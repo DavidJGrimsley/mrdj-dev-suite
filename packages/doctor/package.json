@@ -1,0 +1,38 @@
+{
+  "name": "@mrdj/doctor",
+  "version": "0.1.0",
+  "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./checks": {
+      "import": "./dist/checks/index.js",
+      "types": "./dist/checks/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsc --watch",
+    "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
+  },
+  "dependencies": {
+    "execa": "^6.1.0",
+    "json5": "^2.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": ["expo", "doctor", "lint", "typescript", "quality"],
+  "author": "DJ",
+  "license": "MIT"
+}

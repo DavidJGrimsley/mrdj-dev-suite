@@ -1,0 +1,41 @@
+{
+  "name": "mrdj-dev-suite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal AI dev-suite for Expo developers: doctor, onboarding, automation, and knowledge base",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "typecheck": "pnpm type-check",
+    "test": "turbo run test",
+    "ci": "pnpm type-check && pnpm lint && pnpm test && pnpm build",
+    "clean": "turbo run clean && node -e \"const fs=require('node:fs'); for (const p of ['node_modules','dist']) fs.rmSync(p,{recursive:true,force:true});\"",
+    "doctor": "node packages/cli/dist/cli.js doctor",
+    "doctor:ci": "node packages/cli/dist/cli.js doctor --ci",
+    "onboard": "node packages/cli/dist/cli.js onboard",
+    "test-and-iterate": "node packages/cli/dist/cli.js test-and-iterate",
+    "ship:test": "node packages/cli/dist/cli.js test-and-iterate --base test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@types/node": "^20.10.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.1.0",
+    "turbo": "^2.8.12",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "packageManager": "pnpm@8.14.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

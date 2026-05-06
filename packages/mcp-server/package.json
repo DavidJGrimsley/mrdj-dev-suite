@@ -1,0 +1,43 @@
+{
+  "name": "@mrdj/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for mrdj suite (Claude integration point)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./tools": {
+      "import": "./dist/tools/index.js",
+      "types": "./dist/tools/index.d.ts"
+    },
+    "./resources": {
+      "import": "./dist/resources/index.js",
+      "types": "./dist/resources/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsc --watch",
+    "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
+  },
+  "dependencies": {
+    "@mrdj/doctor": "workspace:*",
+    "@mrdj/knowledge": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.25.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": ["mcp", "model-context-protocol", "claude", "expo"],
+  "author": "DJ",
+  "license": "MIT"
+}

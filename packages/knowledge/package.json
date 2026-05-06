@@ -1,0 +1,38 @@
+{
+  "name": "@mrdj/knowledge",
+  "version": "0.1.0",
+  "description": "Skills, patterns, guides, and rules for Expo development (MCP resources)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./patterns": {
+      "import": "./dist/patterns/index.js",
+      "types": "./dist/patterns/index.d.ts"
+    },
+    "./skills": {
+      "import": "./dist/skills/index.js",
+      "types": "./dist/skills/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsc --watch",
+    "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": ["expo", "knowledge", "patterns", "mcp"],
+  "author": "DJ",
+  "license": "MIT"
+}

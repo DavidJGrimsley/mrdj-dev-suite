@@ -1,0 +1,39 @@
+{
+  "name": "@mrdj/cli",
+  "version": "0.1.0",
+  "description": "CLI entry point for mrdj commands (doctor, onboard, test-and-iterate)",
+  "type": "module",
+  "bin": {
+    "mrdj": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
+    }
+  },
+  "main": "./dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsc --watch",
+    "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
+  },
+  "dependencies": {
+    "@mrdj/doctor": "workspace:*",
+    "@mrdj/knowledge": "workspace:*",
+    "yargs": "^17.7.2",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/yargs": "^17.0.24",
+    "typescript": "^5.9.0"
+  },
+  "keywords": ["expo", "cli", "doctor", "onboarding"],
+  "author": "DJ",
+  "license": "MIT"
+}
