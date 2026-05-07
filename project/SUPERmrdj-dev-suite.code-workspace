@@ -1,32 +1,8 @@
 {
-	"folders": [
-		{
-			"path": ".."
-		},
-		{
-			"path": "../../MCPs/mrdj-app-mcp"
-		},
-		{
-			"path": "../../../ReactNativeApps/core-monorepo"
-		},
-		{
-			"path": "../../../ReactNativeApps/DJsPortfolio"
-		},
-		{
-			"path": "../../../ReactNativeApps/expo-super-template"
-		},
-		{
-			"path": "../../../ReactNativeApps/mercury-bank-sdk"
-		},
-		{
-			"path": "../../../ReactNativeApps/not-hot-dog"
-		},
-		{
-			"path": "../../../ReactNativeApps/PokePages"
-		},
-		{
-			"path": "../../../ReactNativeApps/time2pay"
-		}
-	],
+  "folders": [
+    {
+      "path": ".."
+    }
+  ],
   "settings": {}
 }

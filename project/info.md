@@ -29,10 +29,11 @@ The suite has five layers:
 ## Current State
 
 - Foundation workspace exists with `packages/doctor`, `packages/cli`, `packages/knowledge`, and `packages/mcp-server`.
-- Pattern resources were seeded from the scanned apps and SDK repos.
-- A first Doctor engine exists and can run static checks plus package scripts.
-- The CLI can run Doctor and print the locked ship/onboard workflow direction.
-- MCP server code is still a lightweight placeholder and needs to be replaced with a real MCP SDK server/transport.
+- Pattern resources were promoted into `packages/knowledge/src/content`.
+- Doctor is modular, has `scanFile(file)`, and can run static checks plus package scripts.
+- The CLI can run Doctor, scaffold onboarding project memory, and inspect the ship/test workflow.
+- MCP server code uses the real MCP SDK stdio transport and exposes generated knowledge resources.
+- Reference repos are no longer required in the tracked workspace; `temp/` research clones were removed after harvest.
 
 ## Reference Repos
 

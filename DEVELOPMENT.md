@@ -31,12 +31,12 @@ pnpm ship:test
 ## Current Development Priorities
 
 1. Keep the workspace installable and buildable.
-2. Split Doctor checks into focused modules and add tests.
-3. Move pattern markdown source of truth into `packages/knowledge`.
-4. Replace MCP placeholder code with the real MCP SDK server pattern.
-5. Implement the ship-to-test workflow behind an explicit execution flag.
-6. Implement agent-led post-create onboarding.
+2. Extend Doctor checks and fixtures as new real app failures appear.
+3. Keep pattern markdown source of truth in `packages/knowledge/src/content`.
+4. Keep MCP resources generated from `packages/knowledge`.
+5. Prove the ship-to-test dry-run before enabling fuller git mutation.
+6. Expand agent-led post-create onboarding defaults after dogfooding.
 
 ## GitHub Workflow Direction
 
-Use `gh` for PR operations. The final ship command should run Doctor first, then push, create/update a PR to `test`, poll checks, summarize failures, and merge only after checks pass.
+Use `gh` for PR inspection. The Phase 1 ship command detects branch, remote, git status, and an existing PR, then prints the safe workflow. Full commit/push/merge automation stays manual until the dry-run path has been proven on real repos.

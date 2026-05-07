@@ -19,6 +19,9 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "mrdj-mcp-server": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "type-check": "tsc --noEmit",
@@ -31,7 +34,8 @@
   "dependencies": {
     "@mrdj/doctor": "workspace:*",
     "@mrdj/knowledge": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.25.1"
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

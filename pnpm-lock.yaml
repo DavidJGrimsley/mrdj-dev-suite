@@ -97,6 +97,9 @@ importers:
       '@mrdj/knowledge':
         specifier: workspace:*
         version: link:../knowledge
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^20.10.0

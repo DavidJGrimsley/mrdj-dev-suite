@@ -5,10 +5,14 @@ import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
+import { runOnboardCommand } from './commands/onboard.js';
+import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { OnboardArgv } from './commands/onboard.js';
+import type { ShipArgv } from './commands/test-and-iterate.js';
 
-interface DoctorArgv {
+export interface DoctorArgv {
   path?: string;
   fix?: boolean;
   json?: boolean;
@@ -17,14 +21,6 @@ interface DoctorArgv {
   fast?: boolean;
   scripts?: boolean;
   timeoutMs?: number;
-}
-
-interface ShipArgv {
-  branch?: string;
-  base?: string;
-  feature?: string;
-  prTitle?: string;
-  execute?: boolean;
 }
 
 async function main(): Promise<void> {
@@ -81,10 +77,50 @@ async function main(): Promise<void> {
     )
     .command(
       'onboard',
-      'Print the planned post-create onboarding conversation for new Expo projects',
-      () => {},
-      async () => {
-        printOnboardPlan();
+      'Run post-create onboarding for a new Expo project',
+      (builder) =>
+        builder
+          .option('project', {
+            describe: 'Project path to onboard',
+            type: 'string',
+            default: '.',
+          })
+          .option('yes', {
+            describe: 'Use default answers and scaffold project memory without prompts',
+            type: 'boolean',
+            default: false,
+          })
+          .option('force', {
+            describe: 'Overwrite existing project memory files',
+            type: 'boolean',
+            default: false,
+          })
+          .option('app-name', {
+            describe: 'App display name',
+            type: 'string',
+          })
+          .option('audience', {
+            describe: 'Who the app serves',
+            type: 'string',
+          })
+          .option('core-flows', {
+            describe: 'Primary user flows',
+            type: 'string',
+          })
+          .option('data-needs', {
+            describe: 'Expected data/backend needs',
+            type: 'string',
+          })
+          .option('deployment-target', {
+            describe: 'Deployment target',
+            type: 'string',
+          })
+          .option('defaults', {
+            describe: 'Comma-separated defaults to include',
+            type: 'string',
+          }),
+      async (argv) => {
+        await runOnboardCommand(argv as OnboardArgv);
       }
     )
     .command(
@@ -115,7 +151,7 @@ async function main(): Promise<void> {
             default: false,
           }),
       async (argv) => {
-        printShipPlan(argv as ShipArgv);
+        await runShipCommand(argv as ShipArgv);
       }
     )
     .demandCommand()
@@ -192,45 +228,6 @@ function printCheck(check: DoctorCheckResult): void {
       console.log(chalk.dim(`  ${line}`));
     }
   }
-}
-
-function printOnboardPlan(): void {
-  console.log(chalk.bold('mrdj onboard'));
-  console.log('Post-create onboarding is intentionally agent-led, not a replacement for rn-new.');
-  console.log();
-  console.log('Planned conversation:');
-  console.log('1. Learn the app goal, audience, primary flows, and deployment target.');
-  console.log('2. Detect the existing Expo app shape, package manager, router, and styling setup.');
-  console.log('3. Ask which MrDJ defaults to add: Uniwind, Zustand, Supabase, Drizzle, API routes.');
-  console.log('4. Create project/info.md, project/todo.md, and project/style.md.');
-  console.log('5. Add .env.example, CI checks, MCP/Codex/Claude instructions, and starter code only when selected.');
-}
-
-function printShipPlan(argv: ShipArgv): void {
-  if (argv.execute) {
-    console.log(
-      chalk.yellow(
-        'Mutating ship execution is not implemented yet. This command currently prints the locked workflow.'
-      )
-    );
-    console.log();
-  }
-
-  const branch = argv.branch ?? '<current-branch>';
-  const base = argv.base ?? 'test';
-  const title = argv.prTitle ?? argv.feature ?? '<feature title>';
-
-  console.log(chalk.bold('mrdj ship/test-and-iterate workflow'));
-  console.log(`Branch: ${branch}`);
-  console.log(`Base: ${base}`);
-  console.log(`PR title: ${title}`);
-  console.log();
-  console.log('1. Run mrdj doctor --ci before touching git.');
-  console.log('2. Confirm git status and commit only intentional changes.');
-  console.log(`3. Push ${branch} and open or update a PR into ${base} with gh CLI.`);
-  console.log('4. Poll PR checks until success or failure.');
-  console.log('5. On failure, fetch logs, fix locally, rerun mrdj doctor --ci, push again, and keep polling.');
-  console.log(`6. On success, merge into ${base} using the repo's configured strategy.`);
 }
 
 main().catch((error: unknown) => {

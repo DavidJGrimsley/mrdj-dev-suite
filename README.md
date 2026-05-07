@@ -6,14 +6,14 @@ The suite turns patterns from real apps into a reusable Doctor, MCP knowledge ba
 
 ## Status
 
-Phase 1 is underway. The workspace is scaffolded, pattern resources are seeded, and the first Doctor/CLI slice is implemented. MCP transport, tests, and full ship/onboard automation are still in progress.
+Phase 1 is self-contained. The workspace is scaffolded, harvested knowledge lives in `packages/knowledge`, Doctor has modular checks and tests, MCP uses the real SDK stdio transport, and onboard/ship commands have working Phase 1 command modules.
 
 ## Packages
 
 - `packages/doctor` - project checks for scripts, env safety, Expo config, route architecture, lint, typecheck, tests, Expo Doctor, and builds.
 - `packages/cli` - `mrdj doctor`, `mrdj onboard`, and `mrdj test-and-iterate` entry points.
-- `packages/knowledge` - harvested pattern metadata and future source of truth for skills, guides, rules, and templates.
-- `packages/mcp-server` - placeholder MCP surface that will be upgraded with the real `mrdj-app-mcp` transport pattern.
+- `packages/knowledge` - canonical source of truth for harvested patterns, guides, rules, skills, and reference notes.
+- `packages/mcp-server` - MCP SDK server exposing Doctor tools, knowledge resources, and onboarding prompts over stdio.
 
 ## Quick Start
 
@@ -47,7 +47,7 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 
 ### Ship To Test
 
-`mrdj test-and-iterate` is planned as the shortcut for:
+`mrdj test-and-iterate` is the Phase 1 dry-run shortcut for:
 
 1. Run `mrdj doctor --ci`.
 2. Review git status and commit intentional changes.
@@ -56,11 +56,11 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 5. Fix failures, push again, and keep polling.
 6. Merge to `test` after checks pass.
 
-The current command prints the locked workflow. Mutating execution will be added behind an explicit flag after the dry-run path is proven.
+Mutating git steps remain manual during the dry-run proving period. `--execute` runs Doctor first and stops if the project is not ready.
 
 ### Onboard
 
-`mrdj onboard` should run after `rn-new` or `create-expo-app`, not replace them. It should be agent-led: learn the app goal, audience, data model, styling choice, backend needs, and deployment target, then scaffold only the selected pieces.
+`mrdj onboard` runs after `rn-new` or `create-expo-app`, not instead of them. It learns the app goal, audience, data model, styling choice, backend needs, and deployment target, then creates the project memory files.
 
 Defaults for new MrDJ projects:
 
@@ -69,9 +69,9 @@ Defaults for new MrDJ projects:
 - Supabase/Drizzle/API routes only when the app actually needs them.
 - Always create `project/info.md`, `project/todo.md`, and `project/style.md`.
 
-## Upstream Create-Expo-Stack
+## Reference Repos
 
-The plan is to fork `roninoss/create-expo-stack` and explore a focused upstream PR for Uniwind support. MrDJ-specific depth stays here in `mrdj onboard`: project memory, MCP config, richer boilerplate, and conversational planning.
+The reference repos used for Phase 1 harvest are no longer required in the workspace. `temp/` research clones were removed, and `project/SUPERmrdj-dev-suite.code-workspace` now opens only this suite.
 
 ## Local Rules
 
