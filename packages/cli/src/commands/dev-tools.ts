@@ -26,11 +26,11 @@ export async function runKillPortCommand(argv: KillPortArgv): Promise<void> {
 
   console.log(chalk.bold('mrdj kill-port'));
   for (const port of ports) {
-    const pids = killed.get(port) ?? [];
-    if (pids.length === 0) {
+    const entries = killed.get(port) ?? [];
+    if (entries.length === 0) {
       console.log(chalk.gray(`port ${port}: no listening process found`));
     } else {
-      console.log(chalk.green(`port ${port}: killed ${pids.join(', ')}`));
+      console.log(chalk.green(`port ${port}: killed ${formatKilledEntries(entries)}`));
     }
   }
 }
@@ -46,10 +46,10 @@ export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promis
 
   const killed = await killPorts(ports);
   for (const port of ports) {
-    const pids = killed.get(port) ?? [];
+    const entries = killed.get(port) ?? [];
     console.log(
-      pids.length > 0
-        ? chalk.green(`port ${port}: killed ${pids.join(', ')}`)
+      entries.length > 0
+        ? chalk.green(`port ${port}: killed ${formatKilledEntries(entries)}`)
         : chalk.gray(`port ${port}: no listening process found`)
     );
   }
@@ -67,19 +67,29 @@ export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promis
   await runInheritedShellCommand(command, projectPath);
 }
 
-async function killPorts(ports: number[]): Promise<Map<number, number[]>> {
-  const results = new Map<number, number[]>();
+interface KilledProcess {
+  pid: number;
+  name?: string;
+}
+
+async function killPorts(ports: number[]): Promise<Map<number, KilledProcess[]>> {
+  const results = new Map<number, KilledProcess[]>();
   for (const port of ports) {
     const pids = await findPidsForPort(port);
-    const killed: number[] = [];
+    const killed: KilledProcess[] = [];
     for (const pid of pids) {
+      const name = await getProcessName(pid);
       if (await killPid(pid)) {
-        killed.push(pid);
+        killed.push({ pid, name });
       }
     }
     results.set(port, killed);
   }
   return results;
+}
+
+function formatKilledEntries(entries: KilledProcess[]): string {
+  return entries.map(({ pid, name }) => (name ? `${pid} (${name})` : String(pid))).join(', ');
 }
 
 function normalizePorts(values: Array<string | number>, fallback: number[]): number[] {
@@ -103,7 +113,7 @@ async function findPidsForPort(port: number): Promise<number[]> {
     return stdout
       .split(/\r?\n/)
       .map((line) => Number.parseInt(line.trim(), 10))
-      .filter((pid) => Number.isInteger(pid));
+      .filter((pid) => Number.isInteger(pid) && pid > 0);
   } catch {
     return [];
   }
@@ -125,13 +135,33 @@ async function findWindowsPidsForPort(port: number): Promise<number[]> {
       const localAddress = parts[1] ?? '';
       const state = parts[3] ?? '';
       const pid = Number.parseInt(parts[4] ?? '', 10);
-      if (state === 'LISTENING' && localAddress.endsWith(`:${port}`) && Number.isInteger(pid)) {
+      if (state === 'LISTENING' && localAddress.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0) {
         pids.add(pid);
       }
     }
     return [...pids];
   } catch {
     return [];
+  }
+}
+
+async function getProcessName(pid: number): Promise<string | undefined> {
+  try {
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        windowsHide: true,
+      });
+      const match = stdout.match(/^"([^"]+)"/);
+      return match?.[1];
+    }
+
+    const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'comm='], {
+      windowsHide: true,
+    });
+    const trimmed = stdout.trim();
+    return trimmed || undefined;
+  } catch {
+    return undefined;
   }
 }
 
