@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   renderCodexBlock,
@@ -16,6 +16,7 @@ const tempDirs: string[] = [];
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
   tempDirs.length = 0;
+  vi.restoreAllMocks();
 });
 
 describe('resolveServerInvocation', () => {
@@ -41,7 +42,7 @@ describe('resolveServerInvocation', () => {
   });
 });
 
-describe('runMcpInstallCommand', () => {
+describe('runMcpInstallCommand (project scope)', () => {
   it('writes a project-scoped .mcp.json for Claude that merges with existing servers', async () => {
     const target = await createTempProject();
     await writeFile(
@@ -52,6 +53,7 @@ describe('runMcpInstallCommand', () => {
 
     await runMcpInstallCommand({
       client: 'claude',
+      scope: 'project',
       target,
       serverPath: '/abs/server.js',
     });
@@ -66,7 +68,7 @@ describe('runMcpInstallCommand', () => {
 
   it('writes .cursor/mcp.json for Cursor', async () => {
     const target = await createTempProject();
-    await runMcpInstallCommand({ client: 'cursor', target, serverPath: '/abs/server.js' });
+    await runMcpInstallCommand({ client: 'cursor', scope: 'project', target, serverPath: '/abs/server.js' });
     const written = JSON.parse(await readFile(path.join(target, '.cursor', 'mcp.json'), 'utf8'));
     expect(written.mcpServers['mrdj-dev-suite'].command).toBe('node');
   });
@@ -81,7 +83,7 @@ describe('runMcpInstallCommand', () => {
       'utf8'
     );
 
-    await runMcpInstallCommand({ client: 'codex', target, serverPath: '/abs/server.js' });
+    await runMcpInstallCommand({ client: 'codex', scope: 'project', target, serverPath: '/abs/server.js' });
 
     const written = await readFile(codexPath, 'utf8');
     expect(written).toContain('[mcp_servers.mrdj-dev-suite]');
@@ -89,6 +91,46 @@ describe('runMcpInstallCommand', () => {
     expect(written).toContain('args = ["/abs/server.js"]');
     expect(written).toContain('[other]');
     expect(written).not.toContain('"stale"');
+  });
+});
+
+describe('runMcpInstallCommand (user scope)', () => {
+  let fakeHome: string;
+
+  beforeEach(async () => {
+    fakeHome = await createTempProject();
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+  });
+
+  it('writes ~/.claude.json for Claude, preserving existing keys', async () => {
+    await writeFile(
+      path.join(fakeHome, '.claude.json'),
+      JSON.stringify({ otherSetting: true, mcpServers: { other: { command: 'echo' } } }, null, 2),
+      'utf8'
+    );
+
+    await runMcpInstallCommand({ client: 'claude', scope: 'user', serverPath: '/abs/server.js' });
+
+    const written = JSON.parse(await readFile(path.join(fakeHome, '.claude.json'), 'utf8'));
+    expect(written.otherSetting).toBe(true);
+    expect(written.mcpServers.other).toEqual({ command: 'echo' });
+    expect(written.mcpServers['mrdj-dev-suite']).toEqual({
+      command: 'node',
+      args: ['/abs/server.js'],
+    });
+  });
+
+  it('writes ~/.cursor/mcp.json for Cursor', async () => {
+    await runMcpInstallCommand({ client: 'cursor', scope: 'user', serverPath: '/abs/server.js' });
+    const written = JSON.parse(await readFile(path.join(fakeHome, '.cursor', 'mcp.json'), 'utf8'));
+    expect(written.mcpServers['mrdj-dev-suite'].command).toBe('node');
+  });
+
+  it('writes ~/.codex/config.toml for Codex', async () => {
+    await runMcpInstallCommand({ client: 'codex', scope: 'user', serverPath: '/abs/server.js' });
+    const written = await readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8');
+    expect(written).toContain('[mcp_servers.mrdj-dev-suite]');
+    expect(written).toContain('command = "node"');
   });
 });
 

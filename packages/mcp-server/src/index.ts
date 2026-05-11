@@ -331,10 +331,35 @@ function registerTools(server: McpServer): void {
 
 function registerPrompts(server: McpServer): void {
   server.registerPrompt(
+    'create_expo_super_stack',
+    {
+      title: 'Create Expo Super Stack',
+      description:
+        'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MrDJ onboarding.',
+      argsSchema: {
+        parentDir: z.string().optional(),
+        appName: z.string().optional(),
+      },
+    },
+    ({ parentDir, appName }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildCreateExpoSuperStackPromptText(parentDir, appName),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'onboard_new_expo_app',
     {
-      title: 'Onboard New Expo App',
-      description: 'Guide an agent through MrDJ post-create onboarding for an Expo app.',
+      title: 'Onboard Existing Expo App',
+      description:
+        'Run from inside an existing Expo app folder to apply MrDJ project memory, intake, planning, and scaffolding.',
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -353,13 +378,58 @@ function registerPrompts(server: McpServer): void {
   );
 }
 
+export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
+  const parent = parentDir ?? 'the current working directory';
+  const appHint = appName ? ` The user already named the app: \`${appName}\`.` : '';
+  return [
+    `You are kicking off a brand-new Expo app from ${parent}.${appHint}`,
+    '',
+    'You are NOT inside the app folder yet — the folder does not exist. `create-expo-super-stack` will create it.',
+    '',
+    'STEP 1 — Confirm location and name.',
+    `  Verify with the user that ${parent} is where the new app folder should be created.`,
+    '  If no app name was provided, ask for one. Use kebab-case unless the user prefers otherwise.',
+    '',
+    'STEP 2 — Confirm headline choices BEFORE running the generator.',
+    '  Ask one question at a time:',
+    '    - Target platforms (web, ios, android, apple-tv).',
+    '    - First MVP platform.',
+    '    - Web output mode (static / server / spa / none) if web is included.',
+    '    - Styling: Uniwind (default) or NativeWind.',
+    '    - Data start: local dummy data or Supabase from the start.',
+    '  Echo the resulting `create-expo-super-stack` invocation so the user can sanity-check it before you run anything.',
+    '',
+    'STEP 3 — Run create-expo-super-stack.',
+    '  From the parent directory, invoke the generator via your shell tool:',
+    '    npx -y create-expo-super-stack <app-name> [flags from Step 2]',
+    '  Stream the output back to the user. Do not silently swallow generator prompts — if the generator asks anything interactively, surface it.',
+    '',
+    'STEP 4 — Move into the new app folder.',
+    '  After generation succeeds, change directory into the new app folder for all subsequent steps.',
+    '',
+    'STEP 5 — Hand off to onboarding.',
+    '  Invoke the `onboard_new_expo_app` MCP prompt (or follow its same instructions) inside the newly-created app folder.',
+    '  That prompt enforces the `# TodoForContext(optional):` blocker check before intake/planning/scaffolding.',
+    '',
+    'Rules:',
+    '- Never run create-expo-super-stack inside an existing app folder. If you suspect you are inside one, stop and ask.',
+    '- Prefer asking over assuming. One question per turn.',
+    '- The generator may take several minutes; tell the user before kicking it off.',
+  ].join('\n');
+}
+
 export function buildOnboardPromptText(projectPath?: string): string {
   const target = projectPath ?? 'the current Expo project';
   return [
-    `You are running MrDJ agentic post-create onboarding for ${target}.`,
+    `You are running MrDJ agentic onboarding inside ${target}. The app folder must already exist on disk.`,
+    '',
+    'If you are NOT yet inside an Expo app folder, stop and tell the user to either:',
+    '  (a) cd into the existing app folder and re-invoke this prompt, or',
+    '  (b) run the `create_expo_super_stack` MCP prompt from a parent folder to generate a new app first.',
     '',
     'STEP 0 — Blocker check (do this before anything else).',
-    `  Read project/info.md, project/style.md, project/guidelines.md, and project/todo.md from ${target}.`,
+    `  If a project/ folder does not yet exist in ${target}, create it with the four files (info.md, todo.md, style.md, guidelines.md) using the bundled MrDJ templates — run \`mrdj onboard --yes\` via your shell tool. Then proceed.`,
+    '  Read project/info.md, project/style.md, project/guidelines.md, and project/todo.md.',
     '  Search each file for the literal marker `# TodoForContext(optional):`.',
     '  If ONE OR MORE markers are still present:',
     '    1. STOP. Do not begin intake. Do not propose a plan. Do not scaffold anything.',

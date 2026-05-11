@@ -1,13 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 
 export type McpClient = 'claude' | 'codex' | 'cursor';
+export type McpScope = 'user' | 'project';
 
 export interface McpInstallArgv {
   client?: McpClient;
+  scope?: McpScope;
   target?: string;
   serverPath?: string;
   command?: string;
@@ -23,25 +26,64 @@ const SERVER_KEY = 'mrdj-dev-suite';
 
 export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> {
   const client = argv.client ?? 'claude';
-  const targetDir = path.resolve(argv.target ?? '.');
+  const scope = argv.scope ?? 'user';
   const server = resolveServerInvocation(argv);
+  const dryRun = Boolean(argv.dryRun);
 
   console.log(chalk.bold('mrdj mcp install'));
   console.log(chalk.dim(`client: ${client}`));
-  console.log(chalk.dim(`target: ${targetDir}`));
+  console.log(chalk.dim(`scope:  ${scope}`));
   console.log(chalk.dim(`command: ${server.command} ${server.args.join(' ')}`));
   console.log();
 
+  if (scope === 'user') {
+    await installUserScope(client, server, dryRun);
+    return;
+  }
+
+  const targetDir = path.resolve(argv.target ?? '.');
+  console.log(chalk.dim(`target: ${targetDir}`));
+  await installProjectScope(client, targetDir, server, dryRun);
+}
+
+async function installProjectScope(
+  client: McpClient,
+  targetDir: string,
+  server: ResolvedServer,
+  dryRun: boolean
+): Promise<void> {
   switch (client) {
     case 'claude':
-      await writeJsonMcpConfig(targetDir, '.mcp.json', server, Boolean(argv.dryRun));
-      printClaudeFollowup(targetDir);
+      await writeJsonMcpConfig(path.join(targetDir, '.mcp.json'), server, dryRun);
+      printClaudeProjectFollowup(targetDir);
       break;
     case 'cursor':
-      await writeJsonMcpConfig(targetDir, path.join('.cursor', 'mcp.json'), server, Boolean(argv.dryRun));
+      await writeJsonMcpConfig(path.join(targetDir, '.cursor', 'mcp.json'), server, dryRun);
       break;
     case 'codex':
-      await writeCodexConfig(targetDir, server, Boolean(argv.dryRun));
+      await writeCodexConfig(path.join(targetDir, '.codex', 'config.toml'), server, dryRun);
+      break;
+  }
+}
+
+async function installUserScope(
+  client: McpClient,
+  server: ResolvedServer,
+  dryRun: boolean
+): Promise<void> {
+  const home = os.homedir();
+  switch (client) {
+    case 'claude': {
+      const filePath = path.join(home, '.claude.json');
+      await writeJsonMcpConfig(filePath, server, dryRun);
+      printClaudeUserFollowup();
+      break;
+    }
+    case 'cursor':
+      await writeJsonMcpConfig(path.join(home, '.cursor', 'mcp.json'), server, dryRun);
+      break;
+    case 'codex':
+      await writeCodexConfig(path.join(home, '.codex', 'config.toml'), server, dryRun);
       break;
   }
 }
@@ -66,20 +108,17 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
 function findLocalServerEntry(): string | undefined {
   try {
     const require = createRequire(import.meta.url);
-    const resolved = require.resolve('@mrdj/mcp-server');
-    return resolved;
+    return require.resolve('@mrdj/mcp-server');
   } catch {
     return undefined;
   }
 }
 
 async function writeJsonMcpConfig(
-  targetDir: string,
-  relativeFile: string,
+  filePath: string,
   server: ResolvedServer,
   dryRun: boolean
 ): Promise<void> {
-  const filePath = path.join(targetDir, relativeFile);
   const existing = await readJsonIfExists(filePath);
   const merged: Record<string, unknown> = existing ?? {};
   const servers = isRecord(merged.mcpServers) ? { ...merged.mcpServers } : {};
@@ -104,11 +143,10 @@ async function writeJsonMcpConfig(
 }
 
 async function writeCodexConfig(
-  targetDir: string,
+  filePath: string,
   server: ResolvedServer,
   dryRun: boolean
 ): Promise<void> {
-  const filePath = path.join(targetDir, '.codex', 'config.toml');
   const existing = (await readTextIfExists(filePath)) ?? '';
   const cleaned = stripExistingCodexBlock(existing, SERVER_KEY);
   const block = renderCodexBlock(SERVER_KEY, server);
@@ -146,14 +184,22 @@ export function stripExistingCodexBlock(content: string, key: string): string {
   return [before, tail].filter(Boolean).join('\n\n');
 }
 
-function printClaudeFollowup(targetDir: string): void {
+function printClaudeProjectFollowup(targetDir: string): void {
   console.log();
-  console.log(chalk.bold('Next steps for Claude Code:'));
-  console.log('  1. Restart Claude Code or run `claude mcp reload`.');
-  console.log(
-    `  2. From inside ${targetDir}, invoke the MCP prompt: /mcp-prompt mrdj-dev-suite onboard_new_expo_app`
-  );
-  console.log('  3. Or use it from anywhere via `claude mcp add` with the same command shown above.');
+  console.log(chalk.bold('Next steps for Claude Code (project scope):'));
+  console.log(`  1. Open ${targetDir} as a workspace in Claude Code (or restart Claude Code if already open).`);
+  console.log('  2. Run /mcp to confirm the mrdj-dev-suite server is listed.');
+  console.log('  3. Invoke the prompt: /mcp__mrdj-dev-suite__onboard_new_expo_app');
+}
+
+function printClaudeUserFollowup(): void {
+  console.log();
+  console.log(chalk.bold('Next steps for Claude Code (user scope):'));
+  console.log('  1. Restart Claude Code so it picks up ~/.claude.json.');
+  console.log('  2. From any workspace, run /mcp to confirm mrdj-dev-suite is listed.');
+  console.log('  3. Available prompts:');
+  console.log('       /mcp__mrdj-dev-suite__create_expo_super_stack    (run from a parent dir to create a new app)');
+  console.log('       /mcp__mrdj-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
 }
 
 async function readJsonIfExists(filePath: string): Promise<Record<string, unknown> | null> {

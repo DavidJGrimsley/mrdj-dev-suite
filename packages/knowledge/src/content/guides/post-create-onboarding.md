@@ -27,22 +27,39 @@ onboarding pass.
 
 The terminal `mrdj onboard` command writes the project memory files. The
 agentic version is a conversation with Claude Code, Codex, or Cursor that
-fills those files in collaboratively. Wire it up with:
+fills those files in collaboratively.
+
+Install **once, globally** (user scope, default) so every workspace gets
+the prompts:
 
 ```bash
-mrdj mcp install --client claude   # writes .mcp.json in the project root
-mrdj mcp install --client codex    # writes .codex/config.toml
-mrdj mcp install --client cursor   # writes .cursor/mcp.json
+mrdj mcp install --client claude   # merges into ~/.claude.json
+mrdj mcp install --client codex    # merges into ~/.codex/config.toml
+mrdj mcp install --client cursor   # merges into ~/.cursor/mcp.json
+mrdj mcp install --dry-run         # preview merge before writing
 ```
 
-Then restart the host (or run `claude mcp reload`) and invoke the
-`onboard_new_expo_app` MCP prompt. The agent is required to perform a
-**Step 0 blocker check** before intake or planning: it scans every
-`project/` file for the literal marker `# TodoForContext(optional):` and
-refuses to proceed until each one is either filled in or deleted.
+Restart the host (or run `claude mcp reload`) and the MrDJ prompts are
+available from any workspace.
 
-`mrdj doctor` mirrors this rule with a `todo-for-context markers` warning
-so the same blocker is visible from CI and editor surfaces.
+Two prompts ship with the server:
+
+- `create_expo_super_stack` — invoke from a **parent folder** (e.g.
+  `F:\ReactNativeApps`) when the app folder does not exist yet. The
+  agent confirms platforms, styling, data start, etc., then runs
+  `create-expo-super-stack` and hands off to onboarding inside the new
+  folder.
+- `onboard_new_expo_app` — invoke from **inside an existing Expo app
+  folder** (a freshly generated one or a year-old project). Runs the
+  intake → normalize → plan → scaffold flow.
+
+Both prompts enforce a **Step 0 blocker check** before intake or
+planning: they scan every `project/` file for the literal marker
+`# TodoForContext(optional):` and refuse to proceed until each one is
+either filled in or deleted.
+
+`mrdj doctor` mirrors this rule with a `todo-for-context markers`
+warning so the same blocker is visible from CI and editor surfaces.
 
 ## Defaults
 

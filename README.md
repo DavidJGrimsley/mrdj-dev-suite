@@ -87,15 +87,40 @@ Defaults for new MrDJ projects:
 
 ### Agentic Onboarding via MCP
 
-`mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the `onboard_new_expo_app` prompt is callable from a chat session. The agent is required to scan every `project/` file for `# TodoForContext(optional):` markers before intake — if any remain, it stops and asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as a warning.
+`mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the MrDJ prompts are callable from a chat session.
+
+Two prompts ship with the server:
+
+- `create_expo_super_stack` — invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then hands off to onboarding inside the new folder.
+- `onboard_new_expo_app` — invoke from **inside an existing Expo app folder** (whether brand new from a generator or a year-old project). Runs the intake → normalize → plan → scaffold flow.
+
+Both prompts enforce a `# TodoForContext(optional):` blocker check before any planning or scaffolding. If any markers remain in `project/` files, the agent stops and asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as a warning.
+
+By default, install is **user-scoped** (every workspace gets the server). Pass `--scope project` to limit to one folder.
 
 ```bash
-node packages/cli/dist/cli.js mcp install --client claude   # writes .mcp.json
-node packages/cli/dist/cli.js mcp install --client codex    # writes .codex/config.toml
-node packages/cli/dist/cli.js mcp install --client cursor   # writes .cursor/mcp.json
-node packages/cli/dist/cli.js mcp install --dry-run         # preview without writing
-node packages/cli/dist/cli.js mcp install --server-path <abs/path/to/dist/index.js>
+# default: user-scope install (recommended for personal use)
+node packages/cli/dist/cli.js mcp install --client claude
+node packages/cli/dist/cli.js mcp install --client codex
+node packages/cli/dist/cli.js mcp install --client cursor
+
+# preview the merge against your existing config file before writing
+node packages/cli/dist/cli.js mcp install --dry-run
+
+# local dev: point the server at the workspace dist build
+node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mrdj-dev-suite\packages\mcp-server\dist\index.js"
+
+# limit to one project (writes .mcp.json / .cursor/mcp.json / .codex/config.toml into the target dir)
+node packages/cli/dist/cli.js mcp install --scope project --target F:\path\to\app
 ```
+
+User-scope writes to:
+
+- Claude Code: `~/.claude.json`
+- Cursor: `~/.cursor/mcp.json`
+- Codex: `~/.codex/config.toml`
+
+The merge preserves existing keys/blocks; only the `mrdj-dev-suite` entry is added or replaced.
 
 By default the config invokes the published MCP server via `npx -y @mrdj/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 

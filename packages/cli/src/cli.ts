@@ -249,8 +249,13 @@ async function main(): Promise<void> {
             choices: ['claude', 'codex', 'cursor'] as const,
             default: 'claude' as const,
           })
+          .option('scope', {
+            describe: 'Install for the current user (every workspace) or just the target project',
+            choices: ['user', 'project'] as const,
+            default: 'user' as const,
+          })
           .option('target', {
-            describe: 'Directory to write the MCP config into',
+            describe: 'Project directory for --scope project (ignored for --scope user)',
             type: 'string',
             default: '.',
           })
