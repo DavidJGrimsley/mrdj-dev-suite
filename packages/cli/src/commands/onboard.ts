@@ -157,13 +157,6 @@ export async function collectOnboardPlan(
   const dataNeeds =
     argv.dataNeeds ??
     (await askDataNeeds(seed.dataNeeds));
-  const deploymentTarget =
-    argv.deploymentTarget ??
-    (await askText(
-      'Where do you expect to ship first? Examples: client demo, app stores, web hosting, internal testing.',
-      seed.deploymentTarget
-    ));
-  log.success('Product context captured. Just a few more questions.');
 
   const targetPlatforms = await askTargetPlatforms(argv, seed.targetPlatforms);
   const firstTargetPlatform =
@@ -202,6 +195,14 @@ export async function collectOnboardPlan(
         serverPrompt.explanation
       )
     : 'none';
+
+  const deploymentTarget =
+    argv.deploymentTarget ??
+    (await askText(
+      'How will the first version reach its users? Examples: TestFlight to friends, internal client demo, App Store / Play Store launch, web hosting, side-loaded APK, internal-only.',
+      seed.deploymentTarget
+    ));
+  log.success('Product context captured. Just a few more questions.');
 
   const hasMobileTarget = targetPlatforms.some((platform) => ['android', 'ios'].includes(platform));
   const includeCreateExpoComponents =
