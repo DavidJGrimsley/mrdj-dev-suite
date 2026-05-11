@@ -345,16 +345,57 @@ function registerPrompts(server: McpServer): void {
           role: 'user',
           content: {
             type: 'text',
-            text:
-              `Run MrDJ post-create onboarding for ${projectPath ?? 'the current Expo project'}.\n` +
-              'Read project/info.md, project/style.md, project/guidelines.md, and project/todo.md first. ' +
-              'Ask conversational follow-up questions until the app/business plan is clear, then reorganize notes into the canonical info/style sections, ' +
-              'update project/todo.md phase tasks, scaffold only confirmed pieces, and run Doctor afterward.',
+            text: buildOnboardPromptText(projectPath),
           },
         },
       ],
     })
   );
+}
+
+export function buildOnboardPromptText(projectPath?: string): string {
+  const target = projectPath ?? 'the current Expo project';
+  return [
+    `You are running MrDJ agentic post-create onboarding for ${target}.`,
+    '',
+    'STEP 0 — Blocker check (do this before anything else).',
+    `  Read project/info.md, project/style.md, project/guidelines.md, and project/todo.md from ${target}.`,
+    '  Search each file for the literal marker `# TodoForContext(optional):`.',
+    '  If ONE OR MORE markers are still present:',
+    '    1. STOP. Do not begin intake. Do not propose a plan. Do not scaffold anything.',
+    "    2. List every file + line that still contains a marker, and quote the marker's hint text.",
+    '    3. Tell the user, verbatim:',
+    '         "These TodoForContext lines are blocking onboarding. For each one,',
+    '          either fill out the section underneath OR delete the marker line to',
+    '          acknowledge you do not want to add that context. Save the file, then',
+    '          tell me to re-check."',
+    '    4. Wait for the user. When they say re-check, repeat Step 0 from scratch.',
+    '  Only when zero markers remain may you proceed to Step 1.',
+    '',
+    'STEP 1 — Intake conversation.',
+    '  Using the cleaned project memory as context, ask one focused question at a time to confirm:',
+    '  app purpose, primary audience, first 1-3 core user flows, data needs, deployment target,',
+    '  target platforms, monetization stance, team context, and release strategy.',
+    '  Reuse anything project/info.md already states; do not re-ask questions whose answers are clearly written.',
+    '',
+    'STEP 2 — Normalize.',
+    '  Reshape what you learned into the canonical project/info.md and project/style.md sections.',
+    '  Preserve any "Imported Notes" sections verbatim.',
+    '  Do not invent details the user did not provide; leave a short "Open question:" line instead.',
+    '',
+    'STEP 3 — Plan.',
+    '  Update project/todo.md with a phase-ordered task list driven by the intake answers.',
+    '  Surface tradeoffs (e.g. Supabase vs local data, server vs static web) and let the user pick before writing scaffolding.',
+    '',
+    'STEP 4 — Scaffold only what was confirmed.',
+    '  Use the MCP tools `generate_setup_tasks`, `get_skill`, and `get_guide` for guidance.',
+    '  After each scaffold step, run `doctor_scan_project` and surface any new errors/warnings to the user.',
+    '',
+    'Rules:',
+    '- Never bypass Step 0. The marker check is non-negotiable; the user can clear it in seconds by deleting lines.',
+    '- Prefer asking over assuming. One question per turn.',
+    '- Keep technical/agent rules in project/guidelines.md, not project/style.md.',
+  ].join('\n');
 }
 
 function normalizeMode(value: string | undefined): DoctorMode {

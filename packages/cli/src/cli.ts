@@ -6,11 +6,13 @@ import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
+import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
+import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
@@ -235,6 +237,38 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runClearExpoStartCommand(argv as ClearExpoStartArgv);
+      }
+    )
+    .command(
+      'mcp install',
+      'Register the MrDJ MCP server with Claude Code, Codex, or Cursor',
+      (builder) =>
+        builder
+          .option('client', {
+            describe: 'MCP host to configure',
+            choices: ['claude', 'codex', 'cursor'] as const,
+            default: 'claude' as const,
+          })
+          .option('target', {
+            describe: 'Directory to write the MCP config into',
+            type: 'string',
+            default: '.',
+          })
+          .option('server-path', {
+            describe: 'Absolute path to the built MCP server entry (overrides auto-detect)',
+            type: 'string',
+          })
+          .option('command', {
+            describe: 'Full command to launch the server (overrides server-path and npx fallback)',
+            type: 'string',
+          })
+          .option('dry-run', {
+            describe: 'Print the config that would be written instead of writing it',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runMcpInstallCommand(argv as McpInstallArgv);
       }
     )
     .command(

@@ -185,9 +185,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Implement `create-expo-super-stack`.
 - [ ] Implement `mrdj explain`.
 - [ ] Implement `mrdj skills list`.
-- [ ] Implement `mrdj mcp install`.
-- [ ] Implement `mrdj codex install`.
-- [ ] Implement `mrdj claude install`.
+- [x] Implement `mrdj mcp install` with `--client claude|codex|cursor` (subsumes the originally separate `mrdj codex install` and `mrdj claude install` commands).
 - [ ] Implement `mrdj report`.
 - [ ] Keep DWAH-specific commands future-facing until the personal suite proves itself, such as `dwah login`, `dwah link`, `dwah env pull`, `dwah env push`, `dwah deploy`, `dwah preview`, `dwah promote`, and `dwah rollback`.
 

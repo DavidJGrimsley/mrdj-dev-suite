@@ -6,6 +6,7 @@ export { runExpoDoctorCheck } from './expo-doctor.js';
 export { checkGitignoreEnv } from './gitignore-env.js';
 export { checkPackageScripts } from './package-scripts.js';
 export { checkProjectDocs } from './project-docs.js';
+export { checkTodoForContextMarkers } from './todo-for-context.js';
 export { checkSeoMetadata } from './seo-metadata.js';
 export { runScriptChecks } from './script-checks.js';
 export { scanFileSsrSafety } from './ssr-safety.js';

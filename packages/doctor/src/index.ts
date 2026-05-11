@@ -9,6 +9,7 @@ import {
   checkProjectDocs,
   checkSeoMetadata,
   checkStylingDependencies,
+  checkTodoForContextMarkers,
   runScriptChecks,
 } from './checks/index.js';
 import { createReport } from './reporter.js';
@@ -49,6 +50,7 @@ export async function runDoctor(
   const packageJson = await readPackageJson(packageJsonPath);
 
   checks.push(await checkProjectDocs(resolvedProjectPath));
+  checks.push(await checkTodoForContextMarkers(resolvedProjectPath));
   checks.push(await checkGitignoreEnv(resolvedProjectPath));
 
   if (!packageJson) {

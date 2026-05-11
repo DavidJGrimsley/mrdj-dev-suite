@@ -23,6 +23,27 @@ onboarding pass.
 8. Install added dependencies, run `expo install --fix`, install known missing
    Expo peers such as `expo-font` for `@expo/vector-icons`, then run Doctor.
 
+## Agentic Onboarding (MCP)
+
+The terminal `mrdj onboard` command writes the project memory files. The
+agentic version is a conversation with Claude Code, Codex, or Cursor that
+fills those files in collaboratively. Wire it up with:
+
+```bash
+mrdj mcp install --client claude   # writes .mcp.json in the project root
+mrdj mcp install --client codex    # writes .codex/config.toml
+mrdj mcp install --client cursor   # writes .cursor/mcp.json
+```
+
+Then restart the host (or run `claude mcp reload`) and invoke the
+`onboard_new_expo_app` MCP prompt. The agent is required to perform a
+**Step 0 blocker check** before intake or planning: it scans every
+`project/` file for the literal marker `# TodoForContext(optional):` and
+refuses to proceed until each one is either filled in or deleted.
+
+`mrdj doctor` mirrors this rule with a `todo-for-context markers` warning
+so the same blocker is visible from CI and editor surfaces.
+
 ## Defaults
 
 - Prefer Uniwind and Tailwind v4 for new projects.

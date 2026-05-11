@@ -15,6 +15,18 @@ it for the app before treating it as final.
 - Never make a change that conflicts with the project memory files unless the
   user explicitly updates them first.
 
+## TodoForContext Markers Block Onboarding
+
+- The string `# TodoForContext(optional):` marks sections the user has not
+  yet decided about.
+- Before agentic intake, planning, or scaffolding, scan every `project/`
+  file for this marker.
+- If any marker is present: stop, list each file and line, and tell the
+  user to fill the section underneath OR delete the marker line to
+  acknowledge they do not want to add that context.
+- Only proceed when zero markers remain. `mrdj doctor` also surfaces this
+  as a warning.
+
 ## Product Context
 
 - Audience: {{audience}}

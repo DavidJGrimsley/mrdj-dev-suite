@@ -1,0 +1,120 @@
+import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+import { afterEach, describe, expect, it } from 'vitest';
+
+import {
+  renderCodexBlock,
+  resolveServerInvocation,
+  runMcpInstallCommand,
+  stripExistingCodexBlock,
+} from '../src/commands/mcp-install.js';
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
+  tempDirs.length = 0;
+});
+
+describe('resolveServerInvocation', () => {
+  it('uses explicit --command verbatim', () => {
+    expect(resolveServerInvocation({ command: 'node /tmp/server.js --flag' })).toEqual({
+      command: 'node',
+      args: ['/tmp/server.js', '--flag'],
+    });
+  });
+
+  it('uses node + --server-path when provided', () => {
+    expect(resolveServerInvocation({ serverPath: '/abs/server.js' })).toEqual({
+      command: 'node',
+      args: ['/abs/server.js'],
+    });
+  });
+
+  it('falls back to npx when no path is provided and the server is not resolvable', () => {
+    expect(resolveServerInvocation({})).toEqual({
+      command: 'npx',
+      args: ['-y', '@mrdj/mcp-server'],
+    });
+  });
+});
+
+describe('runMcpInstallCommand', () => {
+  it('writes a project-scoped .mcp.json for Claude that merges with existing servers', async () => {
+    const target = await createTempProject();
+    await writeFile(
+      path.join(target, '.mcp.json'),
+      JSON.stringify({ mcpServers: { other: { command: 'echo' } } }, null, 2),
+      'utf8'
+    );
+
+    await runMcpInstallCommand({
+      client: 'claude',
+      target,
+      serverPath: '/abs/server.js',
+    });
+
+    const written = JSON.parse(await readFile(path.join(target, '.mcp.json'), 'utf8'));
+    expect(written.mcpServers.other).toEqual({ command: 'echo' });
+    expect(written.mcpServers['mrdj-dev-suite']).toEqual({
+      command: 'node',
+      args: ['/abs/server.js'],
+    });
+  });
+
+  it('writes .cursor/mcp.json for Cursor', async () => {
+    const target = await createTempProject();
+    await runMcpInstallCommand({ client: 'cursor', target, serverPath: '/abs/server.js' });
+    const written = JSON.parse(await readFile(path.join(target, '.cursor', 'mcp.json'), 'utf8'));
+    expect(written.mcpServers['mrdj-dev-suite'].command).toBe('node');
+  });
+
+  it('writes .codex/config.toml for Codex and replaces an existing block', async () => {
+    const target = await createTempProject();
+    const codexPath = path.join(target, '.codex', 'config.toml');
+    await mkdir(path.dirname(codexPath), { recursive: true });
+    await writeFile(
+      codexPath,
+      '[mcp_servers.mrdj-dev-suite]\ncommand = "old"\nargs = ["stale"]\n\n[other]\nkey = "value"\n',
+      'utf8'
+    );
+
+    await runMcpInstallCommand({ client: 'codex', target, serverPath: '/abs/server.js' });
+
+    const written = await readFile(codexPath, 'utf8');
+    expect(written).toContain('[mcp_servers.mrdj-dev-suite]');
+    expect(written).toContain('command = "node"');
+    expect(written).toContain('args = ["/abs/server.js"]');
+    expect(written).toContain('[other]');
+    expect(written).not.toContain('"stale"');
+  });
+});
+
+describe('renderCodexBlock', () => {
+  it('renders a TOML block with JSON-escaped strings', () => {
+    expect(renderCodexBlock('mrdj-dev-suite', { command: 'node', args: ['a b', 'c'] })).toBe(
+      '[mcp_servers.mrdj-dev-suite]\ncommand = "node"\nargs = ["a b", "c"]\n'
+    );
+  });
+});
+
+describe('stripExistingCodexBlock', () => {
+  it('removes only the named server block and keeps siblings', () => {
+    const input = '[mcp_servers.mrdj-dev-suite]\ncommand = "x"\nargs = []\n\n[other]\nk = "v"\n';
+    expect(stripExistingCodexBlock(input, 'mrdj-dev-suite')).toBe('[other]\nk = "v"\n');
+  });
+
+  it('returns content unchanged when the block is missing', () => {
+    expect(stripExistingCodexBlock('[other]\nk = "v"\n', 'mrdj-dev-suite')).toBe(
+      '[other]\nk = "v"\n'
+    );
+  });
+});
+
+async function createTempProject(): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-install-'));
+  tempDirs.push(dir);
+  return dir;
+}

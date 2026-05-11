@@ -85,6 +85,20 @@ Defaults for new MrDJ projects:
 - Use `--guidelines-template` to copy the bundled MrDJ `guidelines.md` template, or `--guidelines-template-path <file>` for a custom template.
 - Use temporary `/exposition`, `/exposition/style-guide`, and `/exposition/data` pages to review package choices, style direction, and data flow before pruning them for production.
 
+### Agentic Onboarding via MCP
+
+`mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the `onboard_new_expo_app` prompt is callable from a chat session. The agent is required to scan every `project/` file for `# TodoForContext(optional):` markers before intake — if any remain, it stops and asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as a warning.
+
+```bash
+node packages/cli/dist/cli.js mcp install --client claude   # writes .mcp.json
+node packages/cli/dist/cli.js mcp install --client codex    # writes .codex/config.toml
+node packages/cli/dist/cli.js mcp install --client cursor   # writes .cursor/mcp.json
+node packages/cli/dist/cli.js mcp install --dry-run         # preview without writing
+node packages/cli/dist/cli.js mcp install --server-path <abs/path/to/dist/index.js>
+```
+
+By default the config invokes the published MCP server via `npx -y @mrdj/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+
 ### Dev Cleanup
 
 `mrdj kill-port` kills stuck local server ports. `mrdj clear-expo-start` kills Expo/server ports, clears Expo/Metro caches, then starts Expo with `--clear`.
