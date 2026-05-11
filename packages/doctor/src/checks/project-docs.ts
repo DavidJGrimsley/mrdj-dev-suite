@@ -13,6 +13,7 @@ export async function checkProjectDocs(projectPath: string): Promise<DoctorCheck
       paths: [path.join(projectDir, 'todo.md'), path.join(projectDir, 'TODO.md')],
       required: true,
     },
+    { label: 'guidelines.md', paths: [path.join(projectDir, 'guidelines.md')], required: true },
     { label: 'style.md', paths: [path.join(projectDir, 'style.md')], required: false },
   ];
 
@@ -46,7 +47,6 @@ export async function checkProjectDocs(projectPath: string): Promise<DoctorCheck
   return {
     name: 'project docs',
     status: 'pass',
-    message: 'project/info.md and project/todo.md are present and non-empty.',
+    message: 'project/info.md, project/todo.md, and project/guidelines.md are present and non-empty.',
   };
 }
-

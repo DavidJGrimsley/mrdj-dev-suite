@@ -1,0 +1,47 @@
+{
+  "name": "create-expo-super-stack",
+  "version": "0.1.0",
+  "description": "Opinionated MrDJ wrapper around create-expo-stack with rich Expo onboarding",
+  "type": "module",
+  "bin": {
+    "create-expo-super-stack": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/cli.js",
+      "types": "./dist/cli.d.ts"
+    }
+  },
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "scripts": {
+    "build": "pnpm --filter @mrdj/cli build && tsc",
+    "type-check": "pnpm --filter @mrdj/cli build && tsc --noEmit",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "test": "vitest run --passWithNoTests",
+    "dev": "tsc --watch",
+    "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "@mrdj/cli": "workspace:*",
+    "create-expo-stack": "^2.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "expo",
+    "create-expo-stack",
+    "uniwind",
+    "mrdj",
+    "react-native"
+  ],
+  "author": "DJ",
+  "license": "MIT"
+}

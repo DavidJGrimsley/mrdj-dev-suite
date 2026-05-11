@@ -1,0 +1,72 @@
+# {{appName}} Guidelines
+
+## MrDJ Template Baseline
+
+This file was copied from the bundled MrDJ `guidelines.md` template. Customize
+it for the app before treating it as final.
+
+## Source Of Truth
+
+- The `project/` folder is the golden source of truth for product intent,
+  roadmap, visual style, and technical rules.
+- Agents and contributors must read `project/info.md`, `project/todo.md`,
+  `project/style.md`, and this file before making product or architecture
+  changes.
+- Never make a change that conflicts with the project memory files unless the
+  user explicitly updates them first.
+
+## Product Context
+
+- Audience: {{audience}}
+- Core flows: {{coreFlows}}
+- Data needs: {{dataNeeds}}
+- Deployment target: {{deploymentTarget}}
+- Target platforms:
+{{targetPlatforms}}
+- First MVP platform: {{firstTargetPlatform}}
+- Platform-specific organization: {{platformFileStrategy}}
+- Web output: {{webOutput}}
+- Deployed server: {{deployedServer}}
+- Latest Expo SDK preference: {{useLatestExpoSdk}}
+- Advanced package setup: {{advancedPackageSetup}}
+- Create Expo starter components: {{includeCreateExpoComponents}}
+- Expo UI: {{usesExpoUi}}
+- Expo Native Tabs: {{usesExpoNativeTabs}}
+- Data start: {{dataStart}}
+- Test-to-main safeguards: {{testToMainSafeguards}}
+- EAS usage:
+{{easUses}}
+
+## Expo Architecture
+
+- Keep Expo Router route files thin; route files should import feature screens
+  or layouts.
+- Put reusable business logic in `src/features`, `src/services`, `src/data`, or
+  shared hooks.
+- Prefer Uniwind with Tailwind v4 for new styling work.
+- Use Zustand only when state is shared across screens or features.
+- Keep private environment variables server-side and never expose secrets with
+  `EXPO_PUBLIC_`.
+
+## Default Package Support
+
+- Software Mansion core support starts with Reanimated/Worklets, Gesture
+  Handler, Screens, SVG, and Keyboard Controller.
+- Use the temporary `/exposition` pages to decide which package examples should
+  stay, be replaced, or be removed.
+- Use `react-native-keyboard-controller` for real keyboard-heavy flows instead
+  of piling up manual keyboard offsets.
+- Use Reanimated for meaningful motion, but avoid expensive animation loops in
+  long lists.
+
+## Workflow
+
+- Run `mrdj doctor --ci` before pushing.
+- Use `mrdj clear-expo-start` when Metro or server ports get wedged.
+- When enabled, develop through feature branches into `test`, then promote
+  validated work from `test` to `main`.
+- Treat monorepo scaffolding as future work until the single-app MVP is stable.
+
+## Selected Defaults
+
+{{defaults}}

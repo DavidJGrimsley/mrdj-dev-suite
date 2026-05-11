@@ -4,6 +4,18 @@
 
 Documentation organization establishes consistent structure for project metadata, guides, and architectural decisions. This pattern uses structured markdown files in dedicated `project/` directories alongside inline code documentation to keep knowledge accessible and maintainable.
 
+## MrDJ Project Memory Update
+
+New MrDJ onboarding uses four project memory files:
+
+- `project/info.md` for product intent and context.
+- `project/todo.md` for roadmap and next work.
+- `project/style.md` for visual/design direction only.
+- `project/guidelines.md` for technical rules, agent behavior, workflow, and architecture.
+
+Generated agent instructions should treat the `project/` folder as the source of
+truth and should not make changes that conflict with those files.
+
 ## When to Use
 
 **Organize documentation when:**

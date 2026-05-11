@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "MCP server for mrdj suite (Claude integration point)",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -43,5 +46,8 @@
   },
   "keywords": ["mcp", "model-context-protocol", "claude", "expo"],
   "author": "DJ",
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -17,9 +17,13 @@ A friendly upstream Uniwind contribution should stay small:
 
 - add Uniwind as another styling option,
 - follow the existing package-slice template convention,
+- include `web` in Expo Router generated `app.json` platforms when web config
+  and dependencies are generated,
+- add focused Software Mansion core package options where they are not already
+  covered,
 - avoid MrDJ project memory files, MCP config, agent prompts, or richer
   boilerplate,
-- keep the deeper post-create setup in `mrdj onboard`.
+- keep the deeper post-create setup in `mrdj onboard` and
+  `create-expo-super-stack`.
 
 No local Phase 1 code should depend on the upstream fork or PR existing.
-

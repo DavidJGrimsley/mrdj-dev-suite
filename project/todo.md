@@ -6,7 +6,7 @@
 ## Sprint 1: Foundation
 
 ### Completed
-- [x] Create `project/info.md`, `project/todo.md`, and `project/style.md`.
+- [x] Create `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
 - [x] Create root workspace files: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, `tsconfig.json`.
 - [x] Add basic editor, lint, prettier, vitest, and gitignore configuration.
 - [x] Scaffold packages: `doctor`, `cli`, `knowledge`, `mcp-server`.
@@ -79,13 +79,15 @@ Do not compete with `rn-new` / `create-expo-stack` first. Build an agent-led pos
 - [x] Ask what the app is for, who it serves, core flows, data needs, and deployment target.
 - [x] Detect existing Expo SDK, router, package manager, aliases, and styling setup.
 - [x] Ask which defaults to add: Uniwind, Zustand, Supabase, Drizzle, API routes, project docs, MCP/Codex/Claude config, CI.
-- [x] Generate `project/info.md`, `project/todo.md`, and `project/style.md`.
+- [x] Generate `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
 - [x] Scaffold selected pieces only after confirmation.
 
 ### CLI
 - [x] Create `packages/cli/src/commands/onboard.ts`.
 - [x] Support interactive mode first.
 - [x] Add non-interactive flags later, for example `--styling uniwind --supabase auth --zustand auth-onboarding --project-docs --ci github`.
+- [x] Add rich boilerplate generation for feature folders, mock/local data, shared components, Uniwind defaults, and Software Mansion core examples.
+- [x] Generate root `AGENTS.md` that points agents to the `project/` source of truth.
 
 ## Sprint 6: Upstream `create-expo-stack` Collaboration
 
@@ -97,6 +99,57 @@ Explore a friendly upstream contribution while keeping MrDJ-specific depth in `m
 - [x] Study the existing package-slice template conventions before coding.
 - [x] Keep `project/info.md`, `project/todo.md`, `project/style.md`, MCP config, and richer boilerplate in `mrdj onboard`, not the upstream PR.
 - [x] Track separate upstream follow-ups: clearer generated-file expectations, optional richer Zustand examples, and docs that point users to post-create onboarding tools.
+- [x] Use `f:\SoftwareDev\create-expo-stack` as the local fork for upstream-style work.
+- [x] Add upstream-friendly `--uniwind` support using package-slice templates.
+- [x] Include `web` in Expo Router generated `app.json` platforms.
+- [x] Add focused Software Mansion core option support for Reanimated/Worklets, Gesture Handler, Screens, SVG, and Keyboard Controller.
+
+## Sprint 7: create-expo-super-stack And Dev Cleanup
+
+### Goal
+Ship the public wrapper and the daily cleanup commands that make new Expo app starts less annoying.
+
+### Completed
+- [x] Add `packages/create-expo-super-stack` with bin `create-expo-super-stack`.
+- [x] Delegate to `create-expo-stack` and clearly print the delegated command.
+- [x] Prefer the local `f:\SoftwareDev\create-expo-stack` fork for dev runs.
+- [x] Delegate Uniwind to `create-expo-stack --uniwind` instead of adding it afterward in the wrapper.
+- [x] Resolve generated project path from the project name or `cesconfig.jsonc`.
+- [x] Run MrDJ onboarding and rich boilerplate after generation.
+- [x] Run the full MrDJ onboarding questionnaire instead of only applying canned defaults.
+- [x] Offer bundled/custom `project/guidelines.md` template support.
+- [x] Add `mrdj kill-port [ports...]`.
+- [x] Add `mrdj clear-expo-start` with alias `mrdj clean-start`.
+- [x] Add generated app scripts for `kill-port`, `clear-expo-start`, and `clean-start`.
+- [x] Add generated app scripts for `expo-install-fix`, `expo-doctor`, and `post-create-check`.
+- [x] Run Expo dependency repair/doctor after MrDJ adds dependencies when install was not skipped.
+- [x] Force Tailwind v4 for Uniwind so Tailwind 3 peer conflicts do not break `npm install`.
+- [x] Normalize NativeWind generated artifacts to Uniwind when rich boilerplate is applied.
+- [x] Rename rich demo components to `src/components/exposition`.
+- [x] Generate temporary `/exposition`, `/exposition/style-guide`, and `/exposition/data` pages.
+- [x] Add Software Mansion core exposition demos for Reanimated/Worklets, Gesture Handler, Screens, SVG, and Keyboard Controller.
+- [x] Generate a phase-based `project/todo.md` from onboarding answers.
+- [x] Add local dummy data vs Supabase onboarding and generated guidance.
+- [x] Add test-to-main onboarding with PR checks and `project/release-flow.md`.
+- [x] Print the post-onboarding next steps for style guide, exposition review, project memory review, and phase-by-phase development.
+- [x] Move onboarding to `@clack/prompts` for a friendlier create-expo-stack-style UX.
+- [x] Expand generated `project/info.md` into canonical product/business planning sections.
+- [x] Expand generated `project/style.md` while keeping it visual-only.
+- [x] Preserve non-canonical existing info/style notes under Imported Notes.
+- [x] Generate `project/intake-agent.md` when context is thin or needs agent follow-up.
+- [x] Remove the interactive advanced-setup and comma-separated defaults prompts.
+- [x] Fix server/EAS prompt wording and add explain-this choices for confusing concepts.
+- [x] Run package-manager install before `expo install --fix`, install known
+  missing Expo peers such as `expo-font`, and then run `expo-doctor`.
+- [x] Add `f:\SoftwareDev\dogfood` as the official practice app target.
+
+### Next
+- [ ] Publish package only after an npm name check and a final end-to-end local generation pass.
+- [ ] Add a fully interactive agent-session path for `create-expo-super-stack` so a Codex/plugin prompt can guide the app setup from start to finish while using the CLI behind the scenes.
+- [ ] Let the agent-session intake accept pasted `project/info.md` sections, whole project memory files, or research-plan documents, then check and reshape them into the canonical `project/info.md` and `project/style.md` structure.
+- [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MrDJ onboarding.
+- [ ] Save personal defaults globally for future app generation.
+- [ ] Add monorepo support after the single-app MVP is stable.
 
 ## Full Product Roadmap
 
@@ -127,6 +180,9 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [ ] Implement `mrdj doctor --json`.
 - [ ] Implement `mrdj doctor --fix`.
 - [ ] Implement `mrdj init` / `mrdj onboard`.
+- [x] Implement `mrdj kill-port`.
+- [x] Implement `mrdj clear-expo-start` / `mrdj clean-start`.
+- [x] Implement `create-expo-super-stack`.
 - [ ] Implement `mrdj explain`.
 - [ ] Implement `mrdj skills list`.
 - [ ] Implement `mrdj mcp install`.
@@ -139,6 +195,9 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 - [ ] Author markdown skills first; avoid over-engineering.
 - [ ] Create skills for app-folder architecture, SSR safety, API routes, SEO, Supabase env vars, Uniwind theme systems, deployment, debugging, and project onboarding.
+- [ ] Create a Super Stack startup skill that walks an agent through project research, `create-expo-super-stack`, project-memory shaping, exposition review, and phase-based build kickoff.
+- [ ] Create a continue-development skill that reads `project/todo.md`, finds the next logical task, finishes incomplete work in the current phase first, and only defers/moves tasks with an explicit note when the developer chooses to defer.
+- [ ] Create a research-plan intake skill that can turn pasted research docs, raw notes, or partial `project/info.md` sections into canonical project memory.
 - [ ] Standardize skill structure: when to use it, main rule, checks, preferred structure, example fix, and agent behavior.
 - [ ] Make the same skills reusable by Codex, Claude Code, MCP resources, docs, and future DWAH onboarding.
 
@@ -146,6 +205,9 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 - [ ] Build `plugins/codex/` with `.codex-plugin/plugin.json`, `.mcp.json`, skills, commands, and README.
 - [ ] Include Codex commands such as `review-expo-project.md`, `run-doctor.md`, `prepare-deploy.md`, and `fix-seo.md`.
+- [ ] Add a Codex command/prompt for `create-expo-super-stack` that starts an agent-assisted app setup session and keeps the user in conversation with the agent the whole time.
+- [ ] Add a Codex command/prompt for continuing a generated app by scanning `project/todo.md`, selecting the next phase/task, and updating/defering todos as work progresses.
+- [ ] Add a Codex command/prompt for project research planning when the user has an app idea but little direction, with output designed to feed back into `project/info.md`.
 - [ ] Support two install paths: reliable manual MCP/skills install and a fancier Codex plugin bundle.
 - [ ] Avoid depending on plugin-installed MCP behavior until Codex plugin support is proven stable.
 
@@ -177,6 +239,8 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 ### Phase 10: Personal Workflow And Dogfooding
 
 - [ ] Support use inside an Expo app with `npx @mrdj/cli init`.
+- [ ] Support `npx create-expo-super-stack`.
+- [ ] Support `mrdj clear-expo-start` and `mrdj kill-port` in generated apps.
 - [ ] Support `npx @mrdj/doctor`.
 - [ ] Support `npx @mrdj/cli codex install`.
 - [ ] Support `npx @mrdj/cli claude install`.
@@ -201,11 +265,16 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] `node packages/cli/dist/cli.js doctor . --json --scripts=false` returns a structured report.
 - [x] `mrdj doctor --ci` mirrors each target repo's CI checks as closely as the repo permits.
 - [x] MCP resource listing exposes the harvested patterns.
-- [x] Onboarding creates the three project memory files in a fresh Expo app.
+- [x] Onboarding creates the four project memory files in a fresh Expo app.
+- [x] Generated `project/style.md` stays visual-only and `project/guidelines.md` carries technical/agent rules.
+- [x] Generated rich boilerplate uses `src/components/exposition`, not `src/components/mrdj`.
+- [x] Generated exposition pages include a temporary/prune-before-production notice.
+- [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
+- [x] Existing project memory can be normalized without losing original notes.
 
 ## Out Of Scope For Phase 1
 
 - Codex/Claude Code plugin UI polish.
 - DWAH hosting/preview layer.
-- Monorepo-aware Doctor beyond a first package-manager/Turbo profile.
+- Monorepo-aware generated app scaffolding beyond the post-MVP todo.
 - Fully automated merge without a successful dry-run period.

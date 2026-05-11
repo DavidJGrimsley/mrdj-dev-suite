@@ -19,6 +19,7 @@
     "doctor": "node packages/cli/dist/cli.js doctor",
     "doctor:ci": "node packages/cli/dist/cli.js doctor --ci",
     "onboard": "node packages/cli/dist/cli.js onboard",
+    "create-expo-super-stack": "node packages/create-expo-super-stack/dist/cli.js",
     "test-and-iterate": "node packages/cli/dist/cli.js test-and-iterate",
     "ship:test": "node packages/cli/dist/cli.js test-and-iterate --base test"
   },

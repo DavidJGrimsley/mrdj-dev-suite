@@ -220,11 +220,11 @@ export const PATTERN_METADATA = [
   {
     id: 'project-documentation-org',
     name: 'Project Memory Folder',
-    description: 'project/info.md, project/todo.md, and project/style.md as agent-readable context.',
+    description: 'project/info.md, project/todo.md, project/style.md, and project/guidelines.md as agent-readable context.',
     category: 'project',
     sourceRepos: ['DJsPortfolio', 'not-hot-dog', 'mrdj-app-mcp'],
     resourcePath: 'patterns/project/documentation-org.md',
-    keywords: ['project folder', 'info.md', 'todo.md', 'style.md'],
+    keywords: ['project folder', 'info.md', 'todo.md', 'style.md', 'guidelines.md'],
   },
   {
     id: 'project-configuration-patterns',
@@ -265,7 +265,7 @@ export const PATTERN_METADATA = [
   {
     id: 'automation-post-create-onboarding',
     name: 'Post-Create Expo Onboarding',
-    description: 'Agent-led setup after rn-new/create-expo-app instead of replacing generators.',
+    description: 'Agent-led setup after rn-new/create-expo-app/create-expo-stack plus wrapper flow for create-expo-super-stack.',
     category: 'automation',
     sourceRepos: ['expo-super-template', 'create-expo-stack'],
     resourcePath: 'guides/post-create-onboarding.md',

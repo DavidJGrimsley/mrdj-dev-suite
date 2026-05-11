@@ -347,8 +347,9 @@ function registerPrompts(server: McpServer): void {
             type: 'text',
             text:
               `Run MrDJ post-create onboarding for ${projectPath ?? 'the current Expo project'}.\n` +
-              'Detect the app shape, ask for app goal/audience/core flows/data/deployment, ' +
-              'offer selected defaults, scaffold only confirmed pieces, and run Doctor afterward.',
+              'Read project/info.md, project/style.md, project/guidelines.md, and project/todo.md first. ' +
+              'Ask conversational follow-up questions until the app/business plan is clear, then reorganize notes into the canonical info/style sections, ' +
+              'update project/todo.md phase tasks, scaffold only confirmed pieces, and run Doctor afterward.',
           },
         },
       ],
@@ -399,7 +400,7 @@ function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
   ];
 
   if (selected.includes('project-docs')) {
-    tasks.push('Create project/info.md, project/todo.md, and project/style.md.');
+    tasks.push('Create project/info.md, project/todo.md, project/style.md, and project/guidelines.md.');
   }
   if (selected.includes('uniwind')) {
     tasks.push('Add or verify Tailwind v4 plus Uniwind configuration.');

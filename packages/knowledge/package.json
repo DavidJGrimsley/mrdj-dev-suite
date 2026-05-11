@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Skills, patterns, guides, and rules for Expo development (MCP resources)",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -34,5 +37,8 @@
   },
   "keywords": ["expo", "knowledge", "patterns", "mcp"],
   "author": "DJ",
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

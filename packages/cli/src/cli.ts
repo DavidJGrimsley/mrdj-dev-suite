@@ -5,10 +5,12 @@ import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
+import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
@@ -95,6 +97,75 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('guidelines-template', {
+            describe: 'Copy the bundled MrDJ project/guidelines.md template',
+            type: 'boolean',
+            default: false,
+          })
+          .option('guidelines-template-path', {
+            describe: 'Copy a custom guidelines.md template file',
+            type: 'string',
+          })
+          .option('rich', {
+            describe: 'Add rich boilerplate, package examples, scripts, and agent instructions',
+            type: 'boolean',
+          })
+          .option('advanced-setup', {
+            describe: 'Add advanced setup for installed packages',
+            type: 'boolean',
+          })
+          .option('create-expo-components', {
+            describe: 'Track whether starter create-expo-app components should be kept',
+            type: 'boolean',
+          })
+          .option('latest-expo-sdk', {
+            describe: 'Track whether the project should prefer the latest Expo SDK',
+            type: 'boolean',
+          })
+          .option('platforms', {
+            describe: 'Comma-separated target platforms: web, android, ios, apple-tv',
+            type: 'string',
+          })
+          .option('first-platform', {
+            describe: 'First MVP platform',
+            type: 'string',
+          })
+          .option('platform-strategy', {
+            describe: 'Platform-specific organization style',
+            choices: ['folders', 'files-only'] as const,
+          })
+          .option('web-output', {
+            describe: 'Expo web output mode',
+            choices: ['static', 'server', 'spa', 'none'] as const,
+          })
+          .option('deployed-server', {
+            describe: 'Deployed server expectation',
+            choices: ['standard-expo', 'custom', 'none'] as const,
+          })
+          .option('expo-ui', {
+            describe: 'Track Expo UI usage for mobile targets',
+            type: 'boolean',
+          })
+          .option('expo-native-tabs', {
+            describe: 'Track Expo Native Tabs usage for mobile targets',
+            type: 'boolean',
+          })
+          .option('eas-selected', {
+            describe: 'Ask/store EAS usage choices',
+            type: 'boolean',
+          })
+          .option('eas-uses', {
+            describe: 'Comma-separated EAS uses',
+            type: 'string',
+          })
+          .option('data-start', {
+            describe: 'Initial data mode',
+            choices: ['local', 'supabase'] as const,
+          })
+          .option('test-to-main', {
+            describe: 'Generate test-to-main release safeguards and PR checks',
+            type: 'boolean',
+          })
           .option('app-name', {
             describe: 'App display name',
             type: 'string',
@@ -121,6 +192,49 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
+      }
+    )
+    .command(
+      'kill-port [ports..]',
+      'Kill processes listening on one or more local ports',
+      (builder) =>
+        builder
+          .positional('ports', {
+            describe: 'Ports to kill',
+            type: 'string',
+            array: true,
+            default: ['8081'],
+          })
+          .option('port', {
+            describe: 'Additional port values',
+            type: 'string',
+            array: true,
+          }),
+      async (argv) => {
+        await runKillPortCommand(argv as KillPortArgv);
+      }
+    )
+    .command(
+      ['clear-expo-start [path]', 'clean-start [path]'],
+      'Kill Expo/server ports, clear local caches, and start Expo with --clear',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('ports', {
+            describe: 'Comma-separated ports to kill before starting',
+            type: 'string',
+          })
+          .option('start', {
+            describe: 'Start Expo after clearing caches',
+            type: 'boolean',
+            default: true,
+          }),
+      async (argv) => {
+        await runClearExpoStartCommand(argv as ClearExpoStartArgv);
       }
     )
     .command(

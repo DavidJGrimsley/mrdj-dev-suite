@@ -57,6 +57,7 @@ async function createTempProject(): Promise<string> {
   await mkdir(path.join(projectPath, 'project'), { recursive: true });
   await writeFile(path.join(projectPath, 'project', 'info.md'), '# Info\n', 'utf8');
   await writeFile(path.join(projectPath, 'project', 'todo.md'), '# Todo\n', 'utf8');
+  await writeFile(path.join(projectPath, 'project', 'guidelines.md'), '# Guidelines\n', 'utf8');
   return projectPath;
 }
 

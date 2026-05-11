@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
   "type": "module",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -34,5 +37,8 @@
   },
   "keywords": ["expo", "doctor", "lint", "typescript", "quality"],
   "author": "DJ",
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

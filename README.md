@@ -11,7 +11,8 @@ Phase 1 is self-contained. The workspace is scaffolded, harvested knowledge live
 ## Packages
 
 - `packages/doctor` - project checks for scripts, env safety, Expo config, route architecture, lint, typecheck, tests, Expo Doctor, and builds.
-- `packages/cli` - `mrdj doctor`, `mrdj onboard`, and `mrdj test-and-iterate` entry points.
+- `packages/cli` - `mrdj doctor`, `mrdj onboard`, cleanup commands, and `mrdj test-and-iterate` entry points.
+- `packages/create-expo-super-stack` - `npx create-expo-super-stack` wrapper around `create-expo-stack` plus MrDJ onboarding.
 - `packages/knowledge` - canonical source of truth for harvested patterns, guides, rules, skills, and reference notes.
 - `packages/mcp-server` - MCP SDK server exposing Doctor tools, knowledge resources, and onboarding prompts over stdio.
 
@@ -31,6 +32,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm doctor -- --ci
+pnpm create-expo-super-stack -- my-app --expo-router
 pnpm ship:test
 ```
 
@@ -58,16 +60,39 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 
 Mutating git steps remain manual during the dry-run proving period. `--execute` runs Doctor first and stops if the project is not ready.
 
+### Create Expo Super Stack
+
+`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MrDJ project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app.
+
+```bash
+node packages/create-expo-super-stack/dist/cli.js my-app --expo-router
+node packages/create-expo-super-stack/dist/cli.js my-app --expo-router --mrdj-guidelines-template
+```
+
 ### Onboard
 
-`mrdj onboard` runs after `rn-new` or `create-expo-app`, not instead of them. It learns the app goal, audience, data model, styling choice, backend needs, and deployment target, then creates the project memory files.
+`mrdj onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
 
 Defaults for new MrDJ projects:
 
-- Uniwind, not NativeWind.
+- Uniwind, not NativeWind, when MrDJ is managing styling for an existing app.
 - Zustand when shared state is needed.
 - Supabase/Drizzle/API routes only when the app actually needs them.
-- Always create `project/info.md`, `project/todo.md`, and `project/style.md`.
+- Always create `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
+- Normalize existing `project/info.md` and `project/style.md` into canonical sections while preserving imported notes.
+- Add `project/intake-agent.md` when a follow-up Codex/Claude conversation should clarify thin or messy context.
+- Keep `project/style.md` visual-only; put technical rules in `project/guidelines.md`.
+- Use `--guidelines-template` to copy the bundled MrDJ `guidelines.md` template, or `--guidelines-template-path <file>` for a custom template.
+- Use temporary `/exposition`, `/exposition/style-guide`, and `/exposition/data` pages to review package choices, style direction, and data flow before pruning them for production.
+
+### Dev Cleanup
+
+`mrdj kill-port` kills stuck local server ports. `mrdj clear-expo-start` kills Expo/server ports, clears Expo/Metro caches, then starts Expo with `--clear`.
+
+```bash
+node packages/cli/dist/cli.js kill-port 8081 3000
+node packages/cli/dist/cli.js clear-expo-start /path/to/app --no-start
+```
 
 ## Reference Repos
 
@@ -76,6 +101,6 @@ The reference repos used for Phase 1 harvest are no longer required in the works
 ## Local Rules
 
 - Work inside this repo unless explicitly asked otherwise.
-- Use the other repos as read-only pattern sources.
+- Use `f:\SoftwareDev\create-expo-stack` for upstream-style generator work and `f:\SoftwareDev\dogfood` as the practice app target.
 - Keep `temp/` ignored for cloned reference repos and scratch analysis.
 - Prefer small verified slices over huge generated claims of completion.
