@@ -57,7 +57,7 @@ export interface ServerPromptPlan {
 }
 
 const EXPLAIN_CHOICE = '__mrdj_explain__';
-const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv'] as const;
+const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
 const EAS_USE_OPTIONS = [
   'building mobile applications',
   'hosting a deployed server',
@@ -662,6 +662,9 @@ function formatOptionLabel(value: string): string {
   }
   if (value === 'apple-tv') {
     return 'Apple TV';
+  }
+  if (value === 'android-tv') {
+    return 'Android TV';
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

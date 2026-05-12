@@ -61,6 +61,31 @@ either filled in or deleted.
 `mrdj doctor` mirrors this rule with a `todo-for-context markers`
 warning so the same blocker is visible from CI and editor surfaces.
 
+### What's new in the agentic prompts
+
+- **PHASE 0 file intake.** The agent offers to digest an existing
+  `project/info.md` and `project/style.md` if the user has them already.
+  Questions whose answers are unambiguous in the file are skipped; the
+  agent asks for clarification only when the file is silent or unclear.
+  A reference template URL is mentioned in the prompt; the agent can
+  also inline the template on request.
+- **Android TV alongside Apple TV.** The platform multi-select now
+  includes Android TV. Android TV builds from the same Android target
+  with leanback config in `app.json`; Apple TV is a separate tvOS build
+  target via `react-native-tvos`. Selecting either records the intent
+  in project memory.
+- **Embedded flag map.** Both prompts now include the exact
+  create-expo-stack and `--mrdj-*` flag map so the agent does not have
+  to grep `node_modules` or scan source to translate answers into a
+  command. This was the biggest source of slowness in early test runs.
+- **Credits while waiting.** When generation kicks off, the agent
+  prints a recognition note for the upstream teams and individuals
+  whose work fills the MrDJ knowledge base.
+- **Success message surfaced.** After a successful run, the agent
+  quotes the generator's `MrDJ onboarding complete` tail block back
+  verbatim so the Mr. DJ thank-you text appears in chat the same way
+  it does in a terminal CLI run.
+
 ## Defaults
 
 - Prefer Uniwind and Tailwind v4 for new projects.

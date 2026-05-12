@@ -32,6 +32,16 @@ export interface ParsedArgs {
     projectParentDir?: string;
     yes: boolean;
     skipCreate: boolean;
+    platforms?: string[];
+    firstPlatform?: string;
+    platformStrategy?: 'folders' | 'files-only';
+    webOutput?: 'static' | 'server' | 'spa' | 'none';
+    deployedServer?: 'standard-expo' | 'custom' | 'none';
+    createExpoComponents?: boolean;
+    latestExpoSdk?: boolean;
+    expoUi?: boolean;
+    expoNativeTabs?: boolean;
+    easUses?: string[];
   };
 }
 
@@ -247,6 +257,85 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === '--mrdj-no-test-to-main') {
       mrdj.testToMain = false;
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-platforms=')) {
+      mrdj.platforms = splitList(arg.slice('--mrdj-platforms='.length));
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-first-platform=')) {
+      mrdj.firstPlatform = arg.slice('--mrdj-first-platform='.length);
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-platform-strategy=')) {
+      const value = arg.slice('--mrdj-platform-strategy='.length);
+      if (value === 'folders' || value === 'files-only') {
+        mrdj.platformStrategy = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-web-output=')) {
+      const value = arg.slice('--mrdj-web-output='.length);
+      if (value === 'static' || value === 'server' || value === 'spa' || value === 'none') {
+        mrdj.webOutput = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-deployed-server=')) {
+      const value = arg.slice('--mrdj-deployed-server='.length);
+      if (value === 'standard-expo' || value === 'custom' || value === 'none') {
+        mrdj.deployedServer = value;
+      }
+      continue;
+    }
+
+    if (arg === '--mrdj-create-expo-components') {
+      mrdj.createExpoComponents = true;
+      continue;
+    }
+
+    if (arg === '--mrdj-no-create-expo-components') {
+      mrdj.createExpoComponents = false;
+      continue;
+    }
+
+    if (arg === '--mrdj-latest-expo-sdk') {
+      mrdj.latestExpoSdk = true;
+      continue;
+    }
+
+    if (arg === '--mrdj-no-latest-expo-sdk') {
+      mrdj.latestExpoSdk = false;
+      continue;
+    }
+
+    if (arg === '--mrdj-expo-ui') {
+      mrdj.expoUi = true;
+      continue;
+    }
+
+    if (arg === '--mrdj-no-expo-ui') {
+      mrdj.expoUi = false;
+      continue;
+    }
+
+    if (arg === '--mrdj-expo-native-tabs') {
+      mrdj.expoNativeTabs = true;
+      continue;
+    }
+
+    if (arg === '--mrdj-no-expo-native-tabs') {
+      mrdj.expoNativeTabs = false;
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-eas-uses=')) {
+      mrdj.easUses = splitList(arg.slice('--mrdj-eas-uses='.length));
       continue;
     }
 
@@ -930,6 +1019,16 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
     deploymentTarget: parsed.mrdj.deploymentTarget,
     defaults: parsed.mrdj.defaults,
     testToMain: parsed.mrdj.testToMain,
+    platforms: parsed.mrdj.platforms,
+    firstPlatform: parsed.mrdj.firstPlatform,
+    platformStrategy: parsed.mrdj.platformStrategy,
+    webOutput: parsed.mrdj.webOutput,
+    deployedServer: parsed.mrdj.deployedServer,
+    createExpoComponents: parsed.mrdj.createExpoComponents,
+    latestExpoSdk: parsed.mrdj.latestExpoSdk,
+    expoUi: parsed.mrdj.expoUi,
+    expoNativeTabs: parsed.mrdj.expoNativeTabs,
+    easUses: parsed.mrdj.easUses,
   };
 }
 

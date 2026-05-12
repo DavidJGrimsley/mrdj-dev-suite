@@ -163,6 +163,51 @@ describe('create-expo-super-stack CLI helpers', () => {
     }
   });
 
+  it('parses every onboarding mrdj flag the agentic prompt sends', () => {
+    const parsed = parseArgs([
+      'demo-app',
+      '--mrdj-platforms=web,ios,android-tv',
+      '--mrdj-first-platform=ios',
+      '--mrdj-platform-strategy=folders',
+      '--mrdj-web-output=server',
+      '--mrdj-deployed-server=standard-expo',
+      '--mrdj-no-create-expo-components',
+      '--mrdj-latest-expo-sdk',
+      '--mrdj-no-expo-ui',
+      '--mrdj-expo-native-tabs',
+      '--mrdj-eas-uses=building mobile applications,publishing mobile applications',
+    ]);
+
+    expect(parsed.mrdj.platforms).toEqual(['web', 'ios', 'android-tv']);
+    expect(parsed.mrdj.firstPlatform).toBe('ios');
+    expect(parsed.mrdj.platformStrategy).toBe('folders');
+    expect(parsed.mrdj.webOutput).toBe('server');
+    expect(parsed.mrdj.deployedServer).toBe('standard-expo');
+    expect(parsed.mrdj.createExpoComponents).toBe(false);
+    expect(parsed.mrdj.latestExpoSdk).toBe(true);
+    expect(parsed.mrdj.expoUi).toBe(false);
+    expect(parsed.mrdj.expoNativeTabs).toBe(true);
+    expect(parsed.mrdj.easUses).toEqual([
+      'building mobile applications',
+      'publishing mobile applications',
+    ]);
+    // None of these mrdj-only flags should leak into the create-expo-stack args.
+    expect(parsed.createExpoStackArgs).toEqual(['demo-app']);
+  });
+
+  it('rejects malformed enum values for the new mrdj flags instead of forwarding garbage', () => {
+    const parsed = parseArgs([
+      'demo-app',
+      '--mrdj-platform-strategy=other',
+      '--mrdj-web-output=foo',
+      '--mrdj-deployed-server=bar',
+    ]);
+
+    expect(parsed.mrdj.platformStrategy).toBeUndefined();
+    expect(parsed.mrdj.webOutput).toBeUndefined();
+    expect(parsed.mrdj.deployedServer).toBeUndefined();
+  });
+
   it('sanitizes Expo slug and scheme values from display names', async () => {
     expect(toExpoSlug('Bandana Designer')).toBe('bandana-designer');
     expect(toExpoScheme('Bandana Designer')).toBe('bandana-designer');
