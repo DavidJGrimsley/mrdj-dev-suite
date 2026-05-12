@@ -176,17 +176,18 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 3: Create The CLI
 
-- [ ] Implement `mrdj doctor`.
-- [ ] Implement `mrdj doctor --json`.
-- [ ] Implement `mrdj doctor --fix`.
-- [ ] Implement `mrdj init` / `mrdj onboard`.
+- [x] Implement `mrdj doctor`.
+- [x] Implement `mrdj doctor --json`.
+- [x] Implement `mrdj doctor --fix`.
+- [x] Implement `mrdj init` / `mrdj onboard`.
 - [x] Implement `mrdj kill-port`.
 - [x] Implement `mrdj clear-expo-start` / `mrdj clean-start`.
 - [x] Implement `create-expo-super-stack`.
-- [ ] Implement `mrdj explain`.
-- [ ] Implement `mrdj skills list`.
+- [x] Implement `mrdj explain`.
+- [x] Implement `mrdj skills list`.
+- [x] Implement `mrdj skills show`.
 - [x] Implement `mrdj mcp install` with `--client claude|codex|cursor` (subsumes the originally separate `mrdj codex install` and `mrdj claude install` commands).
-- [ ] Implement `mrdj report`.
+- [x] Implement `mrdj report`.
 - [ ] Keep DWAH-specific commands future-facing until the personal suite proves itself, such as `dwah login`, `dwah link`, `dwah env pull`, `dwah env push`, `dwah deploy`, `dwah preview`, `dwah promote`, and `dwah rollback`.
 
 ### Phase 4: Agent Skills
@@ -279,8 +280,8 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 
 ## Cleanup/Random todo
-- [ ] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
-- [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.
+- [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
+- [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
 
 ## Mono repo support
 - [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.

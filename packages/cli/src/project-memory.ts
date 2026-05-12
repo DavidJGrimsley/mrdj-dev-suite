@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type DataStart = 'local' | 'supabase';
+export type AppDirectory = 'src' | 'root';
+export type PlatformLayoutMode = 'shared' | 'platform-specific';
 
 export interface OnboardAnswers {
   appName: string;
@@ -23,6 +25,8 @@ export interface OnboardAnswers {
   easUses: string[];
   projectInfoReady: boolean;
   projectStyleReady: boolean;
+  appDirectory: AppDirectory;
+  platformLayoutMode: PlatformLayoutMode;
   dataStart: DataStart;
   testToMainSafeguards: boolean;
   defaults: string[];
@@ -255,23 +259,24 @@ export async function scaffoldRichBoilerplate(
     )
   );
 
-  const appDir = path.join(projectPath, 'app');
+  const appDir = getExpoRouterAppDir(projectPath, answers.appDirectory);
+  const expositionRouteDir = path.join(appDir, 'exposition');
+  await mkdir(expositionRouteDir, { recursive: true });
   if (await pathExists(appDir)) {
-    await mkdir(path.join(appDir, 'exposition'), { recursive: true });
     results.push(
       await writeIfAllowed(
-        path.join(appDir, 'exposition', 'index.tsx'),
-        "export { default } from '../../src/features/exposition/exposition-screen';\n",
+        path.join(expositionRouteDir, 'index.tsx'),
+        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen')),
         force
       ),
       await writeIfAllowed(
-        path.join(appDir, 'exposition', 'style-guide.tsx'),
-        "export { default } from '../../src/features/exposition/style-guide-screen';\n",
+        path.join(expositionRouteDir, 'style-guide.tsx'),
+        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen')),
         force
       ),
       await writeIfAllowed(
-        path.join(appDir, 'exposition', 'data.tsx'),
-        "export { default } from '../../src/features/exposition/data-screen';\n",
+        path.join(expositionRouteDir, 'data.tsx'),
+        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'data-screen')),
         force
       )
     );
@@ -305,7 +310,7 @@ export async function scaffoldRichBoilerplate(
     await ensureUniwindMetroConfig(projectPath);
     await removeNativeWindArtifacts(projectPath);
   }
-  await ensureGlobalCssImport(projectPath);
+  await ensureGlobalCssImport(projectPath, answers.appDirectory);
 
   return results;
 }
@@ -349,7 +354,9 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     '',
     `- Target platforms: ${answers.targetPlatforms.join(', ') || 'none selected'}`,
     `- First MVP platform: ${answers.firstTargetPlatform}`,
+    `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,
     `- Platform-specific organization: ${formatPlatformStrategy(answers.platformFileStrategy)}`,
+    `- Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}`,
     `- Web output: ${answers.webOutput}`,
     `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
@@ -399,7 +406,9 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- Latest Expo SDK preference: ${formatBoolean(answers.useLatestExpoSdk)}`,
     `- Target platforms: ${answers.targetPlatforms.join(', ') || 'none selected'}`,
     `- First MVP platform: ${answers.firstTargetPlatform}`,
+    `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,
     `- Platform-specific organization: ${formatPlatformStrategy(answers.platformFileStrategy)}`,
+    `- Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}`,
     `- Web output: ${answers.webOutput}`,
     `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
@@ -437,7 +446,8 @@ export function renderTodo(answers: OnboardAnswers): string {
     '## Phase 1: App Shell And First Flow',
     '',
     `- [ ] Build the MVP first for ${answers.firstTargetPlatform}.`,
-    '- [ ] Establish app shell, navigation, layouts, and route groups.',
+    `- [ ] Establish app shell, navigation, layouts, and route groups in ${formatAppDirectory(answers.appDirectory)}.`,
+    `- [ ] Use ${formatPlatformLayoutMode(answers.platformLayoutMode)} unless project memory is updated.`,
     `- [ ] Implement the first core flow from project info: ${answers.coreFlows}.`,
     '- [ ] Keep route files thin and move real UI into feature screens.',
     '',
@@ -552,7 +562,9 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- Prefer Uniwind with Tailwind v4 for new styling work.',
     '- Use Zustand only when state is shared across screens or features.',
     '- Keep private environment variables server-side and never expose secrets with `EXPO_PUBLIC_`.',
+    `- Keep Expo Router routes in ${formatAppDirectory(answers.appDirectory)} unless the project memory changes.`,
     `- Use ${formatPlatformStrategy(answers.platformFileStrategy)} for platform-specific code when the selected targets diverge.`,
+    `- Use ${formatPlatformLayoutMode(answers.platformLayoutMode)} for selected platform shells.`,
     `- Treat ${answers.firstTargetPlatform} as the first MVP platform until the roadmap says otherwise.`,
     '',
     '## Default Package Support',
@@ -600,6 +612,8 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
     '- `project/todo.md`',
     '- `project/style.md`',
     '- `project/guidelines.md`',
+    '',
+    `Expo Router routes belong in ${formatAppDirectory(answers.appDirectory)}. Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}.`,
     '',
     'Before any intake, planning, scaffolding, or phase work, scan every `project/` file for the marker `# TodoForContext(optional):`. If any are present, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero markers remain.',
     '',
@@ -725,7 +739,9 @@ function applyGuidelinesTemplate(template: string, answers: OnboardAnswers): str
     useLatestExpoSdk: formatBoolean(answers.useLatestExpoSdk),
     targetPlatforms: answers.targetPlatforms.map((item) => `- ${item}`).join('\n'),
     firstTargetPlatform: answers.firstTargetPlatform,
+    appDirectory: formatAppDirectory(answers.appDirectory),
     platformFileStrategy: formatPlatformStrategy(answers.platformFileStrategy),
+    platformLayoutMode: formatPlatformLayoutMode(answers.platformLayoutMode),
     webOutput: answers.webOutput,
     deployedServer: formatServerChoice(answers.deployedServer),
     usesExpoUi: formatBoolean(answers.usesExpoUi),
@@ -750,6 +766,14 @@ function formatBoolean(value: boolean): string {
 
 function formatPlatformStrategy(value: OnboardAnswers['platformFileStrategy']): string {
   return value === 'folders' ? 'platform-specific folders' : 'platform-specific files only';
+}
+
+function formatAppDirectory(value: AppDirectory): string {
+  return value === 'src' ? '`src/app`' : '`app`';
+}
+
+function formatPlatformLayoutMode(value: PlatformLayoutMode): string {
+  return value === 'platform-specific' ? 'platform-specific layouts' : 'shared layouts';
 }
 
 function formatServerChoice(value: OnboardAnswers['deployedServer']): string {
@@ -876,12 +900,18 @@ async function removeTailwindPrettierPluginConfig(filePath: string): Promise<voi
   }
 }
 
-async function ensureGlobalCssImport(projectPath: string): Promise<void> {
-  const layoutPath = path.join(projectPath, 'app', '_layout.tsx');
+async function ensureGlobalCssImport(projectPath: string, appDirectory: AppDirectory): Promise<void> {
+  const layoutPath = path.join(getExpoRouterAppDir(projectPath, appDirectory), '_layout.tsx');
   const appPath = path.join(projectPath, 'App.tsx');
   const layout = await readOptionalText(layoutPath);
-  if (layout && !layout.includes('global.css')) {
-    await writeFile(layoutPath, `import '../global.css';\n${layout}`, 'utf8');
+  if (layout) {
+    const importStatement = renderGlobalCssImport(layoutPath, projectPath);
+    const updated = layout.match(/^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m)
+      ? layout.replace(/^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m, `${importStatement}\n`)
+      : `${importStatement}\n${layout}`;
+    if (updated !== layout) {
+      await writeFile(layoutPath, updated, 'utf8');
+    }
     return;
   }
 
@@ -889,6 +919,23 @@ async function ensureGlobalCssImport(projectPath: string): Promise<void> {
   if (app && !app.includes('global.css')) {
     await writeFile(appPath, `import './global.css';\n${app}`, 'utf8');
   }
+}
+
+function getExpoRouterAppDir(projectPath: string, appDirectory: AppDirectory): string {
+  return appDirectory === 'src' ? path.join(projectPath, 'src', 'app') : path.join(projectPath, 'app');
+}
+
+function renderRouteExport(routeDir: string, targetModulePath: string): string {
+  return `export { default } from '${toRelativeImportPath(routeDir, targetModulePath)}';\n`;
+}
+
+function renderGlobalCssImport(layoutPath: string, projectPath: string): string {
+  return `import '${toRelativeImportPath(path.dirname(layoutPath), path.join(projectPath, 'global.css'))}';`;
+}
+
+function toRelativeImportPath(fromDir: string, toPath: string): string {
+  const normalized = path.relative(fromDir, toPath).replace(/\\/g, '/');
+  return normalized.startsWith('.') ? normalized : `./${normalized}`;
 }
 
 async function writeIfAllowed(

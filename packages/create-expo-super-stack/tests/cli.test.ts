@@ -169,6 +169,8 @@ describe('create-expo-super-stack CLI helpers', () => {
       '--mrdj-platforms=web,ios,android-tv',
       '--mrdj-first-platform=ios',
       '--mrdj-platform-strategy=folders',
+      '--mrdj-app-directory=src',
+      '--mrdj-platform-layouts=platform-specific',
       '--mrdj-web-output=server',
       '--mrdj-deployed-server=standard-expo',
       '--mrdj-no-create-expo-components',
@@ -181,6 +183,8 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(parsed.mrdj.platforms).toEqual(['web', 'ios', 'android-tv']);
     expect(parsed.mrdj.firstPlatform).toBe('ios');
     expect(parsed.mrdj.platformStrategy).toBe('folders');
+    expect(parsed.mrdj.appDirectory).toBe('src');
+    expect(parsed.mrdj.platformLayouts).toBe('platform-specific');
     expect(parsed.mrdj.webOutput).toBe('server');
     expect(parsed.mrdj.deployedServer).toBe('standard-expo');
     expect(parsed.mrdj.createExpoComponents).toBe(false);
@@ -199,11 +203,15 @@ describe('create-expo-super-stack CLI helpers', () => {
     const parsed = parseArgs([
       'demo-app',
       '--mrdj-platform-strategy=other',
+      '--mrdj-app-directory=sideways',
+      '--mrdj-platform-layouts=solo',
       '--mrdj-web-output=foo',
       '--mrdj-deployed-server=bar',
     ]);
 
     expect(parsed.mrdj.platformStrategy).toBeUndefined();
+    expect(parsed.mrdj.appDirectory).toBeUndefined();
+    expect(parsed.mrdj.platformLayouts).toBeUndefined();
     expect(parsed.mrdj.webOutput).toBeUndefined();
     expect(parsed.mrdj.deployedServer).toBeUndefined();
   });

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -28,6 +29,8 @@ export interface OnboardArgv {
   platforms?: string | string[];
   firstPlatform?: string;
   platformStrategy?: 'folders' | 'files-only';
+  appDirectory?: 'src' | 'root';
+  platformLayouts?: 'shared' | 'platform-specific';
   webOutput?: 'static' | 'server' | 'spa' | 'none';
   deployedServer?: 'standard-expo' | 'custom' | 'none';
   expoUi?: boolean;
@@ -174,6 +177,32 @@ export async function collectOnboardPlan(
           seed.platformFileStrategy
         )
       : seed.platformFileStrategy;
+  const appDirectory =
+    argv.appDirectory ??
+    (await askChoice(
+      'Where should MrDJ place Expo Router route files it generates?',
+      [
+        { value: 'src' as const, label: 'src/app', hint: 'Default for new Super Stack apps' },
+        { value: 'root' as const, label: 'app', hint: 'Use when the existing project already keeps routes at the root' },
+      ],
+      seed.appDirectory
+    ));
+  const platformLayoutMode =
+    targetPlatforms.length > 1
+      ? argv.platformLayouts ??
+        (await askChoice(
+          'Do selected platforms need their own layouts?',
+          [
+            { value: 'shared' as const, label: 'Shared layouts', hint: 'Default; use platform files only where needed' },
+            {
+              value: 'platform-specific' as const,
+              label: 'Platform-specific layouts',
+              hint: 'Use when TV, web, or native shells should diverge early',
+            },
+          ],
+          seed.platformLayoutMode
+        ))
+      : 'shared';
   const webOutput = targetPlatforms.includes('web')
     ? await askChoice(
         'For web output, choose the mode that fits the app.',
@@ -280,6 +309,8 @@ export async function collectOnboardPlan(
       easUses,
       projectInfoReady,
       projectStyleReady,
+      appDirectory,
+      platformLayoutMode,
       dataStart,
       testToMainSafeguards,
       defaults,
@@ -406,10 +437,22 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     easUses,
     projectInfoReady: false,
     projectStyleReady: false,
+    appDirectory: argv.appDirectory ?? detectAppDirectory(projectPath),
+    platformLayoutMode: argv.platformLayouts ?? 'shared',
     dataStart,
     testToMainSafeguards,
     defaults: deriveDefaults(argv.defaults, ['project-docs', 'guidelines', 'uniwind', 'doctor'], dataStart, testToMainSafeguards),
   };
+}
+
+function detectAppDirectory(projectPath: string): OnboardAnswers['appDirectory'] {
+  if (existsSync(path.join(projectPath, 'src', 'app'))) {
+    return 'src';
+  }
+  if (existsSync(path.join(projectPath, 'app'))) {
+    return 'root';
+  }
+  return 'src';
 }
 
 function normalizeDeployedServerChoice(

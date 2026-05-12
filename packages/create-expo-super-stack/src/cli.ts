@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access, readdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -35,6 +35,8 @@ export interface ParsedArgs {
     platforms?: string[];
     firstPlatform?: string;
     platformStrategy?: 'folders' | 'files-only';
+    appDirectory?: 'src' | 'root';
+    platformLayouts?: 'shared' | 'platform-specific';
     webOutput?: 'static' | 'server' | 'spa' | 'none';
     deployedServer?: 'standard-expo' | 'custom' | 'none';
     createExpoComponents?: boolean;
@@ -82,6 +84,9 @@ export async function main(): Promise<void> {
   const plan = parsed.mrdj.yes
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
+  const movedAppDir = !parsed.mrdj.skipCreate && plan.answers.appDirectory === 'src'
+    ? await moveRootAppIntoSrc(projectPath)
+    : null;
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
     force: parsed.mrdj.force,
     guidelinesTemplate: plan.guidelinesTemplate,
@@ -95,6 +100,9 @@ export async function main(): Promise<void> {
   console.log('MrDJ onboarding complete.');
   for (const result of written) {
     console.log(`${result.wrote ? 'CREATED' : 'KEPT'} ${path.relative(process.cwd(), result.filePath)}`);
+  }
+  if (movedAppDir) {
+    console.log(`MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`);
   }
   for (const result of identifierRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
@@ -274,6 +282,22 @@ export function parseArgs(args: string[]): ParsedArgs {
       const value = arg.slice('--mrdj-platform-strategy='.length);
       if (value === 'folders' || value === 'files-only') {
         mrdj.platformStrategy = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-app-directory=')) {
+      const value = arg.slice('--mrdj-app-directory='.length);
+      if (value === 'src' || value === 'root') {
+        mrdj.appDirectory = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--mrdj-platform-layouts=')) {
+      const value = arg.slice('--mrdj-platform-layouts='.length);
+      if (value === 'shared' || value === 'platform-specific') {
+        mrdj.platformLayouts = value;
       }
       continue;
     }
@@ -640,6 +664,18 @@ async function resolveGeneratedProjectPath(cwd: string, projectName: string): Pr
   }
 
   return directPath;
+}
+
+async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; to: string } | null> {
+  const rootAppDir = path.join(projectPath, 'app');
+  const srcAppDir = path.join(projectPath, 'src', 'app');
+  if (!(await pathExists(rootAppDir)) || (await pathExists(srcAppDir))) {
+    return null;
+  }
+
+  await mkdir(path.dirname(srcAppDir), { recursive: true });
+  await rename(rootAppDir, srcAppDir);
+  return { from: rootAppDir, to: srcAppDir };
 }
 
 export async function repairExpoProjectIdentifiers(projectPath: string, projectName: string): Promise<string[]> {
@@ -1022,6 +1058,8 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
     platforms: parsed.mrdj.platforms,
     firstPlatform: parsed.mrdj.firstPlatform,
     platformStrategy: parsed.mrdj.platformStrategy,
+    appDirectory: parsed.mrdj.appDirectory ?? 'src',
+    platformLayouts: parsed.mrdj.platformLayouts,
     webOutput: parsed.mrdj.webOutput,
     deployedServer: parsed.mrdj.deployedServer,
     createExpoComponents: parsed.mrdj.createExpoComponents,

@@ -6,14 +6,20 @@ import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
+import { runExplainCommand } from './commands/explain.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
+import { runReportCommand } from './commands/report.js';
+import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
+import type { ExplainArgv } from './commands/explain.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
+import type { ReportArgv } from './commands/report.js';
+import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -80,7 +86,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      'onboard',
+      ['onboard', 'init'],
       'Run post-create onboarding for a new Expo project',
       (builder) =>
         builder
@@ -135,6 +141,14 @@ async function main(): Promise<void> {
           .option('platform-strategy', {
             describe: 'Platform-specific organization style',
             choices: ['folders', 'files-only'] as const,
+          })
+          .option('app-directory', {
+            describe: 'Where Expo Router app routes should live',
+            choices: ['src', 'root'] as const,
+          })
+          .option('platform-layouts', {
+            describe: 'Whether selected platforms share layouts or need platform-specific layouts',
+            choices: ['shared', 'platform-specific'] as const,
           })
           .option('web-output', {
             describe: 'Expo web output mode',
@@ -274,6 +288,95 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runMcpInstallCommand(argv as McpInstallArgv);
+      }
+    )
+    .command(
+      'skills <action> [id]',
+      'List or show bundled MrDJ agent skills',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Skill command',
+            choices: ['list', 'show'] as const,
+          })
+          .positional('id', {
+            describe: 'Skill id',
+            type: 'string',
+          })
+          .option('query', {
+            alias: 'q',
+            describe: 'Filter skills by id, name, description, or tag',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print JSON output',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        const action = String(argv.action);
+        if (action === 'list') {
+          await runSkillsListCommand(argv as SkillsListArgv);
+          return;
+        }
+        await runSkillsShowCommand(argv as SkillsShowArgv);
+      }
+    )
+    .command(
+      'explain <topic>',
+      'Explain a Doctor check or bundled knowledge topic',
+      (builder) =>
+        builder
+          .positional('topic', {
+            describe: 'Doctor check name, knowledge id, or keyword',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print the explanation result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runExplainCommand(argv as ExplainArgv);
+      }
+    )
+    .command(
+      'report [path]',
+      'Generate a local Doctor-backed project report',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path to scan',
+            type: 'string',
+            default: '.',
+          })
+          .option('mode', {
+            describe: 'Doctor mode',
+            choices: ['fast', 'ci', 'full'] as const,
+            default: 'fast' as const,
+          })
+          .option('scripts', {
+            describe: 'Run package scripts in addition to static checks',
+            type: 'boolean',
+            default: true,
+          })
+          .option('json', {
+            describe: 'Print the structured Doctor report as JSON instead of Markdown',
+            type: 'boolean',
+            default: false,
+          })
+          .option('output', {
+            alias: 'o',
+            describe: 'Write the report to a file instead of stdout',
+            type: 'string',
+          })
+          .option('timeout-ms', {
+            describe: 'Timeout per package script check',
+            type: 'number',
+            default: 120000,
+          }),
+      async (argv) => {
+        await runReportCommand(argv as ReportArgv);
       }
     )
     .command(

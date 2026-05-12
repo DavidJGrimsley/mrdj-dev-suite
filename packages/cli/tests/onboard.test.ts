@@ -334,6 +334,41 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('Rich boilerplate');
   });
 
+  it('can generate Expo Router exposition routes under src/app', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-src-app-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ name: 'src-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      'export default function Layout() { return null; }\n',
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Src App',
+      appDirectory: 'src',
+      platformLayouts: 'platform-specific',
+    });
+
+    await expect(readFile(path.join(projectPath, 'src', 'app', 'exposition', 'index.tsx'), 'utf8')).resolves.toContain(
+      '../../features/exposition/exposition-screen'
+    );
+    await expect(readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      "import '../../global.css';"
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain('`src/app`');
+    await expect(readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')).resolves.toContain(
+      'platform-specific layouts'
+    );
+  });
+
   it('can generate Supabase data guidance and opt out of test-to-main workflow', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-supabase-'));
     tempDirs.push(projectPath);
@@ -414,6 +449,8 @@ describe('runOnboardCommand', () => {
     expect(plan.answers.useLatestExpoSdk).toBe(true);
     expect(plan.answers.usesExpoUi).toBe(true);
     expect(plan.answers.usesExpoNativeTabs).toBe(true);
+    expect(plan.answers.appDirectory).toBe('src');
+    expect(plan.answers.platformLayoutMode).toBe('shared');
     expect(plan.guidelinesTemplate).toBe(true);
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
@@ -475,6 +512,8 @@ function sampleAnswers(appName: string): OnboardAnswers {
     easUses: [],
     projectInfoReady: false,
     projectStyleReady: false,
+    appDirectory: 'root',
+    platformLayoutMode: 'shared',
     dataStart: 'local',
     testToMainSafeguards: true,
     defaults: ['project-docs', 'guidelines', 'uniwind', 'doctor'],

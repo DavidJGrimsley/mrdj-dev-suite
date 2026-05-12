@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+
+import { explainTopic } from '../src/commands/explain.js';
+import { renderMarkdownReport } from '../src/commands/report.js';
+import { listSkillSummaries } from '../src/commands/skills.js';
+
+import type { DoctorReport } from '@mrdj/doctor';
+
+describe('Phase 3 command helpers', () => {
+  it('lists bundled skills and filters by query', () => {
+    const allSkills = listSkillSummaries();
+    const routerSkills = listSkillSummaries('router');
+
+    expect(allSkills.length).toBeGreaterThan(0);
+    expect(routerSkills.some((skill) => skill.id === 'expo-router-architecture')).toBe(true);
+    expect(routerSkills.every((skill) => [skill.id, skill.name, skill.description, ...skill.tags].join(' ').toLowerCase().includes('router'))).toBe(true);
+  });
+
+  it('explains exact Doctor check topics without becoming ambiguous', async () => {
+    const result = await explainTopic('env-hygiene');
+
+    expect(result.status).toBe('found');
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.type).toBe('doctor');
+    expect(result.matches[0]?.name).toBe('Env Hygiene');
+  });
+
+  it('surfaces ambiguous broad explain topics', async () => {
+    const result = await explainTopic('expo');
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.matches.length).toBeGreaterThan(1);
+  });
+
+  it('renders a Markdown Doctor report', () => {
+    const report: DoctorReport = {
+      projectPath: 'F:/ReactNativeApps/Demo',
+      timestamp: '2026-05-12T00:00:00.000Z',
+      mode: 'fast',
+      summary: {
+        errors: 0,
+        warnings: 1,
+        passed: 1,
+        skipped: 0,
+      },
+      checks: [
+        {
+          name: 'project docs',
+          status: 'pass',
+          message: 'Project memory files exist.',
+        },
+        {
+          name: 'env hygiene',
+          status: 'warn',
+          message: 'Review env usage.',
+          details: { files: ['.env'] },
+        },
+      ],
+    };
+
+    const markdown = renderMarkdownReport(report);
+
+    expect(markdown).toContain('# MrDJ Doctor Report');
+    expect(markdown).toContain('0 errors, 1 warnings, 1 passed, 0 skipped');
+    expect(markdown).toContain('### WARN env hygiene');
+    expect(markdown).toContain('"files"');
+  });
+});

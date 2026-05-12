@@ -36,7 +36,9 @@ it for the app before treating it as final.
 - Target platforms:
 {{targetPlatforms}}
 - First MVP platform: {{firstTargetPlatform}}
+- Expo Router app directory: {{appDirectory}}
 - Platform-specific organization: {{platformFileStrategy}}
+- Platform layout mode: {{platformLayoutMode}}
 - Web output: {{webOutput}}
 - Deployed server: {{deployedServer}}
 - Latest Expo SDK preference: {{useLatestExpoSdk}}
@@ -55,6 +57,8 @@ it for the app before treating it as final.
   or layouts.
 - Put reusable business logic in `src/features`, `src/services`, `src/data`, or
   shared hooks.
+- Keep Expo Router routes in {{appDirectory}} unless project memory changes.
+- Use {{platformLayoutMode}} for selected platform shells.
 - Prefer Uniwind with Tailwind v4 for new styling work.
 - Use Zustand only when state is shared across screens or features.
 - Keep private environment variables server-side and never expose secrets with
