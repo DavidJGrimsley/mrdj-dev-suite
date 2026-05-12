@@ -120,29 +120,68 @@ async function findPidsForPort(port: number): Promise<number[]> {
 }
 
 async function findWindowsPidsForPort(port: number): Promise<number[]> {
+  const powershellPids = await findWindowsPidsForPortWithPowerShell(port);
+  if (powershellPids.length > 0) {
+    return powershellPids;
+  }
+
   try {
     const { stdout } = await execFileAsync('netstat', ['-ano', '-p', 'tcp'], {
       windowsHide: true,
     });
-    const pids = new Set<number>();
-    for (const line of stdout.split(/\r?\n/)) {
-      const normalized = line.trim().replace(/\s+/g, ' ');
-      const parts = normalized.split(' ');
-      if (parts.length < 5 || parts[0] !== 'TCP') {
-        continue;
-      }
-
-      const localAddress = parts[1] ?? '';
-      const state = parts[3] ?? '';
-      const pid = Number.parseInt(parts[4] ?? '', 10);
-      if (state === 'LISTENING' && localAddress.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0) {
-        pids.add(pid);
-      }
-    }
-    return [...pids];
+    return parseWindowsNetstatPids(stdout, port);
   } catch {
     return [];
   }
+}
+
+async function findWindowsPidsForPortWithPowerShell(port: number): Promise<number[]> {
+  try {
+    const script = [
+      '$ErrorActionPreference = "SilentlyContinue"',
+      `Get-NetTCPConnection -LocalPort ${port}`,
+      '  | Where-Object { $_.State -eq "Listen" -and $_.OwningProcess -gt 0 }',
+      '  | Select-Object -ExpandProperty OwningProcess -Unique',
+    ].join(' ');
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true }
+    );
+    return parsePidLines(stdout);
+  } catch {
+    return [];
+  }
+}
+
+export function parseWindowsNetstatPids(stdout: string, port: number): number[] {
+  const pids = new Set<number>();
+  for (const line of stdout.split(/\r?\n/)) {
+    const normalized = line.trim().replace(/\s+/g, ' ');
+    const parts = normalized.split(' ');
+    if (parts.length < 5 || parts[0] !== 'TCP') {
+      continue;
+    }
+
+    const localAddress = parts[1] ?? '';
+    const state = parts[3] ?? '';
+    const pid = Number.parseInt(parts[4] ?? '', 10);
+    if (state === 'LISTENING' && localAddress.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0) {
+      pids.add(pid);
+    }
+  }
+  return [...pids];
+}
+
+export function parsePidLines(stdout: string): number[] {
+  return Array.from(
+    new Set(
+      stdout
+        .split(/\r?\n/)
+        .map((line) => Number.parseInt(line.trim(), 10))
+        .filter((pid) => Number.isInteger(pid) && pid > 0)
+    )
+  );
 }
 
 async function getProcessName(pid: number): Promise<string | undefined> {

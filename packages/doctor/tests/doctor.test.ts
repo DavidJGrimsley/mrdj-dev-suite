@@ -45,7 +45,7 @@ describe('todo-for-context check', () => {
     ).toBe('pass');
   });
 
-  it('warns when project memory still contains TodoForContext markers', async () => {
+  it('errors when project memory still contains TodoForContext markers', async () => {
     const projectPath = await createTempProject();
     await writeFile(
       path.join(projectPath, 'project', 'info.md'),
@@ -56,7 +56,7 @@ describe('todo-for-context check', () => {
     const report = await runDoctor(projectPath, { runScripts: false });
     const check = report.checks.find((entry) => entry.name === 'todo-for-context markers');
 
-    expect(check?.status).toBe('warn');
+    expect(check?.status).toBe('error');
     expect(check?.details).toMatchObject({
       hits: [
         expect.objectContaining({ file: 'project/info.md', line: 5 }),

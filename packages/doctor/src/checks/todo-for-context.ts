@@ -58,10 +58,10 @@ export async function checkTodoForContextMarkers(projectPath: string): Promise<D
 
   return {
     name: 'todo-for-context markers',
-    status: 'warn',
+    status: 'error',
     message:
       `${hits.length} unresolved # TodoForContext(optional): ${hits.length === 1 ? 'marker' : 'markers'} ` +
-      'block agentic onboarding. Fill the section or delete the marker line.',
+      'block agentic onboarding, project intake, and phase work. Fill the section or delete the marker line.',
     details: { hits },
   };
 }

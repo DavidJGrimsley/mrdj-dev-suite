@@ -276,3 +276,14 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - DWAH hosting/preview layer.
 - Monorepo-aware generated app scaffolding beyond the post-MVP todo.
 - Fully automated merge without a successful dry-run period.
+
+
+## Cleanup/Random todo
+- [ ] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
+- [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.
+
+## Mono repo support
+- [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.
+- [ ] For onboarding, generate the project memory files and rich boilerplate inside the target package instead of the root, and adjust all file paths accordingly.
+- [ ] For Doctor, run checks only against the target package instead of the whole repo, and adjust any file path outputs accordingly.
+(previous todo, might be partially done but is related and we could finish it now: - [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.)

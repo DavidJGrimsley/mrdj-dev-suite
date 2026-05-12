@@ -197,7 +197,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      'kill-port [ports..]',
+      ['kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
       'Kill processes listening on one or more local ports',
       (builder) =>
         builder

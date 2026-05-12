@@ -59,7 +59,8 @@ planning: they scan every `project/` file for the literal marker
 either filled in or deleted.
 
 `mrdj doctor` mirrors this rule with a `todo-for-context markers`
-warning so the same blocker is visible from CI and editor surfaces.
+error so the same blocker stops CI and editor surfaces until the user
+fills the section or deletes the marker line.
 
 ### What's new in the agentic prompts
 
