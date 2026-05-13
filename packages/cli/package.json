@@ -22,6 +22,10 @@
     "./onboarding": {
       "import": "./dist/commands/onboard.js",
       "types": "./dist/commands/onboard.d.ts"
+    },
+    "./continue": {
+      "import": "./dist/continue.js",
+      "types": "./dist/continue.d.ts"
     }
   },
   "main": "./dist/cli.js",

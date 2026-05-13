@@ -20,13 +20,14 @@ export async function runExpoDoctorCheck(args: {
     return null;
   }
 
-  const scriptName = findScript(args.packageJson, ['doctor']);
+  const candidates = ['expo-doctor', 'doctor'];
+  const scriptName = findScript(args.packageJson, candidates);
   if (!scriptName) {
     return {
       name: 'expo doctor',
       status: 'warn',
       message: 'No package script found for expo doctor.',
-      details: { candidates: ['doctor'] },
+      details: { candidates },
     };
   }
 
@@ -38,4 +39,3 @@ export async function runExpoDoctorCheck(args: {
     await runShellCommand(command, args.projectPath, args.timeoutMs)
   );
 }
-

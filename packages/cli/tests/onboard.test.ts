@@ -76,7 +76,7 @@ describe('runOnboardCommand', () => {
       '## Motion Tone'
     );
     await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
-      '## Open Style Questions'
+      '## Style Questions To Revisit'
     );
     await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.not.toContain(
       'Keep Expo Router route files thin'
@@ -139,6 +139,19 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
       'clear-expo-start'
     );
+    await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
+      'mds:continue'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'local-data.native.ts'), 'utf8')
+    ).resolves.toContain('expo-sqlite');
+    await expect(readFile(path.join(projectPath, 'src', 'services', 'local-data.ts'), 'utf8')).resolves.not.toContain(
+      'expo-sqlite'
+    );
+    await expect(readFile(path.join(projectPath, 'app', 'index.tsx'), 'utf8')).resolves.toContain('home-screen');
+    await expect(readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')).resolves.toContain(
+      'settings-screen'
+    );
 
     const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
       scripts: Record<string, string>;
@@ -147,6 +160,8 @@ describe('runOnboardCommand', () => {
     };
     expect(packageJson.scripts['expo-install-fix']).toBe('npx expo install --fix');
     expect(packageJson.scripts['expo-doctor']).toBe('npx expo-doctor');
+    expect(packageJson.scripts.typecheck).toBe('tsc --noEmit');
+    expect(packageJson.scripts['build:web']).toBe('expo export --platform web');
     expect(packageJson.scripts['post-create-check']).toBe('npx expo install --fix && npx expo-doctor');
     expect(packageJson.scripts['ci:verify']).toBe('npx @mrdj/cli doctor --ci');
     expect(packageJson.dependencies['expo-sqlite']).toBe('~55.0.15');
@@ -367,6 +382,46 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')).resolves.toContain(
       'platform-specific layouts'
     );
+  });
+
+  it('preserves an existing tabs or drawer layout while replacing starter routes', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-tabs-layout-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ name: 'tabs-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app', '_layout.tsx'),
+      [
+        "import { Tabs } from 'expo-router';",
+        '',
+        'export default function Layout() {',
+        '  return <Tabs />;',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, 'app', 'details.tsx'), 'export default function Details() { return null; }\n', 'utf8');
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Tabs App',
+      createExpoComponents: false,
+    });
+
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'return <Tabs />'
+    );
+    await expect(readFile(path.join(projectPath, 'app', 'index.tsx'), 'utf8')).resolves.toContain('home-screen');
+    await expect(readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')).resolves.toContain(
+      'settings-screen'
+    );
+    await expect(readFile(path.join(projectPath, 'app', 'details.tsx'), 'utf8')).rejects.toThrow();
   });
 
   it('can generate Supabase data guidance and opt out of test-to-main workflow', async () => {

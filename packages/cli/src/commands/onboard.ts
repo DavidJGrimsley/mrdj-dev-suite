@@ -85,7 +85,7 @@ export const DATA_NEED_OPTIONS = [
 type DataNeedChoice = (typeof DATA_NEED_OPTIONS)[number];
 
 export const PROJECT_INFO_EXPLANATION =
-  'project/info.md is the product brief for the app: purpose, users, goals, features, data, platforms, monetization, team context, release plan, and open questions. Agents use it to avoid guessing what to build.';
+  'project/info.md is the product brief for the app: purpose, users, goals, features, data, platforms, monetization, team context, release plan, and questions to revisit. Agents use it to avoid guessing what to build.';
 export const PROJECT_STYLE_EXPLANATION =
   'project/style.md is only for visual direction: brand references, colors, typography, spacing, motion, accessibility, and style questions. Technical rules belong in project/guidelines.md.';
 export const DATA_START_EXPLANATION =

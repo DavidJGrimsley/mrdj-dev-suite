@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { runDoctor, scanFile } from '@mrdj/doctor';
+import { buildContinueSessionBrief } from '@mrdj/cli/continue';
 import {
   getSkill,
   listKnowledgeResources,
@@ -69,6 +70,16 @@ export async function startStdioServer(): Promise<void> {
 
 export function listTools(): MCPTool[] {
   return [
+    {
+      name: 'continue_project',
+      description: 'Build an MDS Continue session brief for an onboarded app folder.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+        },
+      },
+    },
     {
       name: 'doctor_scan_project',
       description: 'Run MrDJ Doctor checks against a project folder.',
@@ -167,6 +178,9 @@ export async function executeTool(
   input: Record<string, unknown>
 ): Promise<unknown> {
   switch (name) {
+    case 'continue_project': {
+      return buildContinueSessionBrief(readString(input.projectPath) ?? '.');
+    }
     case 'doctor_scan_project': {
       const projectPath = readString(input.projectPath) ?? '.';
       const mode = normalizeMode(readString(input.mode));
@@ -243,6 +257,21 @@ function registerKnowledgeResources(server: McpServer): void {
 }
 
 function registerTools(server: McpServer): void {
+  server.registerTool(
+    'continue_project',
+    {
+      title: 'Continue Project',
+      description: 'Build an MDS Continue session brief for an onboarded app folder.',
+      inputSchema: {
+        projectPath: z.string().optional(),
+      },
+    },
+    async ({ projectPath }) => {
+      const brief = await buildContinueSessionBrief(projectPath ?? '.');
+      return toolJson(brief);
+    }
+  );
+
   server.registerTool(
     'doctor_scan_project',
     {
@@ -382,6 +411,29 @@ function registerPrompts(server: McpServer): void {
           content: {
             type: 'text',
             text: buildOnboardPromptText(projectPath),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
+    'continue_mrdj_project',
+    {
+      title: 'Continue MrDJ Project',
+      description:
+        'Build an MDS Continue session brief for an existing Expo app folder by calling continue_project first.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+      },
+    },
+    ({ projectPath }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildContinueProjectPromptText(projectPath),
           },
         },
       ],
@@ -658,13 +710,36 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. Locate the line "MrDJ onboarding complete." in the generator output. Everything from that line to the end of stdout is the official success summary (CREATED file list, "Onboarding next steps", "Next steps: cd / clear-expo-start", the Mr. DJ thank-you message, and the "For the full dev-suite locally..." line).',
     '  2. Quote that whole tail block back to the user verbatim, in a fenced code block. Do NOT paraphrase or trim. The user expects to see the Mr. DJ thank-you message after every successful run.',
     '  3. THEN cd into the new app folder and run `mrdj doctor`. Surface any errors/warnings (especially todo-for-context markers).',
-    '  4. Tell the user the app is ready and list the next actions from project/todo.md.',
+    '  4. Search the new app folder project/ files for `# TodoForContext(optional):` markers.',
+    '     - If markers exist, ask: "Do you want to resolve the TodoForContext markers now? Default: yes."',
+    '     - If yes, walk through markers one at a time. For each marker, ask whether to fill the section or delete the marker line to acknowledge no extra context is needed.',
+    '     - If no, leave them listed as next actions and do not edit files.',
+    '  5. Run `mrdj continue` from the new app folder and show the MDS Continue brief.',
+    '  6. Tell the user-dev: "For lower token usage and lower cost, open this generated app folder in a new agent session and run `mrdj continue`."',
+    '  7. If the user-dev chooses to keep working in this parent-folder session, scope every command, search, and file read/write to the generated app folder. Do not search the whole parent directory.',
     '',
     'Rules:',
     '- Never run the generator inside an existing app folder. If you suspect you are inside one, stop and ask.',
     '- Never echo the assembled command line. Summarize choices in plain English instead.',
     '- One question per turn. Always show the default. Skip dependent questions when prerequisites are not met.',
     '- The generator runs all of MrDJ onboarding (project memory, exposition pages, dependencies, expo-doctor) once you pass --mrdj-yes plus the --mrdj-* flags. Do not run `mrdj onboard` separately afterward — it is already done.',
+  ].join('\n');
+}
+
+export function buildContinueProjectPromptText(projectPath?: string): string {
+  const target = projectPath ?? 'the current working directory';
+  return [
+    `Build an MDS Continue session brief for the Expo project at ${target}.`,
+    '',
+    'Call the MCP tool `continue_project` first with:',
+    `  projectPath: "${target}"`,
+    '',
+    'After the tool returns:',
+    '1. Present the recommendation priority, title, and plan.',
+    '2. If TodoForContext markers exist, treat them as blockers for onboarding/intake and implementation planning.',
+    '3. For each marker, ask the user to either fill the section or delete the marker line to acknowledge no extra context is needed.',
+    '4. Do not offer "skip markers and implement anyway."',
+    '5. Wait for user approval before making any file edits.',
   ].join('\n');
 }
 

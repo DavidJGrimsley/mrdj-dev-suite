@@ -34,11 +34,40 @@ describe('runDoctor', () => {
     expect(report.checks.find((check) => check.name === 'project docs')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'package scripts')?.status).toBe('pass');
   });
+
+  it('accepts MDS script aliases for Doctor and production builds', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'mds-scripts',
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        typecheck: 'node -e "process.exit(0)"',
+        test: 'node -e "process.exit(0)"',
+        'mds:doctor': 'npx @mrdj/cli doctor',
+        'build:prod': 'eas build --profile production',
+      },
+    });
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+
+    expect(report.checks.find((check) => check.name === 'package scripts')?.status).toBe('pass');
+  });
 });
 
 describe('todo-for-context check', () => {
   it('passes when no TodoForContext markers remain', async () => {
     const projectPath = await createTempProject();
+    await writeFile(
+      path.join(projectPath, 'project', 'guidelines.md'),
+      '# Guidelines\n\n- The string `# TodoForContext(optional):` documents unresolved markers.\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'todo.md'),
+      '# Todo\n\n- [ ] Resolve every `# TodoForContext(optional):` marker.\n',
+      'utf8'
+    );
+
     const report = await runDoctor(projectPath, { runScripts: false });
     expect(
       report.checks.find((check) => check.name === 'todo-for-context markers')?.status

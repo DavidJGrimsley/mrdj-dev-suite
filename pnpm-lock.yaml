@@ -113,6 +113,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.1
         version: 1.29.0(zod@4.4.3)
+      '@mrdj/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@mrdj/doctor':
         specifier: workspace:*
         version: link:../doctor

@@ -68,9 +68,9 @@ async function runProductionBuildCheck(args: {
 }): Promise<DoctorCheckResult | null> {
   const candidates =
     args.mode === 'full'
-      ? ['build:web:deploy', 'build:web', 'build']
+      ? ['build:web:deploy', 'build:web', 'build:prod', 'build:preview', 'build:dev', 'build']
       : args.mode === 'ci'
-        ? ['build:web:deploy', 'build']
+        ? ['build:web:deploy', 'build:web', 'build:prod', 'build']
         : [];
   if (candidates.length === 0) {
     return null;

@@ -5,6 +5,7 @@ import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
+import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runExplainCommand } from './commands/explain.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
@@ -14,6 +15,7 @@ import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { ExplainArgv } from './commands/explain.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
@@ -208,6 +210,25 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
+      }
+    )
+    .command(
+      'continue [path]',
+      'Inspect an onboarded app and propose the next MDS session plan',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Onboarded app path',
+            type: 'string',
+            default: '.',
+          })
+          .option('json', {
+            describe: 'Print the MDS Continue session brief as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runContinueCommand(argv as ContinueArgv);
       }
     )
     .command(

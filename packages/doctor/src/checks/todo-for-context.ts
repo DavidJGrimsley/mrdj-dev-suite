@@ -38,7 +38,7 @@ export async function checkTodoForContextMarkers(projectPath: string): Promise<D
     const lines = contents.split(/\r?\n/);
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index] ?? '';
-      if (line.includes(MARKER)) {
+      if (isUnresolvedMarkerLine(line)) {
         hits.push({
           file: candidate.label,
           line: index + 1,
@@ -64,4 +64,9 @@ export async function checkTodoForContextMarkers(projectPath: string): Promise<D
       'block agentic onboarding, project intake, and phase work. Fill the section or delete the marker line.',
     details: { hits },
   };
+}
+
+function isUnresolvedMarkerLine(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed.startsWith(MARKER) || trimmed.startsWith(`- ${MARKER}`) || trimmed.startsWith(`* ${MARKER}`);
 }

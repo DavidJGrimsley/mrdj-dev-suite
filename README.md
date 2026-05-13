@@ -73,6 +73,15 @@ node packages/create-expo-super-stack/dist/cli.js my-app --expo-router --mrdj-gu
 
 `mrdj onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
 
+### MDS Continue
+
+`mrdj continue` prints an MDS Continue session brief for an already-onboarded app. It checks unresolved `TodoForContext` markers, `project/todo.md`, git status, package scripts, package manager, and a fast no-scripts Doctor scan, then proposes the next session plan without changing files.
+
+```bash
+node packages/cli/dist/cli.js continue /path/to/expo-app
+node packages/cli/dist/cli.js continue /path/to/expo-app --json
+```
+
 Defaults for new MrDJ projects:
 
 - Uniwind, not NativeWind, when MrDJ is managing styling for an existing app.
@@ -91,10 +100,12 @@ Defaults for new MrDJ projects:
 
 Two prompts ship with the server:
 
-- `create_expo_super_stack` — invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then hands off to onboarding inside the new folder.
+- `create_expo_super_stack` — invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then verifies the generated app folder and offers to resolve TodoForContext markers.
 - `onboard_new_expo_app` — invoke from **inside an existing Expo app folder** (whether brand new from a generator or a year-old project). Runs the intake → normalize → plan → scaffold flow.
 
-Both prompts enforce a `# TodoForContext(optional):` blocker check before any planning or scaffolding. If any markers remain in `project/` files, the agent stops and asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as a warning.
+After generation, the user-dev should open the generated app folder directly in a new agent session and run `mrdj continue`. That fresh app-root session reduces token usage and saves money because future searches, reads, and plans are scoped to the app instead of the parent folder and old generator conversation.
+
+Both prompts enforce or surface a `# TodoForContext(optional):` blocker before implementation work. If any markers remain in `project/` files, the agent asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as an error.
 
 By default, install is **user-scoped** (every workspace gets the server). Pass `--scope project` to limit to one folder.
 

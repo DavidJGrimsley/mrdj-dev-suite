@@ -47,16 +47,22 @@ Two prompts ship with the server:
 - `create_expo_super_stack` — invoke from a **parent folder** (e.g.
   `F:\ReactNativeApps`) when the app folder does not exist yet. The
   agent confirms platforms, styling, data start, etc., then runs
-  `create-expo-super-stack` and hands off to onboarding inside the new
-  folder.
+  `create-expo-super-stack`, verifies the generated app folder, and
+  offers to resolve TodoForContext markers.
 - `onboard_new_expo_app` — invoke from **inside an existing Expo app
   folder** (a freshly generated one or a year-old project). Runs the
   intake → normalize → plan → scaffold flow.
 
-Both prompts enforce a **Step 0 blocker check** before intake or
-planning: they scan every `project/` file for the literal marker
-`# TodoForContext(optional):` and refuse to proceed until each one is
-either filled in or deleted.
+After generation, the user-dev should open the generated app folder
+directly in a new agent session and run `mrdj continue`. That fresh
+app-root session reduces token usage and saves money because future
+searches, reads, and plans are scoped to the app instead of the parent
+folder and old generator conversation.
+
+Both prompts enforce or surface a **TodoForContext blocker** before
+implementation work: they scan every `project/` file for the literal
+marker `# TodoForContext(optional):` and ask the user to fill it in or
+delete the marker line.
 
 `mrdj doctor` mirrors this rule with a `todo-for-context markers`
 error so the same blocker stops CI and editor surfaces until the user
@@ -86,6 +92,9 @@ fills the section or deletes the marker line.
   quotes the generator's `MrDJ onboarding complete` tail block back
   verbatim so the Mr. DJ thank-you text appears in chat the same way
   it does in a terminal CLI run.
+- **MDS Continue handoff.** The agent runs `mrdj continue` from the
+  generated app folder, then tells the user-dev to open that app folder
+  in a fresh agent session to lower token usage and cost.
 
 ## Defaults
 

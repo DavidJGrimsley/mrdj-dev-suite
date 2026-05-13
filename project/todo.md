@@ -192,6 +192,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 4: Agent Skills
 
+- [ ] Ensure the agent with which I'm working has a skill for creating skills BEFORE any work is done.
 - [ ] Author markdown skills first; avoid over-engineering.
 - [ ] Create skills for app-folder architecture, SSR safety, API routes, SEO, Supabase env vars, Uniwind theme systems, deployment, debugging, and project onboarding.
 - [ ] Create a Super Stack startup skill that walks an agent through project research, `create-expo-super-stack`, project-memory shaping, exposition review, and phase-based build kickoff.
@@ -202,6 +203,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 5: Codex Plugin
 
+- [ ] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
 - [ ] Build `plugins/codex/` with `.codex-plugin/plugin.json`, `.mcp.json`, skills, commands, and README.
 - [ ] Include Codex commands such as `review-expo-project.md`, `run-doctor.md`, `prepare-deploy.md`, and `fix-seo.md`.
 - [ ] Add a Codex command/prompt for `create-expo-super-stack` that starts an agent-assisted app setup session and keeps the user in conversation with the agent the whole time.
@@ -212,6 +214,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 6: Claude Code Plugin
 
+- [ ] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
 - [ ] Build `plugins/claude-code/` with plugin config, MCP config, commands, shared skills, and README.
 - [ ] Use the same source skill files as the Codex plugin.
 - [ ] Generate plugin skill files from `packages/knowledge` instead of duplicating content manually.
@@ -282,6 +285,18 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 ## Cleanup/Random todo
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
 - [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
+- [ ] Run a sweep to ensure MrDJ-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
+(Then maybe add a small audit checklist before adding any new MrDJ skill:
+
+Does an Expo skill already cover this?
+If yes, is MrDJ only adding project-specific guidance?
+Are we linking/delegating instead of duplicating?
+Is the new rule checkable by Doctor or useful to onboarding?
+Would this still be useful if the Expo docs/plugin improved tomorrow?)
+- change reference of 'MrDJ' infront of tools to 'MDS' and refer to the suite as 'MrDJ Dev Suite' instead of 'MrDJ' to avoid confusion between the suite and the persona/agent. for example, 'MDS Doctor' instead of 'MrDJ Doctor' and 'MDS onboarding' instead of 'MrDJ onboarding'.
+- change kill-port to MDS free-port
+
+
 
 ## Mono repo support
 - [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.

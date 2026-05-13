@@ -12,8 +12,8 @@ export function checkPackageScripts(
     lint: ['lint'],
     typecheck: ['typecheck', 'type-check', 'check'],
     test: ['test', 'test:ci'],
-    doctor: ['doctor'],
-    build: ['build:web:deploy', 'build:web', 'build'],
+    doctor: ['doctor', 'mds:doctor', 'ci:verify'],
+    build: ['build:web:deploy', 'build:web', 'build', 'build:prod', 'build:preview', 'build:dev'],
   };
 
   const missing = Object.entries(expectedScriptGroups)

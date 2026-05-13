@@ -106,6 +106,7 @@ const INFO_HEADINGS = [
   'Monetization Strategy',
   'Team Context',
   'Release Strategy',
+  'Questions To Revisit',
   'Open Questions',
   'Resources',
 ] as const;
@@ -118,6 +119,7 @@ const STYLE_HEADINGS = [
   'Layout/Spacing',
   'Motion Tone',
   'Accessibility Notes',
+  'Style Questions To Revisit',
   'Open Style Questions',
 ] as const;
 
@@ -259,27 +261,68 @@ export async function scaffoldRichBoilerplate(
     )
   );
 
+  if (answers.dataStart === 'local') {
+    results.push(
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'services', 'local-data.native.ts'),
+        renderNativeLocalDataService(),
+        force
+      )
+    );
+  }
+
   const appDir = getExpoRouterAppDir(projectPath, answers.appDirectory);
   const expositionRouteDir = path.join(appDir, 'exposition');
   await mkdir(expositionRouteDir, { recursive: true });
   if (await pathExists(appDir)) {
+    const routeForce = force || !answers.includeCreateExpoComponents;
+    const shouldWriteRootLayout = routeForce && (await canWriteRichRootLayout(path.join(appDir, '_layout.tsx')));
     results.push(
+      await writeIfAllowed(
+        path.join(appDir, 'index.tsx'),
+        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'home', 'home-screen')),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(appDir, 'onboarding.tsx'),
+        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen')),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(appDir, 'settings.tsx'),
+        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'settings', 'settings-screen')),
+        routeForce
+      ),
       await writeIfAllowed(
         path.join(expositionRouteDir, 'index.tsx'),
         renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen')),
-        force
+        routeForce
       ),
       await writeIfAllowed(
         path.join(expositionRouteDir, 'style-guide.tsx'),
         renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen')),
-        force
+        routeForce
       ),
       await writeIfAllowed(
         path.join(expositionRouteDir, 'data.tsx'),
         renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'data-screen')),
-        force
+        routeForce
       )
     );
+
+    if (shouldWriteRootLayout) {
+      results.push(
+        await writeIfAllowed(
+          path.join(appDir, '_layout.tsx'),
+          renderRichRootLayout(projectPath, appDir),
+          routeForce
+        )
+      );
+    }
+
+    if (!answers.includeCreateExpoComponents) {
+      await removeOptionalFile(path.join(appDir, 'details.tsx'));
+    }
   }
 
   if (answers.dataStart === 'supabase') {
@@ -383,14 +426,16 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- EAS usage: ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
     `- Test-to-main safeguards: ${formatBoolean(answers.testToMainSafeguards)}`,
     '',
-    '## Open Questions',
+    '## Questions To Revisit',
     '',
     ...(hasThinOnboardingAnswers(answers)
       ? [
           '- Replace generic onboarding defaults with app-specific decisions.',
           '- Confirm the exact first user flow before production buildout starts.',
         ]
-      : ['# TodoForContext(optional): Add unresolved product, business, data, or release questions.']),
+      : [
+          '# TodoForContext(optional): Add unresolved product, business, data, or release questions to revisit later; delete this marker if there are none.',
+        ]),
     '',
     '## Resources',
     '',
@@ -529,9 +574,9 @@ export function renderStyle(answers: OnboardAnswers, existingStyle?: string | nu
     '- Prefer readable contrast, scalable type, clear focus/pressed states, and platform-appropriate interactions.',
     '- Add user-specific accessibility needs here when known.',
     '',
-    '## Open Style Questions',
+    '## Style Questions To Revisit',
     '',
-    '# TodoForContext(optional): Add unresolved visual decisions to review in `/exposition/style-guide`.',
+    '# TodoForContext(optional): Add unresolved visual decisions to revisit later in `/exposition/style-guide`; delete this marker if there are none.',
     '',
     ...importedNotes,
     '',
@@ -583,6 +628,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '',
     '## Workflow',
     '',
+    '- If the user says `mrdj continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
     '- Run `mrdj doctor --ci` before pushing.',
     '- Use `mrdj clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards
@@ -615,6 +661,8 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
     '',
     `Expo Router routes belong in ${formatAppDirectory(answers.appDirectory)}. Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}.`,
     '',
+    'If the user says `mrdj continue` or `MDS Continue`, first run `mrdj continue` from the app root if available. Use the MDS Continue brief to propose the next plan and wait for approval before editing files. If the command is unavailable, manually inspect markers, Doctor status, git status, and `project/todo.md` in that order.',
+    '',
     'Before any intake, planning, scaffolding, or phase work, scan every `project/` file for the marker `# TodoForContext(optional):`. If any are present, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero markers remain.',
     '',
     'Then build from `project/todo.md` in phase order. Do not make changes that conflict with project memory. If the files are unclear or generic, update the project memory first or ask the user.',
@@ -631,6 +679,7 @@ export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
     '## Agent Prompt',
     '',
     'Read `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md`.',
+    'If the user said `mrdj continue`, run `mrdj continue` first when available and use its session brief as the starting point.',
     'First, search every `project/` file for `# TodoForContext(optional):`. If any markers remain, stop before intake and tell the user to fill the section underneath or delete the marker line to acknowledge no extra context is needed.',
     'Ask conversational follow-up questions until the app plan is clear enough to build phase by phase.',
     'Move any imported notes into the correct canonical sections, preserve useful context, and remove uncertainty only after the user confirms it.',
@@ -666,6 +715,12 @@ async function ensurePackageJson(
   const packageJson = JSON.parse(raw) as PackageJson;
   packageJson.scripts = {
     ...packageJson.scripts,
+    typecheck: packageJson.scripts?.typecheck ?? 'tsc --noEmit',
+    'build:web': packageJson.scripts?.['build:web'] ?? 'expo export --platform web',
+    'mds:continue': packageJson.scripts?.['mds:continue'] ?? 'npx @mrdj/cli continue',
+    'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mrdj/cli doctor',
+    'mds:doctor:ci':
+      packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mrdj/cli doctor --ci',
     'kill-port': packageJson.scripts?.['kill-port'] ?? 'npx @mrdj/cli kill-port',
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? 'npx @mrdj/cli clear-expo-start',
@@ -933,6 +988,15 @@ function renderGlobalCssImport(layoutPath: string, projectPath: string): string 
   return `import '${toRelativeImportPath(path.dirname(layoutPath), path.join(projectPath, 'global.css'))}';`;
 }
 
+async function canWriteRichRootLayout(layoutPath: string): Promise<boolean> {
+  const existing = await readOptionalText(layoutPath);
+  if (!existing) {
+    return true;
+  }
+
+  return !/\b(Tabs|Drawer)\b/.test(existing);
+}
+
 function toRelativeImportPath(fromDir: string, toPath: string): string {
   const normalized = path.relative(fromDir, toPath).replace(/\\/g, '/');
   return normalized.startsWith('.') ? normalized : `./${normalized}`;
@@ -1088,7 +1152,13 @@ function renderMockData(answers: OnboardAnswers): string {
     '  status: "todo" | "doing" | "done";',
     '}',
     '',
-    'export const appSnapshot = {',
+    'export interface AppSnapshot {',
+    '  name: string;',
+    '  audience: string;',
+    '  tasks: AppTask[];',
+    '}',
+    '',
+    'export const appSnapshot: AppSnapshot = {',
     `  name: ${JSON.stringify(answers.appName)},`,
     `  audience: ${JSON.stringify(answers.audience)},`,
     '  tasks: [',
@@ -1119,6 +1189,48 @@ function renderLocalDataService(answers: OnboardAnswers): string {
     ].join('\n');
   }
 
+  return [
+    "import { appSnapshot } from '../data/mock-app';",
+    '',
+    "import type { AppTask } from '../data/mock-app';",
+    '',
+    'let tasks: AppTask[] = [...appSnapshot.tasks];',
+    '',
+    'export async function ensureLocalDataReady(): Promise<void> {',
+    '  tasks = tasks.length > 0 ? tasks : [...appSnapshot.tasks];',
+    '}',
+    '',
+    'export async function getLocalAppSnapshot(): Promise<typeof appSnapshot> {',
+    '  await ensureLocalDataReady();',
+    '  return {',
+    '    ...appSnapshot,',
+    '    tasks,',
+    '  };',
+    '}',
+    '',
+    "export async function addLocalTask(title = 'Try the local data adapter'): Promise<typeof appSnapshot> {",
+    '  await ensureLocalDataReady();',
+    '  tasks = [',
+    '    ...tasks,',
+    '    {',
+    '      id: `task-${Date.now()}`,',
+    '      title,',
+    "      status: 'todo',",
+    '    },',
+    '  ];',
+    '  return getLocalAppSnapshot();',
+    '}',
+    '',
+    'export const dataAdapterNotes = [',
+    "  'This default adapter is web-safe and keeps generated apps runnable immediately.',",
+    "  'Native builds use local-data.native.ts for the Expo SQLite demo.',",
+    "  'Keep screens behind this adapter boundary so SQLite or Supabase can be swapped later.',",
+    '];',
+    '',
+  ].join('\n');
+}
+
+function renderNativeLocalDataService(): string {
   return [
     "import * as SQLite from 'expo-sqlite';",
     '',
@@ -1172,6 +1284,30 @@ function renderLocalDataService(answers: OnboardAnswers): string {
     '  const id = `task-${Date.now()}`;',
     "  await db.runAsync('INSERT INTO exposition_tasks (id, title, status) VALUES (?, ?, ?)', id, title, 'todo');",
     '  return getLocalAppSnapshot();',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderRichRootLayout(projectPath: string, appDir: string): string {
+  return [
+    renderGlobalCssImport(path.join(appDir, '_layout.tsx'), projectPath),
+    "import { Stack } from 'expo-router';",
+    "import { SafeAreaProvider } from 'react-native-safe-area-context';",
+    '',
+    'export default function Layout() {',
+    '  return (',
+    '    <SafeAreaProvider>',
+    '      <Stack>',
+    "        <Stack.Screen name=\"index\" options={{ title: 'Home' }} />",
+    "        <Stack.Screen name=\"onboarding\" options={{ title: 'Onboarding' }} />",
+    "        <Stack.Screen name=\"exposition/index\" options={{ title: 'Exposition' }} />",
+    "        <Stack.Screen name=\"exposition/style-guide\" options={{ title: 'Style Guide' }} />",
+    "        <Stack.Screen name=\"exposition/data\" options={{ title: 'Data' }} />",
+    "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
+    '      </Stack>',
+    '    </SafeAreaProvider>',
+    '  );',
     '}',
     '',
   ].join('\n');
@@ -1593,43 +1729,63 @@ function renderExpositionComponentIndex(): string {
 
 function renderHomeScreen(answers: OnboardAnswers): string {
   return [
-    "import { useEffect, useState } from 'react';",
-    "import { StyleSheet, Text, View } from 'react-native';",
+    "import { Link } from 'expo-router';",
+    "import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';",
     '',
     "import { GestureCard, SvgMark } from '../../components/exposition';",
-    "import { getLocalAppSnapshot } from '../../services/local-data';",
+    "import { appSnapshot } from '../../data/mock-app';",
     '',
-    "import type { appSnapshot } from '../../data/mock-app';",
-    '',
-    'type Snapshot = typeof appSnapshot;',
+    'const expositionLinks = [',
+    "  { href: '/exposition' as const, title: 'Package exposition', body: 'Review included base packages and decide what stays.' },",
+    "  { href: '/exposition/style-guide' as const, title: 'Style guide', body: 'Test colors, type, motion, and component density.' },",
+    "  { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },",
+    '];',
     '',
     'export default function HomeScreen() {',
-    '  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);',
-    '',
-    '  useEffect(() => {',
-    '    void getLocalAppSnapshot().then(setSnapshot);',
-    '  }, []);',
-    '',
     '  return (',
-    '    <View style={styles.screen}>',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
     '      <View style={styles.header}>',
     '        <SvgMark />',
     '        <View style={styles.headerText}>',
     `          <Text style={styles.title}>${answers.appName}</Text>`,
-    '          <Text style={styles.subtitle}>{snapshot?.audience ?? "Loading project context..."}</Text>',
+    '          <Text style={styles.subtitle}>{appSnapshot.audience}</Text>',
     '        </View>',
+    '        <Link href="/settings" asChild>',
+    '          <Pressable accessibilityRole="button" style={styles.infoButton}>',
+    '            <Text style={styles.infoButtonText}>i</Text>',
+    '          </Pressable>',
+    '        </Link>',
     '      </View>',
     '      <GestureCard',
     '        title="Rich boilerplate is wired"',
-    '        body="Routes stay thin, feature screens hold UI, and mock data can be swapped for the real service later."',
+    '        body="Routes stay thin, feature screens hold UI, and the temporary exposition pages are reachable from this home screen."',
     '      />',
-    '      {snapshot?.tasks.map((task) => (',
-    '        <View key={task.id} style={styles.taskCard}>',
-    '          <Text style={styles.taskTitle}>{task.title}</Text>',
-    '          <Text style={styles.taskStatus}>{task.status}</Text>',
-    '        </View>',
-    '      ))}',
-    '    </View>',
+    '      <View style={styles.grid}>',
+    '        <Link href="/onboarding" asChild>',
+    '          <Pressable style={styles.primaryCard}>',
+    '            <Text style={styles.primaryTitle}>Onboarding preview</Text>',
+    '            <Text style={styles.primaryBody}>Open the generated onboarding screen before the main product flow replaces it.</Text>',
+    '          </Pressable>',
+    '        </Link>',
+    '        {expositionLinks.map((item) => (',
+    '          <Link key={item.href} href={item.href} asChild>',
+    '            <Pressable style={styles.linkCard}>',
+    '              <Text style={styles.linkTitle}>{item.title}</Text>',
+    '              <Text style={styles.linkBody}>{item.body}</Text>',
+    '            </Pressable>',
+    '          </Link>',
+    '        ))}',
+    '      </View>',
+    '      <View style={styles.taskList}>',
+    '        <Text style={styles.sectionTitle}>Generated next steps</Text>',
+    '        {appSnapshot.tasks.map((task) => (',
+    '          <View key={task.id} style={styles.taskCard}>',
+    '            <Text style={styles.taskTitle}>{task.title}</Text>',
+    '            <Text style={styles.taskStatus}>{task.status}</Text>',
+    '          </View>',
+    '        ))}',
+    '      </View>',
+    '    </ScrollView>',
     '  );',
     '}',
     '',
@@ -1637,6 +1793,8 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     '  screen: {',
     "    backgroundColor: '#f9fafb',",
     '    flex: 1,',
+    '  },',
+    '  content: {',
     '    gap: 16,',
     '    padding: 20,',
     '  },',
@@ -1648,6 +1806,19 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     '  headerText: {',
     '    flex: 1,',
     '  },',
+    '  infoButton: {',
+    '    alignItems: "center",',
+    "    backgroundColor: '#111827',",
+    '    borderRadius: 18,',
+    '    height: 36,',
+    '    justifyContent: "center",',
+    '    width: 36,',
+    '  },',
+    '  infoButtonText: {',
+    "    color: '#ffffff',",
+    '    fontSize: 18,',
+    '    fontWeight: "800",',
+    '  },',
     '  title: {',
     "    color: '#111827',",
     '    fontSize: 22,',
@@ -1657,6 +1828,51 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     "    color: '#4b5563',",
     '    fontSize: 14,',
     '    marginTop: 3,',
+    '  },',
+    '  grid: {',
+    '    gap: 12,',
+    '  },',
+    '  primaryCard: {',
+    "    backgroundColor: '#111827',",
+    '    borderRadius: 12,',
+    '    gap: 8,',
+    '    padding: 16,',
+    '  },',
+    '  primaryTitle: {',
+    "    color: '#ffffff',",
+    '    fontSize: 18,',
+    '    fontWeight: "800",',
+    '  },',
+    '  primaryBody: {',
+    "    color: '#d1d5db',",
+    '    fontSize: 14,',
+    '    lineHeight: 20,',
+    '  },',
+    '  linkCard: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#e5e7eb',",
+    '    borderRadius: 12,',
+    '    borderWidth: 1,',
+    '    gap: 6,',
+    '    padding: 16,',
+    '  },',
+    '  linkTitle: {',
+    "    color: '#111827',",
+    '    fontSize: 16,',
+    '    fontWeight: "800",',
+    '  },',
+    '  linkBody: {',
+    "    color: '#4b5563',",
+    '    fontSize: 14,',
+    '    lineHeight: 20,',
+    '  },',
+    '  taskList: {',
+    '    gap: 10,',
+    '  },',
+    '  sectionTitle: {',
+    "    color: '#111827',",
+    '    fontSize: 18,',
+    '    fontWeight: "800",',
     '  },',
     '  taskCard: {',
     "    backgroundColor: '#ffffff',",
@@ -1683,6 +1899,7 @@ function renderHomeScreen(answers: OnboardAnswers): string {
 
 function renderOnboardingScreen(): string {
   return [
+    "import { Link } from 'expo-router';",
     "import { StyleSheet, Text, View } from 'react-native';",
     '',
     "import { AnimatedPressable } from '../../components/exposition';",
@@ -1694,7 +1911,9 @@ function renderOnboardingScreen(): string {
     '      <Text style={styles.body}>',
     '        Replace this screen with the first real onboarding step once the product flow is settled.',
     '      </Text>',
-    '      <AnimatedPressable label="Continue" />',
+    '      <Link href="/" asChild>',
+    '        <AnimatedPressable label="Continue to home" />',
+    '      </Link>',
     '    </View>',
     '  );',
     '}',
@@ -2021,7 +2240,7 @@ function renderDataScreen(answers: OnboardAnswers): string {
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
     '      <Text style={styles.title}>Data Exposition</Text>',
-    '      <Text style={styles.intro}>This app starts with local dummy data backed by Expo SQLite. Keep the adapter boundary, then swap implementation details when Supabase is ready.</Text>',
+    '      <Text style={styles.intro}>This app starts with a web-safe local adapter and a native Expo SQLite adapter. Keep the boundary, then swap implementation details when Supabase is ready.</Text>',
     '      <ExpositionNotice />',
     '      <Pressable onPress={addTask} style={styles.button}>',
     '        <Text style={styles.buttonText}>Insert a local task</Text>',

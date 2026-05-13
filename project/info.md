@@ -71,7 +71,7 @@ Planned workflow: kill stuck Expo/server ports, clear local Expo/Metro caches, t
 
 Fork and explore a focused PR for Uniwind support, Expo Router web platform generation, and Software Mansion core option support in `create-expo-stack` if it fits the project style. Keep MrDJ-specific depth out of that PR: project memory files, MCP setup, richer boilerplate, and agent-guided app planning belong in `mrdj onboard` and `create-expo-super-stack`.
 
-## Open Questions
+## Questions To Revisit
 
 - Should `mrdj doctor --ci` block on warnings in personal repos, or only on errors?
 - Should the ship workflow merge automatically after passing checks, or require a final confirmation?

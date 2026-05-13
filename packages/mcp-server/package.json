@@ -35,6 +35,7 @@
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },
   "dependencies": {
+    "@mrdj/cli": "workspace:*",
     "@mrdj/doctor": "workspace:*",
     "@mrdj/knowledge": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.25.1",
