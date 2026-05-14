@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import { scaffoldProjectMemory } from '../project-memory.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
-import type { OnboardAnswers } from '../project-memory.js';
+import type { ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
 import type { Option } from '@clack/prompts';
 
 export interface OnboardArgv {
@@ -34,6 +34,9 @@ export interface OnboardArgv {
   platformLayouts?: 'shared' | 'platform-specific';
   webOutput?: 'static' | 'server' | 'spa' | 'none';
   deployedServer?: 'standard-expo' | 'custom' | 'none';
+  expoServerAdapter?: ExpoServerAdapter;
+  customBackend?: boolean;
+  customBackendEntry?: string;
   expoUi?: boolean;
   expoNativeTabs?: boolean;
   easSelected?: boolean;
@@ -59,6 +62,19 @@ export interface ServerPromptPlan {
   choices: ServerChoice[];
   explanation: string;
 }
+
+const EXPO_SERVER_ADAPTER_OPTIONS: Array<{ value: ExpoServerAdapter; label: string; hint: string }> = [
+  { value: 'eas', label: 'EAS hosting', hint: 'Managed by Expo — use npx expo serve locally' },
+  { value: 'express', label: 'Express adapter', hint: 'Self-hosted via node server.js on port 3000' },
+  { value: 'bun', label: 'Bun adapter', hint: 'Self-hosted with Bun runtime' },
+  { value: 'other', label: 'Other / not sure yet', hint: 'You can update this in project/info.md later' },
+];
+
+const EXPO_SERVER_ADAPTER_EXPLANATION =
+  'The Express adapter (expo-server/adapter/express) lets you self-host Expo Router on your own server (Plesk, VPS, etc.). EAS is Expo\'s managed cloud hosting. Both start the same way locally — `node server.js` or `npx expo serve`.';
+
+const CUSTOM_BACKEND_EXPLANATION =
+  'A separate backend API server runs alongside Expo (not through Expo Router API routes). Example: a TypeScript/Node API server that your app calls directly. This requires starting two processes in development.';
 
 const EXPLAIN_CHOICE = '__mrdj_explain__';
 const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
@@ -218,15 +234,35 @@ export async function collectOnboardPlan(
       )
     : 'none';
 
-  const serverPrompt = getServerPrompt(webOutput, targetPlatforms.some((platform) => platform !== 'web'), seed.deployedServer);
-  const deployedServer = serverPrompt.shouldAsk
-    ? await askExplainedChoice(
-        serverPrompt.message,
-        toServerOptions(serverPrompt.choices),
-        serverPrompt.defaultValue,
-        serverPrompt.explanation
-      )
-    : 'none';
+  // Q1: Expo server adapter (only when webOutput === 'server')
+  const expoServerAdapter: ExpoServerAdapter =
+    argv.expoServerAdapter ??
+    (webOutput === 'server'
+      ? await askExplainedChoice(
+          'How will your Expo Router server be hosted in production?',
+          EXPO_SERVER_ADAPTER_OPTIONS,
+          seed.expoServerAdapter === 'none' ? 'eas' : seed.expoServerAdapter,
+          EXPO_SERVER_ADAPTER_EXPLANATION
+        )
+      : 'none');
+
+  // Q2: Separate custom backend API server (any platform)
+  const hasWebOrNative = webOutput !== 'none' || targetPlatforms.some((p) => p !== 'web');
+  const customBackend =
+    argv.customBackend ??
+    (hasWebOrNative
+      ? await askYesNoWithExplain(
+          'Does this project need a separate backend API server running alongside Expo (not Expo Router API routes)?',
+          seed.customBackend,
+          CUSTOM_BACKEND_EXPLANATION
+        )
+      : false);
+  const customBackendEntry =
+    customBackend
+      ? (argv.customBackendEntry ?? await askText('What is the backend server entry point?', seed.customBackendEntry))
+      : 'server.js';
+
+  const deployedServer = deriveDeployedServer(webOutput, expoServerAdapter, customBackend, argv.deployedServer);
 
   const deploymentTarget =
     argv.deploymentTarget ??
@@ -307,6 +343,9 @@ export async function collectOnboardPlan(
       platformFileStrategy,
       webOutput,
       deployedServer,
+      expoServerAdapter,
+      customBackend,
+      customBackendEntry,
       usesExpoUi,
       usesExpoNativeTabs,
       easUses,
@@ -421,6 +460,10 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     targetPlatforms.some((platform) => platform !== 'web')
   );
 
+  const expoServerAdapter: ExpoServerAdapter = argv.expoServerAdapter ?? 'none';
+  const customBackend = argv.customBackend ?? false;
+  const customBackendEntry = argv.customBackendEntry ?? 'server.js';
+
   return {
     appName: argv.appName ?? path.basename(projectPath),
     audience: argv.audience ?? 'Expo app users',
@@ -434,7 +477,10 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     firstTargetPlatform,
     platformFileStrategy: argv.platformStrategy ?? 'files-only',
     webOutput,
-    deployedServer,
+    deployedServer: deriveDeployedServer(webOutput, expoServerAdapter, customBackend, argv.deployedServer),
+    expoServerAdapter,
+    customBackend,
+    customBackendEntry,
     usesExpoUi: argv.expoUi ?? true,
     usesExpoNativeTabs: argv.expoNativeTabs ?? true,
     easUses,
@@ -471,6 +517,26 @@ function normalizeDeployedServerChoice(
     return 'custom';
   }
 
+  return 'none';
+}
+
+export function deriveDeployedServer(
+  webOutput: OnboardAnswers['webOutput'],
+  expoServerAdapter: ExpoServerAdapter,
+  customBackend: boolean,
+  explicit?: ServerChoice
+): ServerChoice {
+  if (webOutput === 'server') {
+    // Honor explicit if it's meaningful; 'standard-expo' is the default for server mode
+    if (explicit && explicit !== 'none') return explicit;
+    // 'none' or unset means not yet specified — derive from adapter
+    if (expoServerAdapter === 'eas' || expoServerAdapter === 'none') return 'standard-expo';
+    return 'custom';
+  }
+
+  // Non-server output: 'standard-expo' is not applicable — ignore it
+  if (explicit === 'custom') return 'custom';
+  if (customBackend) return 'custom';
   return 'none';
 }
 

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
 export type PlatformLayoutMode = 'shared' | 'platform-specific';
+export type ExpoServerAdapter = 'eas' | 'express' | 'bun' | 'other' | 'none';
 
 export interface OnboardAnswers {
   appName: string;
@@ -20,6 +21,9 @@ export interface OnboardAnswers {
   platformFileStrategy: 'folders' | 'files-only';
   webOutput: 'static' | 'server' | 'spa' | 'none';
   deployedServer: 'standard-expo' | 'custom' | 'none';
+  expoServerAdapter: ExpoServerAdapter;
+  customBackend: boolean;
+  customBackendEntry: string;
   usesExpoUi: boolean;
   usesExpoNativeTabs: boolean;
   easUses: string[];
@@ -458,7 +462,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- **Data:** ${formatDataStart(answers.dataStart)}`,
     `- **Platforms:** ${answers.targetPlatforms.join(', ') || 'none selected'}, first MVP target: ${answers.firstTargetPlatform}`,
     `- **Code organization:** ${formatCodeOrg(answers)}`,
-    `- **Deployed server:** ${formatServerChoice(answers.deployedServer)}`,
+    `- **Deployed server:** ${formatServerAdapterSummary(answers)}`,
     `- **Distribution:** ${answers.deploymentTarget}`,
     `- **EAS:** ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
     '',
@@ -683,32 +687,27 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
 }
 
 export function renderClaudeMd(answers: OnboardAnswers): string {
-  const expoStartSection = [
-    '## Starting the Expo dev server',
+  const spinUpDev = [
+    '## Spin up dev',
     '',
-    'Always use `npm run clear-expo-start` (or `npx @mrdj/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
-    'This kills any process on port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts Expo with `--clear`.',
+    'Run `npm run clear-expo-start` (or `npx @mrdj/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
+    'Kills port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts `expo start --clear`.',
+    'Expo Router API routes work automatically in this mode.',
     'Never fall back to a non-default port — always free the default port first.',
     '',
   ];
 
-  const backendSection =
-    answers.deployedServer === 'custom'
-      ? [
-          '## Starting the backend server',
-          '',
-          'Run `node server.js` (or the appropriate entry point) from the project root in a background process after starting Expo.',
-          'Port 3000 is freed automatically by `clear-expo-start` when a server script is detected in `package.json`.',
-          '',
-        ]
-      : answers.deployedServer === 'standard-expo'
-        ? [
-            '## Starting the Expo Router server',
-            '',
-            '`npm run clear-expo-start` handles both Metro and the Expo Router server output in a single command — no separate server process needed.',
-            '',
-          ]
-        : [];
+  const backendAlongside = answers.customBackend
+    ? [
+        '## Also start the backend API server',
+        '',
+        `Run \`node ${answers.customBackendEntry}\` from the project root in a background process alongside Expo.`,
+        'Both must be running for full local functionality — Expo on port 8081, backend on its own port.',
+        '',
+      ]
+    : [];
+
+  const spinUpProd = buildSpinUpProdSection(answers);
 
   return [
     `# ${answers.appName} — Agent Guidelines`,
@@ -721,9 +720,55 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
     '',
     'Run doctor before beginning each new development phase. Resolve all errors before continuing.',
     '',
-    ...expoStartSection,
-    ...backendSection,
+    ...spinUpDev,
+    ...backendAlongside,
+    ...spinUpProd,
   ].join('\n');
+}
+
+function buildSpinUpProdSection(answers: OnboardAnswers): string[] {
+  if (answers.webOutput === 'none') return [];
+
+  if (answers.customBackend) {
+    return [
+      '## Spin up prod',
+      '',
+      'Run `npm run serve:prod:fresh` for the Expo web server.',
+      'Run `npm run serve:prod:api:fresh` for the backend API server.',
+      'Both must be running for full prod-parity.',
+      '# TodoForContext(optional): Confirm api-server port and build script name in package.json.',
+      '',
+    ];
+  }
+
+  if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
+    return [
+      '## Spin up prod',
+      '',
+      'Run `npm run serve:prod:fresh` — kills port 3000, builds web dist, starts the Node server.',
+      'Run `npm run serve:prod` to restart without rebuilding.',
+      'Server runs on http://localhost:3000. Mirrors your self-hosted (Plesk/VPS) environment.',
+      '',
+    ];
+  }
+
+  if (answers.expoServerAdapter === 'eas') {
+    return [
+      '## Spin up prod',
+      '',
+      'Run `npm run serve:prod:fresh` — builds web dist and starts `npx expo serve`.',
+      'The terminal will show the local URL when ready. Mirrors EAS hosting.',
+      '',
+    ];
+  }
+
+  return [
+    '## Spin up prod',
+    '',
+    'Run `npm run serve:prod:fresh` to build and serve the production bundle.',
+    '# TodoForContext(optional): Confirm this command matches your deployment environment.',
+    '',
+  ];
 }
 
 export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
@@ -788,6 +833,27 @@ async function ensurePackageJson(
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
     'ci:verify': packageJson.scripts?.['ci:verify'] ?? 'npx @mrdj/cli doctor --ci',
   };
+
+  if (answers.webOutput !== 'none') {
+    const serveProd = deriveServeProdScript(answers);
+    const serveProdFresh = deriveServeProdFreshScript(answers);
+    packageJson.scripts = {
+      ...packageJson.scripts,
+      'serve:prod': packageJson.scripts?.['serve:prod'] ?? serveProd,
+      'serve:prod:fresh': packageJson.scripts?.['serve:prod:fresh'] ?? serveProdFresh,
+    };
+
+    if (answers.customBackend) {
+      const entry = answers.customBackendEntry || 'server.js';
+      packageJson.scripts = {
+        ...packageJson.scripts,
+        'serve:prod:api': packageJson.scripts?.['serve:prod:api'] ?? `node ${entry}`,
+        'serve:prod:api:fresh':
+          packageJson.scripts?.['serve:prod:api:fresh'] ??
+          `npm run build:api-server && node ${entry}`,
+      };
+    }
+  }
 
   packageJson.dependencies = {
     ...SOFTWARE_MANSION_CORE_DEPENDENCIES,
@@ -900,6 +966,31 @@ function formatServerChoice(value: OnboardAnswers['deployedServer']): string {
 
 function formatDataStart(value: DataStart): string {
   return value === 'supabase' ? 'Supabase from the start' : 'local dummy data with Expo SQLite';
+}
+
+function formatServerAdapterSummary(answers: OnboardAnswers): string {
+  if (answers.webOutput === 'none') return 'none (native-only)';
+  switch (answers.expoServerAdapter) {
+    case 'eas': return 'EAS hosting';
+    case 'express': return 'Express adapter (node server.js, port 3000)';
+    case 'bun': return 'Bun adapter (node server.js)';
+    case 'other': return 'custom (not yet specified)';
+    default: return formatServerChoice(answers.deployedServer);
+  }
+}
+
+function deriveServeProdScript(answers: OnboardAnswers): string {
+  if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
+    return 'node server.js';
+  }
+  return 'npx expo serve';
+}
+
+function deriveServeProdFreshScript(answers: OnboardAnswers): string {
+  if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
+    return 'npx @mrdj/cli kill-port 3000 && npm run build:web && node server.js';
+  }
+  return 'npx @mrdj/cli kill-port 8081 && npm run build:web && npx expo serve';
 }
 
 function formatStyleStack(answers: OnboardAnswers): string {

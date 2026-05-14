@@ -207,6 +207,18 @@ async function main(): Promise<void> {
           .option('defaults', {
             describe: 'Comma-separated defaults to include',
             type: 'string',
+          })
+          .option('expo-server-adapter', {
+            describe: 'How the Expo Router server is hosted: eas, express, bun, other, none',
+            choices: ['eas', 'express', 'bun', 'other', 'none'] as const,
+          })
+          .option('custom-backend', {
+            describe: 'Project has a separate backend API server alongside Expo',
+            type: 'boolean',
+          })
+          .option('custom-backend-entry', {
+            describe: 'Entry point for the custom backend server (e.g. server.js, api-server.ts)',
+            type: 'string',
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
