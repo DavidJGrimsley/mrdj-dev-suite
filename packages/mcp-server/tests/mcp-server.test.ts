@@ -41,6 +41,18 @@ describe('mrdj MCP helpers', () => {
     const result = await executeTool('knowledge_list_resources', { kind: 'skill' });
 
     expect(Array.isArray(result)).toBe(true);
+    const skills = result as Array<{ uri: string }>;
+    expect(skills.some((resource) => resource.uri === 'mrdj://skills/dev-server-management')).toBe(
+      true
+    );
+    expect(
+      skills.some((resource) => resource.uri === 'mrdj://skills/production-server-patterns')
+    ).toBe(true);
+    expect(skills.some((resource) => resource.uri === 'mrdj://skills/seo-metadata')).toBe(true);
+    expect(skills.some((resource) => resource.uri === 'mrdj://skills/debugging')).toBe(true);
+    expect(skills.some((resource) => resource.uri === 'mrdj://skills/project-onboarding')).toBe(
+      true
+    );
   });
 
   it('builds a continue brief through the MCP continue_project tool', async () => {
