@@ -192,13 +192,15 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 4: Agent Skills
 
-- [ ] Ensure the agent with which I'm working has a skill for creating skills BEFORE any work is done.
-- [ ] Author markdown skills first; avoid over-engineering.
-- [ ] Create skills for app-folder architecture, SSR safety, API routes, SEO, Supabase env vars, Uniwind theme systems, deployment, debugging, and project onboarding.
-- [ ] Create a Super Stack startup skill that walks an agent through project research, `create-expo-super-stack`, project-memory shaping, exposition review, and phase-based build kickoff.
-- [ ] Create a continue-development skill that reads `project/todo.md`, finds the next logical task, finishes incomplete work in the current phase first, and only defers/moves tasks with an explicit note when the developer chooses to defer.
-- [ ] Create a research-plan intake skill that can turn pasted research docs, raw notes, or partial `project/info.md` sections into canonical project memory.
-- [ ] Standardize skill structure: when to use it, main rule, checks, preferred structure, example fix, and agent behavior.
+- [x] Ensure the agent with which I'm working has a skill for creating skills BEFORE any work is done.
+- [x] Author markdown skills first; avoid over-engineering.
+- [x] Create skills for app-folder architecture, SSR safety, API routes, SEO, Supabase env vars, Uniwind theme systems, deployment, debugging, and project onboarding.
+- [x] Create a dev-server-management skill that enforces the dev-server recovery pattern (run clear-expo-start, kill conflicting ports, clear Expo/Metro caches, and avoid fallback to port 8082).
+- [x] Create a production-server-patterns skill covering the three production serving modes: EAS/`npx expo serve`, Express adapter (`node server.js`), and dual-server architecture with separate API.
+- [x] Create a Super Stack startup skill that walks an agent through project research, `create-expo-super-stack`, project-memory shaping, exposition review, and phase-based build kickoff.
+- [x] Create a continue-development skill that reads `project/todo.md`, finds the next logical task, finishes incomplete work in the current phase first, and only defers/moves tasks with an explicit note when the developer chooses to defer.
+- [x] Create a research-plan intake skill that can turn pasted research docs, raw notes, or partial `project/info.md` sections into canonical project memory.
+- [x] Standardize skill structure: when to use it, main rule, checks, preferred structure, example fix, and agent behavior.
 - [ ] Make the same skills reusable by Codex, Claude Code, MCP resources, docs, and future DWAH onboarding.
 
 ### Phase 5: Codex Plugin

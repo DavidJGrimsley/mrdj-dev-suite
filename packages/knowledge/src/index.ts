@@ -145,6 +145,64 @@ const SKILL_RESOURCES = [
     resourcePath: 'skills/deployment.md',
     keywords: ['deployment', 'doctor', 'ci'],
   },
+  {
+    id: 'dev-server-management',
+    name: 'Dev Server Management Skill',
+    description:
+      'Instructions for recovering Expo/Metro local dev-server state and resolving port/cache conflicts.',
+    resourcePath: 'skills/dev-server-management.md',
+    keywords: ['dev server', 'expo start', 'metro', 'ports', 'cache'],
+  },
+  {
+    id: 'production-server-patterns',
+    name: 'Production Server Patterns Skill',
+    description: 'Instructions for choosing and running Expo production serving modes.',
+    resourcePath: 'skills/production-server-patterns.md',
+    keywords: ['production server', 'expo serve', 'express', 'server.js'],
+  },
+  {
+    id: 'seo-metadata',
+    name: 'SEO Metadata Skill',
+    description: 'Instructions for production web metadata, canonical URLs, and indexing strategy.',
+    resourcePath: 'skills/seo-metadata.md',
+    keywords: ['seo', 'metadata', 'canonical', 'open graph'],
+  },
+  {
+    id: 'debugging',
+    name: 'Debugging Skill',
+    description: 'Instructions for reproducible issue triage and root-cause-first fixes.',
+    resourcePath: 'skills/debugging.md',
+    keywords: ['debugging', 'triage', 'doctor', 'root cause'],
+  },
+  {
+    id: 'project-onboarding',
+    name: 'Project Onboarding Skill',
+    description: 'Instructions for onboarding an existing Expo app into MDS project memory and workflow.',
+    resourcePath: 'skills/project-onboarding.md',
+    keywords: ['onboarding', 'project memory', 'expo app'],
+  },
+  {
+    id: 'super-stack-startup',
+    name: 'Super Stack Startup Skill',
+    description:
+      'Instructions for running create-expo-super-stack and handing off to phase-based app development.',
+    resourcePath: 'skills/super-stack-startup.md',
+    keywords: ['create-expo-super-stack', 'startup', 'onboarding flow'],
+  },
+  {
+    id: 'continue-development',
+    name: 'Continue Development Skill',
+    description: 'Instructions for choosing and progressing the next task from project/todo.md.',
+    resourcePath: 'skills/continue-development.md',
+    keywords: ['continue', 'todo', 'phase', 'roadmap'],
+  },
+  {
+    id: 'research-plan-intake',
+    name: 'Research Plan Intake Skill',
+    description: 'Instructions for turning raw research and notes into canonical MDS project memory.',
+    resourcePath: 'skills/research-plan-intake.md',
+    keywords: ['research', 'intake', 'project info', 'planning'],
+  },
 ] as const;
 
 const REFERENCE_RESOURCES = [

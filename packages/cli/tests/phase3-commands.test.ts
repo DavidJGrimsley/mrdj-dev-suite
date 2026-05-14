@@ -10,10 +10,21 @@ describe('Phase 3 command helpers', () => {
   it('lists bundled skills and filters by query', () => {
     const allSkills = listSkillSummaries();
     const routerSkills = listSkillSummaries('router');
+    const seoSkills = listSkillSummaries('seo');
 
     expect(allSkills.length).toBeGreaterThan(0);
+    expect(allSkills.some((skill) => skill.id === 'dev-server-management')).toBe(true);
+    expect(allSkills.some((skill) => skill.id === 'production-server-patterns')).toBe(true);
+    expect(allSkills.some((skill) => skill.id === 'seo-metadata')).toBe(true);
+    expect(allSkills.some((skill) => skill.id === 'debugging')).toBe(true);
+    expect(allSkills.some((skill) => skill.id === 'project-onboarding')).toBe(true);
     expect(routerSkills.some((skill) => skill.id === 'expo-router-architecture')).toBe(true);
-    expect(routerSkills.every((skill) => [skill.id, skill.name, skill.description, ...skill.tags].join(' ').toLowerCase().includes('router'))).toBe(true);
+    expect(
+      routerSkills.every((skill) =>
+        [skill.id, skill.name, skill.description, ...skill.tags].join(' ').toLowerCase().includes('router')
+      )
+    ).toBe(true);
+    expect(seoSkills.some((skill) => skill.id === 'seo-metadata')).toBe(true);
   });
 
   it('explains exact Doctor check topics without becoming ambiguous', async () => {
