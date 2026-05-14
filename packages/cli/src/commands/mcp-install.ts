@@ -114,6 +114,19 @@ function findLocalServerEntry(): string | undefined {
   }
 }
 
+export async function writeMcpJsonToProject(targetDir: string): Promise<void> {
+  const server = resolveServerInvocation({});
+  const filePath = path.join(targetDir, '.mcp.json');
+  const existing = await readJsonIfExists(filePath);
+  const merged: Record<string, unknown> = existing ?? {};
+  const servers = isRecord(merged.mcpServers) ? { ...merged.mcpServers } : {};
+  if (servers[SERVER_KEY]) return;
+  servers[SERVER_KEY] = { command: server.command, args: server.args };
+  merged.mcpServers = servers;
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+}
+
 async function writeJsonMcpConfig(
   filePath: string,
   server: ResolvedServer,

@@ -109,6 +109,7 @@ const INFO_HEADINGS = [
   'Questions To Revisit',
   'Open Questions',
   'Resources',
+  'Tech Stack & MDS Onboarding',
 ] as const;
 
 const STYLE_HEADINGS = [
@@ -143,6 +144,7 @@ export async function scaffoldProjectMemory(
     writeProjectMemoryFile(stylePath, renderStyle(answers, existingStyle), force, true),
     writeIfAllowed(path.join(projectDir, 'guidelines.md'), guidelines, force),
     writeIfAllowed(path.join(projectPath, 'AGENTS.md'), renderAgentInstructions(answers), force),
+    writeIfAllowed(path.join(projectPath, 'CLAUDE.md'), renderClaudeMd(answers), force),
   ]);
 
   if (shouldGenerateIntakeAgentHandoff(answers, existingInfo, existingStyle)) {
@@ -433,9 +435,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
           '- Replace generic onboarding defaults with app-specific decisions.',
           '- Confirm the exact first user flow before production buildout starts.',
         ]
-      : [
-          '# TodoForContext(optional): Add unresolved product, business, data, or release questions to revisit later; delete this marker if there are none.',
-        ]),
+      : []),
     '',
     '## Resources',
     '',
@@ -444,23 +444,35 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     '',
     ...importedNotes,
     '',
-    '## Onboarding Decisions',
+    '## Tech Stack & MDS Onboarding',
+    '',
+    '> Quick-reference stack summary for agents and collaborators. Fill in or correct any items marked below.',
+    '',
+    `- **App:** ${answers.appName} — ${answers.audience}`,
+    '- **Language:** TypeScript',
+    '- **Package manager:** # TodoForContext(optional): pnpm / npm / yarn / bun',
+    `- **Routing:** Expo Router (${formatAppDirectory(answers.appDirectory)})`,
+    `- **Styling:** ${formatStyleStack(answers)}`,
+    '- **State management:** # TodoForContext(optional): Zustand / Jotai / React context / none',
+    `- **Auth:** ${formatAuthSummary(answers)}`,
+    `- **Data:** ${formatDataStart(answers.dataStart)}`,
+    `- **Platforms:** ${answers.targetPlatforms.join(', ') || 'none selected'}, first MVP target: ${answers.firstTargetPlatform}`,
+    `- **Code organization:** ${formatCodeOrg(answers)}`,
+    `- **Deployed server:** ${formatServerChoice(answers.deployedServer)}`,
+    `- **Distribution:** ${answers.deploymentTarget}`,
+    `- **EAS:** ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
+    '',
+    '### MDS Onboarding Decisions',
     '',
     `- Advanced package setup: ${formatBoolean(answers.advancedPackageSetup)}`,
     `- Create Expo starter components: ${formatBoolean(answers.includeCreateExpoComponents)}`,
     `- Latest Expo SDK preference: ${formatBoolean(answers.useLatestExpoSdk)}`,
-    `- Target platforms: ${answers.targetPlatforms.join(', ') || 'none selected'}`,
-    `- First MVP platform: ${answers.firstTargetPlatform}`,
-    `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,
-    `- Platform-specific organization: ${formatPlatformStrategy(answers.platformFileStrategy)}`,
-    `- Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}`,
-    `- Web output: ${answers.webOutput}`,
-    `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
+    `- MrDJ guidelines template: yes`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
     `- Expo Native Tabs: ${formatBoolean(answers.usesExpoNativeTabs)}`,
-    `- EAS usage: ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
-    `- Data start: ${formatDataStart(answers.dataStart)}`,
     `- Test-to-main safeguards: ${formatBoolean(answers.testToMainSafeguards)}`,
+    `- Data start: ${formatDataStart(answers.dataStart)}`,
+    `- Defaults selected: ${answers.defaults.join(', ')}`,
     '',
   ].join('\n');
 }
@@ -670,6 +682,50 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
   ].join('\n');
 }
 
+export function renderClaudeMd(answers: OnboardAnswers): string {
+  const expoStartSection = [
+    '## Starting the Expo dev server',
+    '',
+    'Always use `npm run clear-expo-start` (or `npx @mrdj/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
+    'This kills any process on port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts Expo with `--clear`.',
+    'Never fall back to a non-default port — always free the default port first.',
+    '',
+  ];
+
+  const backendSection =
+    answers.deployedServer === 'custom'
+      ? [
+          '## Starting the backend server',
+          '',
+          'Run `node server.js` (or the appropriate entry point) from the project root in a background process after starting Expo.',
+          'Port 3000 is freed automatically by `clear-expo-start` when a server script is detected in `package.json`.',
+          '',
+        ]
+      : answers.deployedServer === 'standard-expo'
+        ? [
+            '## Starting the Expo Router server',
+            '',
+            '`npm run clear-expo-start` handles both Metro and the Expo Router server output in a single command — no separate server process needed.',
+            '',
+          ]
+        : [];
+
+  return [
+    `# ${answers.appName} — Agent Guidelines`,
+    '',
+    '## Before every git commit',
+    '',
+    'Run `npm run mds:doctor` (or `npx @mrdj/cli doctor --fast .`) before committing. Fix all errors first; warnings are OK to proceed with.',
+    '',
+    '## Before moving to the next phase',
+    '',
+    'Run doctor before beginning each new development phase. Resolve all errors before continuing.',
+    '',
+    ...expoStartSection,
+    ...backendSection,
+  ].join('\n');
+}
+
 export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} Intake Agent Handoff`,
@@ -844,6 +900,34 @@ function formatServerChoice(value: OnboardAnswers['deployedServer']): string {
 
 function formatDataStart(value: DataStart): string {
   return value === 'supabase' ? 'Supabase from the start' : 'local dummy data with Expo SQLite';
+}
+
+function formatStyleStack(answers: OnboardAnswers): string {
+  if (answers.defaults.includes('uniwind')) {
+    return 'Uniwind / Tailwind CSS v4';
+  }
+  return 'standard React Native StyleSheet';
+}
+
+function formatAuthSummary(answers: OnboardAnswers): string {
+  if (answers.dataStart === 'supabase' || answers.defaults.includes('supabase')) {
+    return 'Supabase auth (available via supabase-js)';
+  }
+  return 'no auth planned yet';
+}
+
+function formatCodeOrg(answers: OnboardAnswers): string {
+  const parts: string[] = [
+    formatPlatformStrategy(answers.platformFileStrategy),
+    `${formatAppDirectory(answers.appDirectory)} routes`,
+    formatPlatformLayoutMode(answers.platformLayoutMode),
+  ];
+  if (answers.webOutput === 'none') {
+    parts.push('no web');
+  } else {
+    parts.push(`web: ${answers.webOutput}`);
+  }
+  return parts.join(', ');
 }
 
 function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {

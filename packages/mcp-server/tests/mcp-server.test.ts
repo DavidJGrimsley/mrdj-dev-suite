@@ -66,9 +66,9 @@ describe('mrdj MCP helpers', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
     expect(prompt).toContain('mrdj continue');
-    expect(prompt).toContain('For lower token usage and lower cost');
-    expect(prompt).toContain('open this generated app folder in a new agent session');
-    expect(prompt).toContain('scope every command, search, and file read/write to the generated app folder');
+    expect(prompt).toContain('open a new agent session directly inside');
+    expect(prompt).toContain('To keep token usage low');
+    expect(prompt).toContain('Do NOT walk through markers or ask questions about them in this session');
   });
 
   it('builds a continue slash prompt that calls continue_project first', () => {
@@ -77,6 +77,7 @@ describe('mrdj MCP helpers', () => {
     expect(prompt).toContain('continue_project');
     expect(prompt).toContain('F:/ReactNativeApps/Experimental4');
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
-    expect(prompt).toContain('Wait for user approval before making any file edits');
+    expect(prompt).toContain('Ask EXACTLY ONE question per message');
+    expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
   });
 });

@@ -6,6 +6,7 @@ import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } 
 import chalk from 'chalk';
 
 import { scaffoldProjectMemory } from '../project-memory.js';
+import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { OnboardAnswers } from '../project-memory.js';
 import type { Option } from '@clack/prompts';
@@ -117,6 +118,8 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     guidelinesTemplatePath: plan.guidelinesTemplatePath,
     richBoilerplate: plan.richBoilerplate,
   });
+
+  await writeMcpJsonToProject(projectPath);
 
   console.log(chalk.bold('mrdj onboard'));
   console.log(chalk.dim(projectPath));

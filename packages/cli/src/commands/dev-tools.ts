@@ -218,15 +218,21 @@ async function killPid(pid: number): Promise<boolean> {
 }
 
 async function clearExpoCaches(projectPath: string): Promise<void> {
-  const cachePaths = [
+  const projectCachePaths = [
     '.expo',
     '.cache',
     path.join('node_modules', '.cache', 'metro'),
     path.join('node_modules', '.cache', 'babel-loader'),
-  ];
+  ].map((p) => path.join(projectPath, p));
+
+  // Windows system-level Metro cache (mirrors core-monorepo clear-metro-cache.cjs)
+  const systemCachePaths: string[] = [];
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) {
+    systemCachePaths.push(path.join(process.env.LOCALAPPDATA, 'Temp', 'metro-cache'));
+  }
 
   await Promise.all(
-    cachePaths.map((cachePath) => rm(path.join(projectPath, cachePath), { recursive: true, force: true }))
+    [...projectCachePaths, ...systemCachePaths].map((p) => rm(p, { recursive: true, force: true }))
   );
 }
 

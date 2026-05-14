@@ -497,7 +497,9 @@ function creditsAndWaitMessage(): string {
 }
 
 export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
-  const parent = parentDir ?? 'the current working directory';
+  const looksLikePath = (s: string) => s.includes('/') || s.includes('\\') || s.includes(':');
+  const parent =
+    parentDir && looksLikePath(parentDir) ? parentDir : 'the current working directory';
   const appHint = appName ? ` The user already named the app: \`${appName}\`.` : '';
   const superStack = resolveSuperStackInvocation();
   return [
@@ -508,6 +510,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     'IMPORTANT: Drive this entire flow conversationally. Never echo the assembled command line, never paste a flag string. Run the generator silently when all answers are gathered. The user should feel like a chat, not a CLI session.',
     '',
     'IMPORTANT: Ask EXACTLY one question per turn. Number multi-choice options. Always show the default and let the user just say "default" or press enter. Accept numbers, label text, or natural language ("all", "first three", "android only").',
+    'IMPORTANT: If the very first user message is a single bare word like "go", "start", "yes", "run", or similar — treat it as "proceed" and do NOT interpret it as a folder path or app name. Use the current working directory as the parent.',
     '',
     fileIntakePhase('PHASE 0 — Optional: attach existing project memory'),
     '====== PHASE 1 — Project name and parent folder ======',
@@ -707,16 +710,12 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '====== PHASE 5 — Verify and hand off ======',
     '',
     'After generation succeeds:',
-    '  1. Locate the line "MrDJ onboarding complete." in the generator output. Everything from that line to the end of stdout is the official success summary (CREATED file list, "Onboarding next steps", "Next steps: cd / clear-expo-start", the Mr. DJ thank-you message, and the "For the full dev-suite locally..." line).',
-    '  2. Quote that whole tail block back to the user verbatim, in a fenced code block. Do NOT paraphrase or trim. The user expects to see the Mr. DJ thank-you message after every successful run.',
-    '  3. THEN cd into the new app folder and run `mrdj doctor`. Surface any errors/warnings (especially todo-for-context markers).',
-    '  4. Search the new app folder project/ files for `# TodoForContext(optional):` markers.',
-    '     - If markers exist, ask: "Do you want to resolve the TodoForContext markers now? Default: yes."',
-    '     - If yes, walk through markers one at a time. For each marker, ask whether to fill the section or delete the marker line to acknowledge no extra context is needed.',
-    '     - If no, leave them listed as next actions and do not edit files.',
-    '  5. Run `mrdj continue` from the new app folder and show the MDS Continue brief.',
-    '  6. Tell the user-dev: "For lower token usage and lower cost, open this generated app folder in a new agent session and run `mrdj continue`."',
-    '  7. If the user-dev chooses to keep working in this parent-folder session, scope every command, search, and file read/write to the generated app folder. Do not search the whole parent directory.',
+    '  1. Find the line "Onboarding next steps" in the generator output. Quote everything from that line to the end of stdout verbatim in a fenced code block. Do NOT quote the CREATED file list or anything before "Onboarding next steps".',
+    '  2. Then tell the user (in plain text, not a code block):',
+    '     "Your app is ready. To keep token usage low, open a new agent session directly inside the `<appName>` folder and run `mrdj continue` there."',
+    '  3. If TodoForContext markers exist in the new app\'s project/ files, add one line:',
+    '     "There are unresolved context markers in project/ — resolve them in your new session before starting implementation work."',
+    '  4. Do NOT walk through markers or ask questions about them in this session.',
     '',
     'Rules:',
     '- Never run the generator inside an existing app folder. If you suspect you are inside one, stop and ask.',
@@ -735,11 +734,14 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     `  projectPath: "${target}"`,
     '',
     'After the tool returns:',
-    '1. Present the recommendation priority, title, and plan.',
-    '2. If TodoForContext markers exist, treat them as blockers for onboarding/intake and implementation planning.',
-    '3. For each marker, ask the user to either fill the section or delete the marker line to acknowledge no extra context is needed.',
-    '4. Do not offer "skip markers and implement anyway."',
-    '5. Wait for user approval before making any file edits.',
+    '1. Briefly summarize what you found (2-3 sentences max). Name the next step in one sentence.',
+    '2. If TodoForContext markers exist:',
+    '   - Say something brief like: "Let me ask you a few questions to get to know the project and help you plan the vision."',
+    '   - Then work through each marker by asking the question its hint implies. Do NOT ask the user whether to fill or delete — just ask the question.',
+    '   - Ask EXACTLY ONE question per message. Never combine questions. Never ask sub-questions in the same message.',
+    '   - After the user answers, write the answer into the file under the marker and delete the marker line. Then move to the next question.',
+    '   - Do not offer "skip markers and implement anyway."',
+    '3. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
   ].join('\n');
 }
 

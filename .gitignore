@@ -11,3 +11,5 @@ coverage/
 !.env.example
 
 temp/
+
+.claude/worktrees
