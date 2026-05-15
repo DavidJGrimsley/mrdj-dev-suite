@@ -1,0 +1,44 @@
+{
+  "name": "mrdj-dev-suite",
+  "version": "0.1.0",
+  "description": "MrDJ Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
+  "author": {
+    "name": "DJ Grimsley",
+    "url": "https://davidjgrimsley.com"
+  },
+  "homepage": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  "repository": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  "license": "MIT",
+  "keywords": [
+    "expo",
+    "react-native",
+    "mcp",
+    "doctor",
+    "onboarding",
+    "codex-plugin"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "MrDJ Dev Suite",
+    "shortDescription": "MCP-first Expo review, doctor, onboarding, and deploy workflows",
+    "longDescription": "Generate and use MrDJ skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.",
+    "developerName": "MrDJ",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+    "privacyPolicyURL": "https://github.com/DavidJGrimsley/mrdj-dev-suite/blob/main/README.md",
+    "termsOfServiceURL": "https://github.com/DavidJGrimsley/mrdj-dev-suite/blob/main/README.md",
+    "defaultPrompt": [
+      "Review my Expo project and give me the next safe implementation steps.",
+      "Run a deployment-readiness check with Doctor and fix blockers first.",
+      "Continue the next task from my project/todo.md using MDS phase order."
+    ],
+    "brandColor": "#0A6A6A",
+    "screenshots": []
+  }
+}

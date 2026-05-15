@@ -1,6 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { generateCodexPluginBundleFromKnowledge } from './generate-codex-plugin.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = path.join(packageRoot, 'src', 'content');
@@ -25,6 +26,7 @@ await writeFile(
   )}\n`,
   'utf8'
 );
+await generateCodexPluginBundleFromKnowledge({ packageRoot });
 
 async function listMarkdownFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });

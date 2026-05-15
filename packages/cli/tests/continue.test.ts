@@ -76,6 +76,18 @@ describe('MDS Continue', () => {
     expect(brief.recommendation.priority).toBe('dirty-git');
   });
 
+  it('does not report clean git state when git metadata is unavailable', async () => {
+    const projectPath = await createOnboardedProject({
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+
+    expect(brief.git.available).toBe(false);
+    expect(brief.git.clean).toBe(false);
+    expect(brief.recommendation.priority).toBe('todo');
+  });
+
   it('selects the first unchecked todo when markers, Doctor errors, and git dirt are clear', async () => {
     const projectPath = await createOnboardedProject({
       todo: [

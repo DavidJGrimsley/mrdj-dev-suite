@@ -14,6 +14,7 @@ import {
   isCliEntryPoint,
   parseArgs,
   repairExpoProjectIdentifiers,
+  renderHelpText,
   resolveProjectTarget,
   shouldInstallExpoFontPeerFromPackageJson,
   shouldRunExpoLatestSdkCommandFromPackageJson,
@@ -24,6 +25,26 @@ import {
 } from '../src/cli.js';
 
 describe('create-expo-super-stack CLI helpers', () => {
+  it('parses help flags without forcing interactive prompts', () => {
+    const longHelp = parseArgs(['--help']);
+    expect(longHelp.helpRequested).toBe(true);
+    expect(longHelp.projectName).toBeUndefined();
+    expect(longHelp.createExpoStackArgs).toEqual([]);
+
+    const shortHelp = parseArgs(['-h']);
+    expect(shortHelp.helpRequested).toBe(true);
+    expect(shortHelp.projectName).toBeUndefined();
+    expect(shortHelp.createExpoStackArgs).toEqual([]);
+  });
+
+  it('renders help text with usage and examples', () => {
+    const help = renderHelpText();
+    expect(help).toContain('Usage:');
+    expect(help).toContain('create-expo-super-stack [project-name]');
+    expect(help).toContain('--mrdj-yes');
+    expect(help).toContain('-h, --help');
+  });
+
   it('builds install, latest SDK, expo repair, Expo font peer, and doctor commands in the required order', () => {
     const commands = [
       buildInstallCommand('npm').display,
