@@ -233,14 +233,22 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [ ] Build later: `github_read_repo`, `github_open_issue`, `github_comment_pr`, `dwah_create_project`, `dwah_get_preview_url`, `dwah_deploy`, `dwah_get_logs`, and `dwah_promote`.
 - [ ] Prioritize project review and guidance before deployment tools.
 
-### Phase 9: GitHub Action
+### Phase 9: Unified Agent Bundle (VS Code Copilot)
+
+- [ ] Define the unified agent scope: one agent that loads MCP servers and suite tooling, with clear tool-routing expectations.
+- [ ] Bundle MCP server config, skills/prompts, knowledge resources, CLI wrappers, and recommended VS Code settings into a single installable package.
+- [ ] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
+- [ ] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
+- [ ] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
+
+### Phase 10: GitHub Action
 
 - [ ] Add a repo-local `.github/actions/mrdj-doctor/` or publish `mrdj/doctor-action`.
 - [ ] Support PR/push usage with `npx @mrdj/doctor --ci`.
 - [ ] Report a Doctor score plus errors and warnings in CI output.
 - [ ] Include findings such as unsafe public secrets, missing canonical metadata, and route files containing business logic.
 
-### Phase 10: Personal Workflow And Dogfooding
+### Phase 11: Personal Workflow And Dogfooding
 
 - [ ] Support use inside an Expo app with `npx @mrdj/cli init`.
 - [ ] Support `npx create-expo-super-stack`.
