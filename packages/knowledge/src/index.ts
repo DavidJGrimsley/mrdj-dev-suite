@@ -203,6 +203,13 @@ const SKILL_RESOURCES = [
     resourcePath: 'skills/research-plan-intake.md',
     keywords: ['research', 'intake', 'project info', 'planning'],
   },
+  {
+    id: 'plugin-creation',
+    name: 'MDS Plugin Creation Skill',
+    description: 'Instructions for building a new MDS plugin bundle for Claude Code, Codex, Cursor, or any AI agent client.',
+    resourcePath: 'skills/plugin-creation.md',
+    keywords: ['plugin', 'claude code', 'codex', 'commands', 'bundle'],
+  },
 ] as const;
 
 const REFERENCE_RESOURCES = [

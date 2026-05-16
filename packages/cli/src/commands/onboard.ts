@@ -454,7 +454,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
   const dataStart = argv.dataStart ?? 'local';
   const testToMainSafeguards = argv.testToMain ?? true;
   const webOutput = argv.webOutput ?? (targetPlatforms.includes('web') ? 'static' : 'none');
-  const deployedServer = normalizeDeployedServerChoice(
+  const _deployedServer = normalizeDeployedServerChoice(
     argv.deployedServer,
     webOutput,
     targetPlatforms.some((platform) => platform !== 'web')
@@ -744,7 +744,7 @@ function toOptions(values: string[]): Array<{ value: string; label: string }> {
   return values.map((value) => ({ value, label: formatOptionLabel(value) }));
 }
 
-function toServerOptions(values: ServerChoice[]): Array<{ value: ServerChoice; label: string; hint?: string }> {
+function _toServerOptions(values: ServerChoice[]): Array<{ value: ServerChoice; label: string; hint?: string }> {
   return values.map((value) => {
     switch (value) {
       case 'standard-expo':

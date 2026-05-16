@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mrdj-dev-suite": {
+      "command": "npx",
+      "args": ["-y", "@mrdj/mcp-server"]
+    }
+  }
+}
