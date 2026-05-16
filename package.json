@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:knowledge": "pnpm --filter @mrdj/knowledge build",
+    "build:plugin": "pnpm --filter @mrdj/knowledge build:plugin",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "typecheck": "pnpm type-check",

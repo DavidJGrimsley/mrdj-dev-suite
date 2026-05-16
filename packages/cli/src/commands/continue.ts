@@ -420,7 +420,7 @@ async function readGitSnapshot(projectPath: string): Promise<GitSnapshot> {
   } catch (error) {
     return {
       available: false,
-      clean: true,
+      clean: false,
       statusLines: [],
       error: error instanceof Error ? error.message : String(error),
     };

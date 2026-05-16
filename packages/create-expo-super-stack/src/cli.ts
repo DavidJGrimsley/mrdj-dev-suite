@@ -14,6 +14,7 @@ import type { OnboardArgv } from '@mrdj/cli/onboarding';
 export interface ParsedArgs {
   projectName?: string;
   createExpoStackArgs: string[];
+  helpRequested: boolean;
   mrdj: {
     appName?: string;
     audience?: string;
@@ -65,6 +66,10 @@ interface ExpoProjectCheckOptions {
 
 export async function main(): Promise<void> {
   const initialParsed = parseArgs(process.argv.slice(2));
+  if (initialParsed.helpRequested) {
+    console.log(renderHelpText());
+    return;
+  }
   const parsed = withResolvedProjectName(initialParsed, await promptForMissingProjectName(initialParsed));
   validateCreateExpoStackArgs(parsed.createExpoStackArgs);
   const projectName = parsed.projectName ?? DEFAULT_PROJECT_NAME;
@@ -155,6 +160,7 @@ export function parseArgs(args: string[]): ParsedArgs {
     skipCreate: false,
   };
   let projectName: string | undefined;
+  let helpRequested = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -163,8 +169,17 @@ export function parseArgs(args: string[]): ParsedArgs {
     }
 
     if (!arg.startsWith('--') && !projectName) {
+      if (arg === '-h') {
+        helpRequested = true;
+        continue;
+      }
       projectName = arg;
       createExpoStackArgs.push(arg);
+      continue;
+    }
+
+    if (arg === '--help' || arg === '-h' || arg === '--mrdj-help') {
+      helpRequested = true;
       continue;
     }
 
@@ -369,8 +384,35 @@ export function parseArgs(args: string[]): ParsedArgs {
   return {
     projectName,
     createExpoStackArgs,
+    helpRequested,
     mrdj,
   };
+}
+
+export function renderHelpText(): string {
+  return [
+    'create-expo-super-stack',
+    '',
+    'Usage:',
+    '  create-expo-super-stack [project-name] [create-expo-stack options] [mrdj options]',
+    '',
+    'Examples:',
+    '  create-expo-super-stack my-app --expo-router --uniwind',
+    '  create-expo-super-stack ../MyApp --expo-router --mrdj-yes',
+    '',
+    'Common mrdj options:',
+    '  --mrdj-yes                     Run non-interactive onboarding defaults',
+    '  --mrdj-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
+    '  --mrdj-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
+    '  --mrdj-guidelines-template     Use bundled MrDJ project/guidelines template',
+    '  --mrdj-app-name=<name>         Set display app name for project memory',
+    '',
+    'Help:',
+    '  -h, --help                     Show this help and exit',
+    '',
+    'Note:',
+    '  Unknown non-mrdj flags are forwarded to create-expo-stack.',
+  ].join('\n');
 }
 
 export function withResolvedProjectName(parsed: ParsedArgs, projectName: string): ParsedArgs {

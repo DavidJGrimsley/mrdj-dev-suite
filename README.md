@@ -98,6 +98,23 @@ Defaults for new MrDJ projects:
 
 `mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the MrDJ prompts are callable from a chat session.
 
+### Optional Codex Plugin Bundle
+
+The knowledge build also generates a local Codex plugin bundle at `plugins/codex` (manifest, MCP config, generated skills, and command prompts) plus `.agents/plugins/marketplace.json`.
+
+```bash
+pnpm --filter @mrdj/knowledge build
+```
+
+`pnpm build:plugin` is optional and only needed when you want to regenerate the plugin bundle directly.
+
+Install path options:
+
+- Plugin path (optional): install `mrdj-dev-suite` from the local marketplace entry at `./plugins/codex`.
+- CLI path (reliable fallback): run `mrdj mcp install --client codex --scope project` (or user-scope install) and use MCP prompts/tools directly.
+
+Use the CLI path when you need deterministic setup in fresh repos or CI, or when plugin installation is unavailable in your Codex environment.
+
 Two prompts ship with the server:
 
 - `create_expo_super_stack` — invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then verifies the generated app folder and offers to resolve TodoForContext markers.
