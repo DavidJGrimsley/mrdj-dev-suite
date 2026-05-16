@@ -6,12 +6,37 @@ import {
   getPatternMetadata,
   listPatternMetadata,
 } from './patterns/index.js';
+import { listPromptSpecs } from './prompts/index.js';
 
 import type { PatternCategory, PatternMetadata } from './patterns/index.js';
+import type { PromptSpec } from './prompts/index.js';
 
 export type { PatternCategory, PatternMetadata } from './patterns/index.js';
+export type {
+  McpToolSpec,
+  PromptArgSpec,
+  PromptSpec,
+  PromptSpecContent,
+  PromptSurface,
+} from './prompts/index.js';
+export {
+  getMcpToolSpec,
+  getPromptSpec,
+  listMcpToolSpecs,
+  listPromptSpecs,
+  readPromptContent,
+  readPromptSpec,
+} from './prompts/index.js';
 
-export type KnowledgeKind = 'pattern' | 'guide' | 'rule' | 'skill' | 'reference';
+export type KnowledgeKind =
+  | 'pattern'
+  | 'guide'
+  | 'rule'
+  | 'skill'
+  | 'reference'
+  | 'checklist'
+  | 'example'
+  | 'prompt';
 
 export interface Pattern {
   id: string;
@@ -255,6 +280,44 @@ const REFERENCE_RESOURCES = [
   },
 ] as const;
 
+const CHECKLIST_RESOURCES = [
+  {
+    id: 'ship-test-loop',
+    name: 'Ship-Test Loop Checklist',
+    description: 'Checklist for doctor/PR/fix/poll/merge loops into the test branch.',
+    resourcePath: 'checklists/ship-test-loop.md',
+    keywords: ['checklist', 'ship', 'test branch', 'pull request'],
+    sourceRepos: ['mrdj-dev-suite'],
+  },
+  {
+    id: 'unified-agent-bundle-validation',
+    name: 'Unified Agent Bundle Validation Checklist',
+    description: 'Phase 9 validation checklist for the unified agent bundle.',
+    resourcePath: 'checklists/unified-agent-bundle-validation.md',
+    keywords: ['phase 9', 'unified bundle', 'validation'],
+    sourceRepos: ['mrdj-dev-suite'],
+  },
+] as const;
+
+const EXAMPLE_RESOURCES = [
+  {
+    id: 'ship-test-loop',
+    name: 'Ship-Test Loop Example',
+    description: 'Example iteration log for a PR loop into the test branch.',
+    resourcePath: 'examples/ship-test-loop.md',
+    keywords: ['example', 'ship', 'iteration'],
+    sourceRepos: ['mrdj-dev-suite'],
+  },
+  {
+    id: 'unified-agent-bundle-bootstrap',
+    name: 'Unified Agent Bundle Bootstrap Example',
+    description: 'Phase 9 bootstrap example for unified agent bundle installation.',
+    resourcePath: 'examples/unified-agent-bundle-bootstrap.md',
+    keywords: ['phase 9', 'bundle', 'bootstrap'],
+    sourceRepos: ['mrdj-dev-suite'],
+  },
+] as const;
+
 export async function getPattern(id: string): Promise<Pattern | null> {
   const metadata = getPatternMetadata(id);
   if (!metadata) {
@@ -312,6 +375,11 @@ export function listKnowledgeResources(kind?: KnowledgeKind): KnowledgeResource[
     ...RULE_RESOURCES.map((resource) => simpleResource('rule', resource)),
     ...SKILL_RESOURCES.map((resource) => simpleResource('skill', resource)),
     ...REFERENCE_RESOURCES.map((resource) => simpleResource('reference', resource)),
+    ...CHECKLIST_RESOURCES.map((resource) => simpleResource('checklist', resource)),
+    ...EXAMPLE_RESOURCES.map((resource) => simpleResource('example', resource)),
+    ...listPromptSpecs()
+      .filter((spec) => spec.surfaces.some((surface) => surface !== 'phase9-artifact'))
+      .map(promptResourceFromSpec),
   ];
 
   return kind ? resources.filter((resource) => resource.kind === kind) : resources;
@@ -360,6 +428,18 @@ function patternResourceFromMetadata(metadata: PatternMetadata): KnowledgeResour
     keywords: metadata.keywords,
     category: metadata.category,
     sourceRepos: metadata.sourceRepos,
+  };
+}
+
+function promptResourceFromSpec(spec: PromptSpec): KnowledgeResource {
+  return {
+    id: spec.id,
+    uri: `mrdj://prompts/${spec.slug}`,
+    kind: 'prompt',
+    name: spec.title,
+    description: spec.description,
+    resourcePath: spec.resourcePath,
+    keywords: [...spec.keywords],
   };
 }
 
