@@ -92,6 +92,25 @@ describe('runMcpInstallCommand (project scope)', () => {
     expect(written).toContain('[other]');
     expect(written).not.toContain('"stale"');
   });
+
+  it('writes .vscode/mcp.json for VS Code using the mrdjDevSuite server key', async () => {
+    const target = await createTempProject();
+    await mkdir(path.join(target, '.vscode'), { recursive: true });
+    await writeFile(
+      path.join(target, '.vscode', 'mcp.json'),
+      JSON.stringify({ servers: { existing: { command: 'echo' } } }, null, 2),
+      'utf8'
+    );
+
+    await runMcpInstallCommand({ client: 'vscode', scope: 'project', target, serverPath: '/abs/server.js' });
+
+    const written = JSON.parse(await readFile(path.join(target, '.vscode', 'mcp.json'), 'utf8'));
+    expect(written.servers.existing).toEqual({ command: 'echo' });
+    expect(written.servers.mrdjDevSuite).toEqual({
+      command: 'node',
+      args: ['/abs/server.js'],
+    });
+  });
 });
 
 describe('runMcpInstallCommand (user scope)', () => {
@@ -131,6 +150,17 @@ describe('runMcpInstallCommand (user scope)', () => {
     const written = await readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8');
     expect(written).toContain('[mcp_servers.mrdj-dev-suite]');
     expect(written).toContain('command = "node"');
+  });
+
+  it('prints VS Code user-scope MCP dry-run instructions without writing files', async () => {
+    await runMcpInstallCommand({
+      client: 'vscode',
+      scope: 'user',
+      serverPath: '/abs/server.js',
+      dryRun: true,
+    });
+
+    await expect(readFile(path.join(fakeHome, '.vscode', 'mcp.json'), 'utf8')).rejects.toThrow();
   });
 });
 

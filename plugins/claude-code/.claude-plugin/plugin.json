@@ -1,6 +1,6 @@
 {
   "name": "mrdj-dev-suite",
-  "description": "Expo project intelligence for Claude Code — Doctor diagnostics, architecture skills, MCP tools, and project-memory commands for Expo Router apps.",
+  "description": "Expo project intelligence for Claude Code: Doctor diagnostics, architecture skills, MCP tools, custom MDS agent, and project-memory commands for Expo Router apps.",
   "version": "0.1.0",
   "author": {
     "name": "David Grimsley",

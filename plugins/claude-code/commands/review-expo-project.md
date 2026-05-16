@@ -1,29 +1,13 @@
-﻿# /review-expo-project
+Perform a comprehensive MDS review of the current Expo project.
 
-Review an Expo project with MCP-first diagnostics and skill-guided remediation.
-
-## Arguments
-
-- `projectPath`: absolute or relative project path (default: current directory).
-- `mode`: Doctor mode (`fast`, `ci`, or `full`; default: `ci`).
-
-## MCP-First Workflow
-
-1. Confirm the `mrdj-dev-suite` MCP server is available.
-2. Call `continue_project` to summarize current project state and blockers.
-3. Call `doctor_scan_project` with `projectPath` and `mode`.
-4. For each warning/error, call `doctor_explain_result`, then pull targeted guidance with `get_skill` (for example: `project-onboarding`, `debugging`, `deployment`).
-5. Call `knowledge_list_resources` with `kind: "guide"` if extra reference context is needed.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - `mrdj mcp install --client codex --scope project`
-2. If MCP still cannot run, use direct CLI flows:
-   - `mrdj continue <projectPath>`
-   - `mrdj doctor <projectPath> --ci`
-
-## Verification And Output
-
-- Re-run `doctor_scan_project` (or `mrdj doctor --ci`) after fixes.
-- Output: blocker summary, failing checks, recommended next task, and concrete follow-up commands.
+1. Call `doctor_scan_project` via MCP to surface errors and warnings.
+2. Call `get_skill` for each of the following skill IDs and apply their checks:
+   - `expo-router-architecture` — are route files thin and free of business logic?
+   - `expo-ssr-safety` — are browser globals and client-only APIs properly guarded?
+   - `env-vars` — are public/private env boundaries respected?
+   - `seo-metadata` — do web routes have a metadata and indexing strategy?
+3. Combine Doctor findings and skill findings into a single prioritized list:
+   - P0: errors that block commits or break production
+   - P1: warnings that risk bugs or maintainability
+   - P2: best-practice gaps worth addressing this sprint
+4. For each item provide a specific, actionable fix.

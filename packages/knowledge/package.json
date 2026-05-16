@@ -29,6 +29,7 @@
   "scripts": {
     "build": "tsc && node scripts/copy-content.mjs",
     "build:plugin": "tsc && node scripts/generate-codex-plugin.mjs",
+    "build:vscode": "tsc && node scripts/generate-vscode-copilot.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",

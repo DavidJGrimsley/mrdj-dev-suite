@@ -10,13 +10,11 @@ import { buildContinueSessionBrief } from '@mrdj/cli/continue';
 import {
   getSkill,
   listKnowledgeResources,
-  listMcpToolSpecs,
-  listPromptSpecs,
   readKnowledgeResource,
-  readPromptSpec,
 } from '@mrdj/knowledge';
 
 import type { DoctorMode } from '@mrdj/doctor';
+import type { DoctorCheckResult, DoctorReport } from '@mrdj/doctor';
 import type { KnowledgeKind } from '@mrdj/knowledge';
 
 export function resolveSuperStackInvocation(): string {
@@ -41,19 +39,12 @@ export interface MCPResource {
   content?: string;
 }
 
-export interface MCPPrompt {
-  name: string;
-  title: string;
-  description: string;
-  args: string[];
-}
-
 export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'mrdj-dev-suite',
       version: '0.1.0',
-      description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
+      description: 'MrDJ Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
       capabilities: {
@@ -79,22 +70,137 @@ export async function startStdioServer(): Promise<void> {
 }
 
 export function listTools(): MCPTool[] {
-  return listMcpToolSpecs().map((spec) => ({
-    name: spec.name,
-    description: spec.description,
-    inputSchema: spec.inputSchema,
-  }));
-}
-
-export function listPrompts(): MCPPrompt[] {
-  return listPromptSpecs('mcp-prompt')
-    .filter((spec) => typeof spec.mcpPromptName === 'string')
-    .map((spec) => ({
-      name: spec.mcpPromptName as string,
-      title: spec.title,
-      description: spec.description,
-      args: (spec.mcpArgs ?? []).map((arg) => arg.name),
-    }));
+  return [
+    {
+      name: 'continue_project',
+      description: 'Build an MDS Continue session brief for an onboarded app folder.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'doctor_scan_project',
+      description: 'Run MrDJ Doctor checks against a project folder.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          mode: { type: 'string', enum: ['fast', 'ci', 'full'] },
+          runScripts: { type: 'boolean' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'doctor_scan_file',
+      description: 'Run focused Doctor checks against one file.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: { type: 'string' },
+          projectPath: { type: 'string' },
+        },
+        required: ['filePath'],
+      },
+    },
+    {
+      name: 'doctor_explain_result',
+      description: 'Explain a Doctor result in beginner-friendly language.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          message: { type: 'string' },
+          details: { type: 'object' },
+        },
+        required: ['status', 'message'],
+      },
+    },
+    {
+      name: 'knowledge_list_resources',
+      description: 'List MrDJ knowledge resources by kind.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['pattern', 'guide', 'rule', 'skill', 'reference'] },
+        },
+      },
+    },
+    {
+      name: 'list_skills',
+      description: 'List bundled MDS agent skills with optional keyword filtering.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'get_skill',
+      description: 'Read a bundled MrDJ agent skill.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'get_guide',
+      description: 'Read a bundled MrDJ knowledge guide.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'generate_refactor_plan',
+      description: 'Generate a Doctor-backed refactor plan with related MDS knowledge resources.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          mode: { type: 'string', enum: ['fast', 'ci', 'full'] },
+          runScripts: { type: 'boolean' },
+          focus: { type: 'string' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'generate_deploy_checklist',
+      description: 'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          target: { type: 'string', enum: ['web', 'ios', 'android', 'native', 'all'] },
+          mode: { type: 'string', enum: ['fast', 'ci', 'full'] },
+          runScripts: { type: 'boolean' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
+      name: 'generate_setup_tasks',
+      description: 'Generate post-create onboarding setup tasks.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          defaults: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  ];
 }
 
 export async function listResources(): Promise<MCPResource[]> {
@@ -133,6 +239,9 @@ export async function executeTool(
     case 'knowledge_list_resources': {
       return listKnowledgeResources(normalizeKind(readString(input.kind)));
     }
+    case 'list_skills': {
+      return listSkillSummaries(readString(input.query));
+    }
     case 'get_skill': {
       const id = readString(input.id);
       return id ? getSkill(id) : null;
@@ -140,6 +249,20 @@ export async function executeTool(
     case 'get_guide': {
       const id = readString(input.id);
       return id ? readKnowledgeResource(`mrdj://guides/${id}`) : null;
+    }
+    case 'generate_refactor_plan': {
+      const projectPath = readString(input.projectPath);
+      if (!projectPath) {
+        throw new Error('generate_refactor_plan requires projectPath.');
+      }
+      return generateRefactorPlan(projectPath, input);
+    }
+    case 'generate_deploy_checklist': {
+      const projectPath = readString(input.projectPath);
+      if (!projectPath) {
+        throw new Error('generate_deploy_checklist requires projectPath.');
+      }
+      return generateDeployChecklist(projectPath, input);
     }
     case 'generate_setup_tasks': {
       return generateSetupTasks(readString(input.projectPath) ?? '.', readStringArray(input.defaults));
@@ -190,19 +313,11 @@ function registerKnowledgeResources(server: McpServer): void {
 }
 
 function registerTools(server: McpServer): void {
-  const tool = (name: string) => {
-    const spec = listMcpToolSpecs().find((candidate) => candidate.name === name);
-    if (!spec) {
-      throw new Error(`Missing MCP tool spec for "${name}".`);
-    }
-    return spec;
-  };
-
   server.registerTool(
     'continue_project',
     {
-      title: tool('continue_project').title,
-      description: tool('continue_project').description,
+      title: 'Continue Project',
+      description: 'Build an MDS Continue session brief for an onboarded app folder.',
       inputSchema: {
         projectPath: z.string().optional(),
       },
@@ -216,8 +331,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'doctor_scan_project',
     {
-      title: tool('doctor_scan_project').title,
-      description: tool('doctor_scan_project').description,
+      title: 'Doctor Scan Project',
+      description: 'Run MrDJ Doctor checks against a project folder.',
       inputSchema: {
         projectPath: z.string(),
         mode: z.enum(['fast', 'ci', 'full']).optional(),
@@ -233,8 +348,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'doctor_scan_file',
     {
-      title: tool('doctor_scan_file').title,
-      description: tool('doctor_scan_file').description,
+      title: 'Doctor Scan File',
+      description: 'Run focused Doctor checks against one file.',
       inputSchema: {
         filePath: z.string(),
         projectPath: z.string().optional(),
@@ -249,22 +364,32 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'knowledge_list_resources',
     {
-      title: tool('knowledge_list_resources').title,
-      description: tool('knowledge_list_resources').description,
+      title: 'List Knowledge Resources',
+      description: 'List MrDJ knowledge resources by kind.',
       inputSchema: {
-        kind: z
-          .enum(['pattern', 'guide', 'rule', 'skill', 'reference', 'checklist', 'example', 'prompt'])
-          .optional(),
+        kind: z.enum(['pattern', 'guide', 'rule', 'skill', 'reference']).optional(),
       },
     },
     async ({ kind }) => toolJson(listKnowledgeResources(kind))
   );
 
   server.registerTool(
+    'list_skills',
+    {
+      title: 'List Skills',
+      description: 'List bundled MDS agent skills with optional keyword filtering.',
+      inputSchema: {
+        query: z.string().optional(),
+      },
+    },
+    async ({ query }) => toolJson(listSkillSummaries(query))
+  );
+
+  server.registerTool(
     'get_skill',
     {
-      title: tool('get_skill').title,
-      description: tool('get_skill').description,
+      title: 'Get Skill',
+      description: 'Read a bundled MrDJ agent skill.',
       inputSchema: {
         id: z.string(),
       },
@@ -275,8 +400,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'get_guide',
     {
-      title: tool('get_guide').title,
-      description: tool('get_guide').description,
+      title: 'Get Guide',
+      description: 'Read a bundled MrDJ knowledge guide.',
       inputSchema: {
         id: z.string(),
       },
@@ -285,10 +410,40 @@ function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    'generate_refactor_plan',
+    {
+      title: 'Generate Refactor Plan',
+      description: 'Generate a Doctor-backed refactor plan with related MDS knowledge resources.',
+      inputSchema: {
+        projectPath: z.string(),
+        mode: z.enum(['fast', 'ci', 'full']).optional(),
+        runScripts: z.boolean().optional(),
+        focus: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await generateRefactorPlan(input.projectPath, input))
+  );
+
+  server.registerTool(
+    'generate_deploy_checklist',
+    {
+      title: 'Generate Deploy Checklist',
+      description: 'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
+      inputSchema: {
+        projectPath: z.string(),
+        target: z.enum(['web', 'ios', 'android', 'native', 'all']).optional(),
+        mode: z.enum(['fast', 'ci', 'full']).optional(),
+        runScripts: z.boolean().optional(),
+      },
+    },
+    async (input) => toolJson(await generateDeployChecklist(input.projectPath, input))
+  );
+
+  server.registerTool(
     'doctor_explain_result',
     {
-      title: tool('doctor_explain_result').title,
-      description: tool('doctor_explain_result').description,
+      title: 'Explain Doctor Result',
+      description: 'Explain a Doctor result in beginner-friendly language.',
       inputSchema: {
         status: z.string(),
         message: z.string(),
@@ -301,8 +456,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'generate_setup_tasks',
     {
-      title: tool('generate_setup_tasks').title,
-      description: tool('generate_setup_tasks').description,
+      title: 'Generate Setup Tasks',
+      description: 'Generate post-create onboarding setup tasks.',
       inputSchema: {
         projectPath: z.string().optional(),
         defaults: z.array(z.string()).optional(),
@@ -313,20 +468,12 @@ function registerTools(server: McpServer): void {
 }
 
 function registerPrompts(server: McpServer): void {
-  const promptSpecs = listPromptSpecs('mcp-prompt');
-  const prompt = (name: string) => {
-    const spec = promptSpecs.find((candidate) => candidate.mcpPromptName === name);
-    if (!spec) {
-      throw new Error(`Missing MCP prompt spec for "${name}".`);
-    }
-    return spec;
-  };
-
   server.registerPrompt(
     'create_expo_super_stack',
     {
-      title: prompt('create_expo_super_stack').title,
-      description: prompt('create_expo_super_stack').description,
+      title: 'Create Expo Super Stack',
+      description:
+        'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MrDJ onboarding.',
       argsSchema: {
         parentDir: z.string().optional(),
         appName: z.string().optional(),
@@ -348,8 +495,9 @@ function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     'onboard_new_expo_app',
     {
-      title: prompt('onboard_new_expo_app').title,
-      description: prompt('onboard_new_expo_app').description,
+      title: 'Onboard Existing Expo App',
+      description:
+        'Run from inside an existing Expo app folder to apply MrDJ project memory, intake, planning, and scaffolding.',
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -370,8 +518,9 @@ function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     'continue_mrdj_project',
     {
-      title: prompt('continue_mrdj_project').title,
-      description: prompt('continue_mrdj_project').description,
+      title: 'Continue MrDJ Project',
+      description:
+        'Build an MDS Continue session brief for an existing Expo app folder by calling continue_project first.',
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -387,41 +536,6 @@ function registerPrompts(server: McpServer): void {
         },
       ],
     })
-  );
-
-  server.registerPrompt(
-    'ship_test_loop',
-    {
-      title: prompt('ship_test_loop').title,
-      description: prompt('ship_test_loop').description,
-      argsSchema: {
-        projectPath: z.string().optional(),
-        branch: z.string().optional(),
-        base: z.string().optional(),
-      },
-    },
-    async ({ projectPath, branch, base }) => {
-      const canonical = await readPromptSpec('ship-test-loop');
-      const header = [
-        projectPath ? `Project path: ${projectPath}` : null,
-        branch ? `Branch: ${branch}` : null,
-        base ? `Base branch: ${base}` : 'Base branch: test',
-      ]
-        .filter(Boolean)
-        .join('\n');
-      const text = canonical?.content ?? 'Run the ship-to-test loop with Doctor-first guardrails.';
-      return {
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: header ? `${header}\n\n${text}` : text,
-            },
-          },
-        ],
-      };
-    }
   );
 }
 
@@ -883,6 +997,303 @@ export function buildOnboardPromptText(projectPath?: string): string {
   ].join('\n');
 }
 
+interface SkillSummary {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  uri: string;
+}
+
+interface RefactorPlanItem {
+  priority: number;
+  status: DoctorCheckResult['status'];
+  check: string;
+  finding: string;
+  relatedResources: string[];
+  nextStep: string;
+}
+
+interface DeployChecklistItem {
+  id: string;
+  status: 'pass' | 'action' | 'blocker' | 'manual';
+  title: string;
+  detail: string;
+  relatedResources: string[];
+}
+
+async function generateRefactorPlan(
+  projectPath: string,
+  input: Record<string, unknown>
+): Promise<{
+  kind: 'refactor-plan';
+  projectPath: string;
+  mode: DoctorMode;
+  generatedAt: string;
+  focus: string | null;
+  summary: DoctorReport['summary'];
+  priorities: RefactorPlanItem[];
+  recommendedOrder: string[];
+  verification: string[];
+}> {
+  const mode = normalizeMode(readString(input.mode));
+  const runScripts = typeof input.runScripts === 'boolean' ? input.runScripts : false;
+  const focus = readString(input.focus)?.trim();
+  const report = await runDoctor(projectPath, { mode, runScripts });
+  const actionableChecks = report.checks
+    .filter((check) => check.status === 'error' || check.status === 'warn')
+    .filter((check) => (focus ? doctorCheckMatches(check, focus) : true))
+    .sort(sortDoctorChecks);
+
+  const priorities = actionableChecks.map((check, index) => ({
+    priority: index + 1,
+    status: check.status,
+    check: check.name,
+    finding: check.message,
+    relatedResources: relatedResourcesForCheck(check),
+    nextStep: nextStepForCheck(check),
+  }));
+
+  return {
+    kind: 'refactor-plan',
+    projectPath: report.projectPath,
+    mode: report.mode,
+    generatedAt: report.timestamp,
+    focus: focus ?? null,
+    summary: report.summary,
+    priorities,
+    recommendedOrder:
+      priorities.length > 0
+        ? priorities.map((item) => `${item.priority}. ${item.check}: ${item.nextStep}`)
+        : ['No Doctor warnings or errors matched this refactor request. Keep the current architecture intact.'],
+    verification: [
+      `Run doctor_scan_project for ${report.projectPath} in ${report.mode} mode after the refactor.`,
+      'If route, env, or SSR files changed, run doctor_scan_file on the touched files before the full scan.',
+      'Use get_skill for each related MDS skill before making broad architectural edits.',
+    ],
+  };
+}
+
+async function generateDeployChecklist(
+  projectPath: string,
+  input: Record<string, unknown>
+): Promise<{
+  kind: 'deploy-checklist';
+  projectPath: string;
+  target: 'web' | 'ios' | 'android' | 'native' | 'all';
+  mode: DoctorMode;
+  generatedAt: string;
+  summary: DoctorReport['summary'];
+  checklist: DeployChecklistItem[];
+  unresolvedFindings: RefactorPlanItem[];
+  verification: string[];
+}> {
+  const mode = readString(input.mode) ? normalizeMode(readString(input.mode)) : 'ci';
+  const runScripts = typeof input.runScripts === 'boolean' ? input.runScripts : false;
+  const target = normalizeDeployTarget(readString(input.target));
+  const report = await runDoctor(projectPath, { mode, runScripts });
+  const unresolvedFindings = report.checks
+    .filter((check) => check.status === 'error' || check.status === 'warn')
+    .sort(sortDoctorChecks)
+    .map((check, index) => ({
+      priority: index + 1,
+      status: check.status,
+      check: check.name,
+      finding: check.message,
+      relatedResources: relatedResourcesForCheck(check),
+      nextStep: nextStepForCheck(check),
+    }));
+
+  return {
+    kind: 'deploy-checklist',
+    projectPath: report.projectPath,
+    target,
+    mode: report.mode,
+    generatedAt: report.timestamp,
+    summary: report.summary,
+    checklist: buildDeployChecklist(report, target),
+    unresolvedFindings,
+    verification: [
+      `Run doctor_scan_project with mode "${mode}" and runScripts true before release approval.`,
+      'Run the project-specific lint, typecheck, test, and production build commands that CI will run.',
+      target === 'web' || target === 'all'
+        ? 'Verify metadata, canonical URLs, robots, sitemap, and SSR-safe route behavior in the production web output.'
+        : 'Verify native build/profile settings, store metadata readiness, and device smoke tests for selected native targets.',
+    ],
+  };
+}
+
+function listSkillSummaries(query?: string): SkillSummary[] {
+  const normalizedQuery = query?.trim().toLowerCase();
+  return listKnowledgeResources('skill')
+    .filter((resource) => {
+      if (!normalizedQuery) {
+        return true;
+      }
+      return [resource.id, resource.name, resource.description, ...resource.keywords]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedQuery);
+    })
+    .map((resource) => ({
+      id: resource.id,
+      name: resource.name,
+      description: resource.description,
+      tags: resource.keywords,
+      uri: resource.uri,
+    }));
+}
+
+function buildDeployChecklist(
+  report: DoctorReport,
+  target: 'web' | 'ios' | 'android' | 'native' | 'all'
+): DeployChecklistItem[] {
+  const hasErrors = report.summary.errors > 0;
+  const hasWarnings = report.summary.warnings > 0;
+  const checkNames = report.checks.map((check) => `${check.name} ${check.message}`.toLowerCase());
+  const hasSeoSignal = checkNames.some((value) => value.includes('seo') || value.includes('metadata'));
+  const hasEnvSignal = checkNames.some((value) => value.includes('env') || value.includes('secret'));
+  const hasSsrSignal = checkNames.some((value) => value.includes('ssr') || value.includes('window'));
+  const hasExpoSignal = checkNames.some((value) => value.includes('expo config') || value.includes('expo configuration'));
+
+  const items: DeployChecklistItem[] = [
+    {
+      id: 'doctor-blockers',
+      status: hasErrors ? 'blocker' : hasWarnings ? 'action' : 'pass',
+      title: 'Clear Doctor findings',
+      detail: hasErrors
+        ? 'Doctor reported errors that should block release.'
+        : hasWarnings
+          ? 'Doctor reported warnings; triage them before release approval.'
+          : 'Doctor found no warnings or errors for this scan.',
+      relatedResources: ['mrdj://skills/deployment', 'mrdj://skills/debugging'],
+    },
+    {
+      id: 'env-boundaries',
+      status: hasEnvSignal ? 'action' : 'manual',
+      title: 'Verify public/private environment boundaries',
+      detail:
+        'Confirm EXPO_PUBLIC values are safe for client bundles and private service keys stay server-only.',
+      relatedResources: ['mrdj://rules/env-hygiene', 'mrdj://skills/env-vars'],
+    },
+    {
+      id: 'expo-runtime',
+      status: hasExpoSignal ? 'action' : 'manual',
+      title: 'Verify Expo config and runtime targets',
+      detail: 'Confirm app config, platform list, web output, and build profiles match the release target.',
+      relatedResources: ['mrdj://patterns/project-configuration-patterns', 'mrdj://skills/deployment'],
+    },
+  ];
+
+  if (target === 'web' || target === 'all') {
+    items.push(
+      {
+        id: 'web-metadata',
+        status: hasSeoSignal ? 'action' : 'manual',
+        title: 'Verify web SEO metadata',
+        detail: 'Check title, description, canonical URL, Open Graph tags, sitemap, and robots strategy.',
+        relatedResources: ['mrdj://rules/seo-metadata', 'mrdj://skills/seo-metadata'],
+      },
+      {
+        id: 'web-ssr-safety',
+        status: hasSsrSignal ? 'action' : 'manual',
+        title: 'Verify SSR-safe web/server code',
+        detail: 'Guard browser globals and keep native-only imports out of server execution paths.',
+        relatedResources: ['mrdj://rules/ssr-safety', 'mrdj://skills/expo-ssr-safety'],
+      }
+    );
+  }
+
+  if (target === 'ios' || target === 'android' || target === 'native' || target === 'all') {
+    items.push({
+      id: 'native-build-readiness',
+      status: 'manual',
+      title: 'Verify native build readiness',
+      detail:
+        'Run the selected EAS/local native build profile and smoke test the target platform before store or client release.',
+      relatedResources: ['mrdj://skills/deployment', 'mrdj://reference/package-ci-patterns'],
+    });
+  }
+
+  return items;
+}
+
+function doctorCheckMatches(check: DoctorCheckResult, query: string): boolean {
+  const normalizedQuery = query.toLowerCase();
+  return [check.name, check.message, JSON.stringify(check.details ?? {})]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalizedQuery);
+}
+
+function sortDoctorChecks(a: DoctorCheckResult, b: DoctorCheckResult): number {
+  return severityRank(a.status) - severityRank(b.status) || a.name.localeCompare(b.name);
+}
+
+function severityRank(status: DoctorCheckResult['status']): number {
+  return status === 'error' ? 0 : status === 'warn' ? 1 : status === 'skip' ? 2 : 3;
+}
+
+function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
+  const text = `${check.name} ${check.message}`.toLowerCase();
+  const resources = new Set<string>(['mrdj://skills/debugging']);
+
+  if (text.includes('env') || text.includes('secret') || text.includes('public')) {
+    resources.add('mrdj://rules/env-hygiene');
+    resources.add('mrdj://skills/env-vars');
+  }
+  if (text.includes('ssr') || text.includes('window') || text.includes('document') || text.includes('localstorage')) {
+    resources.add('mrdj://rules/ssr-safety');
+    resources.add('mrdj://skills/expo-ssr-safety');
+  }
+  if (text.includes('seo') || text.includes('metadata') || text.includes('canonical')) {
+    resources.add('mrdj://rules/seo-metadata');
+    resources.add('mrdj://skills/seo-metadata');
+  }
+  if (text.includes('app architecture') || text.includes('route') || text.includes('app/')) {
+    resources.add('mrdj://rules/app-folder-architecture');
+    resources.add('mrdj://skills/expo-router-architecture');
+  }
+  if (text.includes('styling') || text.includes('uniwind') || text.includes('tailwind')) {
+    resources.add('mrdj://skills/uniwind-theming');
+  }
+  if (text.includes('expo') || text.includes('build') || text.includes('script') || text.includes('package')) {
+    resources.add('mrdj://skills/deployment');
+  }
+
+  return [...resources];
+}
+
+function nextStepForCheck(check: DoctorCheckResult): string {
+  const text = `${check.name} ${check.message}`.toLowerCase();
+  if (text.includes('env') || text.includes('secret')) {
+    return 'Separate public client config from private server secrets, then rerun the affected file/project scan.';
+  }
+  if (text.includes('ssr') || text.includes('window') || text.includes('document')) {
+    return 'Move client-only runtime access behind platform/lifecycle guards or isolate it from server paths.';
+  }
+  if (text.includes('seo') || text.includes('metadata')) {
+    return 'Add or normalize route metadata, canonical/indexing strategy, and web output verification.';
+  }
+  if (text.includes('app architecture') || text.includes('route')) {
+    return 'Move business/data logic out of route files and keep app/ focused on routing shells.';
+  }
+  if (text.includes('script') || text.includes('build') || text.includes('package')) {
+    return 'Fix the failing or missing package script so local checks match CI/release expectations.';
+  }
+  return 'Apply the smallest targeted fix, then rerun Doctor to confirm the finding is resolved.';
+}
+
+function normalizeDeployTarget(value: string | undefined): 'web' | 'ios' | 'android' | 'native' | 'all' {
+  return value === 'web' ||
+    value === 'ios' ||
+    value === 'android' ||
+    value === 'native' ||
+    value === 'all'
+    ? value
+    : 'all';
+}
+
 function normalizeMode(value: string | undefined): DoctorMode {
   return value === 'ci' || value === 'full' || value === 'fast' ? value : 'fast';
 }
@@ -892,10 +1303,7 @@ function normalizeKind(value: string | undefined): KnowledgeKind | undefined {
     value === 'guide' ||
     value === 'rule' ||
     value === 'skill' ||
-    value === 'reference' ||
-    value === 'checklist' ||
-    value === 'example' ||
-    value === 'prompt'
+    value === 'reference'
     ? value
     : undefined;
 }

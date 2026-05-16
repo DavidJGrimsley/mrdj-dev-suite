@@ -8,7 +8,7 @@ import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
   executeTool,
-  listPrompts,
+  listTools,
   listResources,
   readResource,
 } from '../src/index.js';
@@ -30,7 +30,6 @@ describe('mrdj MCP helpers', () => {
     expect(resources.some((resource) => resource.uri === 'mrdj://reference/mcp-sdk-transport')).toBe(
       true
     );
-    expect(resources.some((resource) => resource.uri === 'mrdj://prompts/ship-test-loop')).toBe(true);
   });
 
   it('reads generated knowledge resource content', async () => {
@@ -55,6 +54,63 @@ describe('mrdj MCP helpers', () => {
     expect(skills.some((resource) => resource.uri === 'mrdj://skills/project-onboarding')).toBe(
       true
     );
+  });
+
+  it('lists skills with the Phase 8 list_skills alias', async () => {
+    const tools = listTools();
+    expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
+
+    const result = (await executeTool('list_skills', { query: 'deployment' })) as Array<{
+      id: string;
+      uri: string;
+    }>;
+
+    expect(result.some((skill) => skill.id === 'deployment')).toBe(true);
+    expect(result.every((skill) => skill.uri.startsWith('mrdj://skills/'))).toBe(true);
+  });
+
+  it('generates a Doctor-backed refactor plan with related resources', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-refactor-'));
+    tempDirs.push(projectPath);
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(path.join(projectPath, '.env'), 'EXPO_PUBLIC_SERVICE_ROLE_TOKEN=bad\n', 'utf8');
+
+    const result = (await executeTool('generate_refactor_plan', {
+      projectPath,
+      mode: 'fast',
+      runScripts: false,
+      focus: 'env',
+    })) as {
+      kind: string;
+      priorities: Array<{ check: string; relatedResources: string[] }>;
+    };
+
+    expect(result.kind).toBe('refactor-plan');
+    expect(result.priorities.some((item) => item.check === 'env hygiene')).toBe(true);
+    expect(result.priorities[0]?.relatedResources).toContain('mrdj://rules/env-hygiene');
+  });
+
+  it('generates a target-aware deployment checklist', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-deploy-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+
+    const result = (await executeTool('generate_deploy_checklist', {
+      projectPath,
+      target: 'web',
+      mode: 'fast',
+      runScripts: false,
+    })) as {
+      kind: string;
+      target: string;
+      checklist: Array<{ id: string }>;
+    };
+
+    expect(result.kind).toBe('deploy-checklist');
+    expect(result.target).toBe('web');
+    expect(result.checklist.some((item) => item.id === 'web-metadata')).toBe(true);
+    expect(result.checklist.some((item) => item.id === 'web-ssr-safety')).toBe(true);
   });
 
   it('builds a continue brief through the MCP continue_project tool', async () => {
@@ -93,13 +149,5 @@ describe('mrdj MCP helpers', () => {
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
     expect(prompt).toContain('Ask EXACTLY ONE question per message');
     expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
-  });
-
-  it('lists the canonical ship_test_loop prompt metadata', () => {
-    const prompts = listPrompts();
-    const shipPrompt = prompts.find((prompt) => prompt.name === 'ship_test_loop');
-
-    expect(shipPrompt).toBeDefined();
-    expect(shipPrompt?.args).toEqual(['projectPath', 'branch', 'base']);
   });
 });
