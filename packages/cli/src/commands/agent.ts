@@ -1,0 +1,883 @@
+import { cp, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import chalk from 'chalk';
+
+import { runDoctor } from '@mrdj/doctor';
+import { readKnowledgeResource } from '@mrdj/knowledge';
+import { buildContinueSessionBrief } from '../continue.js';
+import {
+  installVscodeUserMcp,
+  resolveServerInvocation,
+  writeCodexConfig,
+  writeJsonMcpConfig,
+  writeVscodeMcpConfig,
+} from './mcp-install.js';
+
+export type AgentClient = 'vscode' | 'claude' | 'codex';
+export type AgentScope = 'user' | 'project';
+export type AgentAction = 'install' | 'verify';
+
+export interface AgentArgv {
+  action?: AgentAction;
+  client?: AgentClient;
+  scope?: AgentScope;
+  target?: string;
+  serverPath?: string;
+  command?: string;
+  dryRun?: boolean;
+  bundlePath?: string;
+}
+
+export interface AgentInstallResult {
+  client: AgentClient;
+  scope: AgentScope;
+  target: string;
+  dryRun: boolean;
+  writtenPaths: string[];
+}
+
+export interface AgentVerifyResult {
+  client: AgentClient;
+  target: string;
+  passed: boolean;
+  checks: Array<{
+    name: string;
+    status: 'pass' | 'fail';
+    path: string;
+    message: string;
+  }>;
+}
+
+const INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->';
+const INSTRUCTIONS_END = '<!-- END MDS COPILOT INSTRUCTIONS -->';
+const CLAUDE_INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS CLAUDE INSTRUCTIONS -->';
+const CLAUDE_INSTRUCTIONS_END = '<!-- END MDS CLAUDE INSTRUCTIONS -->';
+const MDS_SERVER_KEY = 'mrdj-dev-suite';
+const CODEX_PLUGIN_NAME = 'mrdj-dev-suite';
+const CODEX_PLUGIN_SOURCE_PATH = `./plugins/${CODEX_PLUGIN_NAME}`;
+
+interface InstructionMarkers {
+  begin: string;
+  end: string;
+}
+
+export async function runAgentCommand(argv: AgentArgv): Promise<void> {
+  if ((argv.action ?? 'install') === 'verify') {
+    await runAgentVerifyCommand(argv);
+    return;
+  }
+
+  await runAgentInstallCommand(argv);
+}
+
+export async function runAgentInstallCommand(argv: AgentArgv): Promise<AgentInstallResult> {
+  const client = argv.client ?? 'vscode';
+  const scope = argv.scope ?? 'project';
+  const dryRun = Boolean(argv.dryRun);
+  const bundleRoot = resolvePluginBundleRoot(client, argv.bundlePath);
+  const server = resolveServerInvocation({
+    serverPath: argv.serverPath,
+    command: argv.command,
+  });
+  const writtenPaths: string[] = [];
+
+  console.log(chalk.bold('mrdj agent install'));
+  console.log(chalk.dim(`client: ${client}`));
+  console.log(chalk.dim(`scope:  ${scope}`));
+  console.log(chalk.dim(`bundle: ${bundleRoot}`));
+  console.log();
+
+  if (client === 'vscode') {
+    return await installVscodeAgent(argv, scope, dryRun, bundleRoot, server, writtenPaths);
+  }
+
+  if (client === 'claude') {
+    return await installClaudeAgent(argv, scope, dryRun, bundleRoot, server, writtenPaths);
+  }
+
+  return await installCodexAgent(argv, scope, dryRun, bundleRoot, server, writtenPaths);
+}
+
+export async function runAgentVerifyCommand(argv: AgentArgv): Promise<AgentVerifyResult> {
+  const client = argv.client ?? 'vscode';
+  const target = path.resolve(argv.target ?? '.');
+  const result = await verifyAgentInstall(client, target);
+
+  console.log(chalk.bold('mrdj agent verify'));
+  console.log(chalk.dim(`client: ${client}`));
+  console.log(chalk.dim(`target: ${target}`));
+  console.log();
+  for (const check of result.checks) {
+    const label = check.status === 'pass' ? chalk.green('PASS') : chalk.red('FAIL');
+    console.log(`${label} ${check.name}: ${check.message}`);
+    console.log(chalk.dim(`  ${check.path}`));
+  }
+
+  if (!result.passed) {
+    process.exitCode = 1;
+  }
+
+  return result;
+}
+
+export async function verifyAgentInstall(client: AgentClient, target: string): Promise<AgentVerifyResult> {
+  switch (client) {
+    case 'vscode':
+      return await verifyVscodeAgentInstall(target);
+    case 'claude':
+      return await verifyClaudeAgentInstall(target);
+    case 'codex':
+      return await verifyCodexAgentInstall(target);
+  }
+}
+
+export async function verifyVscodeAgentInstall(target: string): Promise<AgentVerifyResult> {
+  const checks: AgentVerifyResult['checks'] = [];
+  const mcpPath = path.join(target, '.vscode', 'mcp.json');
+  const settingsPath = path.join(target, '.vscode', 'settings.json');
+  const instructionsPath = path.join(target, '.github', 'copilot-instructions.md');
+  const agentPath = path.join(target, '.github', 'agents', 'mds.agent.md');
+  const promptsPath = path.join(target, '.github', 'prompts');
+  const skillsPath = path.join(target, '.github', 'skills');
+
+  checks.push(await checkVscodeMcp(mcpPath));
+  checks.push(await checkVscodeSettings(settingsPath));
+  checks.push(await checkContainsMarker('copilot instructions', instructionsPath, INSTRUCTIONS_BEGIN));
+  checks.push(await checkExists('MDS custom agent', agentPath));
+  checks.push(await checkDirectoryContains('prompt files', promptsPath, '.prompt.md'));
+  checks.push(await checkDirectoryContains('skill files', skillsPath, 'SKILL.md'));
+  checks.push(...(await runValidationChecks(target)));
+
+  return {
+    client: 'vscode',
+    target,
+    passed: checks.every((check) => check.status === 'pass'),
+    checks,
+  };
+}
+
+export async function verifyClaudeAgentInstall(target: string): Promise<AgentVerifyResult> {
+  const checks: AgentVerifyResult['checks'] = [];
+  const mcpPath = path.join(target, '.mcp.json');
+  const instructionsPath = path.join(target, 'CLAUDE.md');
+  const agentPath = path.join(target, '.claude', 'agents', 'mds.md');
+  const commandsPath = path.join(target, '.claude', 'commands');
+  const skillsPath = path.join(target, '.claude', 'skills');
+
+  checks.push(await checkJsonMcp('Claude MCP config', mcpPath));
+  checks.push(await checkContainsMarker('Claude instructions', instructionsPath, CLAUDE_INSTRUCTIONS_BEGIN));
+  checks.push(await checkExists('MDS Claude agent', agentPath));
+  checks.push(await checkDirectoryContains('Claude slash commands', commandsPath, '.md'));
+  checks.push(await checkDirectoryContains('Claude skills', skillsPath, 'SKILL.md'));
+  checks.push(...(await runValidationChecks(target)));
+
+  return {
+    client: 'claude',
+    target,
+    passed: checks.every((check) => check.status === 'pass'),
+    checks,
+  };
+}
+
+export async function verifyCodexAgentInstall(target: string): Promise<AgentVerifyResult> {
+  const checks: AgentVerifyResult['checks'] = [];
+  const configPath = path.join(target, '.codex', 'config.toml');
+  const marketplacePath = path.join(target, '.agents', 'plugins', 'marketplace.json');
+  const pluginRoot = path.join(target, 'plugins', CODEX_PLUGIN_NAME);
+
+  checks.push(await checkCodexConfig(configPath));
+  checks.push(await checkMarketplaceEntry(marketplacePath));
+  checks.push(await checkExists('Codex plugin manifest', path.join(pluginRoot, '.codex-plugin', 'plugin.json')));
+  checks.push(await checkDirectoryContains('Codex plugin skills', path.join(pluginRoot, 'skills'), 'SKILL.md'));
+  checks.push(...(await runValidationChecks(target)));
+
+  return {
+    client: 'codex',
+    target,
+    passed: checks.every((check) => check.status === 'pass'),
+    checks,
+  };
+}
+
+async function installVscodeAgent(
+  argv: AgentArgv,
+  scope: AgentScope,
+  dryRun: boolean,
+  bundleRoot: string,
+  server: ReturnType<typeof resolveServerInvocation>,
+  writtenPaths: string[]
+): Promise<AgentInstallResult> {
+  if (scope === 'user') {
+    const target = path.join(os.homedir(), '.copilot');
+    await installVscodeUserAssets(bundleRoot, target, dryRun, writtenPaths);
+    await installVscodeUserMcp(server, dryRun);
+    return {
+      client: 'vscode',
+      scope,
+      target,
+      dryRun,
+      writtenPaths,
+    };
+  }
+
+  const target = path.resolve(argv.target ?? '.');
+  await writeVscodeMcpConfig(path.join(target, '.vscode', 'mcp.json'), server, dryRun);
+  writtenPaths.push(path.join(target, '.vscode', 'mcp.json'));
+  await mergeJsonFile(
+    path.join(bundleRoot, '.vscode', 'settings.json'),
+    path.join(target, '.vscode', 'settings.json'),
+    dryRun,
+    writtenPaths
+  );
+  await installVscodeProjectAssets(bundleRoot, target, dryRun, writtenPaths);
+  printProjectInstallFollowup(target, 'vscode');
+
+  return {
+    client: 'vscode',
+    scope,
+    target,
+    dryRun,
+    writtenPaths,
+  };
+}
+
+async function installClaudeAgent(
+  argv: AgentArgv,
+  scope: AgentScope,
+  dryRun: boolean,
+  bundleRoot: string,
+  server: ReturnType<typeof resolveServerInvocation>,
+  writtenPaths: string[]
+): Promise<AgentInstallResult> {
+  if (scope === 'user') {
+    const target = path.join(os.homedir(), '.claude');
+    await writeJsonMcpConfig(path.join(os.homedir(), '.claude.json'), server, dryRun);
+    writtenPaths.push(path.join(os.homedir(), '.claude.json'));
+    await installClaudeSharedAssets(bundleRoot, target, dryRun, writtenPaths);
+    await upsertInstructions(
+      path.join(bundleRoot, 'CLAUDE.md'),
+      path.join(target, 'CLAUDE.md'),
+      dryRun,
+      writtenPaths,
+      { begin: CLAUDE_INSTRUCTIONS_BEGIN, end: CLAUDE_INSTRUCTIONS_END }
+    );
+    printUserInstallFollowup(target, 'claude');
+    return {
+      client: 'claude',
+      scope,
+      target,
+      dryRun,
+      writtenPaths,
+    };
+  }
+
+  const target = path.resolve(argv.target ?? '.');
+  await writeJsonMcpConfig(path.join(target, '.mcp.json'), server, dryRun);
+  writtenPaths.push(path.join(target, '.mcp.json'));
+  await installClaudeSharedAssets(bundleRoot, path.join(target, '.claude'), dryRun, writtenPaths);
+  await upsertInstructions(
+    path.join(bundleRoot, 'CLAUDE.md'),
+    path.join(target, 'CLAUDE.md'),
+    dryRun,
+    writtenPaths,
+    { begin: CLAUDE_INSTRUCTIONS_BEGIN, end: CLAUDE_INSTRUCTIONS_END }
+  );
+  printProjectInstallFollowup(target, 'claude');
+
+  return {
+    client: 'claude',
+    scope,
+    target,
+    dryRun,
+    writtenPaths,
+  };
+}
+
+async function installCodexAgent(
+  argv: AgentArgv,
+  scope: AgentScope,
+  dryRun: boolean,
+  bundleRoot: string,
+  server: ReturnType<typeof resolveServerInvocation>,
+  writtenPaths: string[]
+): Promise<AgentInstallResult> {
+  const target = scope === 'user' ? os.homedir() : path.resolve(argv.target ?? '.');
+  await writeCodexConfig(path.join(target, '.codex', 'config.toml'), server, dryRun);
+  writtenPaths.push(path.join(target, '.codex', 'config.toml'));
+  await installCodexPluginAssets(bundleRoot, target, dryRun, writtenPaths);
+  if (scope === 'user') {
+    printUserInstallFollowup(target, 'codex');
+  } else {
+    printProjectInstallFollowup(target, 'codex');
+  }
+
+  return {
+    client: 'codex',
+    scope,
+    target,
+    dryRun,
+    writtenPaths,
+  };
+}
+
+async function runValidationChecks(target: string): Promise<AgentVerifyResult['checks']> {
+  const checks: AgentVerifyResult['checks'] = [];
+
+  try {
+    const report = await runDoctor(target, { mode: 'fast', runScripts: false });
+    checks.push({
+      name: 'Doctor validation',
+      status: 'pass',
+      path: target,
+      message: `Doctor ran: ${report.summary.errors} errors, ${report.summary.warnings} warnings.`,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'Doctor validation',
+      status: 'fail',
+      path: target,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  try {
+    const guide = await readKnowledgeResource('mrdj://guides/post-create-onboarding');
+    checks.push({
+      name: 'Knowledge guide validation',
+      status: guide?.content ? 'pass' : 'fail',
+      path: 'mrdj://guides/post-create-onboarding',
+      message: guide?.content ? 'Fetched a bundled knowledge guide.' : 'Could not fetch the bundled guide.',
+    });
+  } catch (error) {
+    checks.push({
+      name: 'Knowledge guide validation',
+      status: 'fail',
+      path: 'mrdj://guides/post-create-onboarding',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  try {
+    const brief = await buildContinueSessionBrief(target);
+    checks.push({
+      name: 'CLI workflow validation',
+      status: 'pass',
+      path: target,
+      message: `MDS Continue workflow ran with recommendation "${brief.recommendation.priority}".`,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'CLI workflow validation',
+      status: 'fail',
+      path: target,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return checks;
+}
+
+export function resolveVscodeBundleRoot(bundlePath?: string): string {
+  return resolvePluginBundleRoot('vscode', bundlePath);
+}
+
+export function resolvePluginBundleRoot(client: AgentClient, bundlePath?: string): string {
+  if (bundlePath) {
+    return path.resolve(bundlePath);
+  }
+
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const repoRoot = path.resolve(moduleDir, '..', '..', '..', '..');
+
+  switch (client) {
+    case 'vscode':
+      return path.join(repoRoot, 'plugins', 'vscode-copilot');
+    case 'claude':
+      return path.join(repoRoot, 'plugins', 'claude-code');
+    case 'codex':
+      return path.join(repoRoot, 'plugins', 'codex');
+  }
+}
+
+async function installVscodeProjectAssets(
+  bundleRoot: string,
+  target: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  await upsertInstructions(
+    path.join(bundleRoot, '.github', 'copilot-instructions.md'),
+    path.join(target, '.github', 'copilot-instructions.md'),
+    dryRun,
+    writtenPaths,
+    { begin: INSTRUCTIONS_BEGIN, end: INSTRUCTIONS_END }
+  );
+  await copyTree(path.join(bundleRoot, '.github', 'agents'), path.join(target, '.github', 'agents'), dryRun, writtenPaths);
+  await copyTree(path.join(bundleRoot, '.github', 'prompts'), path.join(target, '.github', 'prompts'), dryRun, writtenPaths);
+  await copyTree(path.join(bundleRoot, '.github', 'skills'), path.join(target, '.github', 'skills'), dryRun, writtenPaths);
+}
+
+async function installVscodeUserAssets(
+  bundleRoot: string,
+  target: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  await upsertInstructions(
+    path.join(bundleRoot, 'user', '.copilot', 'instructions.md'),
+    path.join(target, 'instructions.md'),
+    dryRun,
+    writtenPaths,
+    { begin: INSTRUCTIONS_BEGIN, end: INSTRUCTIONS_END }
+  );
+  await copyTree(path.join(bundleRoot, 'user', '.copilot', 'agents'), path.join(target, 'agents'), dryRun, writtenPaths);
+  await copyTree(path.join(bundleRoot, 'user', '.copilot', 'skills'), path.join(target, 'skills'), dryRun, writtenPaths);
+}
+
+async function installClaudeSharedAssets(
+  bundleRoot: string,
+  claudeRoot: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  await copyTree(path.join(bundleRoot, 'commands'), path.join(claudeRoot, 'commands'), dryRun, writtenPaths);
+  await copyTree(path.join(bundleRoot, 'agents'), path.join(claudeRoot, 'agents'), dryRun, writtenPaths);
+  await copyTree(path.join(bundleRoot, 'skills'), path.join(claudeRoot, 'skills'), dryRun, writtenPaths);
+}
+
+async function installCodexPluginAssets(
+  bundleRoot: string,
+  installRoot: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  const pluginRoot = path.join(installRoot, 'plugins', CODEX_PLUGIN_NAME);
+  await copyTree(bundleRoot, pluginRoot, dryRun, writtenPaths);
+  await upsertCodexMarketplace(
+    path.join(installRoot, '.agents', 'plugins', 'marketplace.json'),
+    CODEX_PLUGIN_SOURCE_PATH,
+    dryRun,
+    writtenPaths
+  );
+}
+
+async function upsertInstructions(
+  sourcePath: string,
+  destinationPath: string,
+  dryRun: boolean,
+  writtenPaths: string[],
+  markers: InstructionMarkers
+): Promise<void> {
+  const source = await readFile(sourcePath, 'utf8');
+  const existing = await readTextIfExists(destinationPath);
+  const sourceBlock = source.includes(markers.begin)
+    ? source
+    : `${markers.begin}\n${source.trim()}\n${markers.end}\n`;
+  const next = upsertMarkedBlock(existing ?? '', sourceBlock, markers);
+  await writeText(destinationPath, next, dryRun, writtenPaths);
+}
+
+async function mergeJsonFile(
+  sourcePath: string,
+  destinationPath: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  const source = JSON.parse(await readFile(sourcePath, 'utf8')) as Record<string, unknown>;
+  const existingRaw = await readTextIfExists(destinationPath);
+  const existing = existingRaw ? (JSON.parse(existingRaw) as Record<string, unknown>) : {};
+  const next = deepMerge(existing, source);
+  await writeText(destinationPath, `${JSON.stringify(next, null, 2)}\n`, dryRun, writtenPaths);
+}
+
+async function upsertCodexMarketplace(
+  marketplacePath: string,
+  pluginSourcePath: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  const existingRaw = await readTextIfExists(marketplacePath);
+  const existing = existingRaw ? parseJsonObject(existingRaw, marketplacePath) : {};
+  const marketplace: Record<string, unknown> = {
+    ...existing,
+    name: typeof existing.name === 'string' ? existing.name : 'mrdj-local',
+    interface: isRecord(existing.interface) ? existing.interface : { displayName: 'MrDJ Local Plugins' },
+  };
+  const existingPlugins = Array.isArray(existing.plugins) ? existing.plugins : [];
+  const nextEntry = {
+    name: CODEX_PLUGIN_NAME,
+    source: {
+      source: 'local',
+      path: pluginSourcePath,
+    },
+    policy: {
+      installation: 'AVAILABLE',
+      authentication: 'ON_INSTALL',
+    },
+    category: 'Coding',
+  };
+  const plugins = existingPlugins.filter((plugin) => !isRecord(plugin) || plugin.name !== CODEX_PLUGIN_NAME);
+  plugins.push(nextEntry);
+  marketplace.plugins = plugins;
+
+  await writeText(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`, dryRun, writtenPaths);
+}
+
+function upsertMarkedBlock(existing: string, block: string, markers: InstructionMarkers): string {
+  const trimmedBlock = block.trim();
+  const start = existing.indexOf(markers.begin);
+  const end = existing.indexOf(markers.end);
+  if (start !== -1 && end !== -1 && end > start) {
+    const afterEnd = end + markers.end.length;
+    return `${existing.slice(0, start).trimEnd()}\n\n${trimmedBlock}\n\n${existing.slice(afterEnd).trimStart()}`.trimStart();
+  }
+
+  return existing.trim().length > 0 ? `${existing.trimEnd()}\n\n${trimmedBlock}\n` : `${trimmedBlock}\n`;
+}
+
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...target };
+  for (const [key, value] of Object.entries(source)) {
+    const current = merged[key];
+    if (isRecord(current) && isRecord(value)) {
+      merged[key] = deepMerge(current, value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+async function copyTree(
+  sourceDir: string,
+  destinationDir: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  if (dryRun) {
+    const files = await listFiles(sourceDir);
+    for (const file of files) {
+      writtenPaths.push(path.join(destinationDir, path.relative(sourceDir, file)));
+    }
+    printDryRunTree(sourceDir, destinationDir);
+    return;
+  }
+
+  await mkdir(destinationDir, { recursive: true });
+  await cp(sourceDir, destinationDir, { recursive: true, force: true });
+  const files = await listFiles(destinationDir);
+  writtenPaths.push(...files);
+  console.log(chalk.green(`copied ${sourceDir} -> ${destinationDir}`));
+}
+
+async function writeText(
+  filePath: string,
+  content: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  writtenPaths.push(filePath);
+  if (dryRun) {
+    console.log(chalk.cyan('--dry-run output:'));
+    console.log(chalk.gray(`# would write ${filePath}`));
+    return;
+  }
+
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, content, 'utf8');
+  console.log(chalk.green(`wrote ${filePath}`));
+}
+
+async function listFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const filePath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await listFiles(filePath)));
+    } else if (entry.isFile()) {
+      files.push(filePath);
+    }
+  }
+  return files;
+}
+
+function printDryRunTree(sourceDir: string, destinationDir: string): void {
+  console.log(chalk.cyan('--dry-run output:'));
+  console.log(chalk.gray(`# would copy ${sourceDir} -> ${destinationDir}`));
+}
+
+function printProjectInstallFollowup(target: string, client: AgentClient): void {
+  console.log();
+  if (client === 'vscode') {
+    console.log(chalk.bold('Next steps for VS Code Copilot (project scope):'));
+    console.log(`  1. Open ${target} in VS Code.`);
+    console.log('  2. Confirm the mrdjDevSuite MCP server is enabled when Copilot prompts for MCP trust.');
+    console.log('  3. Run `mrdj agent verify --client vscode --target .` from the project root.');
+    return;
+  }
+
+  if (client === 'claude') {
+    console.log(chalk.bold('Next steps for Claude Code (project scope):'));
+    console.log(`  1. Open ${target} in Claude Code or restart Claude Code if it is already open.`);
+    console.log('  2. Run `/mcp` to confirm the mrdj-dev-suite server is listed.');
+    console.log('  3. Use the `mds` agent or MDS slash commands such as `/run-doctor`.');
+    return;
+  }
+
+  console.log(chalk.bold('Next steps for Codex (project scope):'));
+  console.log(`  1. Open ${target} in Codex.`);
+  console.log('  2. Install or enable the mrdj-dev-suite local plugin from the local marketplace.');
+  console.log('  3. Run `mrdj agent verify --client codex --target .` from the project root.');
+}
+
+function printUserInstallFollowup(target: string, client: Exclude<AgentClient, 'vscode'>): void {
+  console.log();
+  if (client === 'claude') {
+    console.log(chalk.bold('Next steps for Claude Code (user scope):'));
+    console.log(`  1. Restart Claude Code so it picks up assets in ${target}.`);
+    console.log('  2. Run `/mcp` to confirm mrdj-dev-suite is listed.');
+    console.log('  3. Use the `mds` agent or MDS slash commands from any workspace.');
+    return;
+  }
+
+  console.log(chalk.bold('Next steps for Codex (user scope):'));
+  console.log(`  1. Restart Codex so it picks up ${path.join(target, '.agents', 'plugins', 'marketplace.json')}.`);
+  console.log('  2. Install or enable the mrdj-dev-suite local plugin from the local marketplace.');
+  console.log('  3. Confirm the mrdj-dev-suite MCP server is configured in Codex settings.');
+}
+
+async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return {
+      name: 'VS Code MCP config',
+      status: 'fail',
+      path: filePath,
+      message: '.vscode/mcp.json is missing.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { servers?: Record<string, unknown> };
+    if (parsed.servers?.mrdjDevSuite) {
+      return {
+        name: 'VS Code MCP config',
+        status: 'pass',
+        path: filePath,
+        message: 'mrdjDevSuite server is configured.',
+      };
+    }
+  } catch {
+    return {
+      name: 'VS Code MCP config',
+      status: 'fail',
+      path: filePath,
+      message: '.vscode/mcp.json is not valid JSON.',
+    };
+  }
+
+  return {
+    name: 'VS Code MCP config',
+    status: 'fail',
+    path: filePath,
+    message: 'mrdjDevSuite server is missing from the servers object.',
+  };
+}
+
+async function checkJsonMcp(name: string, filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return {
+      name,
+      status: 'fail',
+      path: filePath,
+      message: 'MCP config file is missing.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
+    if (parsed.mcpServers?.[MDS_SERVER_KEY]) {
+      return {
+        name,
+        status: 'pass',
+        path: filePath,
+        message: `${MDS_SERVER_KEY} server is configured.`,
+      };
+    }
+  } catch {
+    return {
+      name,
+      status: 'fail',
+      path: filePath,
+      message: 'MCP config file is not valid JSON.',
+    };
+  }
+
+  return {
+    name,
+    status: 'fail',
+    path: filePath,
+    message: `${MDS_SERVER_KEY} server is missing from mcpServers.`,
+  };
+}
+
+async function checkCodexConfig(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  const hasServer = raw?.includes(`[mcp_servers.${MDS_SERVER_KEY}]`) ?? false;
+  return {
+    name: 'Codex MCP config',
+    status: hasServer ? 'pass' : 'fail',
+    path: filePath,
+    message: hasServer ? `${MDS_SERVER_KEY} server is configured.` : 'Codex MCP server block is missing.',
+  };
+}
+
+async function checkMarketplaceEntry(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return {
+      name: 'Codex marketplace entry',
+      status: 'fail',
+      path: filePath,
+      message: 'Marketplace file is missing.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { plugins?: unknown[] };
+    const plugin = parsed.plugins?.find((entry) => isRecord(entry) && entry.name === CODEX_PLUGIN_NAME);
+    const source = isRecord(plugin) && isRecord(plugin.source) ? plugin.source : null;
+    const valid = source?.source === 'local' && source.path === CODEX_PLUGIN_SOURCE_PATH;
+    return {
+      name: 'Codex marketplace entry',
+      status: valid ? 'pass' : 'fail',
+      path: filePath,
+      message: valid ? 'mrdj-dev-suite local plugin is registered.' : 'mrdj-dev-suite local plugin entry is missing or invalid.',
+    };
+  } catch {
+    return {
+      name: 'Codex marketplace entry',
+      status: 'fail',
+      path: filePath,
+      message: 'Marketplace file is not valid JSON.',
+    };
+  }
+}
+
+async function checkVscodeSettings(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return {
+      name: 'VS Code Copilot settings',
+      status: 'fail',
+      path: filePath,
+      message: '.vscode/settings.json is missing.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const promptLocations = parsed['chat.promptFilesLocations'];
+    const agentLocations = parsed['chat.agentFilesLocations'];
+    const skillLocations = parsed['chat.agentSkillsLocations'];
+    const valid =
+      parsed['github.copilot.chat.codeGeneration.useInstructionFiles'] === true &&
+      parsed['chat.useAgentSkills'] === true &&
+      isRecord(promptLocations) &&
+      promptLocations['.github/prompts'] === true &&
+      isRecord(agentLocations) &&
+      agentLocations['.github/agents'] === true &&
+      isRecord(skillLocations) &&
+      skillLocations['.github/skills'] === true;
+
+    return {
+      name: 'VS Code Copilot settings',
+      status: valid ? 'pass' : 'fail',
+      path: filePath,
+      message: valid ? 'Copilot customization discovery settings are installed.' : 'Required Copilot settings are missing.',
+    };
+  } catch {
+    return {
+      name: 'VS Code Copilot settings',
+      status: 'fail',
+      path: filePath,
+      message: '.vscode/settings.json is not valid JSON.',
+    };
+  }
+}
+
+async function checkContainsMarker(
+  name: string,
+  filePath: string,
+  marker: string
+): Promise<AgentVerifyResult['checks'][number]> {
+  const content = await readTextIfExists(filePath);
+  return {
+    name,
+    status: content?.includes(marker) ? 'pass' : 'fail',
+    path: filePath,
+    message: content?.includes(marker) ? 'MDS instructions are installed.' : 'MDS instructions are missing.',
+  };
+}
+
+async function checkExists(name: string, filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  try {
+    await stat(filePath);
+    return { name, status: 'pass', path: filePath, message: 'File exists.' };
+  } catch {
+    return { name, status: 'fail', path: filePath, message: 'File is missing.' };
+  }
+}
+
+async function checkDirectoryContains(
+  name: string,
+  dirPath: string,
+  suffix: string
+): Promise<AgentVerifyResult['checks'][number]> {
+  try {
+    const files = await listFiles(dirPath);
+    const hasMatch = files.some((file) => file.endsWith(suffix));
+    return {
+      name,
+      status: hasMatch ? 'pass' : 'fail',
+      path: dirPath,
+      message: hasMatch ? `Found ${suffix} assets.` : `No ${suffix} assets found.`,
+    };
+  } catch {
+    return {
+      name,
+      status: 'fail',
+      path: dirPath,
+      message: 'Directory is missing.',
+    };
+  }
+}
+
+async function readTextIfExists(filePath: string): Promise<string | null> {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonObject(raw: string, filePath: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (isRecord(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // Throw below with a stable message.
+  }
+  throw new Error(`${filePath} is not a JSON object.`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

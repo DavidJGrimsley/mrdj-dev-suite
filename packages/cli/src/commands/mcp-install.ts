@@ -1,11 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 
-export type McpClient = 'claude' | 'codex' | 'cursor';
+export type McpClient = 'claude' | 'codex' | 'cursor' | 'vscode';
 export type McpScope = 'user' | 'project';
 
 export interface McpInstallArgv {
@@ -17,12 +18,13 @@ export interface McpInstallArgv {
   dryRun?: boolean;
 }
 
-interface ResolvedServer {
+export interface ResolvedServer {
   command: string;
   args: string[];
 }
 
-const SERVER_KEY = 'mrdj-dev-suite';
+export const SERVER_KEY = 'mrdj-dev-suite';
+export const VSCODE_SERVER_KEY = 'mrdjDevSuite';
 
 export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> {
   const client = argv.client ?? 'claude';
@@ -63,6 +65,9 @@ async function installProjectScope(
     case 'codex':
       await writeCodexConfig(path.join(targetDir, '.codex', 'config.toml'), server, dryRun);
       break;
+    case 'vscode':
+      await writeVscodeMcpConfig(path.join(targetDir, '.vscode', 'mcp.json'), server, dryRun);
+      break;
   }
 }
 
@@ -84,6 +89,9 @@ async function installUserScope(
       break;
     case 'codex':
       await writeCodexConfig(path.join(home, '.codex', 'config.toml'), server, dryRun);
+      break;
+    case 'vscode':
+      await installVscodeUserMcp(server, dryRun);
       break;
   }
 }
@@ -127,7 +135,7 @@ export async function writeMcpJsonToProject(targetDir: string): Promise<void> {
   await writeFile(filePath, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
 }
 
-async function writeJsonMcpConfig(
+export async function writeJsonMcpConfig(
   filePath: string,
   server: ResolvedServer,
   dryRun: boolean
@@ -155,7 +163,7 @@ async function writeJsonMcpConfig(
   console.log(chalk.green(`wrote ${filePath}`));
 }
 
-async function writeCodexConfig(
+export async function writeCodexConfig(
   filePath: string,
   server: ResolvedServer,
   dryRun: boolean
@@ -180,6 +188,70 @@ async function writeCodexConfig(
 export function renderCodexBlock(key: string, server: ResolvedServer): string {
   const argsLine = server.args.map((arg) => JSON.stringify(arg)).join(', ');
   return [`[mcp_servers.${key}]`, `command = ${JSON.stringify(server.command)}`, `args = [${argsLine}]`, ''].join('\n');
+}
+
+export async function writeVscodeMcpConfig(
+  filePath: string,
+  server: ResolvedServer,
+  dryRun: boolean
+): Promise<void> {
+  const existing = await readJsonIfExists(filePath);
+  const merged: Record<string, unknown> = existing ?? {};
+  const servers = isRecord(merged.servers) ? { ...merged.servers } : {};
+  servers[VSCODE_SERVER_KEY] = {
+    command: server.command,
+    args: server.args,
+  };
+  merged.servers = servers;
+
+  const json = `${JSON.stringify(merged, null, 2)}\n`;
+
+  if (dryRun) {
+    console.log(chalk.cyan('--dry-run output:'));
+    console.log(chalk.gray(`# would write ${filePath}`));
+    console.log(json);
+    return;
+  }
+
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, json, 'utf8');
+  console.log(chalk.green(`wrote ${filePath}`));
+}
+
+export async function installVscodeUserMcp(
+  server: ResolvedServer,
+  dryRun: boolean
+): Promise<void> {
+  const payload = buildVscodeAddMcpPayload(server);
+  const renderedCommand = renderVscodeAddMcpCommand(payload);
+
+  if (dryRun) {
+    printVscodeUserMcpInstructions(renderedCommand, 'dry-run');
+    return;
+  }
+
+  if (!(await commandExists('code'))) {
+    printVscodeUserMcpInstructions(renderedCommand, 'missing-code-command');
+    return;
+  }
+
+  const result = await runCommand('code', ['--add-mcp', JSON.stringify(payload)], 'inherit');
+  if (result !== 0) {
+    console.log(chalk.yellow(`VS Code returned exit code ${result}. If setup did not complete, run manually:`));
+    console.log(`  ${renderedCommand}`);
+  }
+}
+
+export function buildVscodeAddMcpPayload(server: ResolvedServer): Record<string, unknown> {
+  return {
+    name: VSCODE_SERVER_KEY,
+    command: server.command,
+    args: server.args,
+  };
+}
+
+export function renderVscodeAddMcpCommand(payload: Record<string, unknown>): string {
+  return `code --add-mcp ${JSON.stringify(JSON.stringify(payload))}`;
 }
 
 export function stripExistingCodexBlock(content: string, key: string): string {
@@ -215,6 +287,18 @@ function printClaudeUserFollowup(): void {
   console.log('       /mcp__mrdj-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
 }
 
+function printVscodeUserMcpInstructions(command: string, reason: 'dry-run' | 'missing-code-command'): void {
+  console.log();
+  console.log(chalk.bold('Next steps for VS Code Copilot (user scope):'));
+  if (reason === 'missing-code-command') {
+    console.log(chalk.yellow('The `code` command was not found on PATH, so MDS did not mutate VS Code user MCP settings.'));
+  } else {
+    console.log(chalk.cyan('--dry-run output:'));
+  }
+  console.log('Run this command after installing/enabling the VS Code `code` command:');
+  console.log(`  ${command}`);
+}
+
 async function readJsonIfExists(filePath: string): Promise<Record<string, unknown> | null> {
   const raw = await readTextIfExists(filePath);
   if (raw === null) {
@@ -238,4 +322,25 @@ async function readTextIfExists(filePath: string): Promise<string | null> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function commandExists(command: string): Promise<boolean> {
+  const lookup = process.platform === 'win32' ? 'where' : 'which';
+  return (await runCommand(lookup, [command], 'ignore')) === 0;
+}
+
+async function runCommand(
+  command: string,
+  args: string[],
+  stdio: 'ignore' | 'inherit'
+): Promise<number | null> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio,
+      shell: process.platform === 'win32',
+    });
+
+    child.on('error', () => resolve(1));
+    child.on('close', (code) => resolve(code));
+  });
 }

@@ -238,17 +238,20 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 8: MCP Tools To Build First
 
-- [ ] Build first: `doctor_scan_project`, `doctor_scan_file`, `doctor_explain_result`, `list_skills`, `get_skill`, `get_guide`, `generate_refactor_plan`, and `generate_deploy_checklist`.
+- [x] Build first: `doctor_scan_project`, `doctor_scan_file`, `doctor_explain_result`, `list_skills`, `get_skill`, `get_guide`, `generate_refactor_plan`, and `generate_deploy_checklist`.
 - [ ] Build later: `github_read_repo`, `github_open_issue`, `github_comment_pr`, `dwah_create_project`, `dwah_get_preview_url`, `dwah_deploy`, `dwah_get_logs`, and `dwah_promote`.
-- [ ] Prioritize project review and guidance before deployment tools.
+- [x] Prioritize project review and guidance before deployment tools.
 
-### Phase 9: Unified Agent Bundle (VS Code Copilot)
+### Phase 9: Unified Agent Bundle (VS Code Copilot, Claude Code, Codex)
 
-- [ ] Define the unified agent scope: one agent that loads MCP servers and suite tooling, with clear tool-routing expectations.
-- [ ] Bundle MCP server config, skills/prompts, knowledge resources, CLI wrappers, and recommended VS Code settings into a single installable package.
-- [ ] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
-- [ ] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
-- [ ] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
+- [x] Define the unified agent scope: one agent that loads MCP servers and suite tooling, with clear tool-routing expectations.
+- [x] Bundle MCP server config, skills/prompts, knowledge resources, CLI wrappers, and recommended VS Code settings into a single installable package.
+- [x] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
+- [x] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
+- [x] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
+- [x] Extend `mrdj agent install` to Claude Code and Codex so VS Code, Claude, and Codex each get a native bundle in one command.
+- [x] Add a generated Claude Code `mds` custom agent plus generated commands and skills.
+- [x] Keep Codex as a plugin-first bundle and install it through a local marketplace entry plus MCP config.
 
 ### Phase 10: GitHub Action
 
