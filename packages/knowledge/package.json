@@ -24,7 +24,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc && node scripts/copy-content.mjs",
-    "build:plugin": "node scripts/generate-codex-plugin.mjs",
+    "build:plugin": "tsc && node scripts/generate-codex-plugin.mjs",
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",

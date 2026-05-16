@@ -167,8 +167,6 @@ export function buildPluginManifest(options) {
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
       websiteURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
-      privacyPolicyURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite/blob/main/README.md',
-      termsOfServiceURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite/blob/main/README.md',
       defaultPrompt: [
         'Review my Expo project and give me the next safe implementation steps.',
         'Run a deployment-readiness check with Doctor and fix blockers first.',

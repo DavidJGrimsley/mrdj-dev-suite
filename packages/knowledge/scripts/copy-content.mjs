@@ -27,7 +27,19 @@ await writeFile(
   )}\n`,
   'utf8'
 );
-await generateCodexPluginBundleFromKnowledge({ packageRoot });
+
+if (process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
+  try {
+    await generateCodexPluginBundleFromKnowledge({ packageRoot });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `[copy-content] Failed while generating the Codex plugin bundle. ` +
+        `If you are intentionally running content copy only, rerun with ` +
+        `MRDJ_SKIP_CODEX_PLUGIN_GENERATION=1.\n${detail}`
+    );
+  }
+}
 
 // Generate plugin skill files in the Claude Code plugin format:
 // skills/<skill-id>/SKILL.md with YAML frontmatter extracted from the skill body.

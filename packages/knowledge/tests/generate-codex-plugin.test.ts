@@ -59,6 +59,9 @@ describe('generateCodexPluginBundle', () => {
     expect(manifest.version).toBe('9.9.9');
     expect(manifest.skills).toBe('./skills/');
     expect(manifest.mcpServers).toBe('./.mcp.json');
+    const pluginInterface = manifest.interface as Record<string, unknown>;
+    expect(pluginInterface.privacyPolicyURL).toBeUndefined();
+    expect(pluginInterface.termsOfServiceURL).toBeUndefined();
 
     const mcpRaw = await readFile(path.join(pluginRoot, '.mcp.json'), 'utf8');
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
