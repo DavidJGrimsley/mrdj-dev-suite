@@ -24,7 +24,7 @@ export async function runKillPortCommand(argv: KillPortArgv): Promise<void> {
   const ports = normalizePorts([...(argv.ports ?? []), ...(argv.port ?? [])], [8081]);
   const killed = await killPorts(ports);
 
-  console.log(chalk.bold('mrdj kill-port'));
+  console.log(chalk.bold('mrdj free-port'));
   for (const port of ports) {
     const entries = killed.get(port) ?? [];
     if (entries.length === 0) {
