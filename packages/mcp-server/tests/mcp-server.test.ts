@@ -8,6 +8,7 @@ import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
   executeTool,
+  listPrompts,
   listResources,
   readResource,
 } from '../src/index.js';
@@ -29,6 +30,7 @@ describe('mrdj MCP helpers', () => {
     expect(resources.some((resource) => resource.uri === 'mrdj://reference/mcp-sdk-transport')).toBe(
       true
     );
+    expect(resources.some((resource) => resource.uri === 'mrdj://prompts/ship-test-loop')).toBe(true);
   });
 
   it('reads generated knowledge resource content', async () => {
@@ -91,5 +93,13 @@ describe('mrdj MCP helpers', () => {
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
     expect(prompt).toContain('Ask EXACTLY ONE question per message');
     expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
+  });
+
+  it('lists the canonical ship_test_loop prompt metadata', () => {
+    const prompts = listPrompts();
+    const shipPrompt = prompts.find((prompt) => prompt.name === 'ship_test_loop');
+
+    expect(shipPrompt).toBeDefined();
+    expect(shipPrompt?.args).toEqual(['projectPath', 'branch', 'base']);
   });
 });

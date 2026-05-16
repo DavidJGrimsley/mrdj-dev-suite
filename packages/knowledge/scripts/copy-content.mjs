@@ -1,6 +1,6 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+﻿import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { generateCodexPluginBundleFromKnowledge } from './generate-codex-plugin.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,10 +44,15 @@ if (process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
 // Generate plugin skill files in the Claude Code plugin format:
 // skills/<skill-id>/SKILL.md with YAML frontmatter extracted from the skill body.
 const claudeCodeSkillsDir = path.join(repoRoot, 'plugins', 'claude-code', 'skills');
+const claudeCodeCommandsDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands');
 const skillSource = path.join(source, 'skills');
 const skillFiles = await listMarkdownFiles(skillSource);
+const knowledgeModule = await loadKnowledgeModule(packageRoot);
+const claudePromptSpecs = knowledgeModule.listPromptSpecs('claude-command');
 
 await rm(claudeCodeSkillsDir, { recursive: true, force: true });
+await rm(claudeCodeCommandsDir, { recursive: true, force: true });
+await mkdir(claudeCodeCommandsDir, { recursive: true });
 
 // Generate agent skills from the knowledge package (auto-invoked by Claude).
 for (const filePath of skillFiles) {
@@ -65,24 +70,33 @@ for (const filePath of skillFiles) {
   await writeFile(path.join(skillDir, 'SKILL.md'), skillMd, 'utf8');
 }
 
-// Generate user-invoked command skills from commands-src/ (disable auto-invocation).
-// These are generated after knowledge skills so command versions win any name collision.
-const commandsSrcDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands-src');
-const commandFiles = await listMarkdownFiles(commandsSrcDir).catch(() => []);
+// Generate user-invoked command skills and command docs from canonical prompt specs.
+for (const spec of claudePromptSpecs) {
+  const prompt = await knowledgeModule.readPromptSpec(spec.id);
+  if (!prompt) {
+    throw new Error(`[copy-content] Missing prompt content for "${spec.id}".`);
+  }
 
-for (const filePath of commandFiles) {
-  const content = await readFile(filePath, 'utf8');
-  const id = path.basename(filePath, '.md');
-  const description = content.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim() ?? id;
+  const fileName = spec.claudeCommandFile;
+  if (!fileName) {
+    throw new Error(`[copy-content] Missing claudeCommandFile for prompt spec "${spec.id}".`);
+  }
+
+  await writeFile(path.join(claudeCodeCommandsDir, fileName), prompt.content, 'utf8');
+
+  const id = path.basename(fileName, '.md');
+  const description = prompt.content.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim() ?? id;
 
   const skillDir = path.join(claudeCodeSkillsDir, id);
   await mkdir(skillDir, { recursive: true });
 
-  const skillMd = `---\ndescription: ${description}\ndisable-model-invocation: true\n---\n\n${content}`;
+  const skillMd = `---\ndescription: ${description}\ndisable-model-invocation: true\n---\n\n${prompt.content}`;
   await writeFile(path.join(skillDir, 'SKILL.md'), skillMd, 'utf8');
 }
 
-console.log(`  generated ${skillFiles.length} knowledge + ${commandFiles.length} command skill dirs → ${path.relative(repoRoot, claudeCodeSkillsDir)}`);
+console.log(
+  `  generated ${skillFiles.length} knowledge skill dirs and ${claudePromptSpecs.length} command specs`
+);
 
 async function listMarkdownFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });
@@ -96,4 +110,16 @@ async function listMarkdownFiles(root) {
     }
   }
   return results;
+}
+
+async function loadKnowledgeModule(packageRootPath) {
+  const distEntry = path.join(packageRootPath, 'dist', 'index.js');
+  try {
+    return await import(pathToFileURL(distEntry).href);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `[copy-content] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mrdj/knowledge build" first.\n${detail}`
+    );
+  }
 }

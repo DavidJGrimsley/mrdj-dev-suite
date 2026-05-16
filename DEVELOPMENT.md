@@ -29,8 +29,8 @@ pnpm ship:test
 
 - `packages/doctor` - reusable checks and report types.
 - `packages/cli` - command-line surface.
-- `packages/knowledge` - source catalog for patterns, skills, guides, rules, and references.
-- `packages/mcp-server` - MCP tools/resources surface, pending full SDK transport.
+- `packages/knowledge` - source catalog for patterns, skills, guides, rules, checklists, examples, and prompt specs.
+- `packages/mcp-server` - MCP tools/resources surface backed by canonical knowledge resources.
 - `plugins/codex` - generated Codex plugin bundle (manifest, MCP config, commands, and generated skills).
 
 ## Plugin Build Workflow
@@ -45,7 +45,8 @@ pnpm ship:test
    - `skills/<skill-id>/SKILL.md` from canonical knowledge skills
    - `commands/*.md` command prompts
    - plugin `README.md`
-4. Generates/updates `.agents/plugins/marketplace.json` with local source path `./plugins/codex`.
+4. Generates `plugins/claude-code/commands/**` and command-backed Claude skills from canonical prompt specs.
+5. Generates/updates `.agents/plugins/marketplace.json` with local source path `./plugins/codex`.
 
 Strict validation is enforced for generated skills. Missing or empty skill markdown fails the build.
 

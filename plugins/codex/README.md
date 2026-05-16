@@ -1,4 +1,4 @@
-# MrDJ Dev Suite Codex Plugin
+# MDS Codex Plugin
 
 The MrDJ Dev Suite plugin bundle is generated from `packages/knowledge` and ships:
 
@@ -8,6 +8,7 @@ The MrDJ Dev Suite plugin bundle is generated from `packages/knowledge` and ship
 - Command prompt files in `commands/`
 
 The source of truth for skills remains `packages/knowledge/src/content/skills`.
+Command prompt markdown is sourced from `packages/knowledge/src/content/prompts` via canonical prompt specs.
 
 ## Install In Codex (Plugin Path)
 
