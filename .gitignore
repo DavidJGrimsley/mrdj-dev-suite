@@ -12,4 +12,7 @@ coverage/
 
 temp/
 
+# Build-generated plugin skill files (sourced from packages/knowledge at build time)
+plugins/claude-code/skills/
+
 .claude/worktrees/
