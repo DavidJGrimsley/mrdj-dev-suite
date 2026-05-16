@@ -104,8 +104,9 @@ The knowledge build also generates a local Codex plugin bundle at `plugins/codex
 
 ```bash
 pnpm --filter @mrdj/knowledge build
-pnpm build:plugin
 ```
+
+`pnpm build:plugin` is optional and only needed when you want to regenerate the plugin bundle directly.
 
 Install path options:
 

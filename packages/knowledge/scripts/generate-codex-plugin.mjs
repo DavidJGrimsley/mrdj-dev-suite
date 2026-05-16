@@ -124,7 +124,8 @@ export async function generateCodexPluginBundle(options) {
   }
 
   await mkdir(path.dirname(marketplacePath), { recursive: true });
-  await writeFile(marketplacePath, renderJson(buildMarketplaceManifest()), 'utf8');
+  const marketplaceManifest = await readMergedMarketplaceManifest(marketplacePath);
+  await writeFile(marketplacePath, renderJson(marketplaceManifest), 'utf8');
 
   return {
     pluginRoot,
@@ -190,27 +191,83 @@ export function buildMcpConfig() {
   };
 }
 
-export function buildMarketplaceManifest() {
-  return {
-    name: 'mrdj-local',
-    interface: {
-      displayName: 'MrDJ Local Plugins',
-    },
-    plugins: [
-      {
-        name: PLUGIN_ID,
-        source: {
-          source: 'local',
-          path: './plugins/codex',
-        },
-        policy: {
-          installation: 'AVAILABLE',
-          authentication: 'ON_INSTALL',
-        },
-        category: 'Coding',
-      },
-    ],
+export function buildMarketplaceManifest(options = {}) {
+  const existingManifest = isRecord(options.existingManifest) ? options.existingManifest : null;
+  const existingPlugins = Array.isArray(existingManifest?.plugins)
+    ? existingManifest.plugins.filter((plugin) => isRecord(plugin))
+    : [];
+  const existingSuiteEntry = existingPlugins.find((plugin) => plugin.name === PLUGIN_ID);
+  const mergedSuiteEntry = buildMarketplacePluginEntry(existingSuiteEntry);
+  const retainedPlugins = existingPlugins.filter((plugin) => plugin.name !== PLUGIN_ID);
+  const mergedPlugins = [...retainedPlugins, mergedSuiteEntry].sort((a, b) =>
+    getSortName(a).localeCompare(getSortName(b))
+  );
+
+  const manifest = existingManifest ? { ...existingManifest } : {};
+  if (typeof manifest.name !== 'string' || manifest.name.trim().length === 0) {
+    manifest.name = 'mrdj-local';
+  }
+
+  const existingInterface = isRecord(manifest.interface) ? { ...manifest.interface } : {};
+  if (
+    typeof existingInterface.displayName !== 'string' ||
+    existingInterface.displayName.trim().length === 0
+  ) {
+    existingInterface.displayName = 'MrDJ Local Plugins';
+  }
+  manifest.interface = existingInterface;
+  manifest.plugins = mergedPlugins;
+  return manifest;
+}
+
+function buildMarketplacePluginEntry(existingPlugin = null) {
+  const merged = isRecord(existingPlugin) ? { ...existingPlugin } : {};
+  merged.name = PLUGIN_ID;
+  merged.source = {
+    ...(isRecord(existingPlugin?.source) ? existingPlugin.source : {}),
+    source: 'local',
+    path: './plugins/codex',
   };
+  merged.policy = {
+    ...(isRecord(existingPlugin?.policy) ? existingPlugin.policy : {}),
+    installation: 'AVAILABLE',
+    authentication: 'ON_INSTALL',
+  };
+  merged.category = 'Coding';
+  return merged;
+}
+
+async function readMergedMarketplaceManifest(marketplacePath) {
+  try {
+    const raw = await readFile(marketplacePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      throw new Error('[codex-plugin] Marketplace JSON root must be an object.');
+    }
+    return buildMarketplaceManifest({
+      existingManifest: parsed,
+    });
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return buildMarketplaceManifest();
+    }
+
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `[codex-plugin] Invalid JSON in marketplace file "${marketplacePath}". ${error.message}`
+      );
+    }
+
+    throw error;
+  }
+}
+
+function getSortName(value) {
+  return typeof value?.name === 'string' ? value.name : '';
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function buildCommandFiles() {

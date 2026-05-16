@@ -21,6 +21,8 @@ pnpm doctor -- --ci
 pnpm ship:test
 ```
 
+`pnpm build:plugin` is optional; `pnpm build:knowledge` already includes plugin bundle generation.
+
 `pnpm lint` checks code only. Use package-level `pnpm lint:fix` when you intentionally want ESLint to rewrite files.
 
 ## Package Layout
