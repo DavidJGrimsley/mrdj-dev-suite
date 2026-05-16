@@ -822,7 +822,8 @@ async function ensurePackageJson(
     'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mrdj/cli doctor',
     'mds:doctor:ci':
       packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mrdj/cli doctor --ci',
-    'kill-port': packageJson.scripts?.['kill-port'] ?? 'npx @mrdj/cli kill-port',
+    'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mrdj/cli free-port',
+    'kill-port': packageJson.scripts?.['kill-port'] ?? 'npx @mrdj/cli free-port',
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? 'npx @mrdj/cli clear-expo-start',
     'clean-start': packageJson.scripts?.['clean-start'] ?? 'npx @mrdj/cli clean-start',
@@ -988,9 +989,9 @@ function deriveServeProdScript(answers: OnboardAnswers): string {
 
 function deriveServeProdFreshScript(answers: OnboardAnswers): string {
   if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
-    return 'npx @mrdj/cli kill-port 3000 && npm run build:web && node server.js';
+    return 'npx @mrdj/cli free-port 3000 && npm run build:web && node server.js';
   }
-  return 'npx @mrdj/cli kill-port 8081 && npm run build:web && npx expo serve';
+  return 'npx @mrdj/cli free-port 8081 && npm run build:web && npx expo serve';
 }
 
 function formatStyleStack(answers: OnboardAnswers): string {

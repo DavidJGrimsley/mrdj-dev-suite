@@ -5,6 +5,7 @@ import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
 import { fixDoctor, runDoctor } from '@mrdj/doctor';
+import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runExplainCommand } from './commands/explain.js';
@@ -15,6 +16,7 @@ import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { ExplainArgv } from './commands/explain.js';
@@ -108,7 +110,7 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('guidelines-template', {
-            describe: 'Copy the bundled MrDJ project/guidelines.md template',
+            describe: 'Copy the bundled MDS project/guidelines.md template',
             type: 'boolean',
             default: false,
           })
@@ -244,8 +246,8 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
-      'Kill processes listening on one or more local ports',
+      ['free-port [ports..]', 'kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
+      'Free one or more local ports by stopping listening processes',
       (builder) =>
         builder
           .positional('ports', {
@@ -288,12 +290,12 @@ async function main(): Promise<void> {
     )
     .command(
       'mcp install',
-      'Register the MrDJ MCP server with Claude Code, Codex, or Cursor',
+      'Register the MDS MCP server with Claude Code, Codex, or Cursor',
       (builder) =>
         builder
           .option('client', {
             describe: 'MCP host to configure',
-            choices: ['claude', 'codex', 'cursor'] as const,
+            choices: ['claude', 'codex', 'cursor', 'vscode'] as const,
             default: 'claude' as const,
           })
           .option('scope', {
@@ -324,8 +326,53 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'agent <action>',
+      'Install or verify MDS agent assets for VS Code Copilot, Claude Code, or Codex',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Agent command',
+            choices: ['install', 'verify'] as const,
+          })
+          .option('client', {
+            describe: 'Agent host to configure',
+            choices: ['vscode', 'claude', 'codex'] as const,
+            default: 'vscode' as const,
+          })
+          .option('scope', {
+            describe: 'Install for the current user or just the target project',
+            choices: ['user', 'project'] as const,
+            default: 'project' as const,
+          })
+          .option('target', {
+            describe: 'Project directory for project-scope install or verify',
+            type: 'string',
+            default: '.',
+          })
+          .option('server-path', {
+            describe: 'Absolute path to the built MCP server entry (overrides auto-detect)',
+            type: 'string',
+          })
+          .option('command', {
+            describe: 'Full command to launch the server (overrides server-path and npx fallback)',
+            type: 'string',
+          })
+          .option('bundle-path', {
+            describe: 'Path to the generated client bundle',
+            type: 'string',
+          })
+          .option('dry-run', {
+            describe: 'Print the files/commands that would be written instead of writing them',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runAgentCommand(argv as AgentArgv);
+      }
+    )
+    .command(
       'skills <action> [id]',
-      'List or show bundled MrDJ agent skills',
+      'List or show bundled MDS agent skills',
       (builder) =>
         builder
           .positional('action', {

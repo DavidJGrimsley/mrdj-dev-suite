@@ -1,6 +1,6 @@
-# /run-doctor
+﻿# /run-doctor
 
-Run MrDJ Doctor as the primary health check for an Expo project.
+Run MDS Doctor as the primary health check for an Expo project.
 
 ## Arguments
 
@@ -13,7 +13,8 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 1. Confirm the `mrdj-dev-suite` MCP server is available.
 2. Call `doctor_scan_project` with selected arguments.
 3. For each non-pass result, call `doctor_explain_result`.
-4. Pull targeted implementation guidance with `get_skill` (typically `deployment`, `debugging`, or `dev-server-management`).
+4. If the check is release-related or web-facing, call `generate_deploy_checklist` before giving next steps.
+5. Pull targeted implementation guidance with `get_skill` (typically `deployment`, `debugging`, or `dev-server-management`).
 
 ## CLI / Manual Fallback
 
@@ -27,4 +28,5 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 ## Verification And Output
 
 - Re-run Doctor after each fix batch.
+- Keep the response concise and user-facing; do not surface internal tool chatter or intermediate file reads.
 - Output: check summary, blocking errors first, and the exact command used for re-check.

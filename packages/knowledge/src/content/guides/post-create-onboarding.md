@@ -19,7 +19,7 @@ onboarding pass.
    Uniwind repair for existing apps, Software Mansion core examples, Supabase or
    local data guidance, MCP/Codex/Claude instructions, and CI/release safeguards.
 6. Scaffold only selected pieces.
-7. Add generated cleanup scripts such as `clear-expo-start` and `kill-port`.
+7. Add generated cleanup scripts such as `clear-expo-start` and `free-port` (with `kill-port` compatibility alias).
 8. Install added dependencies, run `expo install --fix`, install known missing
    Expo peers such as `expo-font` for `@expo/vector-icons`, then run Doctor.
 

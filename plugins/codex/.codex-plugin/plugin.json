@@ -1,7 +1,7 @@
 {
   "name": "mrdj-dev-suite",
   "version": "0.1.0",
-  "description": "MrDJ Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
+  "description": "MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
   "author": {
     "name": "DJ Grimsley",
     "url": "https://davidjgrimsley.com"
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "MrDJ Dev Suite",
     "shortDescription": "MCP-first Expo review, doctor, onboarding, and deploy workflows",
-    "longDescription": "Generate and use MrDJ skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.",
+    "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.",
     "developerName": "MrDJ",
     "category": "Coding",
     "capabilities": [

@@ -140,7 +140,7 @@ export function buildPluginManifest(options) {
     name: PLUGIN_ID,
     version: options.version,
     description:
-      'MrDJ Expo development workflows for review, onboarding, deployment readiness, and project continuation.',
+      'MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.',
     author: {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',
@@ -162,7 +162,7 @@ export function buildPluginManifest(options) {
       displayName: 'MrDJ Dev Suite',
       shortDescription: 'MCP-first Expo review, doctor, onboarding, and deploy workflows',
       longDescription:
-        'Generate and use MrDJ skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
+        'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
       developerName: 'MrDJ',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
@@ -285,7 +285,8 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 2. Call \`continue_project\` to summarize current project state and blockers.
 3. Call \`doctor_scan_project\` with \`projectPath\` and \`mode\`.
 4. For each warning/error, call \`doctor_explain_result\`, then pull targeted guidance with \`get_skill\` (for example: \`project-onboarding\`, \`debugging\`, \`deployment\`).
-5. Call \`knowledge_list_resources\` with \`kind: "guide"\` if extra reference context is needed.
+5. If the findings affect release readiness, call \`generate_deploy_checklist\` so the next steps stay checklist-driven instead of PR-driven.
+6. Call \`knowledge_list_resources\` with \`kind: "guide"\` if extra reference context is needed.
 
 ## CLI / Manual Fallback
 
@@ -297,8 +298,10 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 
 ## Verification And Output
 
+- Keep the response user-facing: summarize findings and next steps without echoing internal tool chatter or file-read noise.
 - Re-run \`doctor_scan_project\` (or \`mrdj doctor --ci\`) after fixes.
-- Output: blocker summary, failing checks, recommended next task, and concrete follow-up commands.
+- If the user is validating an installed agent bundle, include \`mrdj agent verify --client <client> --target <path>\` in the follow-up commands.
+- Output: blocker summary, failing checks, recommended next task, and concrete follow-up commands. Avoid proposing a PR unless the user explicitly asks for a GitHub workflow.
 `,
     'run-doctor.md': `# /run-doctor
 
@@ -315,7 +318,8 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 1. Confirm the \`mrdj-dev-suite\` MCP server is available.
 2. Call \`doctor_scan_project\` with selected arguments.
 3. For each non-pass result, call \`doctor_explain_result\`.
-4. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
+4. If the check is release-related or web-facing, call \`generate_deploy_checklist\` before giving next steps.
+5. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
 
 ## CLI / Manual Fallback
 
@@ -329,6 +333,7 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 ## Verification And Output
 
 - Re-run Doctor after each fix batch.
+- Keep the response concise and user-facing; do not surface internal tool chatter or intermediate file reads.
 - Output: check summary, blocking errors first, and the exact command used for re-check.
 `,
     'prepare-deploy.md': `# /prepare-deploy
@@ -346,7 +351,8 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 2. Run \`doctor_scan_project\` in \`ci\` mode for release parity.
 3. Pull \`get_skill\` for \`deployment\`; if web is involved also pull \`seo-metadata\`.
 4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to confirm env hygiene, SSR safety, and metadata requirements.
-5. Produce a release checklist mapped to current failing checks.
+5. Call \`generate_deploy_checklist\` so SEO, scripts, and release-readiness gaps are reflected in the next steps.
+6. Produce a release checklist mapped to current failing checks.
 
 ## CLI / Manual Fallback
 
@@ -359,6 +365,7 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 ## Verification And Output
 
 - Re-run \`doctor_scan_project\` (or CLI equivalent) until blockers are cleared.
+- Keep the response user-facing and checklist-driven; avoid internal tool chatter and avoid asking for a PR unless the user requested GitHub workflow.
 - Output: release readiness status, unresolved blockers, and rollback/readiness notes.
 `,
     'fix-seo.md': `# /fix-seo
@@ -485,37 +492,51 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 export function renderPluginReadme() {
   return `# MrDJ Dev Suite Codex Plugin
 
-The MrDJ Dev Suite plugin bundle is generated from \`packages/knowledge\` and ships:
+The MrDJ Dev Suite Codex plugin bundle is generated from \`packages/knowledge\` and ships the Codex-native MDS surface: plugin manifest, MCP server config, generated skills, and command prompts.
+
+## What's Included
 
 - Codex plugin manifest: \`.codex-plugin/plugin.json\`
 - MCP server config: \`.mcp.json\`
 - Generated skills: \`skills/<skill-id>/SKILL.md\`
-- Command prompt files in \`commands/\`
+- Command prompt files: \`commands/*.md\`
 
 The source of truth for skills remains \`packages/knowledge/src/content/skills\`.
 
-## Install In Codex (Plugin Path)
+## One-Command Install
 
-1. Build knowledge outputs (this also regenerates the plugin bundle):
-   - \`pnpm --filter @mrdj/knowledge build\`
-2. Ensure the local marketplace includes this plugin:
-   - \`.agents/plugins/marketplace.json\` -> \`./plugins/codex\`
-3. Install the plugin from the local marketplace in Codex.
+Project scope installs MCP into \`.codex/config.toml\`, copies this plugin into \`plugins/mrdj-dev-suite\`, and registers it in \`.agents/plugins/marketplace.json\`:
 
-## Install MCP Via CLI (Reliable Fallback)
+\`\`\`sh
+mrdj agent install --client codex --scope project --target /path/to/your/expo-app
+mrdj agent verify --client codex --target /path/to/your/expo-app
+\`\`\`
 
-Use manual MCP install when you want predictable behavior across clients or CI:
+User scope installs MCP into \`~/.codex/config.toml\`, copies the plugin into \`~/plugins/mrdj-dev-suite\`, and registers it in \`~/.agents/plugins/marketplace.json\`:
 
-- \`mrdj mcp install --client codex --scope project\`
-- \`mrdj mcp install --client codex\` (user scope)
+\`\`\`sh
+mrdj agent install --client codex --scope user
+mrdj agent install --client codex --scope user --dry-run
+\`\`\`
 
-This path does not depend on plugin installation and remains fully supported.
+After install, restart Codex if needed and enable/install \`mrdj-dev-suite\` from the local marketplace.
 
-## When To Prefer CLI Fallback
+## MCP-Only Fallback
 
-- You need a fast/project-scoped setup in a fresh repo.
-- Plugin discovery or install is unavailable in your Codex environment.
-- You need deterministic local or CI setup without UI/plugin prerequisites.
+Use this when you only want predictable MCP tools/prompts and not the plugin/skills bundle:
+
+\`\`\`sh
+mrdj mcp install --client codex --scope project --target /path/to/your/expo-app
+mrdj mcp install --client codex --scope user
+\`\`\`
+
+## Regenerate
+
+\`\`\`sh
+pnpm --filter @mrdj/knowledge build
+\`\`\`
+
+Do not edit generated plugin skills directly; update \`packages/knowledge\` and rebuild.
 `;
 }
 

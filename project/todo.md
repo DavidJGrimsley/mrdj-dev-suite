@@ -119,8 +119,9 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
 - [x] Run the full MrDJ onboarding questionnaire instead of only applying canned defaults.
 - [x] Offer bundled/custom `project/guidelines.md` template support.
 - [x] Add `mrdj kill-port [ports...]`.
+- [x] Add `mrdj free-port [ports...]` with `mrdj kill-port` compatibility alias.
 - [x] Add `mrdj clear-expo-start` with alias `mrdj clean-start`.
-- [x] Add generated app scripts for `kill-port`, `clear-expo-start`, and `clean-start`.
+- [x] Add generated app scripts for `free-port`, `kill-port` (compat), `clear-expo-start`, and `clean-start`.
 - [x] Add generated app scripts for `expo-install-fix`, `expo-doctor`, and `post-create-check`.
 - [x] Run Expo dependency repair/doctor after MrDJ adds dependencies when install was not skipped.
 - [x] Force Tailwind v4 for Uniwind so Tailwind 3 peer conflicts do not break `npm install`.
@@ -150,6 +151,10 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
 - [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MrDJ onboarding.
 - [ ] Save personal defaults globally for future app generation.
 - [ ] Add monorepo support after the single-app MVP is stable.
+- [ ] Run an Expo-owned skill delegation sweep so MDS guidance layers project memory/checks/workflow instead of duplicating framework docs.
+- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `MrDJ Dev Suite`.
+- [ ] Rename `kill-port` to `free-port` as the primary command while preserving `kill-port` compatibility alias.
+- [ ] Add canonical ship-test-loop prompt spec (Codex/Claude/MCP): meaningful commit message, open/update PR to test, wait ~2 minutes, poll PR comments + failed checks, fix and push, repeat up to 5 cycles, merge to test when all checks are green.
 
 ## Full Product Roadmap
 
@@ -181,6 +186,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Implement `mrdj doctor --fix`.
 - [x] Implement `mrdj init` / `mrdj onboard`.
 - [x] Implement `mrdj kill-port`.
+- [x] Implement `mrdj free-port` with `mrdj kill-port` compatibility alias.
 - [x] Implement `mrdj clear-expo-start` / `mrdj clean-start`.
 - [x] Implement `create-expo-super-stack`.
 - [x] Implement `mrdj explain`.
@@ -201,45 +207,51 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Create a continue-development skill that reads `project/todo.md`, finds the next logical task, finishes incomplete work in the current phase first, and only defers/moves tasks with an explicit note when the developer chooses to defer.
 - [x] Create a research-plan intake skill that can turn pasted research docs, raw notes, or partial `project/info.md` sections into canonical project memory.
 - [x] Standardize skill structure: when to use it, main rule, checks, preferred structure, example fix, and agent behavior.
-- [ ] Make the same skills reusable by Codex, Claude Code, MCP resources, docs, and future DWAH onboarding.
+- [x] Make the same skills reusable by Codex, Claude Code, MCP resources, docs, and future DWAH onboarding.
 
 ### Phase 5: Codex Plugin
 
-- [ ] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
-- [ ] Build `plugins/codex/` with `.codex-plugin/plugin.json`, `.mcp.json`, skills, commands, and README.
-- [ ] Include Codex commands such as `review-expo-project.md`, `run-doctor.md`, `prepare-deploy.md`, and `fix-seo.md`.
-- [ ] Add a Codex command/prompt for `create-expo-super-stack` that starts an agent-assisted app setup session and keeps the user in conversation with the agent the whole time.
-- [ ] Add a Codex command/prompt for continuing a generated app by scanning `project/todo.md`, selecting the next phase/task, and updating/defering todos as work progresses.
-- [ ] Add a Codex command/prompt for project research planning when the user has an app idea but little direction, with output designed to feed back into `project/info.md`.
-- [ ] Support two install paths: reliable manual MCP/skills install and a fancier Codex plugin bundle.
-- [ ] Avoid depending on plugin-installed MCP behavior until Codex plugin support is proven stable.
+- [x] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
+- [x] Build `plugins/codex/` with `.codex-plugin/plugin.json`, `.mcp.json`, skills, commands, and README.
+- [x] Include Codex commands such as `review-expo-project.md`, `run-doctor.md`, `prepare-deploy.md`, and `fix-seo.md`.
+- [x] Add a Codex command/prompt for `create-expo-super-stack` that starts an agent-assisted app setup session and keeps the user in conversation with the agent the whole time.
+- [x] Add a Codex command/prompt for continuing a generated app by scanning `project/todo.md`, selecting the next phase/task, and updating/defering todos as work progresses.
+- [x] Add a Codex command/prompt for project research planning when the user has an app idea but little direction, with output designed to feed back into `project/info.md`.
+- [x] Support two install paths: reliable manual MCP/skills install and a fancier Codex plugin bundle.
+- [x] Avoid depending on plugin-installed MCP behavior until Codex plugin support is proven stable.
 
 ### Phase 6: Claude Code Plugin
 
-- [ ] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
-- [ ] Build `plugins/claude-code/` with plugin config, MCP config, commands, shared skills, and README.
-- [ ] Use the same source skill files as the Codex plugin.
-- [ ] Generate plugin skill files from `packages/knowledge` instead of duplicating content manually.
+- [x] Ensure the agent with which I'm working has a skill for creating Plugins BEFORE any work is done.
+- [x] Build `plugins/claude-code/` with plugin config, MCP config, commands, shared skills, and README.
+- [x] Use the same source skill files as the Codex plugin.
+- [x] Generate plugin skill files from `packages/knowledge` instead of duplicating content manually.
+- [x] Retire Claude `commands-src` legacy path and keep `plugins/claude-code/commands` as the single distributable command surface.
 
 ### Phase 7: Knowledge Package
 
-- [ ] Make `packages/knowledge` the source of truth for rules, guides, skills, checklists, and examples.
-- [ ] Generate/copy knowledge outputs into `plugins/codex/skills`, `plugins/claude-code/skills`, `packages/mcp-server/resources`, and docs guides.
-- [ ] Treat the knowledge package like a design system: one canonical source, many output surfaces.
+- [x] Make `packages/knowledge` the source of truth for rules, guides, skills, checklists, examples, prompt specs, and MCP tool/prompt metadata.
+- [x] Generate/copy knowledge outputs into `plugins/codex/skills`, `plugins/codex/commands`, `plugins/claude-code/skills`, `plugins/claude-code/commands`, and MCP/doc surfaces (MCP server resources/prompts wired from canonical knowledge + updated docs guides).
+- [x] Treat the knowledge package like a design system: one canonical source, many output surfaces.
+- [x] Add canonical ship-test-loop artifacts across surfaces: Codex command, Claude command, MCP prompt (`ship_test_loop`), checklist, and example.
+- [x] Add Phase 9 source artifacts in canonical knowledge content (bootstrap example + validation checklist) so bundle work starts from one source.
 
 ### Phase 8: MCP Tools To Build First
 
-- [ ] Build first: `doctor_scan_project`, `doctor_scan_file`, `doctor_explain_result`, `list_skills`, `get_skill`, `get_guide`, `generate_refactor_plan`, and `generate_deploy_checklist`.
+- [x] Build first: `doctor_scan_project`, `doctor_scan_file`, `doctor_explain_result`, `list_skills`, `get_skill`, `get_guide`, `generate_refactor_plan`, and `generate_deploy_checklist`.
 - [ ] Build later: `github_read_repo`, `github_open_issue`, `github_comment_pr`, `dwah_create_project`, `dwah_get_preview_url`, `dwah_deploy`, `dwah_get_logs`, and `dwah_promote`.
-- [ ] Prioritize project review and guidance before deployment tools.
+- [x] Prioritize project review and guidance before deployment tools.
 
-### Phase 9: Unified Agent Bundle (VS Code Copilot)
+### Phase 9: Unified Agent Bundle (VS Code Copilot, Claude Code, Codex)
 
-- [ ] Define the unified agent scope: one agent that loads MCP servers and suite tooling, with clear tool-routing expectations.
-- [ ] Bundle MCP server config, skills/prompts, knowledge resources, CLI wrappers, and recommended VS Code settings into a single installable package.
-- [ ] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
-- [ ] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
-- [ ] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
+- [x] Define the unified agent scope: one agent that loads MCP servers and suite tooling, with clear tool-routing expectations.
+- [x] Bundle MCP server config, skills/prompts, knowledge resources, CLI wrappers, and recommended VS Code settings into a single installable package.
+- [x] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
+- [x] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
+- [x] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
+- [x] Extend `mrdj agent install` to Claude Code and Codex so VS Code, Claude, and Codex each get a native bundle in one command.
+- [x] Add a generated Claude Code `mds` custom agent plus generated commands and skills.
+- [x] Keep Codex as a plugin-first bundle and install it through a local marketplace entry plus MCP config.
 
 ### Phase 10: GitHub Action
 
@@ -252,7 +264,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 - [ ] Support use inside an Expo app with `npx @mrdj/cli init`.
 - [ ] Support `npx create-expo-super-stack`.
-- [ ] Support `mrdj clear-expo-start` and `mrdj kill-port` in generated apps.
+- [ ] Support `mrdj clear-expo-start`, `mrdj free-port`, and `mrdj kill-port` compatibility in generated apps.
 - [ ] Support `npx @mrdj/doctor`.
 - [ ] Support `npx @mrdj/cli codex install`.
 - [ ] Support `npx @mrdj/cli claude install`.
@@ -303,8 +315,8 @@ If yes, is MrDJ only adding project-specific guidance?
 Are we linking/delegating instead of duplicating?
 Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
-- change reference of 'MrDJ' infront of tools to 'MDS' and refer to the suite as 'MrDJ Dev Suite' instead of 'MrDJ' to avoid confusion between the suite and the persona/agent. for example, 'MDS Doctor' instead of 'MrDJ Doctor' and 'MDS onboarding' instead of 'MrDJ onboarding'.
-- change kill-port to MDS free-port
+- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MrDJ Dev Suite` as suite name in brand references.
+- [ ] Keep `mrdj free-port` primary and `mrdj kill-port` as compatibility alias in docs, prompts, and generated scripts.
 
 
 

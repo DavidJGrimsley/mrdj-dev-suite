@@ -1,74 +1,51 @@
-# MrDJ Dev Suite — Claude Code Plugin
+# MrDJ Dev Suite - Claude Code Plugin
 
-Gives Claude Code awareness of your Expo project via MDS Doctor, knowledge skills, and project-specific slash commands.
+Gives Claude Code native MDS behavior for Expo projects: MCP tools, a custom `mds` agent, slash commands, generated skills, and project instructions.
 
-## What's included
+## What's Included
 
 | Path | Purpose |
 |------|---------|
-| `CLAUDE.md` | Project-level instructions to paste/merge into your `CLAUDE.md` |
-| `.mcp.json` | Pre-configured MCP server entry for the `mrdj-dev-suite` server |
-| `commands/` | Slash command markdown files — copy to `.claude/commands/` in your project |
-| `skills/` | Build-generated skill files (sourced from `packages/knowledge`; do not edit) |
+| `CLAUDE.md` | Instructions merged into project `CLAUDE.md` or user `~/.claude/CLAUDE.md` |
+| `.mcp.json` | Pre-configured MCP server example for `mrdj-dev-suite` |
+| `agents/mds.md` | Claude Code custom agent for MDS workflows |
+| `commands/*.md` | Slash command markdown files copied to `.claude/commands/` |
+| `skills/*/SKILL.md` | Build-generated skills sourced from `packages/knowledge` |
 
-## Install
+## One-Command Install
 
-### Step 1 — Connect the MCP server
-
-**User scope** (available in every workspace):
+Project scope installs MCP, instructions, the custom agent, slash commands, and generated skills into one Expo app:
 
 ```sh
-mrdj mcp install --client claude
+mrdj agent install --client claude --scope project --target /path/to/your/expo-app
+mrdj agent verify --client claude --target /path/to/your/expo-app
 ```
 
-**Project scope** (one workspace only):
+User scope installs MCP plus reusable assets into `~/.claude`:
+
+```sh
+mrdj agent install --client claude --scope user
+mrdj agent install --client claude --scope user --dry-run
+```
+
+After install, restart Claude Code or reopen the workspace, run `/mcp`, and confirm `mrdj-dev-suite` is listed. Then use the `mds` agent or slash commands such as `/run-doctor`, `/review-expo-project`, and `/prepare-deploy`.
+
+## MCP-Only Fallback
+
+Use this when you only want MCP tools/prompts and not the local agent/commands/skills files:
 
 ```sh
 mrdj mcp install --client claude --scope project --target /path/to/your/expo-app
+mrdj mcp install --client claude --scope user
 ```
 
-Verify: open Claude Code, run `/mcp`, and confirm `mrdj-dev-suite` is listed.
+## Generated Assets
 
-### Step 2 — Install slash commands
-
-Copy the `commands/` directory into your Expo project's `.claude/commands/` folder:
+Skills are sourced from `packages/knowledge/src/content/skills/` and generated into `plugins/claude-code/skills/` at build time. Slash commands are copied from `commands-src/` into `commands/` during the same build.
 
 ```sh
-# From your Expo project root
-cp -r /path/to/mrdj-dev-suite/plugins/claude-code/commands .claude/commands
+pnpm --filter @mrdj/knowledge build
 ```
 
-The following slash commands will then be available in Claude Code:
+Do not edit generated `commands/` or `skills/` files directly; update the knowledge source or command source and rebuild.
 
-| Command | What it does |
-|---------|-------------|
-| `/run-doctor` | Run MDS Doctor and get a prioritized issue summary |
-| `/review-expo-project` | Full project review: Doctor + architecture + SSR + env skills |
-| `/prepare-deploy` | Pre-deploy checklist using the deployment skill |
-| `/fix-seo` | SEO and metadata gap analysis and fixes |
-| `/create-expo-super-stack` | Guided `create-expo-super-stack` session |
-| `/continue-development` | Pick and start the next task from `project/todo.md` |
-| `/research-plan` | Turn raw notes or ideas into canonical `project/info.md` |
-
-### Step 3 — Add CLAUDE.md instructions (optional but recommended)
-
-Paste the contents of `CLAUDE.md` (or the relevant sections) into your Expo project's own `CLAUDE.md`. This tells Claude Code about available MCP tools, when to run Doctor, and the dev-server rule.
-
-## Skills
-
-Skills are sourced from `packages/knowledge/src/content/skills/` and generated into `plugins/claude-code/skills/` at build time. They are available in two ways:
-
-1. **Via MCP** — call `get_skill` with the skill ID from any Claude Code session
-2. **As files** — browse `skills/` for reference (do not edit; re-run `pnpm build` to regenerate)
-
-Available skill IDs: `expo-router-architecture`, `expo-ssr-safety`, `env-vars`, `uniwind-theming`, `api-routes`, `deployment`, `dev-server-management`, `production-server-patterns`, `seo-metadata`, `debugging`, `project-onboarding`, `super-stack-startup`, `continue-development`, `research-plan-intake`, `plugin-creation`.
-
-## Updating
-
-After pulling the latest `mrdj-dev-suite`:
-
-```sh
-pnpm build   # regenerates skills/ and dist/
-```
-
-Then re-copy `commands/` to your Expo project if any commands changed.

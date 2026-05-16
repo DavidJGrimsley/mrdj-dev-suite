@@ -96,41 +96,25 @@ Defaults for new MrDJ projects:
 
 ### Agentic Onboarding via MCP
 
-`mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the MrDJ prompts are callable from a chat session.
-
-### Optional Codex Plugin Bundle
-
-The knowledge build also generates a local Codex plugin bundle at `plugins/codex` (manifest, MCP config, generated skills, and command prompts) plus `.agents/plugins/marketplace.json`.
-
-```bash
-pnpm --filter @mrdj/knowledge build
-```
-
-`pnpm build:plugin` is optional and only needed when you want to regenerate the plugin bundle directly.
-
-Install path options:
-
-- Plugin path (optional): install `mrdj-dev-suite` from the local marketplace entry at `./plugins/codex`.
-- CLI path (reliable fallback): run `mrdj mcp install --client codex --scope project` (or user-scope install) and use MCP prompts/tools directly.
-
-Use the CLI path when you need deterministic setup in fresh repos or CI, or when plugin installation is unavailable in your Codex environment.
+`mrdj mcp install` registers only the MrDJ MCP server with Claude Code, Codex, Cursor, or VS Code Copilot so the MDS prompts/tools are callable from a chat session.
 
 Two prompts ship with the server:
 
-- `create_expo_super_stack` — invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then verifies the generated app folder and offers to resolve TodoForContext markers.
-- `onboard_new_expo_app` — invoke from **inside an existing Expo app folder** (whether brand new from a generator or a year-old project). Runs the intake → normalize → plan → scaffold flow.
+- `create_expo_super_stack` - invoke from a **parent folder** (e.g. `F:\ReactNativeApps`) when the app folder does not exist yet. The agent confirms a few headline choices, runs `create-expo-super-stack`, then verifies the generated app folder and offers to resolve TodoForContext markers.
+- `onboard_new_expo_app` - invoke from **inside an existing Expo app folder** (whether brand new from a generator or a year-old project). Runs the intake -> normalize -> plan -> scaffold flow.
 
 After generation, the user-dev should open the generated app folder directly in a new agent session and run `mrdj continue`. That fresh app-root session reduces token usage and saves money because future searches, reads, and plans are scoped to the app instead of the parent folder and old generator conversation.
 
 Both prompts enforce or surface a `# TodoForContext(optional):` blocker before implementation work. If any markers remain in `project/` files, the agent asks the user to fill them in or delete the marker line. `mrdj doctor` surfaces the same condition as an error.
 
-By default, install is **user-scoped** (every workspace gets the server). Pass `--scope project` to limit to one folder.
+By default, MCP install is **user-scoped** (every workspace gets the server). Pass `--scope project` to limit to one folder.
 
 ```bash
 # default: user-scope install (recommended for personal use)
 node packages/cli/dist/cli.js mcp install --client claude
 node packages/cli/dist/cli.js mcp install --client codex
 node packages/cli/dist/cli.js mcp install --client cursor
+node packages/cli/dist/cli.js mcp install --client vscode
 
 # preview the merge against your existing config file before writing
 node packages/cli/dist/cli.js mcp install --dry-run
@@ -138,19 +122,52 @@ node packages/cli/dist/cli.js mcp install --dry-run
 # local dev: point the server at the workspace dist build
 node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mrdj-dev-suite\packages\mcp-server\dist\index.js"
 
-# limit to one project (writes .mcp.json / .cursor/mcp.json / .codex/config.toml into the target dir)
+# limit to one project (writes .mcp.json / .cursor/mcp.json / .codex/config.toml / .vscode/mcp.json into the target dir)
 node packages/cli/dist/cli.js mcp install --scope project --target F:\path\to\app
 ```
 
-User-scope writes to:
+User-scope MCP writes to:
 
 - Claude Code: `~/.claude.json`
 - Cursor: `~/.cursor/mcp.json`
 - Codex: `~/.codex/config.toml`
+- VS Code Copilot: `code --add-mcp` with server key `mrdjDevSuite`
 
-The merge preserves existing keys/blocks; only the `mrdj-dev-suite` entry is added or replaced.
+The merge preserves existing keys/blocks; only the `mrdj-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mrdj/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 
-By default the config invokes the published MCP server via `npx -y @mrdj/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+### Native Agent Bundles
+
+Use `mrdj agent install` when you want the full native bundle for a client instead of MCP alone:
+
+- VS Code Copilot: MCP plus `.vscode` settings, `.github/copilot-instructions.md`, `.github/agents/mds.agent.md`, `.github/prompts/*.prompt.md`, and generated `.github/skills/*/SKILL.md`.
+- Claude Code: MCP plus `CLAUDE.md` instructions, `.claude/agents/mds.md`, `.claude/commands/*.md`, and generated `.claude/skills/*/SKILL.md`.
+- Codex: MCP plus a local `mrdj-dev-suite` plugin copied into `plugins/mrdj-dev-suite` and registered in `.agents/plugins/marketplace.json`.
+
+Project-scoped install and verify:
+
+```bash
+node packages/cli/dist/cli.js agent install --client vscode --scope project --target F:\path\to\app
+node packages/cli/dist/cli.js agent install --client claude --scope project --target F:\path\to\app
+node packages/cli/dist/cli.js agent install --client codex --scope project --target F:\path\to\app
+
+node packages/cli/dist/cli.js agent verify --client vscode --target F:\path\to\app
+node packages/cli/dist/cli.js agent verify --client claude --target F:\path\to\app
+node packages/cli/dist/cli.js agent verify --client codex --target F:\path\to\app
+```
+
+User-scoped installs:
+
+```bash
+node packages/cli/dist/cli.js agent install --client vscode --scope user
+node packages/cli/dist/cli.js agent install --client claude --scope user
+node packages/cli/dist/cli.js agent install --client codex --scope user
+
+node packages/cli/dist/cli.js agent install --client vscode --scope user --dry-run
+node packages/cli/dist/cli.js agent install --client claude --scope user --dry-run
+node packages/cli/dist/cli.js agent install --client codex --scope user --dry-run
+```
+
+Verification checks the client files, runs a fast no-script Doctor scan, fetches a bundled knowledge guide, and executes the MDS Continue workflow. Use `mrdj mcp install --client <client>` when you only want the MCP server, and `mrdj agent install --client <client>` when you want MCP plus the native instructions/agent/skills/plugin layer.
 
 ### Dev Cleanup
 
@@ -171,3 +188,4 @@ The reference repos used for Phase 1 harvest are no longer required in the works
 - Use `f:\SoftwareDev\create-expo-stack` for upstream-style generator work and `f:\SoftwareDev\dogfood` as the practice app target.
 - Keep `temp/` ignored for cloned reference repos and scratch analysis.
 - Prefer small verified slices over huge generated claims of completion.
+

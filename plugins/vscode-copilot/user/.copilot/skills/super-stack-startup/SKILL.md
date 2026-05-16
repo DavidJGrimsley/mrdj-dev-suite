@@ -1,0 +1,36 @@
+---
+name: "Super Stack Startup Skill"
+description: "Instructions for running create-expo-super-stack and handing off to phase-based app development."
+---
+
+# Skill: Super Stack Startup
+
+Use when kicking off a new app with `create-expo-super-stack` and transitioning into phase-based MDS development.
+
+## Main rule
+
+Run generator + onboarding as one guided flow, then hand off to a fresh app-folder session for implementation.
+
+## Checks
+
+- Confirm command runs from a parent directory where the app folder does not already exist.
+- Confirm stack choices and MDS intake values are captured before generation.
+- Confirm generated app includes project memory and onboarding next-step output.
+- Confirm unresolved context markers are resolved before coding begins.
+- Confirm follow-up uses `mrdj continue` from inside the generated app folder.
+
+## Preferred structure
+
+- Keep startup conversation in plain language and summarize choices before execution.
+- Keep generation details in scripts/flags, but keep user-facing flow conversational.
+- Keep post-generation workflow phase-based using the generated `project/todo.md`.
+
+## Example fix
+
+- Problem: User runs generation inside an existing app folder and gets mixed state artifacts.
+- Fix: Restart from parent directory, regenerate cleanly, then continue in a new app-folder session.
+
+## Agent behavior
+
+- Prevent ambiguous execution context and confirm folder target before running generation.
+- Delegate framework/template primitives to upstream Expo tooling, then apply MDS memory shaping, defaults, and continue-workflow conventions.

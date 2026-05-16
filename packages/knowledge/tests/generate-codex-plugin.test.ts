@@ -17,6 +17,11 @@ interface SkillSeed {
   content: string;
 }
 
+interface CommandSeed {
+  fileName: string;
+  content: string;
+}
+
 const tempDirs: string[] = [];
 
 afterEach(async () => {
@@ -41,12 +46,14 @@ describe('generateCodexPluginBundle', () => {
       }),
     ];
     await seedSkillFiles(contentRoot, skills);
+    const commands = createCommandSeeds();
 
     const result = await generateCodexPluginBundle({
       repoRoot,
       contentRoot,
       pluginVersion: '9.9.9',
       skills: skills.map(({ content: _content, ...metadata }) => metadata),
+      commands,
     });
 
     expect(result.skillIds).toEqual(['alpha-skill', 'zeta-skill']);
@@ -102,6 +109,7 @@ describe('generateCodexPluginBundle', () => {
         repoRoot,
         contentRoot,
         pluginVersion: '0.1.0',
+        commands: createCommandSeeds(),
         skills: [
           {
             id: 'missing-skill',
@@ -175,6 +183,7 @@ describe('generateCodexPluginBundle', () => {
       repoRoot,
       contentRoot,
       pluginVersion: '0.1.0',
+      commands: createCommandSeeds(),
       skills: [
         {
           id: skill.id,
@@ -225,6 +234,7 @@ describe('generateCodexPluginBundle', () => {
         repoRoot,
         contentRoot,
         pluginVersion: '0.1.0',
+        commands: createCommandSeeds(),
         skills: [
           {
             id: 'empty-skill',
@@ -258,6 +268,13 @@ async function seedSkillFiles(contentRoot: string, skills: SkillSeed[]): Promise
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, skill.content, 'utf8');
   }
+}
+
+function createCommandSeeds(): CommandSeed[] {
+  return COMMAND_FILES.map((fileName) => ({
+    fileName,
+    content: `# /${fileName.replace('.md', '')}\n\nGenerated test command for ${fileName}.\n`,
+  }));
 }
 
 async function createTempDir(prefix: string): Promise<string> {
