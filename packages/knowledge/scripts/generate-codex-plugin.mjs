@@ -7,13 +7,14 @@ export const PLUGIN_DIRECTORY = path.join('plugins', 'codex');
 export const MCP_SERVER_KEY = 'mrdj-dev-suite';
 
 export const COMMAND_FILES = [
+  'continue-development.md',
+  'create-expo-super-stack.md',
+  'fix-seo.md',
+  'prepare-deploy.md',
+  'project-research-plan.md',
   'review-expo-project.md',
   'run-doctor.md',
-  'prepare-deploy.md',
-  'fix-seo.md',
-  'create-expo-super-stack.md',
-  'continue-development.md',
-  'project-research-plan.md',
+  'ship-test-loop.md',
 ];
 
 export async function generateCodexPluginBundleFromKnowledge(options = {}) {
@@ -34,6 +35,24 @@ export async function generateCodexPluginBundleFromKnowledge(options = {}) {
       resourcePath: normalizePath(resource.resourcePath),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
+  const commandSpecs = knowledgeModule.listPromptSpecs('codex-command');
+  const commands = await Promise.all(
+    commandSpecs.map(async (spec) => {
+      const full = await knowledgeModule.readPromptSpec(spec.id);
+      if (!full) {
+        throw new Error(`[codex-plugin] Missing prompt spec content for "${spec.id}".`);
+      }
+      const fileName = spec.codexCommandFile;
+      if (!fileName) {
+        throw new Error(`[codex-plugin] Missing codexCommandFile for prompt spec "${spec.id}".`);
+      }
+      return {
+        id: spec.id,
+        fileName,
+        content: normalizeLineEndings(full.content),
+      };
+    })
+  );
 
   const pluginVersion = await readWorkspaceVersion(repoRoot);
 
@@ -41,12 +60,13 @@ export async function generateCodexPluginBundleFromKnowledge(options = {}) {
     repoRoot,
     contentRoot: path.join(packageRoot, 'src', 'content'),
     skills,
+    commands,
     pluginVersion,
   });
 }
 
 export async function generateCodexPluginBundle(options) {
-  const { repoRoot, contentRoot, skills, pluginVersion } = options;
+  const { repoRoot, contentRoot, skills, commands, pluginVersion } = options;
   const pluginRoot = path.join(repoRoot, PLUGIN_DIRECTORY);
   const marketplacePath = path.join(repoRoot, '.agents', 'plugins', 'marketplace.json');
 
@@ -100,12 +120,13 @@ export async function generateCodexPluginBundle(options) {
     content: ensureTrailingNewline(renderPluginReadme()),
   });
 
-  for (const [fileName, fileContent] of Object.entries(buildCommandFiles()).sort(([a], [b]) =>
-    a.localeCompare(b)
-  )) {
+  const commandFiles = Array.isArray(commands)
+    ? [...commands].sort((a, b) => a.fileName.localeCompare(b.fileName))
+    : [];
+  for (const command of commandFiles) {
     files.push({
-      relativePath: path.posix.join('commands', fileName),
-      content: ensureTrailingNewline(fileContent),
+      relativePath: path.posix.join('commands', command.fileName),
+      content: ensureTrailingNewline(command.content),
     });
   }
 
@@ -131,7 +152,7 @@ export async function generateCodexPluginBundle(options) {
     pluginRoot,
     marketplacePath,
     skillIds: skillContents.map((skill) => skill.id),
-    commandFiles: COMMAND_FILES,
+    commandFiles: commandFiles.map((command) => command.fileName),
   };
 }
 
@@ -140,7 +161,7 @@ export function buildPluginManifest(options) {
     name: PLUGIN_ID,
     version: options.version,
     description:
-      'MrDJ Expo development workflows for review, onboarding, deployment readiness, and project continuation.',
+      'MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.',
     author: {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',
@@ -162,8 +183,8 @@ export function buildPluginManifest(options) {
       displayName: 'MrDJ Dev Suite',
       shortDescription: 'MCP-first Expo review, doctor, onboarding, and deploy workflows',
       longDescription:
-        'Generate and use MrDJ skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
-      developerName: 'MrDJ',
+        'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
+      developerName: 'DJ Grimsley',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
       websiteURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
@@ -268,222 +289,8 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function buildCommandFiles() {
-  return {
-    'review-expo-project.md': `# /review-expo-project
-
-Review an Expo project with MCP-first diagnostics and skill-guided remediation.
-
-## Arguments
-
-- \`projectPath\`: absolute or relative project path (default: current directory).
-- \`mode\`: Doctor mode (\`fast\`, \`ci\`, or \`full\`; default: \`ci\`).
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Call \`continue_project\` to summarize current project state and blockers.
-3. Call \`doctor_scan_project\` with \`projectPath\` and \`mode\`.
-4. For each warning/error, call \`doctor_explain_result\`, then pull targeted guidance with \`get_skill\` (for example: \`project-onboarding\`, \`debugging\`, \`deployment\`).
-5. Call \`knowledge_list_resources\` with \`kind: "guide"\` if extra reference context is needed.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. If MCP still cannot run, use direct CLI flows:
-   - \`mrdj continue <projectPath>\`
-   - \`mrdj doctor <projectPath> --ci\`
-
-## Verification And Output
-
-- Re-run \`doctor_scan_project\` (or \`mrdj doctor --ci\`) after fixes.
-- Output: blocker summary, failing checks, recommended next task, and concrete follow-up commands.
-`,
-    'run-doctor.md': `# /run-doctor
-
-Run MrDJ Doctor as the primary health check for an Expo project.
-
-## Arguments
-
-- \`projectPath\`: project root path (default: current directory).
-- \`mode\`: \`fast\`, \`ci\`, or \`full\` (default: \`ci\`).
-- \`runScripts\`: whether Doctor should execute project scripts (default: \`true\` for \`ci\` mode).
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Call \`doctor_scan_project\` with selected arguments.
-3. For each non-pass result, call \`doctor_explain_result\`.
-4. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI alternatives:
-   - \`mrdj doctor <projectPath>\`
-   - \`mrdj doctor <projectPath> --ci\`
-   - \`mrdj doctor <projectPath> --json\`
-
-## Verification And Output
-
-- Re-run Doctor after each fix batch.
-- Output: check summary, blocking errors first, and the exact command used for re-check.
-`,
-    'prepare-deploy.md': `# /prepare-deploy
-
-Prepare an Expo project for release using deployment-focused skills plus Doctor parity checks.
-
-## Arguments
-
-- \`projectPath\`: release candidate project path (default: current directory).
-- \`includeSeo\`: whether to include web metadata/indexing checks (default: \`true\` when web is targeted).
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Run \`doctor_scan_project\` in \`ci\` mode for release parity.
-3. Pull \`get_skill\` for \`deployment\`; if web is involved also pull \`seo-metadata\`.
-4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to confirm env hygiene, SSR safety, and metadata requirements.
-5. Produce a release checklist mapped to current failing checks.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI path:
-   - \`mrdj doctor <projectPath> --ci\`
-   - Run project scripts: \`lint\`, \`type-check\`, \`test\`, and production build/profile scripts.
-
-## Verification And Output
-
-- Re-run \`doctor_scan_project\` (or CLI equivalent) until blockers are cleared.
-- Output: release readiness status, unresolved blockers, and rollback/readiness notes.
-`,
-    'fix-seo.md': `# /fix-seo
-
-Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix verification.
-
-## Arguments
-
-- \`projectPath\`: Expo project path (default: current directory).
-- \`routeOrFile\`: optional route/file focus for targeted checks.
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Pull \`get_skill\` for \`seo-metadata\`.
-3. Optionally run \`doctor_scan_file\` for focused route files, then \`doctor_scan_project\` for full checks.
-4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to ensure canonical/indexing strategy is complete.
-5. Implement metadata, canonical, robots, and sitemap corrections in route ownership boundaries.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI checks:
-   - \`mrdj doctor <projectPath> --ci\`
-   - Run project-specific web build/preview commands to verify metadata output.
-
-## Verification And Output
-
-- Confirm canonical tags, social metadata, and sitemap/robots behavior on affected routes.
-- Output: changed files, resolved SEO gaps, and any remaining manual verification steps.
-`,
-    'create-expo-super-stack.md': `# /create-expo-super-stack
-
-Create a new Expo app with the MrDJ Super Stack flow, then hand off to phase-based continuation.
-
-## Arguments
-
-- \`parentDir\`: folder where the new app directory should be created.
-- \`appName\`: app folder name.
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Invoke the MCP prompt \`create_expo_super_stack\` from a parent directory.
-3. Follow the prompt intake flow and keep one question per turn until generation completes.
-4. After generation, move into the new app folder and invoke \`continue_project\` (or prompt \`continue_mrdj_project\`) for the first implementation session.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI generation:
-   - \`npx -y create-expo-super-stack <appName>\`
-3. Then onboard/continue from inside the generated app:
-   - \`mrdj continue <new-app-path>\`
-
-## Verification And Output
-
-- Confirm generated app has \`project/info.md\`, \`project/todo.md\`, \`project/style.md\`, and \`project/guidelines.md\`.
-- Output: generated app path, onboarding status, and immediate next command.
-`,
-    'continue-development.md': `# /continue-development
-
-Resume work on an onboarded project by following MDS phase order from \`project/todo.md\`.
-
-## Arguments
-
-- \`projectPath\`: onboarded app path (default: current directory).
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Call \`continue_project\` first to get the active-phase brief.
-3. Pull \`get_skill\` for \`continue-development\` to enforce phase-first sequencing.
-4. If blockers appear, use \`doctor_scan_project\` and \`doctor_explain_result\` for targeted remediation before feature work.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI flow:
-   - \`mrdj continue <projectPath>\`
-   - \`mrdj doctor <projectPath>\` when blockers are unclear.
-
-## Verification And Output
-
-- Confirm the chosen task belongs to the active phase or has an explicit deferral note.
-- Output: selected next task, blockers, and validation commands to run after implementation.
-`,
-    'project-research-plan.md': `# /project-research-plan
-
-Turn rough product notes/research into actionable MDS project memory and next-phase plan.
-
-## Arguments
-
-- \`projectPath\`: target project path (default: current directory).
-- \`inputs\`: attached notes/docs to normalize into canonical memory files.
-
-## MCP-First Workflow
-
-1. Confirm the \`mrdj-dev-suite\` MCP server is available.
-2. Pull \`get_skill\` for \`research-plan-intake\` (and \`project-onboarding\` when onboarding context is mixed in).
-3. Call \`knowledge_list_resources\` for \`guide\` and \`reference\` resources as needed for structure and validation.
-4. Normalize clear context directly; ask focused follow-up only where ambiguity changes implementation direction.
-5. Update project memory files and produce an implementation-ready next-phase plan.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mrdj mcp install --client codex --scope project\`
-2. Direct CLI fallback:
-   - Use \`mrdj onboard <projectPath>\` for structured intake when memory files are missing.
-   - Use \`mrdj continue <projectPath>\` after memory normalization to select the next task.
-
-## Verification And Output
-
-- Confirm \`project/info.md\`, \`project/style.md\`, and \`project/todo.md\` align with extracted research context.
-- Output: resolved unknowns, outstanding questions, and the recommended next implementation slice.
-`,
-  };
-}
-
 export function renderPluginReadme() {
-  return `# MrDJ Dev Suite Codex Plugin
+  return `# MDS Codex Plugin
 
 The MrDJ Dev Suite plugin bundle is generated from \`packages/knowledge\` and ships:
 
@@ -493,6 +300,7 @@ The MrDJ Dev Suite plugin bundle is generated from \`packages/knowledge\` and sh
 - Command prompt files in \`commands/\`
 
 The source of truth for skills remains \`packages/knowledge/src/content/skills\`.
+Command prompt markdown is sourced from \`packages/knowledge/src/content/prompts\` via canonical prompt specs.
 
 ## Install In Codex (Plugin Path)
 

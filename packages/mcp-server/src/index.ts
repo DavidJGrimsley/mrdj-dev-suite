@@ -10,7 +10,10 @@ import { buildContinueSessionBrief } from '@mrdj/cli/continue';
 import {
   getSkill,
   listKnowledgeResources,
+  listMcpToolSpecs,
+  listPromptSpecs,
   readKnowledgeResource,
+  readPromptSpec,
 } from '@mrdj/knowledge';
 
 import type { DoctorMode } from '@mrdj/doctor';
@@ -38,12 +41,19 @@ export interface MCPResource {
   content?: string;
 }
 
+export interface MCPPrompt {
+  name: string;
+  title: string;
+  description: string;
+  args: string[];
+}
+
 export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'mrdj-dev-suite',
       version: '0.1.0',
-      description: 'MrDJ Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
+      description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
       capabilities: {
@@ -69,99 +79,22 @@ export async function startStdioServer(): Promise<void> {
 }
 
 export function listTools(): MCPTool[] {
-  return [
-    {
-      name: 'continue_project',
-      description: 'Build an MDS Continue session brief for an onboarded app folder.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          projectPath: { type: 'string' },
-        },
-      },
-    },
-    {
-      name: 'doctor_scan_project',
-      description: 'Run MrDJ Doctor checks against a project folder.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          projectPath: { type: 'string' },
-          mode: { type: 'string', enum: ['fast', 'ci', 'full'] },
-          runScripts: { type: 'boolean' },
-        },
-        required: ['projectPath'],
-      },
-    },
-    {
-      name: 'doctor_scan_file',
-      description: 'Run focused Doctor checks against one file.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          filePath: { type: 'string' },
-          projectPath: { type: 'string' },
-        },
-        required: ['filePath'],
-      },
-    },
-    {
-      name: 'doctor_explain_result',
-      description: 'Explain a Doctor result in beginner-friendly language.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          status: { type: 'string' },
-          message: { type: 'string' },
-          details: { type: 'object' },
-        },
-        required: ['status', 'message'],
-      },
-    },
-    {
-      name: 'knowledge_list_resources',
-      description: 'List MrDJ knowledge resources by kind.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          kind: { type: 'string', enum: ['pattern', 'guide', 'rule', 'skill', 'reference'] },
-        },
-      },
-    },
-    {
-      name: 'get_skill',
-      description: 'Read a bundled MrDJ agent skill.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-        },
-        required: ['id'],
-      },
-    },
-    {
-      name: 'get_guide',
-      description: 'Read a bundled MrDJ knowledge guide.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-        },
-        required: ['id'],
-      },
-    },
-    {
-      name: 'generate_setup_tasks',
-      description: 'Generate post-create onboarding setup tasks.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          projectPath: { type: 'string' },
-          defaults: { type: 'array', items: { type: 'string' } },
-        },
-      },
-    },
-  ];
+  return listMcpToolSpecs().map((spec) => ({
+    name: spec.name,
+    description: spec.description,
+    inputSchema: spec.inputSchema,
+  }));
+}
+
+export function listPrompts(): MCPPrompt[] {
+  return listPromptSpecs('mcp-prompt')
+    .filter((spec) => typeof spec.mcpPromptName === 'string')
+    .map((spec) => ({
+      name: spec.mcpPromptName as string,
+      title: spec.title,
+      description: spec.description,
+      args: (spec.mcpArgs ?? []).map((arg) => arg.name),
+    }));
 }
 
 export async function listResources(): Promise<MCPResource[]> {
@@ -257,11 +190,19 @@ function registerKnowledgeResources(server: McpServer): void {
 }
 
 function registerTools(server: McpServer): void {
+  const tool = (name: string) => {
+    const spec = listMcpToolSpecs().find((candidate) => candidate.name === name);
+    if (!spec) {
+      throw new Error(`Missing MCP tool spec for "${name}".`);
+    }
+    return spec;
+  };
+
   server.registerTool(
     'continue_project',
     {
-      title: 'Continue Project',
-      description: 'Build an MDS Continue session brief for an onboarded app folder.',
+      title: tool('continue_project').title,
+      description: tool('continue_project').description,
       inputSchema: {
         projectPath: z.string().optional(),
       },
@@ -275,8 +216,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'doctor_scan_project',
     {
-      title: 'Doctor Scan Project',
-      description: 'Run MrDJ Doctor checks against a project folder.',
+      title: tool('doctor_scan_project').title,
+      description: tool('doctor_scan_project').description,
       inputSchema: {
         projectPath: z.string(),
         mode: z.enum(['fast', 'ci', 'full']).optional(),
@@ -292,8 +233,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'doctor_scan_file',
     {
-      title: 'Doctor Scan File',
-      description: 'Run focused Doctor checks against one file.',
+      title: tool('doctor_scan_file').title,
+      description: tool('doctor_scan_file').description,
       inputSchema: {
         filePath: z.string(),
         projectPath: z.string().optional(),
@@ -308,10 +249,12 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'knowledge_list_resources',
     {
-      title: 'List Knowledge Resources',
-      description: 'List MrDJ knowledge resources by kind.',
+      title: tool('knowledge_list_resources').title,
+      description: tool('knowledge_list_resources').description,
       inputSchema: {
-        kind: z.enum(['pattern', 'guide', 'rule', 'skill', 'reference']).optional(),
+        kind: z
+          .enum(['pattern', 'guide', 'rule', 'skill', 'reference', 'checklist', 'example', 'prompt'])
+          .optional(),
       },
     },
     async ({ kind }) => toolJson(listKnowledgeResources(kind))
@@ -320,8 +263,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'get_skill',
     {
-      title: 'Get Skill',
-      description: 'Read a bundled MrDJ agent skill.',
+      title: tool('get_skill').title,
+      description: tool('get_skill').description,
       inputSchema: {
         id: z.string(),
       },
@@ -332,8 +275,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'get_guide',
     {
-      title: 'Get Guide',
-      description: 'Read a bundled MrDJ knowledge guide.',
+      title: tool('get_guide').title,
+      description: tool('get_guide').description,
       inputSchema: {
         id: z.string(),
       },
@@ -344,8 +287,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'doctor_explain_result',
     {
-      title: 'Explain Doctor Result',
-      description: 'Explain a Doctor result in beginner-friendly language.',
+      title: tool('doctor_explain_result').title,
+      description: tool('doctor_explain_result').description,
       inputSchema: {
         status: z.string(),
         message: z.string(),
@@ -358,8 +301,8 @@ function registerTools(server: McpServer): void {
   server.registerTool(
     'generate_setup_tasks',
     {
-      title: 'Generate Setup Tasks',
-      description: 'Generate post-create onboarding setup tasks.',
+      title: tool('generate_setup_tasks').title,
+      description: tool('generate_setup_tasks').description,
       inputSchema: {
         projectPath: z.string().optional(),
         defaults: z.array(z.string()).optional(),
@@ -370,12 +313,20 @@ function registerTools(server: McpServer): void {
 }
 
 function registerPrompts(server: McpServer): void {
+  const promptSpecs = listPromptSpecs('mcp-prompt');
+  const prompt = (name: string) => {
+    const spec = promptSpecs.find((candidate) => candidate.mcpPromptName === name);
+    if (!spec) {
+      throw new Error(`Missing MCP prompt spec for "${name}".`);
+    }
+    return spec;
+  };
+
   server.registerPrompt(
     'create_expo_super_stack',
     {
-      title: 'Create Expo Super Stack',
-      description:
-        'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MrDJ onboarding.',
+      title: prompt('create_expo_super_stack').title,
+      description: prompt('create_expo_super_stack').description,
       argsSchema: {
         parentDir: z.string().optional(),
         appName: z.string().optional(),
@@ -397,9 +348,8 @@ function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     'onboard_new_expo_app',
     {
-      title: 'Onboard Existing Expo App',
-      description:
-        'Run from inside an existing Expo app folder to apply MrDJ project memory, intake, planning, and scaffolding.',
+      title: prompt('onboard_new_expo_app').title,
+      description: prompt('onboard_new_expo_app').description,
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -420,9 +370,8 @@ function registerPrompts(server: McpServer): void {
   server.registerPrompt(
     'continue_mrdj_project',
     {
-      title: 'Continue MrDJ Project',
-      description:
-        'Build an MDS Continue session brief for an existing Expo app folder by calling continue_project first.',
+      title: prompt('continue_mrdj_project').title,
+      description: prompt('continue_mrdj_project').description,
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -438,6 +387,41 @@ function registerPrompts(server: McpServer): void {
         },
       ],
     })
+  );
+
+  server.registerPrompt(
+    'ship_test_loop',
+    {
+      title: prompt('ship_test_loop').title,
+      description: prompt('ship_test_loop').description,
+      argsSchema: {
+        projectPath: z.string().optional(),
+        branch: z.string().optional(),
+        base: z.string().optional(),
+      },
+    },
+    async ({ projectPath, branch, base }) => {
+      const canonical = await readPromptSpec('ship-test-loop');
+      const header = [
+        projectPath ? `Project path: ${projectPath}` : null,
+        branch ? `Branch: ${branch}` : null,
+        base ? `Base branch: ${base}` : 'Base branch: test',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const text = canonical?.content ?? 'Run the ship-to-test loop with Doctor-first guardrails.';
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: header ? `${header}\n\n${text}` : text,
+            },
+          },
+        ],
+      };
+    }
   );
 }
 
@@ -908,7 +892,10 @@ function normalizeKind(value: string | undefined): KnowledgeKind | undefined {
     value === 'guide' ||
     value === 'rule' ||
     value === 'skill' ||
-    value === 'reference'
+    value === 'reference' ||
+    value === 'checklist' ||
+    value === 'example' ||
+    value === 'prompt'
     ? value
     : undefined;
 }

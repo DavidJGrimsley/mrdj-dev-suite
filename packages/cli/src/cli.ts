@@ -108,7 +108,7 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('guidelines-template', {
-            describe: 'Copy the bundled MrDJ project/guidelines.md template',
+            describe: 'Copy the bundled MDS project/guidelines.md template',
             type: 'boolean',
             default: false,
           })
@@ -244,8 +244,8 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
-      'Kill processes listening on one or more local ports',
+      ['free-port [ports..]', 'kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
+      'Free one or more local ports by stopping listening processes',
       (builder) =>
         builder
           .positional('ports', {
@@ -288,7 +288,7 @@ async function main(): Promise<void> {
     )
     .command(
       'mcp install',
-      'Register the MrDJ MCP server with Claude Code, Codex, or Cursor',
+      'Register the MDS MCP server with Claude Code, Codex, or Cursor',
       (builder) =>
         builder
           .option('client', {
@@ -325,7 +325,7 @@ async function main(): Promise<void> {
     )
     .command(
       'skills <action> [id]',
-      'List or show bundled MrDJ agent skills',
+      'List or show bundled MDS agent skills',
       (builder) =>
         builder
           .positional('action', {

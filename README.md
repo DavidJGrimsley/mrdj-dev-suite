@@ -12,7 +12,7 @@ Phase 1 is self-contained. The workspace is scaffolded, harvested knowledge live
 
 - `packages/doctor` - project checks for scripts, env safety, Expo config, route architecture, lint, typecheck, tests, Expo Doctor, and builds.
 - `packages/cli` - `mrdj doctor`, `mrdj onboard`, cleanup commands, and `mrdj test-and-iterate` entry points.
-- `packages/create-expo-super-stack` - `npx create-expo-super-stack` wrapper around `create-expo-stack` plus MrDJ onboarding.
+- `packages/create-expo-super-stack` - `npx create-expo-super-stack` wrapper around `create-expo-stack` plus MDS onboarding.
 - `packages/knowledge` - canonical source of truth for harvested patterns, guides, rules, skills, and reference notes.
 - `packages/mcp-server` - MCP SDK server exposing Doctor tools, knowledge resources, and onboarding prompts over stdio.
 
@@ -60,9 +60,11 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 
 Mutating git steps remain manual during the dry-run proving period. `--execute` runs Doctor first and stops if the project is not ready.
 
+Canonical prompt surface also includes `/ship-test-loop` (Codex/Claude command files + MCP prompt `ship_test_loop`) for the same workflow.
+
 ### Create Expo Super Stack
 
-`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MrDJ project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app.
+`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MDS project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app.
 
 ```bash
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router
@@ -82,21 +84,21 @@ node packages/cli/dist/cli.js continue /path/to/expo-app
 node packages/cli/dist/cli.js continue /path/to/expo-app --json
 ```
 
-Defaults for new MrDJ projects:
+Defaults for new MDS projects:
 
-- Uniwind, not NativeWind, when MrDJ is managing styling for an existing app.
+- Uniwind, not NativeWind, when MDS is managing styling for an existing app.
 - Zustand when shared state is needed.
 - Supabase/Drizzle/API routes only when the app actually needs them.
 - Always create `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
 - Normalize existing `project/info.md` and `project/style.md` into canonical sections while preserving imported notes.
 - Add `project/intake-agent.md` when a follow-up Codex/Claude conversation should clarify thin or messy context.
 - Keep `project/style.md` visual-only; put technical rules in `project/guidelines.md`.
-- Use `--guidelines-template` to copy the bundled MrDJ `guidelines.md` template, or `--guidelines-template-path <file>` for a custom template.
+- Use `--guidelines-template` to copy the bundled MDS `guidelines.md` template, or `--guidelines-template-path <file>` for a custom template.
 - Use temporary `/exposition`, `/exposition/style-guide`, and `/exposition/data` pages to review package choices, style direction, and data flow before pruning them for production.
 
 ### Agentic Onboarding via MCP
 
-`mrdj mcp install` registers the MrDJ MCP server with Claude Code, Codex, or Cursor so the MrDJ prompts are callable from a chat session.
+`mrdj mcp install` registers the MDS MCP server with Claude Code, Codex, or Cursor so the MDS prompts are callable from a chat session.
 
 ### Optional Codex Plugin Bundle
 
@@ -154,10 +156,10 @@ By default the config invokes the published MCP server via `npx -y @mrdj/mcp-ser
 
 ### Dev Cleanup
 
-`mrdj kill-port` kills stuck local server ports. `mrdj clear-expo-start` kills Expo/server ports, clears Expo/Metro caches, then starts Expo with `--clear`.
+`mrdj free-port` (with `mrdj kill-port` compatibility alias) frees stuck local server ports. `mrdj clear-expo-start` kills Expo/server ports, clears Expo/Metro caches, then starts Expo with `--clear`.
 
 ```bash
-node packages/cli/dist/cli.js kill-port 8081 3000
+node packages/cli/dist/cli.js free-port 8081 3000
 node packages/cli/dist/cli.js clear-expo-start /path/to/app --no-start
 ```
 
