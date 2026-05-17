@@ -31,6 +31,7 @@ describe('runDoctor', () => {
     const report = await runDoctor(projectPath, { runScripts: false });
 
     expect(report.summary.errors).toBe(0);
+    expect(report.summary.score).toBe(100);
     expect(report.checks.find((check) => check.name === 'project docs')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'package scripts')?.status).toBe('pass');
   });
@@ -51,6 +52,24 @@ describe('runDoctor', () => {
     const report = await runDoctor(projectPath, { runScripts: false });
 
     expect(report.checks.find((check) => check.name === 'package scripts')?.status).toBe('pass');
+  });
+
+  it('computes score from warning count', async () => {
+    const projectPath = await createTempProject();
+    await writeFile(path.join(projectPath, 'project', 'guidelines.md'), '', 'utf8');
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'warn-score',
+      main: 'index.js',
+      dependencies: {
+        'expo-router': '^5.0.0',
+      },
+    });
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+
+    expect(report.summary.errors).toBe(0);
+    expect(report.summary.warnings).toBe(3);
+    expect(report.summary.score).toBe(85);
   });
 });
 
@@ -76,6 +95,16 @@ describe('todo-for-context check', () => {
 
   it('errors when project memory still contains TodoForContext markers', async () => {
     const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'marker-project',
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        typecheck: 'node -e "process.exit(0)"',
+        test: 'node -e "process.exit(0)"',
+        doctor: 'node -e "process.exit(0)"',
+        build: 'node -e "process.exit(0)"',
+      },
+    });
     await writeFile(
       path.join(projectPath, 'project', 'info.md'),
       '# Info\n\n## Monetization Strategy\n\n# TodoForContext(optional): Add notes.\n',
@@ -86,6 +115,7 @@ describe('todo-for-context check', () => {
     const check = report.checks.find((entry) => entry.name === 'todo-for-context markers');
 
     expect(check?.status).toBe('error');
+    expect(report.summary.score).toBe(75);
     expect(check?.details).toMatchObject({
       hits: [
         expect.objectContaining({ file: 'project/info.md', line: 5 }),

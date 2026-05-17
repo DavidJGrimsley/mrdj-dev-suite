@@ -1,0 +1,40 @@
+name: Doctor (smoke)
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Doctor package (for local-path npx)
+        run: pnpm --filter @mrdj/doctor build
+
+      - name: Run MDS Doctor Action
+        uses: ./.github/actions/mrdj-doctor
+        with:
+          project-path: .
+          mode: fast
+          run-scripts: "false"
+          doctor-version: ./packages/doctor
+          min-score: "90"
+

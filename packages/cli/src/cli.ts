@@ -540,6 +540,7 @@ function printDoctorReport(report: DoctorReport): void {
   console.log();
   console.log(
     [
+      chalk.cyan(`score ${report.summary.score}/100`),
       chalk.red(`${report.summary.errors} errors`),
       chalk.yellow(`${report.summary.warnings} warnings`),
       chalk.green(`${report.summary.passed} passed`),

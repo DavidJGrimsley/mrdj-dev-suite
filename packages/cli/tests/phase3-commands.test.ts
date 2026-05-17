@@ -49,6 +49,7 @@ describe('Phase 3 command helpers', () => {
       timestamp: '2026-05-12T00:00:00.000Z',
       mode: 'fast',
       summary: {
+        score: 95,
         errors: 0,
         warnings: 1,
         passed: 1,
