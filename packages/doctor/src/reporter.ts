@@ -1,20 +1,29 @@
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from './types.js';
 
+function computeScore(summary: { errors: number; warnings: number }): number {
+  return Math.max(0, 100 - summary.errors * 25 - summary.warnings * 5);
+}
+
 export function createReport(
   projectPath: string,
   mode: DoctorMode,
   checks: DoctorCheckResult[]
 ): DoctorReport {
+  const summary = {
+    errors: checks.filter((check) => check.status === 'error').length,
+    warnings: checks.filter((check) => check.status === 'warn').length,
+    passed: checks.filter((check) => check.status === 'pass').length,
+    skipped: checks.filter((check) => check.status === 'skip').length,
+  };
+
   return {
     projectPath,
     timestamp: new Date().toISOString(),
     mode,
     checks,
     summary: {
-      errors: checks.filter((check) => check.status === 'error').length,
-      warnings: checks.filter((check) => check.status === 'warn').length,
-      passed: checks.filter((check) => check.status === 'pass').length,
-      skipped: checks.filter((check) => check.status === 'skip').length,
+      score: computeScore(summary),
+      ...summary,
     },
   };
 }
@@ -38,6 +47,7 @@ export function formatHumanReport(report: DoctorReport): string {
 
   lines.push('');
   lines.push(
+    `score ${report.summary.score}/100 | ` +
     `${report.summary.errors} errors | ${report.summary.warnings} warnings | ` +
       `${report.summary.passed} passed | ${report.summary.skipped} skipped`
   );
@@ -53,4 +63,3 @@ function label(check: DoctorCheckResult): string {
     skip: 'SKIP',
   }[check.status];
 }
-

@@ -14,6 +14,7 @@ export interface DoctorReport {
   mode: DoctorMode;
   checks: DoctorCheckResult[];
   summary: {
+    score: number;
     errors: number;
     warnings: number;
     passed: number;
@@ -49,4 +50,3 @@ export interface PackageJson {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 }
-

@@ -11,6 +11,7 @@ const EXCLUDED_DIRS = new Set([
   '.git',
   '.expo',
   '.turbo',
+  'mds',
   'build',
   'coverage',
   'dist',

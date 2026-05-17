@@ -1,0 +1,104 @@
+name: "MDS Doctor"
+description: "Run @mrdj/doctor in CI and gate on score/min-score."
+
+inputs:
+  project-path:
+    description: "Project path to scan"
+    default: "."
+    required: false
+  mode:
+    description: "Doctor mode: ci, fast, or full"
+    default: "ci"
+    required: false
+  run-scripts:
+    description: "Run package scripts (lint/typecheck/test/doctor/build) in addition to static checks"
+    default: "true"
+    required: false
+  timeout-ms:
+    description: "Timeout per script check"
+    default: "120000"
+    required: false
+  doctor-version:
+    description: "npm dist-tag/semver, or a local path (e.g. ./packages/doctor)"
+    default: "latest"
+    required: false
+  node-version:
+    description: "Node.js version for the runner"
+    default: "20"
+    required: false
+  min-score:
+    description: "Fail when Doctor score is below this value"
+    default: "90"
+    required: false
+
+outputs:
+  score:
+    description: "Doctor score (0-100)"
+    value: ${{ steps.mds_doctor_summary.outputs.score }}
+  errors:
+    description: "Doctor error count"
+    value: ${{ steps.mds_doctor_summary.outputs.errors }}
+  warnings:
+    description: "Doctor warning count"
+    value: ${{ steps.mds_doctor_summary.outputs.warnings }}
+  passed:
+    description: "Doctor pass count"
+    value: ${{ steps.mds_doctor_summary.outputs.passed }}
+  skipped:
+    description: "Doctor skip count"
+    value: ${{ steps.mds_doctor_summary.outputs.skipped }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Run Doctor (JSON)
+      id: mds_doctor_run
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        MODE="${{ inputs.mode }}"
+        case "$MODE" in
+          ci|fast|full) ;;
+          *) echo "Invalid mode: $MODE (expected ci|fast|full)"; exit 2 ;;
+        esac
+
+        RUN_SCRIPTS="${{ inputs.run-scripts }}"
+        if [[ "$RUN_SCRIPTS" == "true" ]]; then
+          SCRIPTS_FLAG="--scripts"
+        else
+          SCRIPTS_FLAG="--no-scripts"
+        fi
+
+        TIMEOUT_MS="${{ inputs.timeout-ms }}"
+        MIN_SCORE="${{ inputs.min-score }}"
+
+        DOCTOR_VERSION="${{ inputs.doctor-version }}"
+        if [[ "$DOCTOR_VERSION" == .* || "$DOCTOR_VERSION" == /* ]]; then
+          DOCTOR_SPEC="$DOCTOR_VERSION"
+        else
+          DOCTOR_SPEC="@mrdj/doctor@$DOCTOR_VERSION"
+        fi
+
+        # Always produce JSON, even when Doctor errors (capture exit code manually).
+        set +e
+        npx -y "$DOCTOR_SPEC" "${{ inputs.project-path }}" "--$MODE" --json $SCRIPTS_FLAG --timeout-ms "$TIMEOUT_MS" > mds-doctor-report.json
+        DOCTOR_EXIT_CODE=$?
+        set -e
+
+        echo "doctor_exit_code=$DOCTOR_EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+    - name: Summarize and gate
+      id: mds_doctor_summary
+      shell: bash
+      run: |
+        set -euo pipefail
+        node "${{ github.action_path }}/summarize-doctor-report.mjs" \
+          --report "mds-doctor-report.json" \
+          --min-score "${{ inputs.min-score }}" \
+          --doctor-exit-code "${{ steps.mds_doctor_run.outputs.doctor_exit_code }}"

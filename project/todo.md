@@ -255,14 +255,25 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 10: GitHub Action
 
-- [ ] Add a repo-local `.github/actions/mrdj-doctor/` or publish `mrdj/doctor-action`.
-- [ ] Support PR/push usage with `npx @mrdj/doctor --ci`.
-- [ ] Report a Doctor score plus errors and warnings in CI output.
-- [ ] Include findings such as unsafe public secrets, missing canonical metadata, and route files containing business logic.
+- [x] Add a repo-local `.github/actions/mrdj-doctor/` or publish `mrdj/doctor-action`.
+- [x] Support PR/push usage with `npx @mrdj/doctor --ci`.
+- [x] Report a Doctor score plus errors and warnings in CI output.
+- [x] Include findings such as unsafe public secrets, missing canonical metadata, and route files containing business logic.
 
-### Phase 11: Personal Workflow And Dogfooding
+### Phase 11: Publishing, Personal Workflow And Dogfooding
 
+- [ ] Run a sweep to ensure MrDJ-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
+(Then maybe add a small audit checklist before adding any new MrDJ skill:
+
+Does an Expo skill already cover this?
+If yes, is MrDJ only adding project-specific guidance?
+Are we linking/delegating instead of duplicating?
+Is the new rule checkable by Doctor or useful to onboarding?
+Would this still be useful if the Expo docs/plugin improved tomorrow?)
+- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MrDJ Dev Suite` as suite name in brand references.
+- [ ] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
 - [ ] Support use inside an Expo app with `npx @mrdj/cli init`.
+- [ ] Open a PR to create expo stack from my local fork (added USniwind to CLI, made CLI match website, updated website with Uniwind.)
 - [ ] Support `npx create-expo-super-stack`.
 - [ ] Support `mrdj clear-expo-start`, `mrdj free-port`, and `mrdj kill-port` compatibility in generated apps.
 - [ ] Support `npx @mrdj/doctor`.
@@ -307,16 +318,10 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 ## Cleanup/Random todo
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
 - [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
-- [ ] Run a sweep to ensure MrDJ-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
-(Then maybe add a small audit checklist before adding any new MrDJ skill:
 
-Does an Expo skill already cover this?
-If yes, is MrDJ only adding project-specific guidance?
-Are we linking/delegating instead of duplicating?
-Is the new rule checkable by Doctor or useful to onboarding?
-Would this still be useful if the Expo docs/plugin improved tomorrow?)
-- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MrDJ Dev Suite` as suite name in brand references.
-- [ ] Keep `mrdj free-port` primary and `mrdj kill-port` as compatibility alias in docs, prompts, and generated scripts.
+- [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 
+- [ ] Enhance the style guide component to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own. 
 
 
 

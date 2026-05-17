@@ -1,0 +1,12 @@
+{
+  "name": "doctor-smoke-fixture",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "lint": "echo lint",
+    "typecheck": "echo typecheck",
+    "test": "echo test",
+    "doctor": "echo doctor",
+    "build": "echo build"
+  }
+}
