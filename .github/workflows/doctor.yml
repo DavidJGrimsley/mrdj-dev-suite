@@ -32,7 +32,7 @@ jobs:
       - name: Run MDS Doctor Action
         uses: ./.github/actions/mrdj-doctor
         with:
-          project-path: .
+          project-path: .github/fixtures/doctor-smoke
           mode: fast
           run-scripts: "false"
           doctor-version: ./packages/doctor
