@@ -17,3 +17,5 @@ temp/
 plugins/claude-code/skills/
 
 .claude/worktrees/
+
+*.code-workspace
