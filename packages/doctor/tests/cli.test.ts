@@ -48,7 +48,7 @@ describe('doctor CLI', () => {
 });
 
 async function createTempProject(): Promise<string> {
-  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-doctor-cli-'));
+  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-doctor-cli-'));
   tempDirs.push(projectPath);
   await mkdir(path.join(projectPath, 'project'), { recursive: true });
   await writeFile(path.join(projectPath, 'project', 'info.md'), '# Info\n', 'utf8');

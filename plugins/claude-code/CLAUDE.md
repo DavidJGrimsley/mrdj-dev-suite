@@ -1,10 +1,10 @@
-# MrDJ Dev Suite - Claude Code Instructions
+# MDS Dev Suite - Claude Code Instructions
 
-This file is merged by `mrdj agent install --client claude` into either a project `CLAUDE.md` or user `~/.claude/CLAUDE.md`.
+This file is merged by `mds agent install --client claude` into either a project `CLAUDE.md` or user `~/.claude/CLAUDE.md`.
 
 ## MDS MCP Tools Available
 
-When the `mrdj-dev-suite` MCP server is connected (check `/mcp`), use these tools before falling back to terminal commands:
+When the `mds-dev-suite` MCP server is connected (check `/mcp`), use these tools before falling back to terminal commands:
 
 | Tool | Use it when |
 |------|-------------|
@@ -26,13 +26,13 @@ The project includes a Claude Code custom agent at `.claude/agents/mds.md` after
 
 ## When To Run Doctor
 
-- Before every `git commit`, run `doctor_scan_project` or `mrdj doctor --fast` in the terminal.
+- Before every `git commit`, run `doctor_scan_project` or `mds doctor --fast` in the terminal.
 - Before starting a new phase of development, resolve all Doctor errors first.
 - Before release/client handoff, run `generate_deploy_checklist` and then fix any blocking Doctor errors.
 
 ## Dev Server Rule
 
-Always start Expo with `mrdj clear-expo-start <project-path>`. Never use bare `expo start`, `npx expo start`, or `pnpm exec expo start`. This command frees port 8081, clears caches, and starts with `--clear`.
+Always start Expo with `mds clear-expo-start <project-path>`. Never use bare `expo start`, `npx expo start`, or `pnpm exec expo start`. This command frees port 8081, clears caches, and starts with `--clear`.
 
 ## Slash Commands
 

@@ -9,7 +9,7 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 
 ## MCP-First Workflow
 
-1. Confirm the `mrdj-dev-suite` MCP server is available.
+1. Confirm the `mds-dev-suite` MCP server is available.
 2. Pull `get_skill` for `seo-metadata`.
 3. Optionally run `doctor_scan_file` for focused route files, then `doctor_scan_project` for full checks.
 4. Use `knowledge_list_resources` (`kind: "rule"`) to ensure canonical/indexing strategy is complete.
@@ -18,9 +18,9 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mrdj mcp install --client codex --scope project`
+   - `mds mcp install --client codex --scope project`
 2. Direct CLI checks:
-   - `mrdj doctor <projectPath> --ci`
+   - `mds doctor <projectPath> --ci`
    - Run project-specific web build/preview commands to verify metadata output.
 
 ## Verification And Output

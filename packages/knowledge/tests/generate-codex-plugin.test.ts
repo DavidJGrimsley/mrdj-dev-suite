@@ -31,7 +31,7 @@ afterEach(async () => {
 
 describe('generateCodexPluginBundle', () => {
   it('generates plugin bundle files and marketplace output deterministically', async () => {
-    const repoRoot = await createTempDir('mrdj-plugin-repo-');
+    const repoRoot = await createTempDir('mds-plugin-repo-');
     const contentRoot = path.join(repoRoot, 'packages', 'knowledge', 'src', 'content');
     await mkdir(contentRoot, { recursive: true });
 
@@ -62,7 +62,7 @@ describe('generateCodexPluginBundle', () => {
     const pluginRoot = path.join(repoRoot, 'plugins', 'codex');
     const manifestRaw = await readFile(path.join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8');
     const manifest = JSON.parse(manifestRaw) as Record<string, unknown>;
-    expect(manifest.name).toBe('mrdj-dev-suite');
+    expect(manifest.name).toBe('mds-dev-suite');
     expect(manifest.version).toBe('9.9.9');
     expect(manifest.skills).toBe('./skills/');
     expect(manifest.mcpServers).toBe('./.mcp.json');
@@ -72,9 +72,9 @@ describe('generateCodexPluginBundle', () => {
 
     const mcpRaw = await readFile(path.join(pluginRoot, '.mcp.json'), 'utf8');
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
-    expect(mcp.mcpServers['mrdj-dev-suite']).toEqual({
+    expect(mcp.mcpServers['mds-dev-suite']).toEqual({
       command: 'npx',
-      args: ['-y', '@mrdj/mcp-server'],
+      args: ['-y', '@mds/mcp-server'],
     });
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));
@@ -92,7 +92,7 @@ describe('generateCodexPluginBundle', () => {
     };
     expect(marketplace.plugins).toHaveLength(1);
     expect(marketplace.plugins[0]).toMatchObject({
-      name: 'mrdj-dev-suite',
+      name: 'mds-dev-suite',
       source: {
         path: './plugins/codex',
       },
@@ -100,7 +100,7 @@ describe('generateCodexPluginBundle', () => {
   });
 
   it('fails when skill content file is missing', async () => {
-    const repoRoot = await createTempDir('mrdj-plugin-repo-missing-');
+    const repoRoot = await createTempDir('mds-plugin-repo-missing-');
     const contentRoot = path.join(repoRoot, 'packages', 'knowledge', 'src', 'content');
     await mkdir(contentRoot, { recursive: true });
 
@@ -125,7 +125,7 @@ describe('generateCodexPluginBundle', () => {
   });
 
   it('preserves existing marketplace metadata and plugins when upserting this plugin', async () => {
-    const repoRoot = await createTempDir('mrdj-plugin-repo-merge-');
+    const repoRoot = await createTempDir('mds-plugin-repo-merge-');
     const contentRoot = path.join(repoRoot, 'packages', 'knowledge', 'src', 'content');
     await mkdir(contentRoot, { recursive: true });
 
@@ -159,7 +159,7 @@ describe('generateCodexPluginBundle', () => {
               category: 'General',
             },
             {
-              name: 'mrdj-dev-suite',
+              name: 'mds-dev-suite',
               source: {
                 source: 'local',
                 path: './old/path',
@@ -209,7 +209,7 @@ describe('generateCodexPluginBundle', () => {
     expect(marketplace.plugins).toHaveLength(2);
     expect(marketplace.plugins[0].name).toBe('another-plugin');
     expect(marketplace.plugins[1]).toMatchObject({
-      name: 'mrdj-dev-suite',
+      name: 'mds-dev-suite',
       source: {
         source: 'local',
         path: './plugins/codex',
@@ -224,7 +224,7 @@ describe('generateCodexPluginBundle', () => {
   });
 
   it('fails when skill content is empty', async () => {
-    const repoRoot = await createTempDir('mrdj-plugin-repo-empty-');
+    const repoRoot = await createTempDir('mds-plugin-repo-empty-');
     const contentRoot = path.join(repoRoot, 'packages', 'knowledge', 'src', 'content');
     await mkdir(path.join(contentRoot, 'skills'), { recursive: true });
     await writeFile(path.join(contentRoot, 'skills', 'empty-skill.md'), ' \n\t', 'utf8');

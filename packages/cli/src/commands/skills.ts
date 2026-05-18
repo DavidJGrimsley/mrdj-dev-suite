@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 
-import { getSkill, listKnowledgeResources } from '@mrdj/knowledge';
+import { getSkill, listKnowledgeResources } from '@mds/knowledge';
 
-import type { KnowledgeResource, Skill } from '@mrdj/knowledge';
+import type { KnowledgeResource, Skill } from '@mds/knowledge';
 
 export interface SkillsListArgv {
   query?: string;
@@ -30,7 +30,7 @@ export async function runSkillsListCommand(argv: SkillsListArgv): Promise<void> 
     return;
   }
 
-  console.log(chalk.bold('mrdj skills list'));
+  console.log(chalk.bold('mds skills list'));
   if (argv.query) {
     console.log(chalk.dim(`filter: ${argv.query}`));
   }
@@ -50,7 +50,7 @@ export async function runSkillsListCommand(argv: SkillsListArgv): Promise<void> 
 
 export async function runSkillsShowCommand(argv: SkillsShowArgv): Promise<void> {
   if (!argv.id) {
-    throw new Error('mrdj skills show requires a skill id.');
+    throw new Error('mds skills show requires a skill id.');
   }
 
   const skill = await getSkill(argv.id);
@@ -82,7 +82,7 @@ export function listSkillSummaries(query?: string): SkillSummary[] {
 function printClosestSkills(query: string): void {
   const matches = listSkillSummaries(query).slice(0, 5);
   if (matches.length === 0) {
-    console.log(chalk.gray('Run `mrdj skills list` to see available bundled skills.'));
+    console.log(chalk.gray('Run `mds skills list` to see available bundled skills.'));
     return;
   }
 

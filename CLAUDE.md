@@ -1,13 +1,13 @@
-# MrDJ Dev Suite — Agent Guidelines
+# MDS Dev Suite — Agent Guidelines
 
 ## Before every git commit
-Always run `mrdj doctor --fast` (or via MCP `doctor_scan_project`) on the target project before committing. If the report has errors, fix them before proceeding. Warnings are acceptable to commit with.
+Always run `mds doctor --fast` (or via MCP `doctor_scan_project`) on the target project before committing. If the report has errors, fix them before proceeding. Warnings are acceptable to commit with.
 
 ## Before moving to the next phase
-Run `mrdj doctor --fast` before beginning a new phase of onboarding or development work. Resolve all errors before continuing to the next phase.
+Run `mds doctor --fast` before beginning a new phase of onboarding or development work. Resolve all errors before continuing to the next phase.
 
 ## Starting the Expo dev server
-Always use `mrdj clear-expo-start <project-path>` instead of bare `expo start`, `npx expo start`, or `pnpm exec expo start`. This command:
+Always use `mds clear-expo-start <project-path>` instead of bare `expo start`, `npx expo start`, or `pnpm exec expo start`. This command:
 - Kills any process listening on the Expo port (default 8081) and the Express port (3000) if a server script is detected
 - Clears project-level caches (`.expo`, `.cache`, `node_modules/.cache/metro`, `node_modules/.cache/babel-loader`)
 - Clears the Windows system-level Metro cache (`%LOCALAPPDATA%\Temp\metro-cache`)

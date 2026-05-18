@@ -341,7 +341,7 @@ export async function scaffoldRichBoilerplate(
     await mkdir(path.join(projectPath, '.github', 'workflows'), { recursive: true });
     results.push(
       await writeIfAllowed(
-        path.join(projectPath, '.github', 'workflows', 'mrdj-pr-checks.yml'),
+        path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'),
         renderGitHubPrChecksWorkflow(),
         force
       ),
@@ -471,7 +471,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- Advanced package setup: ${formatBoolean(answers.advancedPackageSetup)}`,
     `- Create Expo starter components: ${formatBoolean(answers.includeCreateExpoComponents)}`,
     `- Latest Expo SDK preference: ${formatBoolean(answers.useLatestExpoSdk)}`,
-    `- MrDJ guidelines template: yes`,
+    `- MDS guidelines template: yes`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
     `- Expo Native Tabs: ${formatBoolean(answers.usesExpoNativeTabs)}`,
     `- Test-to-main safeguards: ${formatBoolean(answers.testToMainSafeguards)}`,
@@ -539,7 +539,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '## Phase 4: Polish, Safeguards, And Release',
     '',
     '- [ ] Prune unused Software Mansion examples and remove unneeded packages.',
-    '- [ ] Run `mrdj doctor --ci` and address errors.',
+    '- [ ] Run `mds doctor --ci` and address errors.',
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
@@ -614,7 +614,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- The string `# TodoForContext(optional):` marks sections the user has not yet decided about.',
     '- Before agentic intake, planning, or scaffolding, scan every `project/` file for this marker.',
     '- If any marker is present: stop, list each file + line, and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context.',
-    '- Only proceed when zero markers remain. `mrdj doctor --ci` treats unresolved markers as errors.',
+    '- Only proceed when zero markers remain. `mds doctor --ci` treats unresolved markers as errors.',
     '',
     '## Expo Architecture',
     '',
@@ -644,9 +644,9 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '',
     '## Workflow',
     '',
-    '- If the user says `mrdj continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
-    '- Run `mrdj doctor --ci` before pushing.',
-    '- Use `mrdj clear-expo-start` when Metro or server ports get wedged.',
+    '- If the user says `mds continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
+    '- Run `mds doctor --ci` before pushing.',
+    '- Use `mds clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards
       ? ['- Develop through feature branches into `test`, then promote validated work from `test` to `main`.']
       : []),
@@ -677,7 +677,7 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
     '',
     `Expo Router routes belong in ${formatAppDirectory(answers.appDirectory)}. Platform layout mode: ${formatPlatformLayoutMode(answers.platformLayoutMode)}.`,
     '',
-    'If the user says `mrdj continue` or `MDS Continue`, first run `mrdj continue` from the app root if available. Use the MDS Continue brief to propose the next plan and wait for approval before editing files. If the command is unavailable, manually inspect markers, Doctor status, git status, and `project/todo.md` in that order.',
+    'If the user says `mds continue` or `MDS Continue`, first run `mds continue` from the app root if available. Use the MDS Continue brief to propose the next plan and wait for approval before editing files. If the command is unavailable, manually inspect markers, Doctor status, git status, and `project/todo.md` in that order.',
     '',
     'Before any intake, planning, scaffolding, or phase work, scan every `project/` file for the marker `# TodoForContext(optional):`. If any are present, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero markers remain.',
     '',
@@ -690,7 +690,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
   const spinUpDev = [
     '## Spin up dev',
     '',
-    'Run `npm run clear-expo-start` (or `npx @mrdj/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
+    'Run `npm run clear-expo-start` (or `npx @mds/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
     'Kills port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts `expo start --clear`.',
     'Expo Router API routes work automatically in this mode.',
     'Never fall back to a non-default port — always free the default port first.',
@@ -714,7 +714,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
     '',
     '## Before every git commit',
     '',
-    'Run `npm run mds:doctor` (or `npx @mrdj/cli doctor --fast .`) before committing. Fix all errors first; warnings are OK to proceed with.',
+    'Run `npm run mds:doctor` (or `npx @mds/cli doctor --fast .`) before committing. Fix all errors first; warnings are OK to proceed with.',
     '',
     '## Before moving to the next phase',
     '',
@@ -780,7 +780,7 @@ export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
     '## Agent Prompt',
     '',
     'Read `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md`.',
-    'If the user said `mrdj continue`, run `mrdj continue` first when available and use its session brief as the starting point.',
+    'If the user said `mds continue`, run `mds continue` first when available and use its session brief as the starting point.',
     'First, search every `project/` file for `# TodoForContext(optional):`. If any markers remain, stop before intake and tell the user to fill the section underneath or delete the marker line to acknowledge no extra context is needed.',
     'Ask conversational follow-up questions until the app plan is clear enough to build phase by phase.',
     'Move any imported notes into the correct canonical sections, preserve useful context, and remove uncertainty only after the user confirms it.',
@@ -818,21 +818,19 @@ async function ensurePackageJson(
     ...packageJson.scripts,
     typecheck: packageJson.scripts?.typecheck ?? 'tsc --noEmit',
     'build:web': packageJson.scripts?.['build:web'] ?? 'expo export --platform web',
-    'mds:continue': packageJson.scripts?.['mds:continue'] ?? 'npx @mrdj/cli continue',
-    'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mrdj/cli doctor',
+    'mds:continue': packageJson.scripts?.['mds:continue'] ?? 'npx @mds/cli continue',
+    'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mds/cli doctor',
     'mds:doctor:ci':
-      packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mrdj/cli doctor --ci',
-    'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mrdj/cli free-port',
-    'kill-port': packageJson.scripts?.['kill-port'] ?? 'npx @mrdj/cli free-port',
+      packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mds/cli doctor --ci',
+    'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mds/cli free-port',
     'clear-expo-start':
-      packageJson.scripts?.['clear-expo-start'] ?? 'npx @mrdj/cli clear-expo-start',
-    'clean-start': packageJson.scripts?.['clean-start'] ?? 'npx @mrdj/cli clean-start',
+      packageJson.scripts?.['clear-expo-start'] ?? 'npx @mds/cli clear-expo-start',
     'expo-install-fix':
       packageJson.scripts?.['expo-install-fix'] ?? 'npx expo install --fix',
     'expo-doctor': packageJson.scripts?.['expo-doctor'] ?? 'npx expo-doctor',
     'post-create-check':
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
-    'ci:verify': packageJson.scripts?.['ci:verify'] ?? 'npx @mrdj/cli doctor --ci',
+    'ci:verify': packageJson.scripts?.['ci:verify'] ?? 'npx @mds/cli doctor --ci',
   };
 
   if (answers.webOutput !== 'none') {
@@ -989,9 +987,9 @@ function deriveServeProdScript(answers: OnboardAnswers): string {
 
 function deriveServeProdFreshScript(answers: OnboardAnswers): string {
   if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
-    return 'npx @mrdj/cli free-port 3000 && npm run build:web && node server.js';
+    return 'npx @mds/cli free-port 3000 && npm run build:web && node server.js';
   }
-  return 'npx @mrdj/cli free-port 8081 && npm run build:web && npx expo serve';
+  return 'npx @mds/cli free-port 8081 && npm run build:web && npx expo serve';
 }
 
 function formatStyleStack(answers: OnboardAnswers): string {
@@ -1242,7 +1240,7 @@ function renderImportedNotes(
   return [
     '## Imported Notes',
     '',
-    'The following notes existed before MrDJ normalized this file. An agent should move useful details into the correct sections during project intake.',
+    'The following notes existed before MDS normalized this file. An agent should move useful details into the correct sections during project intake.',
     '',
     '```md',
     trimmed,
@@ -1340,7 +1338,7 @@ function renderMockData(answers: OnboardAnswers): string {
     '  tasks: [',
     "    { id: 'task-1', title: 'Shape the first user flow', status: 'doing' },",
     "    { id: 'task-2', title: 'Replace mock data with the real data layer', status: 'todo' },",
-    "    { id: 'task-3', title: 'Run mrdj doctor before pushing', status: 'todo' },",
+    "    { id: 'task-3', title: 'Run mds doctor before pushing', status: 'todo' },",
     '  ] satisfies AppTask[],',
     '};',
     '',
@@ -1520,7 +1518,7 @@ function renderSupabaseClient(): string {
 
 function renderGitHubPrChecksWorkflow(): string {
   return [
-    'name: MrDJ PR Checks',
+    'name: MDS PR Checks',
     '',
     'on:',
     '  pull_request:',
@@ -1552,7 +1550,7 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '',
     '- Build features on short-lived feature branches.',
     '- Open pull requests into `test` first.',
-    '- Require the `MrDJ PR Checks` workflow to pass before merging into `test`.',
+    '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
     '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
     '- Promote from `test` to `main` only after validation.',
     '- Protect `main` so direct pushes are blocked and PR checks are required.',
@@ -1574,7 +1572,7 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '',
     '- Create `test` and `main` branches.',
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
-    '- Require the generated `MrDJ PR Checks` workflow before merge.',
+    '- Require the generated `MDS PR Checks` workflow before merge.',
     '',
   ].join('\n');
 }

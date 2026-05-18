@@ -1,8 +1,8 @@
 # Post-Create Expo Onboarding
 
-MrDJ onboarding runs after `rn-new`, `create-expo-app`, `create-expo-stack`, or
+MDS onboarding runs after `rn-new`, `create-expo-app`, `create-expo-stack`, or
 another generator has created an Expo project. `create-expo-super-stack` wraps
-that same idea by running `create-expo-stack` first and then applying the MrDJ
+that same idea by running `create-expo-stack` first and then applying the MDS
 onboarding pass.
 
 ## Flow
@@ -25,7 +25,7 @@ onboarding pass.
 
 ## Agentic Onboarding (MCP)
 
-The terminal `mrdj onboard` command writes the project memory files. The
+The terminal `mds onboard` command writes the project memory files. The
 agentic version is a conversation with Claude Code, Codex, or Cursor that
 fills those files in collaboratively.
 
@@ -33,13 +33,13 @@ Install **once, globally** (user scope, default) so every workspace gets
 the prompts:
 
 ```bash
-mrdj mcp install --client claude   # merges into ~/.claude.json
-mrdj mcp install --client codex    # merges into ~/.codex/config.toml
-mrdj mcp install --client cursor   # merges into ~/.cursor/mcp.json
-mrdj mcp install --dry-run         # preview merge before writing
+mds mcp install --client claude   # merges into ~/.claude.json
+mds mcp install --client codex    # merges into ~/.codex/config.toml
+mds mcp install --client cursor   # merges into ~/.cursor/mcp.json
+mds mcp install --dry-run         # preview merge before writing
 ```
 
-Restart the host (or run `claude mcp reload`) and the MrDJ prompts are
+Restart the host (or run `claude mcp reload`) and the MDS prompts are
 available from any workspace.
 
 Two prompts ship with the server:
@@ -54,7 +54,7 @@ Two prompts ship with the server:
   intake → normalize → plan → scaffold flow.
 
 After generation, the user-dev should open the generated app folder
-directly in a new agent session and run `mrdj continue`. That fresh
+directly in a new agent session and run `mds continue`. That fresh
 app-root session reduces token usage and saves money because future
 searches, reads, and plans are scoped to the app instead of the parent
 folder and old generator conversation.
@@ -64,7 +64,7 @@ implementation work: they scan every `project/` file for the literal
 marker `# TodoForContext(optional):` and ask the user to fill it in or
 delete the marker line.
 
-`mrdj doctor` mirrors this rule with a `todo-for-context markers`
+`mds doctor` mirrors this rule with a `todo-for-context markers`
 error so the same blocker stops CI and editor surfaces until the user
 fills the section or deletes the marker line.
 
@@ -82,17 +82,17 @@ fills the section or deletes the marker line.
   target via `react-native-tvos`. Selecting either records the intent
   in project memory.
 - **Embedded flag map.** Both prompts now include the exact
-  create-expo-stack and `--mrdj-*` flag map so the agent does not have
+  create-expo-stack and `--mds-*` flag map so the agent does not have
   to grep `node_modules` or scan source to translate answers into a
   command. This was the biggest source of slowness in early test runs.
 - **Credits while waiting.** When generation kicks off, the agent
   prints a recognition note for the upstream teams and individuals
-  whose work fills the MrDJ knowledge base.
+  whose work fills the MDS knowledge base.
 - **Success message surfaced.** After a successful run, the agent
-  quotes the generator's `MrDJ onboarding complete` tail block back
+  quotes the generator's `MDS onboarding complete` tail block back
   verbatim so the Mr. DJ thank-you text appears in chat the same way
   it does in a terminal CLI run.
-- **MDS Continue handoff.** The agent runs `mrdj continue` from the
+- **MDS Continue handoff.** The agent runs `mds continue` from the
   generated app folder, then tells the user-dev to open that app folder
   in a fresh agent session to lower token usage and cost.
 

@@ -76,7 +76,7 @@ const EXPO_SERVER_ADAPTER_EXPLANATION =
 const CUSTOM_BACKEND_EXPLANATION =
   'A separate backend API server runs alongside Expo (not through Expo Router API routes). Example: a TypeScript/Node API server that your app calls directly. This requires starting two processes in development.';
 
-const EXPLAIN_CHOICE = '__mrdj_explain__';
+const EXPLAIN_CHOICE = '__mds_explain__';
 const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
 const EAS_USE_OPTIONS = [
   'building mobile applications',
@@ -84,7 +84,7 @@ const EAS_USE_OPTIONS = [
   'hosting web apps',
   'publishing mobile applications',
 ] as const;
-export const OTHER_DATA_NEEDS = '__mrdj_other_data_needs__';
+export const OTHER_DATA_NEEDS = '__mds_other_data_needs__';
 export const DATA_NEED_OPTIONS = [
   'Local UI/app state',
   'User accounts/authentication',
@@ -120,7 +120,7 @@ export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
   'We will spend time defining the application and business now so the generated project memory gives agents real context.';
 export const SUPER_STACK_SUCCESS_MESSAGE =
-  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MrDJ@DavidJGrimsley.com or by raising an issue on Github at github.com/mrdj-dev-suite/issues.";
+  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on Github at github.com/mds-dev-suite/issues.";
 const CHECKBOX_PROMPT_HINT = 'Use Space to select options, then Enter to continue.';
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
@@ -137,7 +137,7 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
 
   await writeMcpJsonToProject(projectPath);
 
-  console.log(chalk.bold('mrdj onboard'));
+  console.log(chalk.bold('mds onboard'));
   console.log(chalk.dim(projectPath));
   console.log();
   for (const result of written) {
@@ -199,7 +199,7 @@ export async function collectOnboardPlan(
   const appDirectory =
     argv.appDirectory ??
     (await askChoice(
-      'Where should MrDJ place Expo Router route files it generates?',
+      'Where should MDS place Expo Router route files it generates?',
       [
         { value: 'src' as const, label: 'src/app', hint: 'Default for new Super Stack apps' },
         { value: 'root' as const, label: 'app', hint: 'Use when the existing project already keeps routes at the root' },
@@ -304,7 +304,7 @@ export async function collectOnboardPlan(
 
   const guidelinesTemplate =
     argv.guidelinesTemplate ??
-    (await askYesNo('Use the bundled MrDJ project/guidelines.md template?', true));
+    (await askYesNo('Use the bundled MDS project/guidelines.md template?', true));
   const dataStart =
     argv.dataStart ??
     (await askExplainedChoice(
@@ -611,7 +611,7 @@ async function askDataNeeds(fallback: string): Promise<string> {
   });
   const selectedNeeds = Array.from(handleCancel(selected));
   const customNotes = selectedNeeds.includes(OTHER_DATA_NEEDS)
-    ? await askText('What other data needs should MrDJ remember?', fallback)
+    ? await askText('What other data needs should MDS remember?', fallback)
     : undefined;
   return formatDataNeedsSelection(selectedNeeds, customNotes);
 }
@@ -737,7 +737,7 @@ function printOnboardingNextSteps(): void {
   console.log('2. Browse exposition pages to understand included base packages.');
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log('4. Tell the agent to commence development phase by phase.');
-  console.log('Then run mrdj doctor --ci, or use mrdj clear-expo-start when Metro gets stuck.');
+  console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }
 
 function toOptions(values: string[]): Array<{ value: string; label: string }> {

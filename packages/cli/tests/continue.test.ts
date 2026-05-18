@@ -19,14 +19,14 @@ afterEach(async () => {
 
 describe('MDS Continue', () => {
   it('guides users away from parent folders that are not onboarded apps', async () => {
-    const parent = await mkdtemp(path.join(os.tmpdir(), 'mrdj-continue-parent-'));
+    const parent = await mkdtemp(path.join(os.tmpdir(), 'mds-continue-parent-'));
     tempDirs.push(parent);
 
     const brief = await buildContinueSessionBrief(parent);
 
     expect(brief.isOnboardedApp).toBe(false);
     expect(brief.recommendation.priority).toBe('not-onboarded');
-    expect(brief.recommendation.plan.join('\n')).toContain('mrdj continue ./my-app');
+    expect(brief.recommendation.plan.join('\n')).toContain('mds continue ./my-app');
     expect(brief.handoff).toContain('lower token usage and lower cost');
   });
 
@@ -134,7 +134,7 @@ async function createOnboardedProject(options: {
   guidelines?: string;
   style?: string;
 } = {}): Promise<string> {
-  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-continue-app-'));
+  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-continue-app-'));
   tempDirs.push(projectPath);
   await mkdir(path.join(projectPath, 'project'), { recursive: true });
   await writeFile(

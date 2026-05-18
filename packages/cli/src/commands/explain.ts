@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 
-import { listKnowledgeResources, readKnowledgeResource } from '@mrdj/knowledge';
+import { listKnowledgeResources, readKnowledgeResource } from '@mds/knowledge';
 
-import type { KnowledgeResource, KnowledgeResourceContent } from '@mrdj/knowledge';
+import type { KnowledgeResource, KnowledgeResourceContent } from '@mds/knowledge';
 
 export interface ExplainArgv {
   topic?: string;
@@ -73,7 +73,7 @@ const DOCTOR_TOPICS = [
     id: 'styling stack',
     name: 'Styling Stack',
     description: 'Checks for the expected Uniwind/Tailwind styling setup and conflicting NativeWind artifacts.',
-    nextStep: 'Prefer Uniwind plus Tailwind v4 for new MrDJ app scaffolds.',
+    nextStep: 'Prefer Uniwind plus Tailwind v4 for new MDS app scaffolds.',
     relatedResources: ['styling-uniwind-setup', 'uniwind-theming'],
     aliases: ['styling', 'uniwind', 'tailwind'],
   },
@@ -113,7 +113,7 @@ const DOCTOR_TOPICS = [
     id: 'script checks',
     name: 'Script Checks',
     description: 'Runs lint, typecheck, tests, Expo Doctor, and build scripts when the selected Doctor mode asks for them.',
-    nextStep: 'Fix the failing script locally, rerun mrdj doctor, then push only after the CI-equivalent profile passes.',
+    nextStep: 'Fix the failing script locally, rerun mds doctor, then push only after the CI-equivalent profile passes.',
     relatedResources: ['deployment-ci-cd-patterns', 'deployment'],
     aliases: ['eslint', 'typescript', 'typecheck', 'expo doctor', 'build checks', 'ci'],
   },
@@ -121,7 +121,7 @@ const DOCTOR_TOPICS = [
 
 export async function runExplainCommand(argv: ExplainArgv): Promise<void> {
   if (!argv.topic) {
-    throw new Error('mrdj explain requires a topic.');
+    throw new Error('mds explain requires a topic.');
   }
 
   const result = await explainTopic(argv.topic);
@@ -195,7 +195,7 @@ function doctorMatchFromTopic(candidate: (typeof DOCTOR_TOPICS)[number]): Explai
 
 function printExplainResult(result: ExplainResult): void {
   if (result.status === 'not-found') {
-    console.log(chalk.red(`No MrDJ explanation matched "${result.query}".`));
+    console.log(chalk.red(`No MDS explanation matched "${result.query}".`));
     console.log(chalk.gray('Try a Doctor check name like env hygiene, app architecture, or seo metadata.'));
     return;
   }
@@ -205,13 +205,13 @@ function printExplainResult(result: ExplainResult): void {
     for (const match of result.matches.slice(0, 10)) {
       console.log(`  ${match.id} - ${match.name}`);
     }
-    console.log(chalk.gray('Run `mrdj explain <exact id>` for one of these topics.'));
+    console.log(chalk.gray('Run `mds explain <exact id>` for one of these topics.'));
     return;
   }
 
   const match = result.matches[0];
   if (!match) {
-    console.log(chalk.red(`No MrDJ explanation matched "${result.query}".`));
+    console.log(chalk.red(`No MDS explanation matched "${result.query}".`));
     return;
   }
   console.log(chalk.bold(match.name));

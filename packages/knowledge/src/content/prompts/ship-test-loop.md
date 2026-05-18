@@ -8,7 +8,7 @@ Push intentional changes with a meaningful commit message, open/update a PR to `
 
 ## Loop Rules
 
-1. Run `mrdj doctor --ci` before any git mutation.
+1. Run `mds doctor --ci` before any git mutation.
 2. Stage only intentional files and create a meaningful commit message.
 3. Push branch and open or update a PR targeting `test`.
 4. Wait about 2 minutes, then poll PR comments, review threads, and failed checks.

@@ -17,7 +17,7 @@ Run generator + onboarding as one guided flow, then hand off to a fresh app-fold
 - Confirm stack choices and MDS intake values are captured before generation.
 - Confirm generated app includes project memory and onboarding next-step output.
 - Confirm unresolved context markers are resolved before coding begins.
-- Confirm follow-up uses `mrdj continue` from inside the generated app folder.
+- Confirm follow-up uses `mds continue` from inside the generated app folder.
 
 ## Preferred structure
 

@@ -41,10 +41,10 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
-      '@mrdj/doctor':
+      '@mds/doctor':
         specifier: workspace:*
         version: link:../doctor
-      '@mrdj/knowledge':
+      '@mds/knowledge':
         specifier: workspace:*
         version: link:../knowledge
       chalk:
@@ -69,7 +69,7 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
-      '@mrdj/cli':
+      '@mds/cli':
         specifier: workspace:*
         version: link:../cli
       create-expo-stack:
@@ -113,13 +113,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.1
         version: 1.29.0(zod@4.4.3)
-      '@mrdj/cli':
+      '@mds/cli':
         specifier: workspace:*
         version: link:../cli
-      '@mrdj/doctor':
+      '@mds/doctor':
         specifier: workspace:*
         version: link:../doctor
-      '@mrdj/knowledge':
+      '@mds/knowledge':
         specifier: workspace:*
         version: link:../knowledge
       zod:

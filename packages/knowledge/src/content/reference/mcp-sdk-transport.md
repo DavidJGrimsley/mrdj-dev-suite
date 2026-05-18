@@ -1,17 +1,17 @@
 # MCP SDK Transport Pattern
 
-Source pattern: `mrdj-app-mcp/src/index.ts`.
+Source pattern: `mds-app-mcp/src/index.ts`.
 
 ## Core Shape
 
 - Create a high-level `McpServer` from `@modelcontextprotocol/sdk/server/mcp.js`.
-- Register static markdown resources with stable `mrdj://` URIs.
+- Register static markdown resources with stable `mds://` URIs.
 - Register tools with schemas and handlers that return MCP text content.
 - Register prompts for reusable agent workflows.
 - Connect with `StdioServerTransport` for local agent use.
 - Keep HTTP/SSE transport as a later hosting concern unless a client needs it.
 
-## MrDJ Suite Decision
+## MDS Suite Decision
 
 Phase 1 uses stdio as the production MCP transport because it works for local
 Codex/Claude workflows and avoids server lifecycle complexity. The server

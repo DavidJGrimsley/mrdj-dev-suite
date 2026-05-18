@@ -1,5 +1,5 @@
 <!-- BEGIN MDS COPILOT INSTRUCTIONS -->
-# MrDJ Dev Suite Copilot Instructions
+# MDS Dev Suite Copilot Instructions
 
 - Treat `project/` as the source of truth for product intent, roadmap, style, and technical rules.
 - Prefer MDS MCP tools before broad edits: `doctor_scan_project`, `doctor_scan_file`, `generate_refactor_plan`, and `generate_deploy_checklist`.

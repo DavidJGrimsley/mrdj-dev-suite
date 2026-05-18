@@ -1,11 +1,11 @@
 {
-  "name": "mrdj-local",
+  "name": "mds-local",
   "interface": {
-    "displayName": "MrDJ Local Plugins"
+    "displayName": "MDS Local Plugins"
   },
   "plugins": [
     {
-      "name": "mrdj-dev-suite",
+      "name": "mds-dev-suite",
       "source": {
         "source": "local",
         "path": "./plugins/codex"

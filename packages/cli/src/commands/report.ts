@@ -3,9 +3,9 @@ import path from 'node:path';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mrdj/doctor';
+import { runDoctor } from '@mds/doctor';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mds/doctor';
 
 export interface ReportArgv {
   path?: string;
@@ -41,7 +41,7 @@ export async function runReportCommand(argv: ReportArgv): Promise<void> {
 
 export function renderMarkdownReport(report: DoctorReport): string {
   return [
-    '# MrDJ Doctor Report',
+    '# MDS Doctor Report',
     '',
     `- Project: ${report.projectPath}`,
     `- Mode: ${report.mode}`,

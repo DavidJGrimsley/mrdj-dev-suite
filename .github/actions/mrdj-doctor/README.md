@@ -1,6 +1,6 @@
 # MDS Doctor GitHub Action
 
-Composite Action that runs `@mrdj/doctor` and fails CI when:
+Composite Action that runs `@mds/doctor` and fails CI when:
 
 - Doctor reports errors, or
 - Doctor score is below `min-score` (default: `90`)
@@ -13,7 +13,7 @@ Composite Action that runs `@mrdj/doctor` and fails CI when:
 ## Usage
 
 ```yaml
-- uses: ./.github/actions/mrdj-doctor
+- uses: ./.github/actions/mds-doctor
   with:
     project-path: .
     mode: ci

@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "mrdj-dev-suite": {
+    "mds-dev-suite": {
       "command": "npx",
       "args": [
         "-y",
-        "@mrdj/mcp-server"
+        "@mds/mcp-server"
       ]
     }
   }

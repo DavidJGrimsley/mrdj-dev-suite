@@ -1,7 +1,7 @@
 {
   "name": "create-expo-super-stack",
   "version": "0.1.0",
-  "description": "Opinionated MrDJ wrapper around create-expo-stack with rich Expo onboarding",
+  "description": "Opinionated MDS wrapper around create-expo-stack with rich Expo onboarding",
   "type": "module",
   "bin": {
     "create-expo-super-stack": "./dist/cli.js"
@@ -18,8 +18,8 @@
   "main": "./dist/cli.js",
   "types": "./dist/cli.d.ts",
   "scripts": {
-    "build": "pnpm --filter @mrdj/cli build && tsc",
-    "type-check": "pnpm --filter @mrdj/cli build && tsc --noEmit",
+    "build": "pnpm --filter @mds/cli build && tsc",
+    "type-check": "pnpm --filter @mds/cli build && tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "vitest run --passWithNoTests",
@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
-    "@mrdj/cli": "workspace:*",
+    "@mds/cli": "workspace:*",
     "create-expo-stack": "^2.21.3"
   },
   "devDependencies": {
@@ -39,7 +39,7 @@
     "expo",
     "create-expo-stack",
     "uniwind",
-    "mrdj",
+    "mds",
     "react-native"
   ],
   "author": "DJ",

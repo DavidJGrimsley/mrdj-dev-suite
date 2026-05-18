@@ -1,5 +1,5 @@
 name: "MDS Doctor"
-description: "Run @mrdj/doctor in CI and gate on score/min-score."
+description: "Run @mds/doctor in CI and gate on score/min-score."
 
 inputs:
   project-path:
@@ -82,7 +82,7 @@ runs:
         if [[ "$DOCTOR_VERSION" == .* || "$DOCTOR_VERSION" == /* ]]; then
           DOCTOR_SPEC="$DOCTOR_VERSION"
         else
-          DOCTOR_SPEC="@mrdj/doctor@$DOCTOR_VERSION"
+          DOCTOR_SPEC="@mds/doctor@$DOCTOR_VERSION"
         fi
 
         # Always produce JSON, even when Doctor errors (capture exit code manually).

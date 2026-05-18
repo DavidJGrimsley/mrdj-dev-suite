@@ -20,7 +20,7 @@ export function checkStylingDependencies(packageJson: PackageJson): DoctorCheckR
     return {
       name: 'styling stack',
       status: 'warn',
-      message: 'NativeWind detected. MrDJ suite defaults new projects to Uniwind.',
+      message: 'NativeWind detected. MDS suite defaults new projects to Uniwind.',
     };
   }
 

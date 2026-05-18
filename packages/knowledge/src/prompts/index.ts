@@ -109,7 +109,7 @@ const PROMPT_SPECS: PromptSpec[] = [
     surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
     codexCommandFile: 'continue-development.md',
     claudeCommandFile: 'continue-development.md',
-    mcpPromptName: 'continue_mrdj_project',
+    mcpPromptName: 'continue_mds_project',
     mcpArgs: [{ name: 'projectPath', description: 'Path to the existing onboarded app folder.' }],
   },
   {

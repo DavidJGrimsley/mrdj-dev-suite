@@ -24,7 +24,7 @@ export async function runKillPortCommand(argv: KillPortArgv): Promise<void> {
   const ports = normalizePorts([...(argv.ports ?? []), ...(argv.port ?? [])], [8081]);
   const killed = await killPorts(ports);
 
-  console.log(chalk.bold('mrdj free-port'));
+  console.log(chalk.bold('mds free-port'));
   for (const port of ports) {
     const entries = killed.get(port) ?? [];
     if (entries.length === 0) {
@@ -40,7 +40,7 @@ export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promis
   const autoPorts = await shouldIncludeServerPort(projectPath) ? [8081, 3000] : [8081];
   const ports = normalizePorts(argv.ports ? argv.ports.split(',') : [], autoPorts);
 
-  console.log(chalk.bold('mrdj clear-expo-start'));
+  console.log(chalk.bold('mds clear-expo-start'));
   console.log(chalk.dim(projectPath));
   console.log();
 

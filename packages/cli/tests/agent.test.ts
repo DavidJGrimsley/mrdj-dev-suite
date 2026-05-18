@@ -22,7 +22,7 @@ afterEach(async () => {
 describe('VS Code agent install', () => {
   it('installs project-scoped VS Code Copilot assets and preserves existing MCP servers', async () => {
     const bundleRoot = await createBundle();
-    const target = await createTempDir('mrdj-agent-target-');
+    const target = await createTempDir('mds-agent-target-');
     await mkdir(path.join(target, '.vscode'), { recursive: true });
     await mkdir(path.join(target, '.github'), { recursive: true });
     await writeFile(
@@ -47,7 +47,7 @@ describe('VS Code agent install', () => {
 
     const mcp = JSON.parse(await readFile(path.join(target, '.vscode', 'mcp.json'), 'utf8'));
     expect(mcp.servers.existing).toEqual({ command: 'echo' });
-    expect(mcp.servers.mrdjDevSuite).toEqual({ command: 'node', args: ['/abs/server.js'] });
+    expect(mcp.servers.mdsDevSuite).toEqual({ command: 'node', args: ['/abs/server.js'] });
     const settings = JSON.parse(await readFile(path.join(target, '.vscode', 'settings.json'), 'utf8'));
     expect(settings['editor.formatOnSave']).toBe(true);
     expect(settings['chat.useAgentSkills']).toBe(true);
@@ -65,7 +65,7 @@ describe('VS Code agent install', () => {
 
   it('supports user-scope dry-runs without mutating the home directory', async () => {
     const bundleRoot = await createBundle();
-    const fakeHome = await createTempDir('mrdj-agent-home-');
+    const fakeHome = await createTempDir('mds-agent-home-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
 
     const result = await runAgentInstallCommand({
@@ -88,7 +88,7 @@ describe('VS Code agent install', () => {
 describe('Claude agent install', () => {
   it('installs project-scoped Claude Code assets with MCP and instructions', async () => {
     const bundleRoot = await createClaudeBundle();
-    const target = await createTempDir('mrdj-claude-target-');
+    const target = await createTempDir('mds-claude-target-');
     await writeFile(
       path.join(target, '.mcp.json'),
       JSON.stringify({ mcpServers: { other: { command: 'echo' } } }, null, 2),
@@ -106,7 +106,7 @@ describe('Claude agent install', () => {
 
     const mcp = JSON.parse(await readFile(path.join(target, '.mcp.json'), 'utf8'));
     expect(mcp.mcpServers.other).toEqual({ command: 'echo' });
-    expect(mcp.mcpServers['mrdj-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
+    expect(mcp.mcpServers['mds-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
     expect(await readFile(path.join(target, '.claude', 'agents', 'mds.md'), 'utf8')).toContain('name: mds');
     expect(await readFile(path.join(target, '.claude', 'commands', 'run-doctor.md'), 'utf8')).toContain('# Run Doctor');
     expect(await readFile(path.join(target, '.claude', 'skills', 'deployment', 'SKILL.md'), 'utf8')).toContain(
@@ -123,7 +123,7 @@ describe('Claude agent install', () => {
 
   it('supports user-scope dry-runs without mutating the home directory', async () => {
     const bundleRoot = await createClaudeBundle();
-    const fakeHome = await createTempDir('mrdj-claude-home-');
+    const fakeHome = await createTempDir('mds-claude-home-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
 
     const result = await runAgentInstallCommand({
@@ -145,7 +145,7 @@ describe('Claude agent install', () => {
 describe('Codex agent install', () => {
   it('installs project-scoped Codex MCP config, local plugin, and marketplace entry', async () => {
     const bundleRoot = await createCodexBundle();
-    const target = await createTempDir('mrdj-codex-target-');
+    const target = await createTempDir('mds-codex-target-');
     await writeFileWithDirs(
       path.join(target, '.agents', 'plugins', 'marketplace.json'),
       JSON.stringify(
@@ -175,17 +175,17 @@ describe('Codex agent install', () => {
     });
 
     const config = await readFile(path.join(target, '.codex', 'config.toml'), 'utf8');
-    expect(config).toContain('[mcp_servers.mrdj-dev-suite]');
+    expect(config).toContain('[mcp_servers.mds-dev-suite]');
     expect(config).toContain('command = "node"');
     expect(config).toContain('args = ["/abs/server.js"]');
 
     const marketplace = JSON.parse(await readFile(path.join(target, '.agents', 'plugins', 'marketplace.json'), 'utf8'));
     expect(marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'other')).toBeTruthy();
-    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mrdj-dev-suite');
-    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mrdj-dev-suite' });
+    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mds-dev-suite');
+    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mds-dev-suite' });
     expect(mdsEntry.policy).toEqual({ installation: 'AVAILABLE', authentication: 'ON_INSTALL' });
-    expect(await readFile(path.join(target, 'plugins', 'mrdj-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
-      '"name": "mrdj-dev-suite"'
+    expect(await readFile(path.join(target, 'plugins', 'mds-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
+      '"name": "mds-dev-suite"'
     );
 
     const verify = await verifyCodexAgentInstall(target);
@@ -194,7 +194,7 @@ describe('Codex agent install', () => {
 
   it('supports user-scope dry-runs without mutating the home directory', async () => {
     const bundleRoot = await createCodexBundle();
-    const fakeHome = await createTempDir('mrdj-codex-home-');
+    const fakeHome = await createTempDir('mds-codex-home-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
 
     const result = await runAgentInstallCommand({
@@ -208,7 +208,7 @@ describe('Codex agent install', () => {
     expect(result.dryRun).toBe(true);
     expect(result.target).toBe(fakeHome);
     expect(
-      result.writtenPaths.some((filePath) => filePath.endsWith(path.join('plugins', 'mrdj-dev-suite', 'commands', 'run-doctor.md')))
+      result.writtenPaths.some((filePath) => filePath.endsWith(path.join('plugins', 'mds-dev-suite', 'commands', 'run-doctor.md')))
     ).toBe(true);
     await expect(readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(fakeHome, '.agents', 'plugins', 'marketplace.json'), 'utf8')).rejects.toThrow();
@@ -216,7 +216,7 @@ describe('Codex agent install', () => {
 });
 
 async function createBundle(): Promise<string> {
-  const bundleRoot = await createTempDir('mrdj-vscode-bundle-');
+  const bundleRoot = await createTempDir('mds-vscode-bundle-');
   await writeFileWithDirs(
     path.join(bundleRoot, '.github', 'copilot-instructions.md'),
     '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->\n# MDS\n<!-- END MDS COPILOT INSTRUCTIONS -->\n'
@@ -248,7 +248,7 @@ async function createBundle(): Promise<string> {
 }
 
 async function createClaudeBundle(): Promise<string> {
-  const bundleRoot = await createTempDir('mrdj-claude-bundle-');
+  const bundleRoot = await createTempDir('mds-claude-bundle-');
   await writeFileWithDirs(path.join(bundleRoot, 'CLAUDE.md'), '# MDS Claude Instructions\n');
   await writeFileWithDirs(path.join(bundleRoot, 'agents', 'mds.md'), '---\nname: mds\n---\n# MDS Agent\n');
   await writeFileWithDirs(path.join(bundleRoot, 'commands', 'run-doctor.md'), '# Run Doctor\n');
@@ -257,10 +257,10 @@ async function createClaudeBundle(): Promise<string> {
 }
 
 async function createCodexBundle(): Promise<string> {
-  const bundleRoot = await createTempDir('mrdj-codex-bundle-');
+  const bundleRoot = await createTempDir('mds-codex-bundle-');
   await writeFileWithDirs(
     path.join(bundleRoot, '.codex-plugin', 'plugin.json'),
-    JSON.stringify({ name: 'mrdj-dev-suite', version: '0.1.0' }, null, 2)
+    JSON.stringify({ name: 'mds-dev-suite', version: '0.1.0' }, null, 2)
   );
   await writeFileWithDirs(path.join(bundleRoot, '.mcp.json'), JSON.stringify({ mcpServers: {} }, null, 2));
   await writeFileWithDirs(path.join(bundleRoot, 'commands', 'run-doctor.md'), '# Run Doctor\n');

@@ -1,8 +1,8 @@
-# mrdj-dev-suite Style
+# mds-dev-suite Style
 
 ## Visual Direction
 
-This file is only for the look and feel of the dev suite and generated MrDJ
+This file is only for the look and feel of the dev suite and generated MDS
 project materials. Technical rules live in `project/guidelines.md`.
 
 - Quiet, practical, developer-first interfaces.

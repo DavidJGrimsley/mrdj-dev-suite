@@ -23,8 +23,8 @@ export interface ResolvedServer {
   args: string[];
 }
 
-export const SERVER_KEY = 'mrdj-dev-suite';
-export const VSCODE_SERVER_KEY = 'mrdjDevSuite';
+export const SERVER_KEY = 'mds-dev-suite';
+export const VSCODE_SERVER_KEY = 'mdsDevSuite';
 
 export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> {
   const client = argv.client ?? 'claude';
@@ -32,7 +32,7 @@ export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> 
   const server = resolveServerInvocation(argv);
   const dryRun = Boolean(argv.dryRun);
 
-  console.log(chalk.bold('mrdj mcp install'));
+  console.log(chalk.bold('mds mcp install'));
   console.log(chalk.dim(`client: ${client}`));
   console.log(chalk.dim(`scope:  ${scope}`));
   console.log(chalk.dim(`command: ${server.command} ${server.args.join(' ')}`));
@@ -100,7 +100,7 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
   if (argv.command) {
     const [command, ...args] = argv.command.split(/\s+/).filter(Boolean);
     if (!command) {
-      throw new Error('mrdj mcp install --command was empty.');
+      throw new Error('mds mcp install --command was empty.');
     }
     return { command, args };
   }
@@ -110,13 +110,13 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
     return { command: 'node', args: [serverPath] };
   }
 
-  return { command: 'npx', args: ['-y', '@mrdj/mcp-server'] };
+  return { command: 'npx', args: ['-y', '@mds/mcp-server'] };
 }
 
 function findLocalServerEntry(): string | undefined {
   try {
     const require = createRequire(import.meta.url);
-    return require.resolve('@mrdj/mcp-server');
+    return require.resolve('@mds/mcp-server');
   } catch {
     return undefined;
   }
@@ -273,18 +273,18 @@ function printClaudeProjectFollowup(targetDir: string): void {
   console.log();
   console.log(chalk.bold('Next steps for Claude Code (project scope):'));
   console.log(`  1. Open ${targetDir} as a workspace in Claude Code (or restart Claude Code if already open).`);
-  console.log('  2. Run /mcp to confirm the mrdj-dev-suite server is listed.');
-  console.log('  3. Invoke the prompt: /mcp__mrdj-dev-suite__onboard_new_expo_app');
+  console.log('  2. Run /mcp to confirm the mds-dev-suite server is listed.');
+  console.log('  3. Invoke the prompt: /mcp__mds-dev-suite__onboard_new_expo_app');
 }
 
 function printClaudeUserFollowup(): void {
   console.log();
   console.log(chalk.bold('Next steps for Claude Code (user scope):'));
   console.log('  1. Restart Claude Code so it picks up ~/.claude.json.');
-  console.log('  2. From any workspace, run /mcp to confirm mrdj-dev-suite is listed.');
+  console.log('  2. From any workspace, run /mcp to confirm mds-dev-suite is listed.');
   console.log('  3. Available prompts:');
-  console.log('       /mcp__mrdj-dev-suite__create_expo_super_stack    (run from a parent dir to create a new app)');
-  console.log('       /mcp__mrdj-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
+  console.log('       /mcp__mds-dev-suite__create_expo_super_stack    (run from a parent dir to create a new app)');
+  console.log('       /mcp__mds-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
 }
 
 function printVscodeUserMcpInstructions(command: string, reason: 'dry-run' | 'missing-code-command'): void {

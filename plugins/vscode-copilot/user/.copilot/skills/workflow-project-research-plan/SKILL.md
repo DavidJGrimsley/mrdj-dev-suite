@@ -14,7 +14,7 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 
 ## MCP-First Workflow
 
-1. Confirm the `mrdjDevSuite` MCP server is available.
+1. Confirm the `mdsDevSuite` MCP server is available.
 2. Pull `get_skill` for `research-plan-intake` (and `project-onboarding` when onboarding context is mixed in).
 3. Call `knowledge_list_resources` for `guide` and `reference` resources as needed for structure and validation.
 4. Normalize clear context directly; ask focused follow-up only where ambiguity changes implementation direction.
@@ -23,10 +23,10 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mrdj mcp install --client codex --scope project`
+   - `mds mcp install --client codex --scope project`
 2. Direct CLI fallback:
-   - Use `mrdj onboard <projectPath>` for structured intake when memory files are missing.
-   - Use `mrdj continue <projectPath>` after memory normalization to select the next task.
+   - Use `mds onboard <projectPath>` for structured intake when memory files are missing.
+   - Use `mds continue <projectPath>` after memory normalization to select the next task.
 
 ## Verification And Output
 

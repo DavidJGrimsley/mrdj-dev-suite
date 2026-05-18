@@ -1,12 +1,12 @@
 {
-  "name": "mrdj-dev-suite",
+  "name": "mds-dev-suite",
   "description": "Expo project intelligence for Claude Code: Doctor diagnostics, architecture skills, MCP tools, custom MDS agent, and project-memory commands for Expo Router apps.",
   "version": "0.1.0",
   "author": {
     "name": "David Grimsley",
     "url": "https://github.com/DavidJGrimsley"
   },
-  "homepage": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
-  "repository": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  "homepage": "https://github.com/DavidJGrimsley/mds-dev-suite",
+  "repository": "https://github.com/DavidJGrimsley/mds-dev-suite",
   "license": "MIT"
 }

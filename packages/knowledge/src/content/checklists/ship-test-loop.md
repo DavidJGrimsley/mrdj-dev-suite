@@ -2,7 +2,7 @@
 
 Use this checklist when running the PR loop into `test`.
 
-1. Doctor CI pass: `mrdj doctor --ci`.
+1. Doctor CI pass: `mds doctor --ci`.
 2. Stage intentional files only.
 3. Create meaningful commit message.
 4. Push branch.

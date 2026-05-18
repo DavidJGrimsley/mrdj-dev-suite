@@ -13,7 +13,7 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 
 ## MCP-First Workflow
 
-1. Confirm the `mrdjDevSuite` MCP server is available.
+1. Confirm the `mdsDevSuite` MCP server is available.
 2. Call `continue_project` first to get the active-phase brief.
 3. Pull `get_skill` for `continue-development` to enforce phase-first sequencing.
 4. If blockers appear, use `doctor_scan_project` and `doctor_explain_result` for targeted remediation before feature work.
@@ -21,10 +21,10 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mrdj mcp install --client codex --scope project`
+   - `mds mcp install --client codex --scope project`
 2. Direct CLI flow:
-   - `mrdj continue <projectPath>`
-   - `mrdj doctor <projectPath>` when blockers are unclear.
+   - `mds continue <projectPath>`
+   - `mds doctor <projectPath>` when blockers are unclear.
 
 ## Verification And Output
 

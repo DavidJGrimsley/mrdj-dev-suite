@@ -25,13 +25,13 @@ plugins/<client-name>/
 - Prompt/command markdown lives only in `packages/knowledge/src/content/prompts/`.
 - `plugins/<client>/skills/` remains generated output and is not manually edited.
 - Commands reference real MCP tool names from `packages/mcp-server`.
-- MCP config uses the `mrdj-dev-suite` server key.
+- MCP config uses the `mds-dev-suite` server key.
 
 ## Adding a plugin capability
 
 1. Add or update canonical content in `packages/knowledge/src/content/*`.
 2. Update canonical prompt metadata in `packages/knowledge/src/prompts/index.ts`.
-3. Regenerate outputs via `pnpm --filter @mrdj/knowledge build`.
+3. Regenerate outputs via `pnpm --filter @mds/knowledge build`.
 4. Verify generated plugin assets under `plugins/codex/` and `plugins/claude-code/`.
 
 ## Agent behavior
