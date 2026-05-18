@@ -271,12 +271,12 @@ Are we linking/delegating instead of duplicating?
 Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Finish naming cleanup: use `MDS` for tools while keeping `MDS Dev Suite` as suite name in brand references.
-- [ ] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
+- [x] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
 - [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
 - [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
 - [ ] Support `npx create-expo-super-stack`.
-- [ ] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
-- [ ] Support `npx @mr.dj2u/doctor`.
+- [x] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
+- [x] Support `npx @mr.dj2u/doctor`.
 - [ ] Support `npx @mr.dj2u/cli codex install`.
 - [ ] Support `npx @mr.dj2u/cli claude install`.
 - [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
