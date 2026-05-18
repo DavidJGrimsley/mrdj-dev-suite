@@ -6,10 +6,10 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { cancel, isCancel, log, text } from '@clack/prompts';
-import { SUPER_STACK_SUCCESS_MESSAGE, collectOnboardPlan, defaultOnboardPlan } from '@mds/cli/onboarding';
-import { scaffoldProjectMemory } from '@mds/cli/project-memory';
+import { SUPER_STACK_SUCCESS_MESSAGE, collectOnboardPlan, defaultOnboardPlan } from '@mr.dj2u/cli/onboarding';
+import { scaffoldProjectMemory } from '@mr.dj2u/cli/project-memory';
 
-import type { OnboardArgv } from '@mds/cli/onboarding';
+import type { OnboardArgv } from '@mr.dj2u/cli/onboarding';
 
 export interface ParsedArgs {
   projectName?: string;
@@ -148,7 +148,7 @@ export async function main(): Promise<void> {
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
-  console.log('For the full dev-suite locally, use the generated scripts or install @mds/cli in the app.');
+  console.log('For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.');
 }
 
 export function parseArgs(args: string[]): ParsedArgs {

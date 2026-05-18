@@ -4,7 +4,7 @@ import { explainTopic } from '../src/commands/explain.js';
 import { renderMarkdownReport } from '../src/commands/report.js';
 import { listSkillSummaries } from '../src/commands/skills.js';
 
-import type { DoctorReport } from '@mds/doctor';
+import type { DoctorReport } from '@mr.dj2u/doctor';
 
 describe('Phase 3 command helpers', () => {
   it('lists bundled skills and filters by query', () => {

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mds/doctor';
+import { runDoctor } from '@mr.dj2u/doctor';
 
 export interface ShipArgv {
   branch?: string;

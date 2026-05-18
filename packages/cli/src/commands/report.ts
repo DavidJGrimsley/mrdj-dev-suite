@@ -3,9 +3,9 @@ import path from 'node:path';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mds/doctor';
+import { runDoctor } from '@mr.dj2u/doctor';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mds/doctor';
+import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 
 export interface ReportArgv {
   path?: string;

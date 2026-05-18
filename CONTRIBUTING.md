@@ -34,7 +34,7 @@ cat project/todo.md # Task breakdown
 - **File Extensions**: Use `.ts` / `.tsx` for all source code
 
 ### Naming Conventions
-- **Packages**: Lowercase, kebab-case (`@mds/package-name`)
+- **Packages**: Lowercase, kebab-case (`@mr.dj2u/package-name`)
 - **Directories**: Lowercase, descriptive (`src/`, `checks/`, `resources/`)
 - **Files**: lowercase for utilities/types, PascalCase for classes/components
 - **Functions**: camelCase for all
@@ -46,9 +46,9 @@ cat project/todo.md # Task breakdown
 import execa from 'execa';
 import { readFile } from 'fs/promises';
 
-// 2. Internal packages (@mds/*)
-import { Doctor } from '@mds/doctor';
-import { Skills } from '@mds/knowledge';
+// 2. Internal packages (@mr.dj2u/*)
+import { Doctor } from '@mr.dj2u/doctor';
+import { Skills } from '@mr.dj2u/knowledge';
 
 // 3. Local imports (relative)
 import { Config } from './config';
@@ -97,8 +97,8 @@ packages/
 ```json
 {
   "dependencies": {
-    "@mds/doctor": "workspace:*",
-    "@mds/knowledge": "workspace:*"
+    "@mr.dj2u/doctor": "workspace:*",
+    "@mr.dj2u/knowledge": "workspace:*"
   }
 }
 ```
@@ -106,11 +106,11 @@ packages/
 ### Cross-Package Communication
 ```typescript
 // ✅ DO: Import from package entry point
-import { Doctor } from '@mds/doctor';
-import { Skills, Patterns } from '@mds/knowledge';
+import { Doctor } from '@mr.dj2u/doctor';
+import { Skills, Patterns } from '@mr.dj2u/knowledge';
 
 // ❌ DON'T: Import from subdirectories
-import { Doctor } from '@mds/doctor/src/index';
+import { Doctor } from '@mr.dj2u/doctor/src/index';
 ```
 
 ## Development Workflow
@@ -138,7 +138,7 @@ pnpm build       # Compilation errors
 ### 3. Test Locally
 ```bash
 # Run specific package tests
-pnpm --filter @mds/doctor test
+pnpm --filter @mr.dj2u/doctor test
 
 # Run all tests
 pnpm test

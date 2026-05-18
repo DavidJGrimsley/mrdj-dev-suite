@@ -690,7 +690,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
   const spinUpDev = [
     '## Spin up dev',
     '',
-    'Run `npm run clear-expo-start` (or `npx @mds/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
+    'Run `npm run clear-expo-start` (or `npx @mr.dj2u/cli clear-expo-start .`) instead of bare `expo start` or `npx expo start`.',
     'Kills port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts `expo start --clear`.',
     'Expo Router API routes work automatically in this mode.',
     'Never fall back to a non-default port — always free the default port first.',
@@ -714,7 +714,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
     '',
     '## Before every git commit',
     '',
-    'Run `npm run mds:doctor` (or `npx @mds/cli doctor --fast .`) before committing. Fix all errors first; warnings are OK to proceed with.',
+    'Run `npm run mds:doctor` (or `npx @mr.dj2u/cli doctor --fast .`) before committing. Fix all errors first; warnings are OK to proceed with.',
     '',
     '## Before moving to the next phase',
     '',
@@ -818,19 +818,19 @@ async function ensurePackageJson(
     ...packageJson.scripts,
     typecheck: packageJson.scripts?.typecheck ?? 'tsc --noEmit',
     'build:web': packageJson.scripts?.['build:web'] ?? 'expo export --platform web',
-    'mds:continue': packageJson.scripts?.['mds:continue'] ?? 'npx @mds/cli continue',
-    'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mds/cli doctor',
+    'mds:continue': packageJson.scripts?.['mds:continue'] ?? 'npx @mr.dj2u/cli continue',
+    'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? 'npx @mr.dj2u/cli doctor',
     'mds:doctor:ci':
-      packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mds/cli doctor --ci',
-    'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mds/cli free-port',
+      packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mr.dj2u/cli doctor --ci',
+    'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mr.dj2u/cli free-port',
     'clear-expo-start':
-      packageJson.scripts?.['clear-expo-start'] ?? 'npx @mds/cli clear-expo-start',
+      packageJson.scripts?.['clear-expo-start'] ?? 'npx @mr.dj2u/cli clear-expo-start',
     'expo-install-fix':
       packageJson.scripts?.['expo-install-fix'] ?? 'npx expo install --fix',
     'expo-doctor': packageJson.scripts?.['expo-doctor'] ?? 'npx expo-doctor',
     'post-create-check':
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
-    'ci:verify': packageJson.scripts?.['ci:verify'] ?? 'npx @mds/cli doctor --ci',
+    'ci:verify': packageJson.scripts?.['ci:verify'] ?? 'npx @mr.dj2u/cli doctor --ci',
   };
 
   if (answers.webOutput !== 'none') {
@@ -987,9 +987,9 @@ function deriveServeProdScript(answers: OnboardAnswers): string {
 
 function deriveServeProdFreshScript(answers: OnboardAnswers): string {
   if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
-    return 'npx @mds/cli free-port 3000 && npm run build:web && node server.js';
+    return 'npx @mr.dj2u/cli free-port 3000 && npm run build:web && node server.js';
   }
-  return 'npx @mds/cli free-port 8081 && npm run build:web && npx expo serve';
+  return 'npx @mr.dj2u/cli free-port 8081 && npm run build:web && npx expo serve';
 }
 
 function formatStyleStack(answers: OnboardAnswers): string {

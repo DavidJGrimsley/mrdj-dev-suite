@@ -37,7 +37,7 @@ describe('resolveServerInvocation', () => {
   it('falls back to npx when no path is provided and the server is not resolvable', () => {
     expect(resolveServerInvocation({})).toEqual({
       command: 'npx',
-      args: ['-y', '@mds/mcp-server'],
+      args: ['-y', '@mr.dj2u/mcp-server'],
     });
   });
 });

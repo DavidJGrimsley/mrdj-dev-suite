@@ -1,5 +1,5 @@
 {
-  "name": "@mds/doctor",
+  "name": "@mr.dj2u/doctor",
   "version": "0.1.0",
   "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
   "type": "module",

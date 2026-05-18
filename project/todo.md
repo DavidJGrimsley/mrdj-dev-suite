@@ -256,7 +256,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 ### Phase 10: GitHub Action
 
 - [x] Add a repo-local `.github/actions/mds-doctor/` or publish `mds/doctor-action`.
-- [x] Support PR/push usage with `npx @mds/doctor --ci`.
+- [x] Support PR/push usage with `npx @mr.dj2u/doctor --ci`.
 - [x] Report a Doctor score plus errors and warnings in CI output.
 - [x] Include findings such as unsafe public secrets, missing canonical metadata, and route files containing business logic.
 
@@ -272,13 +272,13 @@ Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Finish naming cleanup: use `MDS` for tools while keeping `MDS Dev Suite` as suite name in brand references.
 - [ ] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
-- [ ] Support use inside an Expo app with `npx @mds/cli init`.
+- [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
 - [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
 - [ ] Support `npx create-expo-super-stack`.
 - [ ] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
-- [ ] Support `npx @mds/doctor`.
-- [ ] Support `npx @mds/cli codex install`.
-- [ ] Support `npx @mds/cli claude install`.
+- [ ] Support `npx @mr.dj2u/doctor`.
+- [ ] Support `npx @mr.dj2u/cli codex install`.
+- [ ] Support `npx @mr.dj2u/cli claude install`.
 - [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
 - [ ] Dogfood on DavidJGrimsley.com, Time2Pay, PokePages, Quantum API frontend, and any DWAH prototype.
 

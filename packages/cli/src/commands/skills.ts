@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 
-import { getSkill, listKnowledgeResources } from '@mds/knowledge';
+import { getSkill, listKnowledgeResources } from '@mr.dj2u/knowledge';
 
-import type { KnowledgeResource, Skill } from '@mds/knowledge';
+import type { KnowledgeResource, Skill } from '@mr.dj2u/knowledge';
 
 export interface SkillsListArgv {
   query?: string;

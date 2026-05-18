@@ -183,7 +183,7 @@ export function buildMcpConfig() {
     mcpServers: {
       [MCP_SERVER_KEY]: {
         command: 'npx',
-        args: ['-y', '@mds/mcp-server'],
+        args: ['-y', '@mr.dj2u/mcp-server'],
       },
     },
   };
@@ -533,7 +533,7 @@ mds mcp install --client codex --scope user
 ## Regenerate
 
 \`\`\`sh
-pnpm --filter @mds/knowledge build
+pnpm --filter @mr.dj2u/knowledge build
 \`\`\`
 
 Do not edit generated plugin skills directly; update \`packages/knowledge\` and rebuild.
@@ -568,7 +568,7 @@ async function loadKnowledgeModule(packageRoot) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `[codex-plugin] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mds/knowledge build" first.\n${detail}`
+      `[codex-plugin] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mr.dj2u/knowledge build" first.\n${detail}`
     );
   }
 }

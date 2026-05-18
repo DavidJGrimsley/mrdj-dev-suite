@@ -31,7 +31,7 @@ plugins/<client-name>/
 
 1. Add or update canonical content in `packages/knowledge/src/content/*`.
 2. Update canonical prompt metadata in `packages/knowledge/src/prompts/index.ts`.
-3. Regenerate outputs via `pnpm --filter @mds/knowledge build`.
+3. Regenerate outputs via `pnpm --filter @mr.dj2u/knowledge build`.
 4. Verify generated plugin assets under `plugins/codex/` and `plugins/claude-code/`.
 
 ## Agent behavior

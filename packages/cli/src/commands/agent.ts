@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mds/doctor';
-import { readKnowledgeResource } from '@mds/knowledge';
+import { runDoctor } from '@mr.dj2u/doctor';
+import { readKnowledgeResource } from '@mr.dj2u/knowledge';
 import { buildContinueSessionBrief } from '../continue.js';
 import {
   installVscodeUserMcp,

@@ -1,6 +1,6 @@
 # MDS Doctor GitHub Action
 
-Composite Action that runs `@mds/doctor` and fails CI when:
+Composite Action that runs `@mr.dj2u/doctor` and fails CI when:
 
 - Doctor reports errors, or
 - Doctor score is below `min-score` (default: `90`)

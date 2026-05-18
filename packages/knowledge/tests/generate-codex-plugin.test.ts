@@ -74,7 +74,7 @@ describe('generateCodexPluginBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
     expect(mcp.mcpServers['mds-dev-suite']).toEqual({
       command: 'npx',
-      args: ['-y', '@mds/mcp-server'],
+      args: ['-y', '@mr.dj2u/mcp-server'],
     });
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));

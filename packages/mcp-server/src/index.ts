@@ -5,17 +5,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
-import { runDoctor, scanFile } from '@mds/doctor';
-import { buildContinueSessionBrief } from '@mds/cli/continue';
+import { runDoctor, scanFile } from '@mr.dj2u/doctor';
+import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
 import {
   getSkill,
   listKnowledgeResources,
   readKnowledgeResource,
-} from '@mds/knowledge';
+} from '@mr.dj2u/knowledge';
 
-import type { DoctorMode } from '@mds/doctor';
-import type { DoctorCheckResult, DoctorReport } from '@mds/doctor';
-import type { KnowledgeKind } from '@mds/knowledge';
+import type { DoctorMode } from '@mr.dj2u/doctor';
+import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
+import type { KnowledgeKind } from '@mr.dj2u/knowledge';
 
 export function resolveSuperStackInvocation(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));

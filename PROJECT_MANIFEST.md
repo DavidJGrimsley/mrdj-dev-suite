@@ -123,20 +123,20 @@ packages/mcp-server/src/
 
 ### Dependency Graph
 ```
-@mds/cli
+@mr.dj2u/cli
 ├── yargs (CLI argument parsing)
 ├── chalk (colored output)
-├── @mds/doctor ──────────┐
+├── @mr.dj2u/doctor ──────────┐
 │   ├── execa (subprocess)  │
 │   └── json5 (JSON parsing)│
-└── @mds/knowledge ───────┤
+└── @mr.dj2u/knowledge ───────┤
     ├── (no external deps)  │
     └── patterns/skills ────┘
 
-@mds/mcp-server
+@mr.dj2u/mcp-server
 ├── @modelcontextprotocol/sdk
-├── @mds/doctor ──────┐
-└── @mds/knowledge ───┴─ (shared knowledge base)
+├── @mr.dj2u/doctor ──────┐
+└── @mr.dj2u/knowledge ───┴─ (shared knowledge base)
 ```
 
 ---
@@ -185,7 +185,7 @@ pnpm list -r
 
 ## 📦 Packages (4 Total)
 
-### 1. @mds/doctor
+### 1. @mr.dj2u/doctor
 **Purpose**: Multi-check health diagnostics for Expo projects
 - ESLint validation
 - TypeScript compilation check
@@ -196,7 +196,7 @@ pnpm list -r
 **Entry Point**: `src/index.ts`
 **Build Output**: `dist/index.js`
 
-### 2. @mds/cli
+### 2. @mr.dj2u/cli
 **Purpose**: Command-line interface for mds suite
 - `mds doctor [path] [--fix]` - Run diagnostics
 - `mds onboard` - Interactive project setup
@@ -206,7 +206,7 @@ pnpm list -r
 **Entry Point**: `src/cli.ts`
 **Bin Entry**: `mds` command
 
-### 3. @mds/knowledge
+### 3. @mr.dj2u/knowledge
 **Purpose**: Architectural patterns, skills, conventions
 - Routing patterns (file-based, dynamic, guards)
 - Styling patterns (Uniwind, theming, responsive)
@@ -220,7 +220,7 @@ pnpm list -r
 **Entry Point**: `src/index.ts`
 **Export**: Patterns, skills, style guide
 
-### 4. @mds/mcp-server
+### 4. @mr.dj2u/mcp-server
 **Purpose**: Model Context Protocol server for Claude integration
 - Tool: `doctor_scan_project_full`
 - Tool: `onboard_new_expo_app`
@@ -255,7 +255,7 @@ pnpm onboard          # Start onboarding wizard
 ### Monorepo-Specific
 ```bash
 pnpm list -r          # List all packages with dependencies
-pnpm --filter @mds/doctor build  # Build single package
+pnpm --filter @mr.dj2u/doctor build  # Build single package
 turbo run lint --dry  # Dry-run Turborepo tasks
 ```
 

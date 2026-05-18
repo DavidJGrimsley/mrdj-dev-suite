@@ -35,19 +35,19 @@ The **mds-dev-suite** monorepo foundation is now **100% complete** with all infr
 20. **project/style.md** - Code style conventions
 
 ### ✅ Package Scaffolding (8 files - 2 per package)
-**@mds/doctor**
+**@mr.dj2u/doctor**
 21. **packages/doctor/package.json** - Exports, dependencies (execa, json5)
 22. **packages/doctor/tsconfig.json** - TypeScript config
 
-**@mds/cli**
+**@mr.dj2u/cli**
 23. **packages/cli/package.json** - Exports, dependencies (yargs, chalk)
 24. **packages/cli/tsconfig.json** - TypeScript config
 
-**@mds/knowledge**
+**@mr.dj2u/knowledge**
 25. **packages/knowledge/package.json** - Exports (patterns, skills)
 26. **packages/knowledge/tsconfig.json** - TypeScript config
 
-**@mds/mcp-server**
+**@mr.dj2u/mcp-server**
 27. **packages/mcp-server/package.json** - Exports (tools, resources)
 28. **packages/mcp-server/tsconfig.json** - TypeScript config
 
@@ -80,10 +80,10 @@ The **mds-dev-suite** monorepo foundation is now **100% complete** with all infr
 8. ✅ CI/CD pipeline stages
 
 ### Package Structure (4 Packages)
-1. **@mds/doctor** - Multi-check health diagnostics (eslint, typescript, expo, architecture)
-2. **@mds/cli** - Command-line interface (doctor, onboard, test-and-iterate)
-3. **@mds/knowledge** - Patterns, skills, conventions database
-4. **@mds/mcp-server** - Model Context Protocol server for Claude
+1. **@mr.dj2u/doctor** - Multi-check health diagnostics (eslint, typescript, expo, architecture)
+2. **@mr.dj2u/cli** - Command-line interface (doctor, onboard, test-and-iterate)
+3. **@mr.dj2u/knowledge** - Patterns, skills, conventions database
+4. **@mr.dj2u/mcp-server** - Model Context Protocol server for Claude
 
 ## 📋 Quality Assurance
 

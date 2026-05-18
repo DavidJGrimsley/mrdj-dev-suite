@@ -147,7 +147,7 @@ export function buildVscodeMcpConfig() {
     servers: {
       [VSCODE_MCP_SERVER_KEY]: {
         command: 'npx',
-        args: ['-y', '@mds/mcp-server'],
+        args: ['-y', '@mr.dj2u/mcp-server'],
       },
     },
   };
@@ -345,7 +345,7 @@ async function loadKnowledgeModule(packageRoot) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `[vscode-copilot] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mds/knowledge build" first.\n${detail}`
+      `[vscode-copilot] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mr.dj2u/knowledge build" first.\n${detail}`
     );
   }
 }

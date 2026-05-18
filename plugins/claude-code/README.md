@@ -44,7 +44,7 @@ mds mcp install --client claude --scope user
 Skills are sourced from `packages/knowledge/src/content/skills/` and generated into `plugins/claude-code/skills/` at build time. Slash commands are copied from `commands-src/` into `commands/` during the same build.
 
 ```sh
-pnpm --filter @mds/knowledge build
+pnpm --filter @mr.dj2u/knowledge build
 ```
 
 Do not edit generated `commands/` or `skills/` files directly; update the knowledge source or command source and rebuild.

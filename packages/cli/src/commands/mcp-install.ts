@@ -110,13 +110,13 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
     return { command: 'node', args: [serverPath] };
   }
 
-  return { command: 'npx', args: ['-y', '@mds/mcp-server'] };
+  return { command: 'npx', args: ['-y', '@mr.dj2u/mcp-server'] };
 }
 
 function findLocalServerEntry(): string | undefined {
   try {
     const require = createRequire(import.meta.url);
-    return require.resolve('@mds/mcp-server');
+    return require.resolve('@mr.dj2u/mcp-server');
   } catch {
     return undefined;
   }

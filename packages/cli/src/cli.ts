@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
-import { fixDoctor, runDoctor } from '@mds/doctor';
+import { fixDoctor, runDoctor } from '@mr.dj2u/doctor';
 import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
@@ -15,7 +15,7 @@ import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mds/doctor';
+import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';

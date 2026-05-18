@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 
-import { listKnowledgeResources, readKnowledgeResource } from '@mds/knowledge';
+import { listKnowledgeResources, readKnowledgeResource } from '@mr.dj2u/knowledge';
 
-import type { KnowledgeResource, KnowledgeResourceContent } from '@mds/knowledge';
+import type { KnowledgeResource, KnowledgeResourceContent } from '@mr.dj2u/knowledge';
 
 export interface ExplainArgv {
   topic?: string;

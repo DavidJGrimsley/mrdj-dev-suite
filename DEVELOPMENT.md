@@ -35,7 +35,7 @@ pnpm ship:test
 
 ## Plugin Build Workflow
 
-`packages/knowledge` is the single source of truth. Running `pnpm --filter @mds/knowledge build` now does all of the following:
+`packages/knowledge` is the single source of truth. Running `pnpm --filter @mr.dj2u/knowledge build` now does all of the following:
 
 1. Validates markdown under `packages/knowledge/src/content`.
 2. Copies content into `packages/knowledge/dist/content`.
@@ -55,8 +55,8 @@ Strict validation is enforced for generated skills. Missing or empty skill markd
 Run the standard checks:
 
 ```bash
-pnpm --filter @mds/knowledge test
-pnpm --filter @mds/knowledge build
+pnpm --filter @mr.dj2u/knowledge test
+pnpm --filter @mr.dj2u/knowledge build
 pnpm build
 ```
 

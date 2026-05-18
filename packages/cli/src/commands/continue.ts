@@ -5,9 +5,9 @@ import { promisify } from 'node:util';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mds/doctor';
+import { runDoctor } from '@mr.dj2u/doctor';
 
-import type { DoctorCheckResult, DoctorReport } from '@mds/doctor';
+import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 
 const execFileAsync = promisify(execFile);
 const TODO_MARKER = '# TodoForContext(optional):';
