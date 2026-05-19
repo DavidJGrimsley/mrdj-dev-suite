@@ -823,11 +823,8 @@ async function ensurePackageJson(
     'mds:doctor:ci':
       packageJson.scripts?.['mds:doctor:ci'] ?? 'npx @mr.dj2u/cli doctor --ci',
     'free-port': packageJson.scripts?.['free-port'] ?? 'npx @mr.dj2u/cli free-port',
-    'kill-port': packageJson.scripts?.['kill-port'] ?? 'npx @mr.dj2u/cli kill-port',
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? 'npx @mr.dj2u/cli clear-expo-start',
-    'clean-start':
-      packageJson.scripts?.['clean-start'] ?? 'npx @mr.dj2u/cli clean-start',
     'expo-install-fix':
       packageJson.scripts?.['expo-install-fix'] ?? 'npx expo install --fix',
     'expo-doctor': packageJson.scripts?.['expo-doctor'] ?? 'npx expo-doctor',

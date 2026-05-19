@@ -23,7 +23,7 @@ The suite has five layers:
 - **Post-create onboarding first:** do not rebuild `rn-new` / `create-expo-stack` first. Run after a project exists and use an agent conversation to understand the app.
 - **Project memory is required:** onboarded projects should have `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
 - **Style is visual-only:** technical rules and agent behavior belong in `project/guidelines.md`.
-- **create-expo-super-stack wraps, not forks:** the public wrapper depends on `create-expo-stack`, announces that delegation, then applies MDS onboarding.
+- **create-expo-super-stack wraps, not forks:** the public wrapper delegates to `create-expo-stack`, announces that delegation, then applies MDS onboarding. Until the upstream Uniwind PR lands, it may use the temporary scoped fork package `@mr.dj2u/create-expo-stack` as a compatibility bridge.
 - **Doctor before git pushes:** the ship workflow should run at least the local equivalent of CI before pushing.
 - **GitHub automation uses `gh`:** PR creation, check polling, log inspection, and merging should use the GitHub CLI.
 - **Knowledge has one source of truth:** package docs, MCP resources, agent skills, and plugin files should be generated from `packages/knowledge`.
@@ -61,7 +61,7 @@ Planned workflow: agent-led conversation after `rn-new` or `create-expo-app`. It
 
 ### `create-expo-super-stack`
 
-Planned workflow: run `create-expo-stack` under the hood, resolve the generated app, then apply MDS project memory, rich boilerplate, Uniwind/Tailwind v4 defaults, Software Mansion core examples, and dev-suite package scripts.
+Planned workflow: run `create-expo-stack` under the hood, resolve the generated app, then apply MDS project memory, rich boilerplate, Uniwind/Tailwind v4 defaults, Software Mansion core examples, and dev-suite package scripts. Local dev prefers `f:\SoftwareDev\create-expo-stack`; public Super Stack releases temporarily prefer `@mr.dj2u/create-expo-stack` before falling back to the official package.
 
 ### `mds clear-expo-start`
 

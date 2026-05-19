@@ -62,7 +62,7 @@ Mutating git steps remain manual during the dry-run proving period. `--execute` 
 
 ### Create Expo Super Stack
 
-`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MDS project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app.
+`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MDS project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app. Until the upstream Uniwind PR lands, the package prefers the temporary scoped fork `@mr.dj2u/create-expo-stack` after local fork overrides and before the official fallback.
 
 ```bash
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router

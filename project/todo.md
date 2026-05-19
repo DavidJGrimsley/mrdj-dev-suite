@@ -272,16 +272,17 @@ Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Finish naming cleanup: use `MDS` for tools while keeping `Mr. DJ's Dev Suite` as suite name in brand references.
 - [x] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
-- [ ] Add forked version of create expo stack to be used/bundled with super stack so the dev suite can work before the upstream PR is merged.
-- [ ] Republish npm packages.
-- [ ] Test npx create expo super stack as any other dev would.
-- [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
-- [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
-- [ ] Support `npx create-expo-super-stack`.
-- [x] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
+- [x] Add temporary `@mr.dj2u/create-expo-stack@2.21.3-mrdj.0` fork dependency/resolver path to `create-expo-super-stack` so the dev suite can work before the upstream PR is merged.
+- [x] Republish npm packages (`@mr.dj2u/knowledge`, `@mr.dj2u/doctor`, `@mr.dj2u/cli`, `create-expo-super-stack`, and `@mr.dj2u/mcp-server` are all at `0.1.1`; scoped fork `@mr.dj2u/create-expo-stack@2.21.3-mrdj.0` is published).
+- [x] Test npx create expo super stack as any other dev would (smoke-tested with `npx -y create-expo-super-stack phase11-smoke-app --expo-router --uniwind --no-install --mds-yes --mds-skip-expo-fix`).
+- [x] Support use inside an Expo app with `npx @mr.dj2u/cli init` (verified on 2026-05-19 in `f:\phase11-smoke\phase11-smoke-app`).
+- [x] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
+- [x] Support `npx create-expo-super-stack`.
+- [x] Support `mds clear-expo-start` and `mds free-port` in generated apps.
 - [x] Support `npx @mr.dj2u/doctor`.
-- [ ] Support `npx @mr.dj2u/cli codex install`.
-- [ ] Support `npx @mr.dj2u/cli claude install`.
+- [x] Support Codex install via `npx @mr.dj2u/cli agent install --client codex` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client codex`.
+- [x] Support Claude install via `npx @mr.dj2u/cli agent install --client claude` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client claude`.
+- [ ] Review and update prompt/skill text in MCP/plugin surfaces (agentic create expo super stack - CLI-backed flows pick up CLI changes once that updated CLI version is what gets executed so this may be a non-issue) to remove any lag from the CLI and ensure that the source of truth in `packages/knowledge` prevents this drift in the future.
 - [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
 - [ ] Dogfood on Time2Pay, PokePages and the Dogfood app.
 
@@ -321,7 +322,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 ## Cleanup/Random todo
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
 - [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
-- [ ] Keep `mds free-port` primary and `mds kill-port` as compatibility alias in docs, prompts, and generated scripts.
+- [x] Keep `mds free-port` primary in docs, prompts, and generated scripts.
 - [ ] Sweep for backwards compatibility/legacy support and remove them. For example, the `commands-src` path for Claude commands is a legacy artifact from before the unified knowledge source and should be removed to avoid confusion.
 - Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
 - [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 

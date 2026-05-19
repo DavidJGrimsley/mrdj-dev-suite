@@ -252,20 +252,22 @@ describe('create-expo-super-stack CLI helpers', () => {
             name: 'Bandana Designer',
             slug: 'Bandana Designer',
             scheme: 'Bandana Designer',
+            platforms: ['ios', 'android'],
           },
         }),
         'utf8',
       );
 
-      await expect(repairExpoProjectIdentifiers(projectPath, 'Bandana Designer')).resolves.toEqual([
+      await expect(repairExpoProjectIdentifiers(projectPath, 'Bandana Designer', ['web', 'ios', 'android'])).resolves.toEqual([
         path.join(projectPath, 'app.json'),
       ]);
 
       const repaired = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
-        expo: { slug: string; scheme: string };
+        expo: { slug: string; scheme: string; platforms: string[] };
       };
       expect(repaired.expo.slug).toBe('bandana-designer');
       expect(repaired.expo.scheme).toBe('bandana-designer');
+      expect(repaired.expo.platforms).toContain('web');
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

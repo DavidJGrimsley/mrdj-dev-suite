@@ -9,7 +9,7 @@ Use a deterministic reset path first; do not work around unstable server state w
 ## Checks
 
 - Run `mds clear-expo-start`  before manual troubleshooting.
-- If a conflict remains, run `mds free-port <port...>` (or legacy `mds kill-port`) for blocked ports.
+- If a conflict remains, run `mds free-port <port...>` for blocked ports.
 - Confirm Expo/Metro caches are cleared before retrying startup.
 - Treat fallback to port `8082` as an unresolved state that requires full reset.
 - Confirm the same recovery scripts are available to teammates and automation.
