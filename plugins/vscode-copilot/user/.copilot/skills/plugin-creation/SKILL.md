@@ -3,7 +3,7 @@ name: "MDS Plugin Creation Skill"
 description: "Instructions for building a new MDS plugin bundle for Claude Code, Codex, Cursor, or any AI agent client."
 ---
 
-﻿# Skill: MDS Plugin Creation
+# Skill: MDS Plugin Creation
 
 Use when building or extending an MDS plugin bundle for any agent client (Claude Code, Codex, Cursor, etc.).
 

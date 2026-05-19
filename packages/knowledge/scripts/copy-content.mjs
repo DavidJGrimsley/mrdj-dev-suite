@@ -64,7 +64,6 @@ const skillSource = path.join(source, 'skills');
 const skillFiles = await listMarkdownFiles(skillSource);
 
 await rm(claudeCodeSkillsDir, { recursive: true, force: true });
-await rm(claudeCodeCommandsDir, { recursive: true, force: true });
 await rm(claudeCodeAgentsDir, { recursive: true, force: true });
 
 // Generate agent skills from the knowledge package (auto-invoked by Claude).
@@ -88,6 +87,9 @@ for (const filePath of skillFiles) {
 const commandsSrcDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands-src');
 const commandFiles = await listMarkdownFiles(commandsSrcDir).catch(() => []);
 
+if (commandFiles.length > 0) {
+  await rm(claudeCodeCommandsDir, { recursive: true, force: true });
+}
 await mkdir(claudeCodeCommandsDir, { recursive: true });
 for (const filePath of commandFiles) {
   const content = await readFile(filePath, 'utf8');

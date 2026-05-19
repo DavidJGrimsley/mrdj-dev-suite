@@ -25,7 +25,7 @@ it for the app before treating it as final.
   user to fill the section underneath OR delete the marker line to
   acknowledge they do not want to add that context.
 - Only proceed when zero markers remain. `mds doctor` also surfaces this
-  as a warning.
+  as an error that blocks CI.
 
 ## Product Context
 

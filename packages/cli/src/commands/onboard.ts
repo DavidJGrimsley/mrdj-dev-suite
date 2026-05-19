@@ -120,7 +120,7 @@ export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
   'We will spend time defining the application and business now so the generated project memory gives agents real context.';
 export const SUPER_STACK_SUCCESS_MESSAGE =
-  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on Github at github.com/mds-dev-suite/issues.";
+  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on GitHub at github.com/mds-dev-suite/issues.";
 const CHECKBOX_PROMPT_HINT = 'Use Space to select options, then Enter to continue.';
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {

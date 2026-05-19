@@ -29,4 +29,3 @@ Prefer Uniwind with Tailwind v4 defaults, keep theme tokens centralized, and ens
 
 - Preserve existing design intent while fixing setup drift.
 - Delegate framework styling primitives to official Expo/Uniwind docs, then apply MDS conventions for token consistency and onboarding readiness.
-

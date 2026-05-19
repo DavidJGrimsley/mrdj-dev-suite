@@ -553,8 +553,8 @@ function renderJson(value) {
 }
 
 function ensureTrailingNewline(value) {
-  const normalized = normalizeLineEndings(value);
-  return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
+  const normalized = normalizeLineEndings(value).trimEnd();
+  return `${normalized}\n`;
 }
 
 function isMissingFileError(error) {

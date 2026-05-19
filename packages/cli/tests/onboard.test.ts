@@ -165,7 +165,9 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['post-create-check']).toBe('npx expo install --fix && npx expo-doctor');
     expect(packageJson.scripts['ci:verify']).toBe('npx @mr.dj2u/cli doctor --ci');
     expect(packageJson.scripts['free-port']).toBe('npx @mr.dj2u/cli free-port');
-    expect(packageJson.scripts['kill-port']).toBeUndefined();
+    expect(packageJson.scripts['kill-port']).toBe('npx @mr.dj2u/cli kill-port');
+    expect(packageJson.scripts['clear-expo-start']).toBe('npx @mr.dj2u/cli clear-expo-start');
+    expect(packageJson.scripts['clean-start']).toBe('npx @mr.dj2u/cli clean-start');
     expect(packageJson.dependencies['expo-sqlite']).toBe('~55.0.15');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
