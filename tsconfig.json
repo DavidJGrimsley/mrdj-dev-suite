@@ -16,7 +16,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "paths": {
-      "@mrdj/*": ["../*/src"]
+      "@mr.dj2u/*": ["../*/src"]
     },
     "skipLibCheck": true,
     "esModuleInterop": true,

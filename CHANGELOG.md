@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Knowledge harvest from 9 production repos
 - Doctor multi-check engine with 4 validators
-- CLI mrdj doctor command with --fix flag
+- CLI mds doctor command with --fix flag
 
 ### Changed
 - Restructured packages/ layout for clarity

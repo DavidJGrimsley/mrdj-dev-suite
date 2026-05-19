@@ -41,7 +41,7 @@ describe('create-expo-super-stack CLI helpers', () => {
     const help = renderHelpText();
     expect(help).toContain('Usage:');
     expect(help).toContain('create-expo-super-stack [project-name]');
-    expect(help).toContain('--mrdj-yes');
+    expect(help).toContain('--mds-yes');
     expect(help).toContain('-h, --help');
   });
 
@@ -128,11 +128,11 @@ describe('create-expo-super-stack CLI helpers', () => {
     const resolved = withResolvedProjectName(parsed, 'poop');
     expect(resolved.projectName).toBe('poop');
     expect(resolved.createExpoStackArgs).toEqual(['poop', '--expo-router', '--no-install']);
-    expect(resolved.mrdj.appName).toBe('poop');
+    expect(resolved.mds.appName).toBe('poop');
   });
 
   it('normalizes path-like project targets before delegating to create-expo-stack', () => {
-    const cwd = path.join('F:', 'SoftwareDev', 'mrdj-dev-suite');
+    const cwd = path.join('F:', 'SoftwareDev', 'mds-dev-suite');
     const target = resolveProjectTarget(path.join('F:', 'SoftwareDev', 'Smoke Path App'), cwd);
 
     expect(target.projectName).toBe('Smoke Path App');
@@ -143,16 +143,16 @@ describe('create-expo-super-stack CLI helpers', () => {
 
     expect(resolved.projectName).toBe('Smoke Relative App');
     expect(resolved.createExpoStackArgs).toEqual(['Smoke Relative App', '--expo-router', '--no-install']);
-    expect(resolved.mrdj.appName).toBe('Smoke Relative App');
-    expect(resolved.mrdj.projectParentDir).toBeDefined();
+    expect(resolved.mds.appName).toBe('Smoke Relative App');
+    expect(resolved.mds.projectParentDir).toBeDefined();
   });
 
-  it('uses an explicit MrDJ app name instead of the project folder name', () => {
-    const parsed = parseArgs(['folder-name', '--mrdj-app-name=Display Name']);
+  it('uses an explicit MDS app name instead of the project folder name', () => {
+    const parsed = parseArgs(['folder-name', '--mds-app-name=Display Name']);
     const resolved = withResolvedProjectName(parsed, 'ignored');
 
     expect(resolved.projectName).toBe('folder-name');
-    expect(resolved.mrdj.appName).toBe('Display Name');
+    expect(resolved.mds.appName).toBe('Display Name');
   });
 
   it('rejects conflicting create-expo-stack auth provider flags', () => {
@@ -184,57 +184,57 @@ describe('create-expo-super-stack CLI helpers', () => {
     }
   });
 
-  it('parses every onboarding mrdj flag the agentic prompt sends', () => {
+  it('parses every onboarding mds flag the agentic prompt sends', () => {
     const parsed = parseArgs([
       'demo-app',
-      '--mrdj-platforms=web,ios,android-tv',
-      '--mrdj-first-platform=ios',
-      '--mrdj-platform-strategy=folders',
-      '--mrdj-app-directory=src',
-      '--mrdj-platform-layouts=platform-specific',
-      '--mrdj-web-output=server',
-      '--mrdj-deployed-server=standard-expo',
-      '--mrdj-no-create-expo-components',
-      '--mrdj-latest-expo-sdk',
-      '--mrdj-no-expo-ui',
-      '--mrdj-expo-native-tabs',
-      '--mrdj-eas-uses=building mobile applications,publishing mobile applications',
+      '--mds-platforms=web,ios,android-tv',
+      '--mds-first-platform=ios',
+      '--mds-platform-strategy=folders',
+      '--mds-app-directory=src',
+      '--mds-platform-layouts=platform-specific',
+      '--mds-web-output=server',
+      '--mds-deployed-server=standard-expo',
+      '--mds-no-create-expo-components',
+      '--mds-latest-expo-sdk',
+      '--mds-no-expo-ui',
+      '--mds-expo-native-tabs',
+      '--mds-eas-uses=building mobile applications,publishing mobile applications',
     ]);
 
-    expect(parsed.mrdj.platforms).toEqual(['web', 'ios', 'android-tv']);
-    expect(parsed.mrdj.firstPlatform).toBe('ios');
-    expect(parsed.mrdj.platformStrategy).toBe('folders');
-    expect(parsed.mrdj.appDirectory).toBe('src');
-    expect(parsed.mrdj.platformLayouts).toBe('platform-specific');
-    expect(parsed.mrdj.webOutput).toBe('server');
-    expect(parsed.mrdj.deployedServer).toBe('standard-expo');
-    expect(parsed.mrdj.createExpoComponents).toBe(false);
-    expect(parsed.mrdj.latestExpoSdk).toBe(true);
-    expect(parsed.mrdj.expoUi).toBe(false);
-    expect(parsed.mrdj.expoNativeTabs).toBe(true);
-    expect(parsed.mrdj.easUses).toEqual([
+    expect(parsed.mds.platforms).toEqual(['web', 'ios', 'android-tv']);
+    expect(parsed.mds.firstPlatform).toBe('ios');
+    expect(parsed.mds.platformStrategy).toBe('folders');
+    expect(parsed.mds.appDirectory).toBe('src');
+    expect(parsed.mds.platformLayouts).toBe('platform-specific');
+    expect(parsed.mds.webOutput).toBe('server');
+    expect(parsed.mds.deployedServer).toBe('standard-expo');
+    expect(parsed.mds.createExpoComponents).toBe(false);
+    expect(parsed.mds.latestExpoSdk).toBe(true);
+    expect(parsed.mds.expoUi).toBe(false);
+    expect(parsed.mds.expoNativeTabs).toBe(true);
+    expect(parsed.mds.easUses).toEqual([
       'building mobile applications',
       'publishing mobile applications',
     ]);
-    // None of these mrdj-only flags should leak into the create-expo-stack args.
+    // None of these mds-only flags should leak into the create-expo-stack args.
     expect(parsed.createExpoStackArgs).toEqual(['demo-app']);
   });
 
-  it('rejects malformed enum values for the new mrdj flags instead of forwarding garbage', () => {
+  it('rejects malformed enum values for the new mds flags instead of forwarding garbage', () => {
     const parsed = parseArgs([
       'demo-app',
-      '--mrdj-platform-strategy=other',
-      '--mrdj-app-directory=sideways',
-      '--mrdj-platform-layouts=solo',
-      '--mrdj-web-output=foo',
-      '--mrdj-deployed-server=bar',
+      '--mds-platform-strategy=other',
+      '--mds-app-directory=sideways',
+      '--mds-platform-layouts=solo',
+      '--mds-web-output=foo',
+      '--mds-deployed-server=bar',
     ]);
 
-    expect(parsed.mrdj.platformStrategy).toBeUndefined();
-    expect(parsed.mrdj.appDirectory).toBeUndefined();
-    expect(parsed.mrdj.platformLayouts).toBeUndefined();
-    expect(parsed.mrdj.webOutput).toBeUndefined();
-    expect(parsed.mrdj.deployedServer).toBeUndefined();
+    expect(parsed.mds.platformStrategy).toBeUndefined();
+    expect(parsed.mds.appDirectory).toBeUndefined();
+    expect(parsed.mds.platformLayouts).toBeUndefined();
+    expect(parsed.mds.webOutput).toBeUndefined();
+    expect(parsed.mds.deployedServer).toBeUndefined();
   });
 
   it('sanitizes Expo slug and scheme values from display names', async () => {

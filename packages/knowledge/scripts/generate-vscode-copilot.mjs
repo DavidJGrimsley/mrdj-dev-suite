@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildCommandFiles, normalizeLineEndings } from './generate-codex-plugin.mjs';
 
 export const VSCODE_COPILOT_DIRECTORY = path.join('plugins', 'vscode-copilot');
-export const VSCODE_MCP_SERVER_KEY = 'mrdjDevSuite';
+export const VSCODE_MCP_SERVER_KEY = 'mdsDevSuite';
 
 export async function generateVscodeCopilotBundleFromKnowledge(options = {}) {
   const packageRoot = options.packageRoot
@@ -147,7 +147,7 @@ export function buildVscodeMcpConfig() {
     servers: {
       [VSCODE_MCP_SERVER_KEY]: {
         command: 'npx',
-        args: ['-y', '@mrdj/mcp-server'],
+        args: ['-y', '@mr.dj2u/mcp-server'],
       },
     },
   };
@@ -194,7 +194,7 @@ export function buildVscodeWorkflowSkills() {
             description: `Run the MDS ${title} workflow in VS Code Copilot user scope.`,
           }),
           '',
-          content.replaceAll('mrdj-dev-suite', VSCODE_MCP_SERVER_KEY),
+          content.replaceAll('mds-dev-suite', VSCODE_MCP_SERVER_KEY),
         ].join('\n'),
       ];
     })
@@ -220,7 +220,7 @@ function renderVscodePrompt(fileName, content) {
       description: `Run the MDS ${title} workflow with MCP-first diagnostics and CLI fallback.`,
     }),
     '',
-    content.replaceAll('mrdj-dev-suite', VSCODE_MCP_SERVER_KEY),
+    content.replaceAll('mds-dev-suite', VSCODE_MCP_SERVER_KEY),
   ].join('\n');
 }
 
@@ -233,7 +233,7 @@ function renderMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    'You are the MrDJ Dev Suite agent for Expo projects. Prefer MCP tools first, then CLI fallbacks.',
+    'You are the MDS Dev Suite agent for Expo projects. Prefer MCP tools first, then CLI fallbacks.',
     '',
     '## Tool Routing',
     '',
@@ -254,7 +254,7 @@ function renderMdsAgent() {
 function renderCopilotInstructions() {
   return [
     '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->',
-    '# MrDJ Dev Suite Copilot Instructions',
+    '# MDS Dev Suite Copilot Instructions',
     '',
     '- Treat `project/` as the source of truth for product intent, roadmap, style, and technical rules.',
     '- Prefer MDS MCP tools before broad edits: `doctor_scan_project`, `doctor_scan_file`, `generate_refactor_plan`, and `generate_deploy_checklist`.',
@@ -265,7 +265,7 @@ function renderCopilotInstructions() {
 }
 
 function renderVscodeReadme() {
-  return `# MrDJ Dev Suite VS Code Copilot Bundle
+  return `# MDS Dev Suite VS Code Copilot Bundle
 
 This bundle is generated from \`packages/knowledge\` and targets native VS Code Copilot customization surfaces:
 
@@ -279,13 +279,13 @@ This bundle is generated from \`packages/knowledge\` and targets native VS Code 
 ## Project Install
 
 \`\`\`bash
-mrdj agent install --client vscode --scope project --target .
+mds agent install --client vscode --scope project --target .
 \`\`\`
 
 ## User Install
 
 \`\`\`bash
-mrdj agent install --client vscode --scope user
+mds agent install --client vscode --scope user
 \`\`\`
 
 User-scope setup copies the generated assets into \`~/.copilot\` and uses VS Code's \`code --add-mcp\` flow for the MCP server when the \`code\` command is available. If it is not available, the CLI prints the exact manual command.
@@ -293,7 +293,7 @@ User-scope setup copies the generated assets into \`~/.copilot\` and uses VS Cod
 ## Verify
 
 \`\`\`bash
-mrdj agent verify --client vscode --target .
+mds agent verify --client vscode --target .
 \`\`\`
 
 Skills and prompt workflows are generated from the knowledge package. Do not edit generated copies by hand; update \`packages/knowledge/src/content\` or the generator scripts instead.
@@ -345,7 +345,7 @@ async function loadKnowledgeModule(packageRoot) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `[vscode-copilot] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mrdj/knowledge build" first.\n${detail}`
+      `[vscode-copilot] Could not load knowledge catalog at "${distEntry}". Run "pnpm --filter @mr.dj2u/knowledge build" first.\n${detail}`
     );
   }
 }

@@ -20,20 +20,20 @@ afterEach(async () => {
   tempDirs.length = 0;
 });
 
-describe('mrdj MCP helpers', () => {
+describe('mds MCP helpers', () => {
   it('lists generated knowledge resources', async () => {
     const resources = await listResources();
 
-    expect(resources.some((resource) => resource.uri === 'mrdj://guides/animation-performance')).toBe(
+    expect(resources.some((resource) => resource.uri === 'mds://guides/animation-performance')).toBe(
       true
     );
-    expect(resources.some((resource) => resource.uri === 'mrdj://reference/mcp-sdk-transport')).toBe(
+    expect(resources.some((resource) => resource.uri === 'mds://reference/mcp-sdk-transport')).toBe(
       true
     );
   });
 
   it('reads generated knowledge resource content', async () => {
-    const resource = await readResource('mrdj://guides/animation-performance');
+    const resource = await readResource('mds://guides/animation-performance');
 
     expect(resource?.content).toContain('Expo blog');
   });
@@ -43,15 +43,15 @@ describe('mrdj MCP helpers', () => {
 
     expect(Array.isArray(result)).toBe(true);
     const skills = result as Array<{ uri: string }>;
-    expect(skills.some((resource) => resource.uri === 'mrdj://skills/dev-server-management')).toBe(
+    expect(skills.some((resource) => resource.uri === 'mds://skills/dev-server-management')).toBe(
       true
     );
     expect(
-      skills.some((resource) => resource.uri === 'mrdj://skills/production-server-patterns')
+      skills.some((resource) => resource.uri === 'mds://skills/production-server-patterns')
     ).toBe(true);
-    expect(skills.some((resource) => resource.uri === 'mrdj://skills/seo-metadata')).toBe(true);
-    expect(skills.some((resource) => resource.uri === 'mrdj://skills/debugging')).toBe(true);
-    expect(skills.some((resource) => resource.uri === 'mrdj://skills/project-onboarding')).toBe(
+    expect(skills.some((resource) => resource.uri === 'mds://skills/seo-metadata')).toBe(true);
+    expect(skills.some((resource) => resource.uri === 'mds://skills/debugging')).toBe(true);
+    expect(skills.some((resource) => resource.uri === 'mds://skills/project-onboarding')).toBe(
       true
     );
   });
@@ -66,11 +66,11 @@ describe('mrdj MCP helpers', () => {
     }>;
 
     expect(result.some((skill) => skill.id === 'deployment')).toBe(true);
-    expect(result.every((skill) => skill.uri.startsWith('mrdj://skills/'))).toBe(true);
+    expect(result.every((skill) => skill.uri.startsWith('mds://skills/'))).toBe(true);
   });
 
   it('generates a Doctor-backed refactor plan with related resources', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-refactor-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-refactor-'));
     tempDirs.push(projectPath);
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
     await writeFile(path.join(projectPath, '.env'), 'EXPO_PUBLIC_SERVICE_ROLE_TOKEN=bad\n', 'utf8');
@@ -87,11 +87,11 @@ describe('mrdj MCP helpers', () => {
 
     expect(result.kind).toBe('refactor-plan');
     expect(result.priorities.some((item) => item.check === 'env hygiene')).toBe(true);
-    expect(result.priorities[0]?.relatedResources).toContain('mrdj://rules/env-hygiene');
+    expect(result.priorities[0]?.relatedResources).toContain('mds://rules/env-hygiene');
   });
 
   it('generates a target-aware deployment checklist', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-deploy-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-deploy-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
@@ -114,7 +114,7 @@ describe('mrdj MCP helpers', () => {
   });
 
   it('builds a continue brief through the MCP continue_project tool', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-mcp-continue-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-continue-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
@@ -135,7 +135,7 @@ describe('mrdj MCP helpers', () => {
   it('tells generated app users to start a fresh app-folder session for MDS Continue', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
-    expect(prompt).toContain('mrdj continue');
+    expect(prompt).toContain('mds continue');
     expect(prompt).toContain('open a new agent session directly inside');
     expect(prompt).toContain('To keep token usage low');
     expect(prompt).toContain('Do NOT walk through markers or ask questions about them in this session');

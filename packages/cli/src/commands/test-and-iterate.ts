@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mrdj/doctor';
+import { runDoctor } from '@mr.dj2u/doctor';
 
 export interface ShipArgv {
   branch?: string;
@@ -23,7 +23,7 @@ export async function runShipCommand(argv: ShipArgv): Promise<void> {
   const branch = argv.branch ?? (await detectCurrentBranch()) ?? '<current-branch>';
   const title = argv.prTitle ?? argv.feature ?? branch;
 
-  console.log(chalk.bold('mrdj ship/test-and-iterate workflow'));
+  console.log(chalk.bold('mds ship/test-and-iterate workflow'));
   console.log(`Branch: ${branch}`);
   console.log(`Base: ${base}`);
   console.log(`PR title: ${title}`);
@@ -45,7 +45,7 @@ export async function runShipCommand(argv: ShipArgv): Promise<void> {
   }
 
   console.log(chalk.bold('Execute gate enabled'));
-  console.log('Running mrdj doctor --ci before any git mutation.');
+  console.log('Running mds doctor --ci before any git mutation.');
   const report = await runDoctor('.', { mode: 'ci' });
   console.log(
     `${report.summary.errors} errors | ${report.summary.warnings} warnings | ` +
@@ -65,7 +65,7 @@ export async function runShipCommand(argv: ShipArgv): Promise<void> {
 
 function printDryRun(branch: string, base: string, title: string): void {
   console.log(chalk.bold('Planned steps'));
-  console.log('1. Run mrdj doctor --ci.');
+  console.log('1. Run mds doctor --ci.');
   console.log('2. Review git status and stage only intentional changes.');
   console.log(`3. Commit changes for "${title}".`);
   console.log(`4. Push ${branch}.`);

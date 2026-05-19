@@ -35,7 +35,7 @@ afterEach(async () => {
 
 describe('runOnboardCommand', () => {
   it('creates project memory files in non-interactive mode', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-'));
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
@@ -64,7 +64,7 @@ describe('runOnboardCommand', () => {
       '## Team Context'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'Run `mrdj doctor --ci`'
+      'Run `mds doctor --ci`'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
@@ -117,7 +117,7 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'app', 'exposition', 'data.tsx'), 'utf8')).resolves.toContain(
       'data-screen'
     );
-    await expect(readFile(path.join(projectPath, 'src', 'components', 'mrdj', 'index.ts'), 'utf8')).rejects.toThrow();
+    await expect(readFile(path.join(projectPath, 'src', 'components', 'mds', 'index.ts'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'), 'utf8')).resolves.toContain(
       'AnimatedPressable'
     );
@@ -130,8 +130,8 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')).resolves.toContain(
       'build from `project/todo.md` in phase order'
     );
-    await expect(readFile(path.join(projectPath, '.github', 'workflows', 'mrdj-pr-checks.yml'), 'utf8')).resolves.toContain(
-      'MrDJ PR Checks'
+    await expect(readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')).resolves.toContain(
+      'MDS PR Checks'
     );
     await expect(readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')).resolves.toContain(
       'Test-To-Main Safeguards'
@@ -163,16 +163,18 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts.typecheck).toBe('tsc --noEmit');
     expect(packageJson.scripts['build:web']).toBe('expo export --platform web');
     expect(packageJson.scripts['post-create-check']).toBe('npx expo install --fix && npx expo-doctor');
-    expect(packageJson.scripts['ci:verify']).toBe('npx @mrdj/cli doctor --ci');
-    expect(packageJson.scripts['free-port']).toBe('npx @mrdj/cli free-port');
-    expect(packageJson.scripts['kill-port']).toBe('npx @mrdj/cli free-port');
+    expect(packageJson.scripts['ci:verify']).toBe('npx @mr.dj2u/cli doctor --ci');
+    expect(packageJson.scripts['free-port']).toBe('npx @mr.dj2u/cli free-port');
+    expect(packageJson.scripts['kill-port']).toBe('npx @mr.dj2u/cli kill-port');
+    expect(packageJson.scripts['clear-expo-start']).toBe('npx @mr.dj2u/cli clear-expo-start');
+    expect(packageJson.scripts['clean-start']).toBe('npx @mr.dj2u/cli clean-start');
     expect(packageJson.dependencies['expo-sqlite']).toBe('~55.0.15');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
   });
 
   it('normalizes existing project info and style while preserving imported notes', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-existing-memory-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-existing-memory-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'memory-app' }), 'utf8');
@@ -207,7 +209,7 @@ describe('runOnboardCommand', () => {
   });
 
   it('upgrades existing Tailwind 3 projects to the Uniwind Tailwind 4 peer', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-tailwind-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-tailwind-'));
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
@@ -306,7 +308,7 @@ describe('runOnboardCommand', () => {
   });
 
   it('can copy the bundled guidelines template', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-template-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-template-'));
     tempDirs.push(projectPath);
 
     await runOnboardCommand({
@@ -319,14 +321,14 @@ describe('runOnboardCommand', () => {
     });
 
     const guidelines = await readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8');
-    expect(guidelines).toContain('MrDJ Template Baseline');
+    expect(guidelines).toContain('MDS Template Baseline');
     expect(guidelines).toContain('# Template App Guidelines');
     expect(guidelines).toContain('- project-docs');
     expect(guidelines).toContain('- guidelines');
   });
 
   it('can leave Uniwind ownership to create-expo-stack', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-external-uniwind-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-external-uniwind-'));
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
@@ -352,7 +354,7 @@ describe('runOnboardCommand', () => {
   });
 
   it('can generate Expo Router exposition routes under src/app', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-src-app-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-src-app-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
     await writeFile(
@@ -387,7 +389,7 @@ describe('runOnboardCommand', () => {
   });
 
   it('preserves an existing tabs or drawer layout while replacing starter routes', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-tabs-layout-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-tabs-layout-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
     await writeFile(
@@ -427,7 +429,7 @@ describe('runOnboardCommand', () => {
   });
 
   it('can generate Supabase data guidance and opt out of test-to-main workflow', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-onboard-supabase-'));
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-supabase-'));
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
@@ -456,7 +458,7 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Two Supabase projects');
     await expect(
-      readFile(path.join(projectPath, '.github', 'workflows', 'mrdj-pr-checks.yml'), 'utf8')
+      readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).rejects.toThrow();
   });
 
@@ -533,7 +535,7 @@ describe('runOnboardCommand', () => {
   it('formats checkbox data-need selections with an Other escape hatch', () => {
     expect(DATA_NEED_OPTIONS).toContain('Backend database records');
     expect(DATA_NEED_OPTIONS).toContain('External APIs/integrations');
-    expect(OTHER_DATA_NEEDS).toBe('__mrdj_other_data_needs__');
+    expect(OTHER_DATA_NEEDS).toBe('__mds_other_data_needs__');
     expect(
       formatDataNeedsSelection(
         ['Local UI/app state', 'User accounts/authentication', OTHER_DATA_NEEDS],

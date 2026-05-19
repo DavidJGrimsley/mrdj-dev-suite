@@ -244,15 +244,15 @@ const REFERENCE_RESOURCES = [
     description: 'Inventory of harvested reference repos and cleanup rules.',
     resourcePath: 'reference/reference-repo-evacuation.md',
     keywords: ['reference repos', 'evacuation', 'phase 1'],
-    sourceRepos: ['mrdj-dev-suite'],
+    sourceRepos: ['mds-dev-suite'],
   },
   {
     id: 'mcp-sdk-transport',
     name: 'MCP SDK Transport Pattern',
-    description: 'MCP server/stdio transport pattern harvested from mrdj-app-mcp.',
+    description: 'MCP server/stdio transport pattern harvested from mds-app-mcp.',
     resourcePath: 'reference/mcp-sdk-transport.md',
     keywords: ['mcp', 'stdio', 'resources', 'tools'],
-    sourceRepos: ['mrdj-app-mcp'],
+    sourceRepos: ['mds-app-mcp'],
   },
   {
     id: 'package-ci-patterns',
@@ -287,7 +287,7 @@ const CHECKLIST_RESOURCES = [
     description: 'Checklist for doctor/PR/fix/poll/merge loops into the test branch.',
     resourcePath: 'checklists/ship-test-loop.md',
     keywords: ['checklist', 'ship', 'test branch', 'pull request'],
-    sourceRepos: ['mrdj-dev-suite'],
+    sourceRepos: ['mds-dev-suite'],
   },
   {
     id: 'unified-agent-bundle-validation',
@@ -295,7 +295,7 @@ const CHECKLIST_RESOURCES = [
     description: 'Phase 9 validation checklist for the unified agent bundle.',
     resourcePath: 'checklists/unified-agent-bundle-validation.md',
     keywords: ['phase 9', 'unified bundle', 'validation'],
-    sourceRepos: ['mrdj-dev-suite'],
+    sourceRepos: ['mds-dev-suite'],
   },
 ] as const;
 
@@ -306,7 +306,7 @@ const EXAMPLE_RESOURCES = [
     description: 'Example iteration log for a PR loop into the test branch.',
     resourcePath: 'examples/ship-test-loop.md',
     keywords: ['example', 'ship', 'iteration'],
-    sourceRepos: ['mrdj-dev-suite'],
+    sourceRepos: ['mds-dev-suite'],
   },
   {
     id: 'unified-agent-bundle-bootstrap',
@@ -314,7 +314,7 @@ const EXAMPLE_RESOURCES = [
     description: 'Phase 9 bootstrap example for unified agent bundle installation.',
     resourcePath: 'examples/unified-agent-bundle-bootstrap.md',
     keywords: ['phase 9', 'bundle', 'bootstrap'],
-    sourceRepos: ['mrdj-dev-suite'],
+    sourceRepos: ['mds-dev-suite'],
   },
 ] as const;
 
@@ -332,7 +332,7 @@ export async function listPatterns(category?: PatternCategory): Promise<Pattern[
 }
 
 export async function getSkill(id: string): Promise<Skill | null> {
-  const resource = getKnowledgeResource(`mrdj://skills/${id}`);
+  const resource = getKnowledgeResource(`mds://skills/${id}`);
   if (!resource || resource.kind !== 'skill') {
     return null;
   }
@@ -412,7 +412,7 @@ function patternFromMetadata(metadata: PatternMetadata): Pattern {
     category: metadata.category,
     source: metadata.sourceRepos.join(', '),
     references: metadata.resourcePath ? [metadata.resourcePath] : [],
-    uri: `mrdj://patterns/${metadata.id}`,
+    uri: `mds://patterns/${metadata.id}`,
     resourcePath: metadata.resourcePath,
   };
 }
@@ -420,7 +420,7 @@ function patternFromMetadata(metadata: PatternMetadata): Pattern {
 function patternResourceFromMetadata(metadata: PatternMetadata): KnowledgeResource {
   return {
     id: metadata.id,
-    uri: `mrdj://patterns/${metadata.id}`,
+    uri: `mds://patterns/${metadata.id}`,
     kind: 'pattern',
     name: metadata.name,
     description: metadata.description,
@@ -434,7 +434,7 @@ function patternResourceFromMetadata(metadata: PatternMetadata): KnowledgeResour
 function promptResourceFromSpec(spec: PromptSpec): KnowledgeResource {
   return {
     id: spec.id,
-    uri: `mrdj://prompts/${spec.slug}`,
+    uri: `mds://prompts/${spec.slug}`,
     kind: 'prompt',
     name: spec.title,
     description: spec.description,
@@ -456,7 +456,7 @@ function simpleResource(
 ): KnowledgeResource {
   return {
     id: resource.id,
-    uri: `mrdj://${resourceNamespace(kind)}/${resource.id}`,
+    uri: `mds://${resourceNamespace(kind)}/${resource.id}`,
     kind,
     name: resource.name,
     description: resource.description,

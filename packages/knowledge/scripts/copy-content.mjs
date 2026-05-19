@@ -64,7 +64,6 @@ const skillSource = path.join(source, 'skills');
 const skillFiles = await listMarkdownFiles(skillSource);
 
 await rm(claudeCodeSkillsDir, { recursive: true, force: true });
-await rm(claudeCodeCommandsDir, { recursive: true, force: true });
 await rm(claudeCodeAgentsDir, { recursive: true, force: true });
 
 // Generate agent skills from the knowledge package (auto-invoked by Claude).
@@ -88,6 +87,9 @@ for (const filePath of skillFiles) {
 const commandsSrcDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands-src');
 const commandFiles = await listMarkdownFiles(commandsSrcDir).catch(() => []);
 
+if (commandFiles.length > 0) {
+  await rm(claudeCodeCommandsDir, { recursive: true, force: true });
+}
 await mkdir(claudeCodeCommandsDir, { recursive: true });
 for (const filePath of commandFiles) {
   const content = await readFile(filePath, 'utf8');
@@ -131,7 +133,7 @@ function renderClaudeMdsAgent() {
   return [
     '---',
     'name: mds',
-    'description: Use for MrDJ Dev Suite Expo project work: Doctor scans, project review, onboarding, deployment readiness, and phase-based continuation.',
+    'description: Use for MDS Dev Suite Expo project work: Doctor scans, project review, onboarding, deployment readiness, and phase-based continuation.',
     'model: inherit',
     'skills:',
     '  - deployment',
@@ -146,7 +148,7 @@ function renderClaudeMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    'You are the MrDJ Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.',
+    'You are the MDS Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.',
     '',
     '## Tool Routing',
     '',
@@ -163,7 +165,7 @@ function renderClaudeMdsAgent() {
     '- Keep route files thin, env secrets server-only, and release work gated by Doctor checks.',
     '- Prefer official Expo/React Native guidance for framework mechanics; MDS adds project memory, checks, defaults, and workflows.',
     '- Do not skip unresolved `# TodoForContext(optional):` markers before implementation.',
-    '- When MCP is unavailable, use CLI fallbacks such as `mrdj doctor`, `mrdj continue`, and `mrdj report`.',
+    '- When MCP is unavailable, use CLI fallbacks such as `mds doctor`, `mds continue`, and `mds report`.',
     '',
   ].join('\n');
 }

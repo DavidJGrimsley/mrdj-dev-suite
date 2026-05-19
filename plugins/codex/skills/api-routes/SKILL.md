@@ -30,4 +30,3 @@ Keep route handlers thin and defensive: validate input, enforce auth/authorizati
 
 - Apply the smallest safe refactor that adds validation/auth boundaries first.
 - Delegate framework primitive questions to official Expo API route guidance, then layer MDS project-specific rules (env boundaries, doc updates, Doctor compatibility).
-

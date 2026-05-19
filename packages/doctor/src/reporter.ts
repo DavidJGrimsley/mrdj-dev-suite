@@ -33,7 +33,7 @@ export function formatJsonReport(report: DoctorReport): string {
 }
 
 export function formatHumanReport(report: DoctorReport): string {
-  const lines = [`mrdj doctor (${report.mode})`, report.projectPath, ''];
+  const lines = [`mds doctor (${report.mode})`, report.projectPath, ''];
 
   for (const check of report.checks) {
     lines.push(`${label(check)} ${check.name}: ${check.message}`);

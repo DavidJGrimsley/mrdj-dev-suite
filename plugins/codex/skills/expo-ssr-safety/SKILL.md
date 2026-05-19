@@ -29,4 +29,3 @@ Assume server runtime first: guard browser-only APIs, isolate native-only code, 
 
 - Fix crash-risk paths first, then clean up architecture.
 - Delegate framework SSR primitives to official Expo docs, then apply MDS-specific guard patterns and Doctor rule compatibility.
-

@@ -1,15 +1,15 @@
 # Reference Repo Evacuation
 
 Phase 1 captured the useful patterns from the temporary multi-root workspace so
-`mrdj-dev-suite` can run from a clean single-folder workspace.
+`mds-dev-suite` can run from a clean single-folder workspace.
 
 ## Captured Sources
 
 | Source repo | Captured knowledge | Suite destination |
 | --- | --- | --- |
-| `mrdj-app-mcp` | MCP SDK server construction, stdio transport, resource registration, prompt registration, and guide loading pattern. | `reference/mcp-sdk-transport.md`, MCP server implementation |
-| `mrdj-pokemon-mcp` | MCP family naming and guide/resource convention. | Knowledge resource URI rules |
-| `mrdj-fne-mcp` | MCP family naming and tool/resource split. | Knowledge resource URI rules |
+| `mds-app-mcp` | MCP SDK server construction, stdio transport, resource registration, prompt registration, and guide loading pattern. | `reference/mcp-sdk-transport.md`, MCP server implementation |
+| `mds-pokemon-mcp` | MCP family naming and guide/resource convention. | Knowledge resource URI rules |
+| `mds-fne-mcp` | MCP family naming and tool/resource split. | Knowledge resource URI rules |
 | `time2pay` | Uniwind setup, CI-equivalent checks, env handling, Expo deployment shape, Doctor dogfood target. | Patterns, Doctor fixtures, `reference/doctor-dogfood.md` |
 | `DJsPortfolio` | API route proxy patterns, Drizzle schema examples, docs organization, route structure, Doctor dogfood target. | API/database/project patterns |
 | `PokePages` | Dynamic route hierarchies, Zustand stores, Drizzle migrations, Doctor dogfood target. | Routing/state/database patterns |
@@ -27,5 +27,5 @@ Phase 1 captured the useful patterns from the temporary multi-root workspace so
 - Keep reference repos read-only during harvest.
 - Delete `temp/` clones after their patterns are promoted or intentionally
   discarded.
-- A new engineer should be able to open only `mrdj-dev-suite` and still access
+- A new engineer should be able to open only `mds-dev-suite` and still access
   all Phase 1 knowledge through `packages/knowledge`.

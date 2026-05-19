@@ -5,17 +5,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
-import { runDoctor, scanFile } from '@mrdj/doctor';
-import { buildContinueSessionBrief } from '@mrdj/cli/continue';
+import { runDoctor, scanFile } from '@mr.dj2u/doctor';
+import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
 import {
   getSkill,
   listKnowledgeResources,
   readKnowledgeResource,
-} from '@mrdj/knowledge';
+} from '@mr.dj2u/knowledge';
 
-import type { DoctorMode } from '@mrdj/doctor';
-import type { DoctorCheckResult, DoctorReport } from '@mrdj/doctor';
-import type { KnowledgeKind } from '@mrdj/knowledge';
+import type { DoctorMode } from '@mr.dj2u/doctor';
+import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
+import type { KnowledgeKind } from '@mr.dj2u/knowledge';
 
 export function resolveSuperStackInvocation(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -42,9 +42,9 @@ export interface MCPResource {
 export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
-      name: 'mrdj-dev-suite',
+      name: 'mds-dev-suite',
       version: '0.1.0',
-      description: 'MrDJ Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
+      description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
       capabilities: {
@@ -65,7 +65,7 @@ export function createMrdjMcpServer(): McpServer {
 export async function startStdioServer(): Promise<void> {
   const server = createMrdjMcpServer();
   await server.connect(new StdioServerTransport());
-  console.error('mrdj-dev-suite MCP server running on stdio');
+  console.error('mds-dev-suite MCP server running on stdio');
   process.stdin.resume();
 }
 
@@ -83,7 +83,7 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'doctor_scan_project',
-      description: 'Run MrDJ Doctor checks against a project folder.',
+      description: 'Run MDS Doctor checks against a project folder.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -121,7 +121,7 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'knowledge_list_resources',
-      description: 'List MrDJ knowledge resources by kind.',
+      description: 'List MDS knowledge resources by kind.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -141,7 +141,7 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'get_skill',
-      description: 'Read a bundled MrDJ agent skill.',
+      description: 'Read a bundled MDS agent skill.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -152,7 +152,7 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'get_guide',
-      description: 'Read a bundled MrDJ knowledge guide.',
+      description: 'Read a bundled MDS knowledge guide.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -248,7 +248,7 @@ export async function executeTool(
     }
     case 'get_guide': {
       const id = readString(input.id);
-      return id ? readKnowledgeResource(`mrdj://guides/${id}`) : null;
+      return id ? readKnowledgeResource(`mds://guides/${id}`) : null;
     }
     case 'generate_refactor_plan': {
       const projectPath = readString(input.projectPath);
@@ -332,7 +332,7 @@ function registerTools(server: McpServer): void {
     'doctor_scan_project',
     {
       title: 'Doctor Scan Project',
-      description: 'Run MrDJ Doctor checks against a project folder.',
+      description: 'Run MDS Doctor checks against a project folder.',
       inputSchema: {
         projectPath: z.string(),
         mode: z.enum(['fast', 'ci', 'full']).optional(),
@@ -365,7 +365,7 @@ function registerTools(server: McpServer): void {
     'knowledge_list_resources',
     {
       title: 'List Knowledge Resources',
-      description: 'List MrDJ knowledge resources by kind.',
+      description: 'List MDS knowledge resources by kind.',
       inputSchema: {
         kind: z.enum(['pattern', 'guide', 'rule', 'skill', 'reference']).optional(),
       },
@@ -389,7 +389,7 @@ function registerTools(server: McpServer): void {
     'get_skill',
     {
       title: 'Get Skill',
-      description: 'Read a bundled MrDJ agent skill.',
+      description: 'Read a bundled MDS agent skill.',
       inputSchema: {
         id: z.string(),
       },
@@ -401,12 +401,12 @@ function registerTools(server: McpServer): void {
     'get_guide',
     {
       title: 'Get Guide',
-      description: 'Read a bundled MrDJ knowledge guide.',
+      description: 'Read a bundled MDS knowledge guide.',
       inputSchema: {
         id: z.string(),
       },
     },
-    async ({ id }) => toolJson(await readKnowledgeResource(`mrdj://guides/${id}`))
+    async ({ id }) => toolJson(await readKnowledgeResource(`mds://guides/${id}`))
   );
 
   server.registerTool(
@@ -473,7 +473,7 @@ function registerPrompts(server: McpServer): void {
     {
       title: 'Create Expo Super Stack',
       description:
-        'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MrDJ onboarding.',
+        'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MDS onboarding.',
       argsSchema: {
         parentDir: z.string().optional(),
         appName: z.string().optional(),
@@ -497,7 +497,7 @@ function registerPrompts(server: McpServer): void {
     {
       title: 'Onboard Existing Expo App',
       description:
-        'Run from inside an existing Expo app folder to apply MrDJ project memory, intake, planning, and scaffolding.',
+        'Run from inside an existing Expo app folder to apply MDS project memory, intake, planning, and scaffolding.',
       argsSchema: {
         projectPath: z.string().optional(),
       },
@@ -516,9 +516,9 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
-    'continue_mrdj_project',
+    'continue_mds_project',
     {
-      title: 'Continue MrDJ Project',
+      title: 'Continue MDS Project',
       description:
         'Build an MDS Continue session brief for an existing Expo app folder by calling continue_project first.',
       argsSchema: {
@@ -539,7 +539,7 @@ function registerPrompts(server: McpServer): void {
   );
 }
 
-const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mrdj-dev-suite/templates/info.md';
+const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mds-dev-suite/templates/info.md';
 
 function fileIntakePhase(label: string): string {
   return [
@@ -572,7 +572,7 @@ function creditsAndWaitMessage(): string {
     '  """',
     '  Generating now. This typically takes 2-5 minutes. While we wait, let\'s shout out and recognize how this is working.',
     '',
-    '  create-expo-super-stack by Mr. DJ (who also built this agentic flow) wraps create-expo-stack by Roni Oss with major contributions by Dan Stepanov. Big thanks to them and to several other teams and individuals whose work and educational materials fill the MrDJ-dev-suite knowledge base:',
+    '  create-expo-super-stack by Mr. DJ (who also built this agentic flow) wraps create-expo-stack by Roni Oss with major contributions by Dan Stepanov. Big thanks to them and to several other teams and individuals whose work and educational materials fill the MDS-dev-suite knowledge base:',
     '',
     '    - Expo team (Evan Bacon for Expo Router, Brent Vatne, Charlie Cheever, and the broader Expo crew)',
     '    - React and React Native core teams',
@@ -587,7 +587,7 @@ function creditsAndWaitMessage(): string {
     '    - Catalin Miron for the React Native animation tutorials',
     '    - Infinite Red / Jamon Holmgren for Ignite and the broader RN community',
     '',
-    '  Their contributions to the software development community are what fill the pages of the MrDJ-dev-suite knowledge base, alongside contributions and organization by Mr. DJ. Please enjoy the experience of the MrDJ-dev-suite plugin as you continue your development.',
+    '  Their contributions to the software development community are what fill the pages of the MDS-dev-suite knowledge base, alongside contributions and organization by Mr. DJ. Please enjoy the experience of the MDS-dev-suite plugin as you continue your development.',
     '  """',
     '',
     'Then surface generator output as it arrives. Do not echo the assembled command. If the generator surfaces an interactive prompt despite flags, relay it to the user.',
@@ -639,7 +639,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  3. Drawer',
     '',
     'Q2.5 — Styling system?',
-    '  1. Uniwind (default — Tailwind v4 universal styling, MrDJ preference)',
+    '  1. Uniwind (default — Tailwind v4 universal styling, MDS preference)',
     '  2. NativeWind (Tailwind v3 for React Native)',
     '  3. Tamagui',
     '  4. Restyle',
@@ -658,7 +658,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. No (default — you can add it later)',
     '  2. Yes',
     '',
-    '====== PHASE 3 — MrDJ project memory & roadmap (passed as --mrdj-* flags) ======',
+    '====== PHASE 3 — MDS project memory & roadmap (passed as --mds-* flags) ======',
     '',
     'Q3.1 — App display name? (defaults to the project name from Q1.2 — confirm or override)',
     '',
@@ -696,7 +696,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  2. Platform folders (recommended for large projects, very different UI on each platform, or targeting TV and other platforms from one codebase)',
     '',
     'Q3.7a — Where should the Expo Router app folder live?',
-    '  1. src/app (default — MrDJ preference for new Super Stack apps)',
+    '  1. src/app (default — MDS preference for new Super Stack apps)',
     '  2. app (root-level app folder)',
     '',
     'Q3.7b — Do selected platforms need their own layouts? (only if multi-platform)',
@@ -721,7 +721,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  Examples: TestFlight to friends, internal client demo, App Store / Play Store launch, web hosting, side-loaded APK, internal-only.',
     '',
     'Q3.11 — Keep the starter components that come with create-expo-app?',
-    '  1. No (default — MrDJ rich boilerplate replaces them)',
+    '  1. No (default — MDS rich boilerplate replaces them)',
     '  2. Yes',
     '',
     'Q3.12 — Use the latest Expo SDK even if Expo Go availability may lag?',
@@ -742,8 +742,8 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  3. hosting web apps',
     '  4. publishing mobile applications',
     '',
-    'Q3.16 — Use the bundled MrDJ project/guidelines.md template?',
-    '  1. Yes (default — recommended; MrDJ-specific architecture rules)',
+    'Q3.16 — Use the bundled MDS project/guidelines.md template?',
+    '  1. Yes (default — recommended; MDS-specific architecture rules)',
     '  2. No',
     '',
     'Q3.17 — Data starting point?',
@@ -766,28 +766,28 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  Q2.7 Supabase → --supabase ; Firebase → --firebase ; None → no auth flag',
     '  Q2.8 EAS Yes → --eas ; No → no flag',
     '',
-    'mrdj-* flags (Phase 3 answers — wrap values containing spaces in double quotes):',
-    '  Q3.1 → --mrdj-app-name=',
-    '  Q3.2 → --mrdj-audience=',
-    '  Q3.3 → --mrdj-core-flows=',
-    '  Q3.4 → --mrdj-data-needs=         (comma-joined labels)',
-    '  Q3.5 → --mrdj-platforms=          (comma-joined slugs from: web,ios,android,apple-tv,android-tv)',
-    '  Q3.6 → --mrdj-first-platform=',
-    '  Q3.7 → --mrdj-platform-strategy=  (files-only|folders)',
-    '  Q3.7a → --mrdj-app-directory=     (src|root)',
-    '  Q3.7b → --mrdj-platform-layouts=  (shared|platform-specific)',
-    '  Q3.8 → --mrdj-web-output=         (static|server|spa)',
-    '  Q3.9 → --mrdj-deployed-server=    (standard-expo|custom|none)',
-    '  Q3.10 → --mrdj-deployment-target=',
-    '  Q3.11 → --mrdj-create-expo-components or --mrdj-no-create-expo-components',
-    '  Q3.12 → --mrdj-latest-expo-sdk or --mrdj-no-latest-expo-sdk',
-    '  Q3.13 → --mrdj-expo-ui or --mrdj-no-expo-ui',
-    '  Q3.14 → --mrdj-expo-native-tabs or --mrdj-no-expo-native-tabs',
-    '  Q3.15 → --mrdj-eas-uses=          (comma-joined labels; only if Q2.8 = Yes)',
-    '  Q3.16 → --mrdj-guidelines-template',
-    '  Q3.17 → --mrdj-data-start=        (local|supabase)',
-    '  Q3.18 → --mrdj-test-to-main or --mrdj-no-test-to-main',
-    '  Always append: --mrdj-yes',
+    'mds-* flags (Phase 3 answers — wrap values containing spaces in double quotes):',
+    '  Q3.1 → --mds-app-name=',
+    '  Q3.2 → --mds-audience=',
+    '  Q3.3 → --mds-core-flows=',
+    '  Q3.4 → --mds-data-needs=         (comma-joined labels)',
+    '  Q3.5 → --mds-platforms=          (comma-joined slugs from: web,ios,android,apple-tv,android-tv)',
+    '  Q3.6 → --mds-first-platform=',
+    '  Q3.7 → --mds-platform-strategy=  (files-only|folders)',
+    '  Q3.7a → --mds-app-directory=     (src|root)',
+    '  Q3.7b → --mds-platform-layouts=  (shared|platform-specific)',
+    '  Q3.8 → --mds-web-output=         (static|server|spa)',
+    '  Q3.9 → --mds-deployed-server=    (standard-expo|custom|none)',
+    '  Q3.10 → --mds-deployment-target=',
+    '  Q3.11 → --mds-create-expo-components or --mds-no-create-expo-components',
+    '  Q3.12 → --mds-latest-expo-sdk or --mds-no-latest-expo-sdk',
+    '  Q3.13 → --mds-expo-ui or --mds-no-expo-ui',
+    '  Q3.14 → --mds-expo-native-tabs or --mds-no-expo-native-tabs',
+    '  Q3.15 → --mds-eas-uses=          (comma-joined labels; only if Q2.8 = Yes)',
+    '  Q3.16 → --mds-guidelines-template',
+    '  Q3.17 → --mds-data-start=        (local|supabase)',
+    '  Q3.18 → --mds-test-to-main or --mds-no-test-to-main',
+    '  Always append: --mds-yes',
     '',
     '====== PHASE 4 — Confirm and generate ======',
     '',
@@ -797,20 +797,20 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '   - TypeScript, npm, Expo Router, Uniwind, Zustand, no auth provider, no EAS yet',
     '   - audience: <...>, first flow: <...>',
     '   - platforms: web + iOS + Android, first MVP: iOS, src/app routes, files-only suffixes, shared layouts',
-    '   - data starts local, test-to-main on, MrDJ guidelines template on"',
+    '   - data starts local, test-to-main on, MDS guidelines template on"',
     'Ask the user to confirm or change anything.',
     '',
     creditsAndWaitMessage(),
     '',
     'Generator invocation (build silently from the flag map above; never echo this line):',
-    `  ${superStack} <appName> <create-expo-stack flags> <--mrdj-* flags> --mrdj-yes`,
+    `  ${superStack} <appName> <create-expo-stack flags> <--mds-* flags> --mds-yes`,
     '',
     '====== PHASE 5 — Verify and hand off ======',
     '',
     'After generation succeeds:',
     '  1. Find the line "Onboarding next steps" in the generator output. Quote everything from that line to the end of stdout verbatim in a fenced code block. Do NOT quote the CREATED file list or anything before "Onboarding next steps".',
     '  2. Then tell the user (in plain text, not a code block):',
-    '     "Your app is ready. To keep token usage low, open a new agent session directly inside the `<appName>` folder and run `mrdj continue` there."',
+    '     "Your app is ready. To keep token usage low, open a new agent session directly inside the `<appName>` folder and run `mds continue` there."',
     '  3. If TodoForContext markers exist in the new app\'s project/ files, add one line:',
     '     "There are unresolved context markers in project/ — resolve them in your new session before starting implementation work."',
     '  4. Do NOT walk through markers or ask questions about them in this session.',
@@ -819,7 +819,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '- Never run the generator inside an existing app folder. If you suspect you are inside one, stop and ask.',
     '- Never echo the assembled command line. Summarize choices in plain English instead.',
     '- One question per turn. Always show the default. Skip dependent questions when prerequisites are not met.',
-    '- The generator runs all of MrDJ onboarding (project memory, exposition pages, dependencies, expo-doctor) once you pass --mrdj-yes plus the --mrdj-* flags. Do not run `mrdj onboard` separately afterward — it is already done.',
+    '- The generator runs all of MDS onboarding (project memory, exposition pages, dependencies, expo-doctor) once you pass --mds-yes plus the --mds-* flags. Do not run `mds onboard` separately afterward — it is already done.',
   ].join('\n');
 }
 
@@ -846,13 +846,13 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
 export function buildOnboardPromptText(projectPath?: string): string {
   const target = projectPath ?? 'the current Expo project';
   return [
-    `You are running MrDJ agentic onboarding inside ${target}. The app folder must already exist on disk.`,
+    `You are running MDS agentic onboarding inside ${target}. The app folder must already exist on disk.`,
     '',
     'If you are NOT yet inside an Expo app folder, stop and tell the user to either:',
     '  (a) cd into the existing app folder and re-invoke this prompt, or',
     '  (b) run the `create_expo_super_stack` MCP prompt from a parent folder to generate a new app first.',
     '',
-    'IMPORTANT: Drive this conversationally. Never echo the assembled `mrdj onboard` command line. One question per turn. Number multi-choice options. Always show the default and accept "default" / number / label / natural language.',
+    'IMPORTANT: Drive this conversationally. Never echo the assembled `mds onboard` command line. One question per turn. Number multi-choice options. Always show the default and accept "default" / number / label / natural language.',
     '',
     fileIntakePhase('PHASE 0a — Optional: attach existing project memory'),
     '====== PHASE 0b — State + blocker check ======',
@@ -912,11 +912,11 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '  1. File suffixes only (default — e.g. screen.web.tsx. Good for small to medium projects targeting web and mobile)',
     '  2. Platform folders (recommended for large projects, very different UI on each platform, or targeting TV and other platforms from one codebase)',
     '',
-    'Q1.7a — Where should MrDJ place Expo Router route files it generates?',
+    'Q1.7a — Where should MDS place Expo Router route files it generates?',
     '  1. Detected existing app folder (default; usually src/app or app)',
     '  2. src/app',
     '  3. app',
-    '  Note: mrdj onboard does not move an existing route tree automatically.',
+    '  Note: mds onboard does not move an existing route tree automatically.',
     '',
     'Q1.7b — Do selected platforms need their own layouts? (only if multi-platform)',
     '  1. Shared layouts (default)',
@@ -947,7 +947,7 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '  3. hosting web apps',
     '  4. publishing mobile applications',
     '',
-    'Q1.16 — Use the bundled MrDJ project/guidelines.md template? (Yes default / No)',
+    'Q1.16 — Use the bundled MDS project/guidelines.md template? (Yes default / No)',
     '',
     'Q1.17 — Data starting point?',
     '  1. Local dummy data (default)',
@@ -962,7 +962,7 @@ export function buildOnboardPromptText(projectPath?: string): string {
     'When confirmed, run silently via your shell tool. Do NOT print the command. Just say:',
     '  "Scaffolding project memory and rich boilerplate now. This takes a few seconds."',
     '',
-    '====== Flag map for `mrdj onboard` (use these EXACTLY) ======',
+    '====== Flag map for `mds onboard` (use these EXACTLY) ======',
     '',
     '  Q1.1 → --app-name=             (wrap value in double quotes if it contains spaces)',
     '  Q1.2 → --audience=',
@@ -987,7 +987,7 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '  Always append: --yes',
     '  Project path: pass --project=<absolute path to the app folder>',
     '',
-    'After it completes, run `mrdj doctor` and surface any errors/warnings.',
+    'After it completes, run `mds doctor` and surface any errors/warnings.',
     '',
     'Rules:',
     '- Never bypass PHASE 0. The marker check is non-negotiable; the user can clear it in seconds by deleting lines.',
@@ -1166,7 +1166,7 @@ function buildDeployChecklist(
         : hasWarnings
           ? 'Doctor reported warnings; triage them before release approval.'
           : 'Doctor found no warnings or errors for this scan.',
-      relatedResources: ['mrdj://skills/deployment', 'mrdj://skills/debugging'],
+      relatedResources: ['mds://skills/deployment', 'mds://skills/debugging'],
     },
     {
       id: 'env-boundaries',
@@ -1174,14 +1174,14 @@ function buildDeployChecklist(
       title: 'Verify public/private environment boundaries',
       detail:
         'Confirm EXPO_PUBLIC values are safe for client bundles and private service keys stay server-only.',
-      relatedResources: ['mrdj://rules/env-hygiene', 'mrdj://skills/env-vars'],
+      relatedResources: ['mds://rules/env-hygiene', 'mds://skills/env-vars'],
     },
     {
       id: 'expo-runtime',
       status: hasExpoSignal ? 'action' : 'manual',
       title: 'Verify Expo config and runtime targets',
       detail: 'Confirm app config, platform list, web output, and build profiles match the release target.',
-      relatedResources: ['mrdj://patterns/project-configuration-patterns', 'mrdj://skills/deployment'],
+      relatedResources: ['mds://patterns/project-configuration-patterns', 'mds://skills/deployment'],
     },
   ];
 
@@ -1192,14 +1192,14 @@ function buildDeployChecklist(
         status: hasSeoSignal ? 'action' : 'manual',
         title: 'Verify web SEO metadata',
         detail: 'Check title, description, canonical URL, Open Graph tags, sitemap, and robots strategy.',
-        relatedResources: ['mrdj://rules/seo-metadata', 'mrdj://skills/seo-metadata'],
+        relatedResources: ['mds://rules/seo-metadata', 'mds://skills/seo-metadata'],
       },
       {
         id: 'web-ssr-safety',
         status: hasSsrSignal ? 'action' : 'manual',
         title: 'Verify SSR-safe web/server code',
         detail: 'Guard browser globals and keep native-only imports out of server execution paths.',
-        relatedResources: ['mrdj://rules/ssr-safety', 'mrdj://skills/expo-ssr-safety'],
+        relatedResources: ['mds://rules/ssr-safety', 'mds://skills/expo-ssr-safety'],
       }
     );
   }
@@ -1211,7 +1211,7 @@ function buildDeployChecklist(
       title: 'Verify native build readiness',
       detail:
         'Run the selected EAS/local native build profile and smoke test the target platform before store or client release.',
-      relatedResources: ['mrdj://skills/deployment', 'mrdj://reference/package-ci-patterns'],
+      relatedResources: ['mds://skills/deployment', 'mds://reference/package-ci-patterns'],
     });
   }
 
@@ -1236,29 +1236,29 @@ function severityRank(status: DoctorCheckResult['status']): number {
 
 function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
   const text = `${check.name} ${check.message}`.toLowerCase();
-  const resources = new Set<string>(['mrdj://skills/debugging']);
+  const resources = new Set<string>(['mds://skills/debugging']);
 
   if (text.includes('env') || text.includes('secret') || text.includes('public')) {
-    resources.add('mrdj://rules/env-hygiene');
-    resources.add('mrdj://skills/env-vars');
+    resources.add('mds://rules/env-hygiene');
+    resources.add('mds://skills/env-vars');
   }
   if (text.includes('ssr') || text.includes('window') || text.includes('document') || text.includes('localstorage')) {
-    resources.add('mrdj://rules/ssr-safety');
-    resources.add('mrdj://skills/expo-ssr-safety');
+    resources.add('mds://rules/ssr-safety');
+    resources.add('mds://skills/expo-ssr-safety');
   }
   if (text.includes('seo') || text.includes('metadata') || text.includes('canonical')) {
-    resources.add('mrdj://rules/seo-metadata');
-    resources.add('mrdj://skills/seo-metadata');
+    resources.add('mds://rules/seo-metadata');
+    resources.add('mds://skills/seo-metadata');
   }
   if (text.includes('app architecture') || text.includes('route') || text.includes('app/')) {
-    resources.add('mrdj://rules/app-folder-architecture');
-    resources.add('mrdj://skills/expo-router-architecture');
+    resources.add('mds://rules/app-folder-architecture');
+    resources.add('mds://skills/expo-router-architecture');
   }
   if (text.includes('styling') || text.includes('uniwind') || text.includes('tailwind')) {
-    resources.add('mrdj://skills/uniwind-theming');
+    resources.add('mds://skills/uniwind-theming');
   }
   if (text.includes('expo') || text.includes('build') || text.includes('script') || text.includes('package')) {
-    resources.add('mrdj://skills/deployment');
+    resources.add('mds://skills/deployment');
   }
 
   return [...resources];
@@ -1326,7 +1326,7 @@ function explainDoctorResult(input: Record<string, unknown>): string {
         ? 'This is worth fixing, but it may not block local development.'
         : 'This result does not require action.';
 
-  return `${severity}\n\nFinding: ${message}\n\nNext step: inspect the named file or script, apply the smallest fix, then rerun mrdj doctor.`;
+  return `${severity}\n\nFinding: ${message}\n\nNext step: inspect the named file or script, apply the smallest fix, then rerun mds doctor.`;
 }
 
 function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
@@ -1348,7 +1348,7 @@ function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
   if (selected.includes('supabase')) {
     tasks.push('Add Supabase env docs and client/server boundary guidance.');
   }
-  tasks.push('Run mrdj doctor after scaffolding selected pieces.');
+  tasks.push('Run mds doctor after scaffolding selected pieces.');
 
   return tasks;
 }
@@ -1375,7 +1375,7 @@ function isDirectRun(): boolean {
 if (isDirectRun()) {
   startStdioServer().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('Fatal error in mrdj-dev-suite MCP server:', message);
+    console.error('Fatal error in mds-dev-suite MCP server:', message);
     process.exit(1);
   });
 }

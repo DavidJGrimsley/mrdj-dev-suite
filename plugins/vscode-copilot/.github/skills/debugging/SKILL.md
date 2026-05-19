@@ -15,7 +15,7 @@ Debug by narrowing scope quickly: reproduce, isolate, capture evidence, apply th
 
 - Reproduce the issue consistently and record exact command/path/error output.
 - Confirm environment assumptions (platform, output mode, env vars, script path) match the failing context.
-- Run targeted checks first (`mrdj doctor`, focused tests, route/file scans) before broad reruns.
+- Run targeted checks first (`mds doctor`, focused tests, route/file scans) before broad reruns.
 - Separate root-cause signals from secondary cascade errors.
 - Re-verify with the same reproduction path after the fix.
 

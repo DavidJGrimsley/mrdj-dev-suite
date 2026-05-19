@@ -496,5 +496,5 @@ core-monorepo/
 
 ---
 
-*Pattern extracted from production monorepos: core-monorepo (3 apps, 6 packages), mrdj-dev-suite*
+*Pattern extracted from production monorepos: core-monorepo (3 apps, 6 packages), mds-dev-suite*
 *Examples: pnpm-workspace.yaml, turbo.json, tsconfig.base.json, workspace:* references*

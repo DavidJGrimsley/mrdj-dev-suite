@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mrdj/doctor';
-import { readKnowledgeResource } from '@mrdj/knowledge';
+import { runDoctor } from '@mr.dj2u/doctor';
+import { readKnowledgeResource } from '@mr.dj2u/knowledge';
 import { buildContinueSessionBrief } from '../continue.js';
 import {
   installVscodeUserMcp,
@@ -55,8 +55,8 @@ const INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->';
 const INSTRUCTIONS_END = '<!-- END MDS COPILOT INSTRUCTIONS -->';
 const CLAUDE_INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS CLAUDE INSTRUCTIONS -->';
 const CLAUDE_INSTRUCTIONS_END = '<!-- END MDS CLAUDE INSTRUCTIONS -->';
-const MDS_SERVER_KEY = 'mrdj-dev-suite';
-const CODEX_PLUGIN_NAME = 'mrdj-dev-suite';
+const MDS_SERVER_KEY = 'mds-dev-suite';
+const CODEX_PLUGIN_NAME = 'mds-dev-suite';
 const CODEX_PLUGIN_SOURCE_PATH = `./plugins/${CODEX_PLUGIN_NAME}`;
 
 interface InstructionMarkers {
@@ -84,7 +84,7 @@ export async function runAgentInstallCommand(argv: AgentArgv): Promise<AgentInst
   });
   const writtenPaths: string[] = [];
 
-  console.log(chalk.bold('mrdj agent install'));
+  console.log(chalk.bold('mds agent install'));
   console.log(chalk.dim(`client: ${client}`));
   console.log(chalk.dim(`scope:  ${scope}`));
   console.log(chalk.dim(`bundle: ${bundleRoot}`));
@@ -106,7 +106,7 @@ export async function runAgentVerifyCommand(argv: AgentArgv): Promise<AgentVerif
   const target = path.resolve(argv.target ?? '.');
   const result = await verifyAgentInstall(client, target);
 
-  console.log(chalk.bold('mrdj agent verify'));
+  console.log(chalk.bold('mds agent verify'));
   console.log(chalk.dim(`client: ${client}`));
   console.log(chalk.dim(`target: ${target}`));
   console.log();
@@ -344,18 +344,18 @@ async function runValidationChecks(target: string): Promise<AgentVerifyResult['c
   }
 
   try {
-    const guide = await readKnowledgeResource('mrdj://guides/post-create-onboarding');
+    const guide = await readKnowledgeResource('mds://guides/post-create-onboarding');
     checks.push({
       name: 'Knowledge guide validation',
       status: guide?.content ? 'pass' : 'fail',
-      path: 'mrdj://guides/post-create-onboarding',
+      path: 'mds://guides/post-create-onboarding',
       message: guide?.content ? 'Fetched a bundled knowledge guide.' : 'Could not fetch the bundled guide.',
     });
   } catch (error) {
     checks.push({
       name: 'Knowledge guide validation',
       status: 'fail',
-      path: 'mrdj://guides/post-create-onboarding',
+      path: 'mds://guides/post-create-onboarding',
       message: error instanceof Error ? error.message : String(error),
     });
   }
@@ -503,8 +503,8 @@ async function upsertCodexMarketplace(
   const existing = existingRaw ? parseJsonObject(existingRaw, marketplacePath) : {};
   const marketplace: Record<string, unknown> = {
     ...existing,
-    name: typeof existing.name === 'string' ? existing.name : 'mrdj-local',
-    interface: isRecord(existing.interface) ? existing.interface : { displayName: 'MrDJ Local Plugins' },
+    name: typeof existing.name === 'string' ? existing.name : 'mds-local',
+    interface: isRecord(existing.interface) ? existing.interface : { displayName: 'MDS Local Plugins' },
   };
   const existingPlugins = Array.isArray(existing.plugins) ? existing.plugins : [];
   const nextEntry = {
@@ -615,23 +615,23 @@ function printProjectInstallFollowup(target: string, client: AgentClient): void 
   if (client === 'vscode') {
     console.log(chalk.bold('Next steps for VS Code Copilot (project scope):'));
     console.log(`  1. Open ${target} in VS Code.`);
-    console.log('  2. Confirm the mrdjDevSuite MCP server is enabled when Copilot prompts for MCP trust.');
-    console.log('  3. Run `mrdj agent verify --client vscode --target .` from the project root.');
+    console.log('  2. Confirm the mdsDevSuite MCP server is enabled when Copilot prompts for MCP trust.');
+    console.log('  3. Run `mds agent verify --client vscode --target .` from the project root.');
     return;
   }
 
   if (client === 'claude') {
     console.log(chalk.bold('Next steps for Claude Code (project scope):'));
     console.log(`  1. Open ${target} in Claude Code or restart Claude Code if it is already open.`);
-    console.log('  2. Run `/mcp` to confirm the mrdj-dev-suite server is listed.');
+    console.log('  2. Run `/mcp` to confirm the mds-dev-suite server is listed.');
     console.log('  3. Use the `mds` agent or MDS slash commands such as `/run-doctor`.');
     return;
   }
 
   console.log(chalk.bold('Next steps for Codex (project scope):'));
   console.log(`  1. Open ${target} in Codex.`);
-  console.log('  2. Install or enable the mrdj-dev-suite local plugin from the local marketplace.');
-  console.log('  3. Run `mrdj agent verify --client codex --target .` from the project root.');
+  console.log('  2. Install or enable the mds-dev-suite local plugin from the local marketplace.');
+  console.log('  3. Run `mds agent verify --client codex --target .` from the project root.');
 }
 
 function printUserInstallFollowup(target: string, client: Exclude<AgentClient, 'vscode'>): void {
@@ -639,15 +639,15 @@ function printUserInstallFollowup(target: string, client: Exclude<AgentClient, '
   if (client === 'claude') {
     console.log(chalk.bold('Next steps for Claude Code (user scope):'));
     console.log(`  1. Restart Claude Code so it picks up assets in ${target}.`);
-    console.log('  2. Run `/mcp` to confirm mrdj-dev-suite is listed.');
+    console.log('  2. Run `/mcp` to confirm mds-dev-suite is listed.');
     console.log('  3. Use the `mds` agent or MDS slash commands from any workspace.');
     return;
   }
 
   console.log(chalk.bold('Next steps for Codex (user scope):'));
   console.log(`  1. Restart Codex so it picks up ${path.join(target, '.agents', 'plugins', 'marketplace.json')}.`);
-  console.log('  2. Install or enable the mrdj-dev-suite local plugin from the local marketplace.');
-  console.log('  3. Confirm the mrdj-dev-suite MCP server is configured in Codex settings.');
+  console.log('  2. Install or enable the mds-dev-suite local plugin from the local marketplace.');
+  console.log('  3. Confirm the mds-dev-suite MCP server is configured in Codex settings.');
 }
 
 async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
@@ -663,12 +663,12 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
 
   try {
     const parsed = JSON.parse(raw) as { servers?: Record<string, unknown> };
-    if (parsed.servers?.mrdjDevSuite) {
+    if (parsed.servers?.mdsDevSuite) {
       return {
         name: 'VS Code MCP config',
         status: 'pass',
         path: filePath,
-        message: 'mrdjDevSuite server is configured.',
+        message: 'mdsDevSuite server is configured.',
       };
     }
   } catch {
@@ -684,7 +684,7 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
     name: 'VS Code MCP config',
     status: 'fail',
     path: filePath,
-    message: 'mrdjDevSuite server is missing from the servers object.',
+    message: 'mdsDevSuite server is missing from the servers object.',
   };
 }
 
@@ -757,7 +757,7 @@ async function checkMarketplaceEntry(filePath: string): Promise<AgentVerifyResul
       name: 'Codex marketplace entry',
       status: valid ? 'pass' : 'fail',
       path: filePath,
-      message: valid ? 'mrdj-dev-suite local plugin is registered.' : 'mrdj-dev-suite local plugin entry is missing or invalid.',
+      message: valid ? 'mds-dev-suite local plugin is registered.' : 'mds-dev-suite local plugin entry is missing or invalid.',
     };
   } catch {
     return {

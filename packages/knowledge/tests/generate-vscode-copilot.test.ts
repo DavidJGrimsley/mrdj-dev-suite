@@ -28,7 +28,7 @@ afterEach(async () => {
 
 describe('generateVscodeCopilotBundle', () => {
   it('generates VS Code Copilot project and user assets from knowledge skills', async () => {
-    const repoRoot = await createTempDir('mrdj-vscode-bundle-');
+    const repoRoot = await createTempDir('mds-vscode-bundle-');
     const contentRoot = path.join(repoRoot, 'packages', 'knowledge', 'src', 'content');
     await mkdir(contentRoot, { recursive: true });
 
@@ -60,7 +60,7 @@ describe('generateVscodeCopilotBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { servers: Record<string, { command: string; args: string[] }> };
     expect(mcp.servers[VSCODE_MCP_SERVER_KEY]).toEqual({
       command: 'npx',
-      args: ['-y', '@mrdj/mcp-server'],
+      args: ['-y', '@mr.dj2u/mcp-server'],
     });
     const settingsRaw = await readFile(path.join(bundleRoot, '.vscode', 'settings.json'), 'utf8');
     const settings = JSON.parse(settingsRaw) as Record<string, unknown>;
@@ -87,9 +87,9 @@ describe('generateVscodeCopilotBundle', () => {
   it('builds a VS Code MCP config with the camel-case server key', () => {
     expect(buildVscodeMcpConfig()).toEqual({
       servers: {
-        mrdjDevSuite: {
+        mdsDevSuite: {
           command: 'npx',
-          args: ['-y', '@mrdj/mcp-server'],
+          args: ['-y', '@mr.dj2u/mcp-server'],
         },
       },
     });

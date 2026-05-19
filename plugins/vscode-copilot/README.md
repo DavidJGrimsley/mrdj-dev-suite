@@ -1,4 +1,4 @@
-# MrDJ Dev Suite VS Code Copilot Bundle
+# MDS Dev Suite VS Code Copilot Bundle
 
 This bundle is generated from `packages/knowledge` and targets native VS Code Copilot customization surfaces:
 
@@ -12,13 +12,13 @@ This bundle is generated from `packages/knowledge` and targets native VS Code Co
 ## Project Install
 
 ```bash
-mrdj agent install --client vscode --scope project --target .
+mds agent install --client vscode --scope project --target .
 ```
 
 ## User Install
 
 ```bash
-mrdj agent install --client vscode --scope user
+mds agent install --client vscode --scope user
 ```
 
 User-scope setup copies the generated assets into `~/.copilot` and uses VS Code's `code --add-mcp` flow for the MCP server when the `code` command is available. If it is not available, the CLI prints the exact manual command.
@@ -26,7 +26,7 @@ User-scope setup copies the generated assets into `~/.copilot` and uses VS Code'
 ## Verify
 
 ```bash
-mrdj agent verify --client vscode --target .
+mds agent verify --client vscode --target .
 ```
 
 Skills and prompt workflows are generated from the knowledge package. Do not edit generated copies by hand; update `packages/knowledge/src/content` or the generator scripts instead.

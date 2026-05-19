@@ -5,9 +5,9 @@ import { promisify } from 'node:util';
 
 import chalk from 'chalk';
 
-import { runDoctor } from '@mrdj/doctor';
+import { runDoctor } from '@mr.dj2u/doctor';
 
-import type { DoctorCheckResult, DoctorReport } from '@mrdj/doctor';
+import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 
 const execFileAsync = promisify(execFile);
 const TODO_MARKER = '# TodoForContext(optional):';
@@ -137,7 +137,7 @@ export async function buildContinueSessionBrief(projectPathInput = '.'): Promise
     nextTodo,
     recommendation,
     handoff:
-      'For lower token usage and lower cost, open this app folder directly in a new agent session and run `mrdj continue` before implementation work.',
+      'For lower token usage and lower cost, open this app folder directly in a new agent session and run `mds continue` before implementation work.',
   };
 }
 
@@ -155,7 +155,7 @@ export function chooseRecommendation(input: {
       requiresApproval: true,
       plan: [
         'Run from the app folder, or pass the app path explicitly.',
-        'Example: `mrdj continue ./my-app`.',
+        'Example: `mds continue ./my-app`.',
         'After generation, open the generated app folder in a fresh agent session to reduce token usage and save money.',
       ],
     };
@@ -169,7 +169,7 @@ export function chooseRecommendation(input: {
       plan: [
         'Ask the user whether to fill each marker with context or delete the marker line to acknowledge no extra context is needed.',
         'Handle markers one at a time and keep edits limited to project memory files.',
-        'Run `mrdj continue` again when marker cleanup is finished.',
+        'Run `mds continue` again when marker cleanup is finished.',
       ],
     };
   }
@@ -182,7 +182,7 @@ export function chooseRecommendation(input: {
       plan: [
         'Review the failing Doctor checks listed in this brief.',
         'Fix the highest-impact error first, keeping edits scoped to the app folder.',
-        'Rerun `mrdj doctor --fast --scripts=false` or `mrdj continue` after fixes.',
+        'Rerun `mds doctor --fast --scripts=false` or `mds continue` after fixes.',
       ],
     };
   }
@@ -218,7 +218,7 @@ export function chooseRecommendation(input: {
     title: 'Prepare CI or deployment readiness',
     requiresApproval: true,
     plan: [
-      'Run the CI-equivalent checks with `mrdj doctor --ci`.',
+      'Run the CI-equivalent checks with `mds doctor --ci`.',
       'Review release/deployment notes in project/release-flow.md when present.',
       'Prepare the next deployment or PR plan from a clean app-root session.',
     ],
@@ -236,7 +236,7 @@ export function renderContinueSessionBrief(brief: ContinueSessionBrief): string 
 
   if (!brief.isOnboardedApp) {
     lines.push(chalk.yellow('This does not look like an onboarded app folder.'));
-    lines.push('Run from the app folder or pass the app path, for example `mrdj continue ./my-app`.');
+    lines.push('Run from the app folder or pass the app path, for example `mds continue ./my-app`.');
     lines.push('');
     lines.push(...renderPlan(brief.recommendation));
     return lines.join('\n');

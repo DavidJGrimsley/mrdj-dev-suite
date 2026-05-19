@@ -4,7 +4,7 @@ import { explainTopic } from '../src/commands/explain.js';
 import { renderMarkdownReport } from '../src/commands/report.js';
 import { listSkillSummaries } from '../src/commands/skills.js';
 
-import type { DoctorReport } from '@mrdj/doctor';
+import type { DoctorReport } from '@mr.dj2u/doctor';
 
 describe('Phase 3 command helpers', () => {
   it('lists bundled skills and filters by query', () => {
@@ -72,7 +72,7 @@ describe('Phase 3 command helpers', () => {
 
     const markdown = renderMarkdownReport(report);
 
-    expect(markdown).toContain('# MrDJ Doctor Report');
+    expect(markdown).toContain('# MDS Doctor Report');
     expect(markdown).toContain('0 errors, 1 warnings, 1 passed, 0 skipped');
     expect(markdown).toContain('### WARN env hygiene');
     expect(markdown).toContain('"files"');

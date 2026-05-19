@@ -1,6 +1,6 @@
 {
-  "name": "@mrdj/knowledge",
-  "version": "0.1.0",
+  "name": "@mr.dj2u/knowledge",
+  "version": "0.1.1",
   "description": "Skills, patterns, guides, and rules for Expo development (MCP resources)",
   "type": "module",
   "files": [

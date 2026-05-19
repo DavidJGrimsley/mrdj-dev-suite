@@ -1,4 +1,4 @@
-# Contributing to mrdj-dev-suite
+# Contributing to mds-dev-suite
 
 Thank you for contributing! This guide explains how to work within the monorepo structure, follow our standards, and submit changes.
 
@@ -11,7 +11,7 @@ Thank you for contributing! This guide explains how to work within the monorepo 
 ### Initial Setup
 ```bash
 # Clone the repository
-git clone <repo-url> && cd mrdj-dev-suite
+git clone <repo-url> && cd mds-dev-suite
 
 # Install dependencies
 pnpm install
@@ -34,7 +34,7 @@ cat project/todo.md # Task breakdown
 - **File Extensions**: Use `.ts` / `.tsx` for all source code
 
 ### Naming Conventions
-- **Packages**: Lowercase, kebab-case (`@mrdj/package-name`)
+- **Packages**: Lowercase, kebab-case (`@mr.dj2u/package-name`)
 - **Directories**: Lowercase, descriptive (`src/`, `checks/`, `resources/`)
 - **Files**: lowercase for utilities/types, PascalCase for classes/components
 - **Functions**: camelCase for all
@@ -46,9 +46,9 @@ cat project/todo.md # Task breakdown
 import execa from 'execa';
 import { readFile } from 'fs/promises';
 
-// 2. Internal packages (@mrdj/*)
-import { Doctor } from '@mrdj/doctor';
-import { Skills } from '@mrdj/knowledge';
+// 2. Internal packages (@mr.dj2u/*)
+import { Doctor } from '@mr.dj2u/doctor';
+import { Skills } from '@mr.dj2u/knowledge';
 
 // 3. Local imports (relative)
 import { Config } from './config';
@@ -97,8 +97,8 @@ packages/
 ```json
 {
   "dependencies": {
-    "@mrdj/doctor": "workspace:*",
-    "@mrdj/knowledge": "workspace:*"
+    "@mr.dj2u/doctor": "workspace:*",
+    "@mr.dj2u/knowledge": "workspace:*"
   }
 }
 ```
@@ -106,11 +106,11 @@ packages/
 ### Cross-Package Communication
 ```typescript
 // ✅ DO: Import from package entry point
-import { Doctor } from '@mrdj/doctor';
-import { Skills, Patterns } from '@mrdj/knowledge';
+import { Doctor } from '@mr.dj2u/doctor';
+import { Skills, Patterns } from '@mr.dj2u/knowledge';
 
 // ❌ DON'T: Import from subdirectories
-import { Doctor } from '@mrdj/doctor/src/index';
+import { Doctor } from '@mr.dj2u/doctor/src/index';
 ```
 
 ## Development Workflow
@@ -138,7 +138,7 @@ pnpm build       # Compilation errors
 ### 3. Test Locally
 ```bash
 # Run specific package tests
-pnpm --filter @mrdj/doctor test
+pnpm --filter @mr.dj2u/doctor test
 
 # Run all tests
 pnpm test
@@ -422,4 +422,4 @@ Before submitting a PR, verify:
 
 ## Thank You!
 
-Your contributions help make mrdj-dev-suite better for all Expo developers. We appreciate your time and effort! 🙏
+Your contributions help make mds-dev-suite better for all Expo developers. We appreciate your time and effort! 🙏

@@ -61,13 +61,13 @@ Configuration patterns establish consistent strategies for managing app configur
     },
     
     "ios": {
-      "bundleIdentifier": "com.mrdj2u.djsportfolio",
+      "bundleIdentifier": "com.mds2u.djsportfolio",
       "buildNumber": "1",
       "supportsTabletMode": true
     },
     
     "android": {
-      "package": "com.mrdj2u.djsportfolio",
+      "package": "com.mds2u.djsportfolio",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./public/adaptive-icon.png",
@@ -125,18 +125,18 @@ export default ({ config }) => {
     
     ios: {
       bundleIdentifier: isDev
-        ? 'com.mrdj2u.djsportfolio.dev'
+        ? 'com.mds2u.djsportfolio.dev'
         : isStaging
-        ? 'com.mrdj2u.djsportfolio.staging'
-        : 'com.mrdj2u.djsportfolio',
+        ? 'com.mds2u.djsportfolio.staging'
+        : 'com.mds2u.djsportfolio',
     },
     
     android: {
       package: isDev
-        ? 'com.mrdj2u.djsportfolio.dev'
+        ? 'com.mds2u.djsportfolio.dev'
         : isStaging
-        ? 'com.mrdj2u.djsportfolio.staging'
-        : 'com.mrdj2u.djsportfolio',
+        ? 'com.mds2u.djsportfolio.staging'
+        : 'com.mds2u.djsportfolio',
     },
   };
 };

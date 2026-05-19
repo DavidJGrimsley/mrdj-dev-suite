@@ -1,5 +1,5 @@
-<!-- mrdj-dev-suite Project Manifest -->
-# Project Manifest: mrdj-dev-suite
+<!-- mds-dev-suite Project Manifest -->
+# Project Manifest: mds-dev-suite
 
 **Created**: 2025-01 | **Status**: Foundation Complete | **Phase**: 0 → 1 Transition
 
@@ -96,7 +96,7 @@ packages/mcp-server/src/
 ### Layer Model (5-Layer)
 ```
 ┌─────────────────────────────────────────────┐
-│  Layer 1: mrdj-cli (User Interface)         │
+│  Layer 1: mds-cli (User Interface)         │
 │  Commands: doctor, onboard, test-and-iterate│
 └──────────┬──────────────────────────────────┘
            │
@@ -123,20 +123,20 @@ packages/mcp-server/src/
 
 ### Dependency Graph
 ```
-@mrdj/cli
+@mr.dj2u/cli
 ├── yargs (CLI argument parsing)
 ├── chalk (colored output)
-├── @mrdj/doctor ──────────┐
+├── @mr.dj2u/doctor ──────────┐
 │   ├── execa (subprocess)  │
 │   └── json5 (JSON parsing)│
-└── @mrdj/knowledge ───────┤
+└── @mr.dj2u/knowledge ───────┤
     ├── (no external deps)  │
     └── patterns/skills ────┘
 
-@mrdj/mcp-server
+@mr.dj2u/mcp-server
 ├── @modelcontextprotocol/sdk
-├── @mrdj/doctor ──────┐
-└── @mrdj/knowledge ───┴─ (shared knowledge base)
+├── @mr.dj2u/doctor ──────┐
+└── @mr.dj2u/knowledge ───┴─ (shared knowledge base)
 ```
 
 ---
@@ -145,7 +145,7 @@ packages/mcp-server/src/
 
 ### Step 1: Validate Setup (5 minutes)
 ```bash
-cd f:\SoftwareDev\mrdj-dev-suite
+cd f:\SoftwareDev\mds-dev-suite
 pnpm install
 pnpm list -r
 ```
@@ -185,7 +185,7 @@ pnpm list -r
 
 ## 📦 Packages (4 Total)
 
-### 1. @mrdj/doctor
+### 1. @mr.dj2u/doctor
 **Purpose**: Multi-check health diagnostics for Expo projects
 - ESLint validation
 - TypeScript compilation check
@@ -196,17 +196,17 @@ pnpm list -r
 **Entry Point**: `src/index.ts`
 **Build Output**: `dist/index.js`
 
-### 2. @mrdj/cli
-**Purpose**: Command-line interface for mrdj suite
-- `mrdj doctor [path] [--fix]` - Run diagnostics
-- `mrdj onboard` - Interactive project setup
-- `mrdj test-and-iterate [--feature] [--pr-title]` - Automated workflow
+### 2. @mr.dj2u/cli
+**Purpose**: Command-line interface for mds suite
+- `mds doctor [path] [--fix]` - Run diagnostics
+- `mds onboard` - Interactive project setup
+- `mds test-and-iterate [--feature] [--pr-title]` - Automated workflow
 
 **Location**: `packages/cli/`
 **Entry Point**: `src/cli.ts`
-**Bin Entry**: `mrdj` command
+**Bin Entry**: `mds` command
 
-### 3. @mrdj/knowledge
+### 3. @mr.dj2u/knowledge
 **Purpose**: Architectural patterns, skills, conventions
 - Routing patterns (file-based, dynamic, guards)
 - Styling patterns (Uniwind, theming, responsive)
@@ -220,7 +220,7 @@ pnpm list -r
 **Entry Point**: `src/index.ts`
 **Export**: Patterns, skills, style guide
 
-### 4. @mrdj/mcp-server
+### 4. @mr.dj2u/mcp-server
 **Purpose**: Model Context Protocol server for Claude integration
 - Tool: `doctor_scan_project_full`
 - Tool: `onboard_new_expo_app`
@@ -255,7 +255,7 @@ pnpm onboard          # Start onboarding wizard
 ### Monorepo-Specific
 ```bash
 pnpm list -r          # List all packages with dependencies
-pnpm --filter @mrdj/doctor build  # Build single package
+pnpm --filter @mr.dj2u/doctor build  # Build single package
 turbo run lint --dry  # Dry-run Turborepo tasks
 ```
 
@@ -322,4 +322,4 @@ turbo run lint --dry  # Dry-run Turborepo tasks
 
 **Next Command**: User should run `pnpm install` to validate workspace setup, then indicate readiness to begin **Priority 1: Knowledge Harvest**.
 
-Generated: 2025-01 | mrdj-dev-suite Foundation Phase Complete
+Generated: 2025-01 | mds-dev-suite Foundation Phase Complete

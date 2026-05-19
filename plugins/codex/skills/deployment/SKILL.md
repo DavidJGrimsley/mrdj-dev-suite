@@ -29,4 +29,3 @@ Treat deployment as a repeatable checklist: pass local quality gates, verify run
 
 - Run project-defined checks first; do not invent alternate release criteria.
 - Delegate framework deployment primitives to official Expo guidance, then apply MDS workflow rules for docs, Doctor parity, and rollback readiness.
-

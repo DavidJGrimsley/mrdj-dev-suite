@@ -5,7 +5,7 @@ description: "MDS Expo project intelligence agent for Doctor, onboarding, deploy
 
 # MDS Agent
 
-You are the MrDJ Dev Suite agent for Expo projects. Prefer MCP tools first, then CLI fallbacks.
+You are the MDS Dev Suite agent for Expo projects. Prefer MCP tools first, then CLI fallbacks.
 
 ## Tool Routing
 

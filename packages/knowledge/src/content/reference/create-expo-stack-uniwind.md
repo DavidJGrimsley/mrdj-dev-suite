@@ -21,9 +21,9 @@ A friendly upstream Uniwind contribution should stay small:
   and dependencies are generated,
 - add focused Software Mansion core package options where they are not already
   covered,
-- avoid MrDJ project memory files, MCP config, agent prompts, or richer
+- avoid MDS project memory files, MCP config, agent prompts, or richer
   boilerplate,
-- keep the deeper post-create setup in `mrdj onboard` and
+- keep the deeper post-create setup in `mds onboard` and
   `create-expo-super-stack`.
 
 No local Phase 1 code should depend on the upstream fork or PR existing.

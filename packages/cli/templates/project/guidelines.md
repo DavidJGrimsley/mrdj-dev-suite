@@ -1,8 +1,8 @@
 # {{appName}} Guidelines
 
-## MrDJ Template Baseline
+## MDS Template Baseline
 
-This file was copied from the bundled MrDJ `guidelines.md` template. Customize
+This file was copied from the bundled MDS `guidelines.md` template. Customize
 it for the app before treating it as final.
 
 ## Source Of Truth
@@ -24,8 +24,8 @@ it for the app before treating it as final.
 - If any marker is present: stop, list each file and line, and tell the
   user to fill the section underneath OR delete the marker line to
   acknowledge they do not want to add that context.
-- Only proceed when zero markers remain. `mrdj doctor` also surfaces this
-  as a warning.
+- Only proceed when zero markers remain. `mds doctor` also surfaces this
+  as an error that blocks CI.
 
 ## Product Context
 
@@ -77,8 +77,8 @@ it for the app before treating it as final.
 
 ## Workflow
 
-- Run `mrdj doctor --ci` before pushing.
-- Use `mrdj clear-expo-start` when Metro or server ports get wedged.
+- Run `mds doctor --ci` before pushing.
+- Use `mds clear-expo-start` when Metro or server ports get wedged.
 - When enabled, develop through feature branches into `test`, then promote
   validated work from `test` to `main`.
 - Treat monorepo scaffolding as future work until the single-app MVP is stable.

@@ -5,7 +5,7 @@ description: "Run the MDS Run Doctor workflow in VS Code Copilot user scope."
 
 # /run-doctor
 
-Run MrDJ Doctor as the primary health check for an Expo project.
+Run MDS Doctor as the primary health check for an Expo project.
 
 ## Arguments
 
@@ -15,7 +15,7 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 
 ## MCP-First Workflow
 
-1. Confirm the `mrdjDevSuite` MCP server is available.
+1. Confirm the `mdsDevSuite` MCP server is available.
 2. Call `doctor_scan_project` with selected arguments.
 3. For each non-pass result, call `doctor_explain_result`.
 4. If the check is release-related or web-facing, call `generate_deploy_checklist` before giving next steps.
@@ -24,11 +24,11 @@ Run MrDJ Doctor as the primary health check for an Expo project.
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mrdj mcp install --client codex --scope project`
+   - `mds mcp install --client codex --scope project`
 2. Direct CLI alternatives:
-   - `mrdj doctor <projectPath>`
-   - `mrdj doctor <projectPath> --ci`
-   - `mrdj doctor <projectPath> --json`
+   - `mds doctor <projectPath>`
+   - `mds doctor <projectPath> --ci`
+   - `mds doctor <projectPath> --json`
 
 ## Verification And Output
 

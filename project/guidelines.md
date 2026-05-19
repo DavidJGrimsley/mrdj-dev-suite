@@ -1,4 +1,4 @@
-# mrdj-dev-suite Guidelines
+# mds-dev-suite Guidelines
 
 ## Source Of Truth
 
@@ -11,9 +11,9 @@
 
 ## Repo Scope
 
-- `mrdj-dev-suite` owns the MrDJ CLI, Doctor, MCP server, knowledge package,
+- `mds-dev-suite` owns the MDS CLI, Doctor, MCP server, knowledge package,
   onboarding, rich boilerplate, and `create-expo-super-stack`.
-- `f:\SoftwareDev\create-expo-stack` is the upstream-style fork. Keep MrDJ
+- `f:\SoftwareDev\create-expo-stack` is the upstream-style fork. Keep MDS
   memory, MCP, and rich boilerplate out of upstream PRs.
 - `f:\SoftwareDev\dogfood` is the practice app for testing generated flows.
 
@@ -43,7 +43,7 @@
 
 ## Expo Defaults
 
-- Prefer Uniwind and Tailwind v4 for new MrDJ Expo templates.
+- Prefer Uniwind and Tailwind v4 for new MDS Expo templates.
 - Keep Expo Router route files thin; route files should import feature screens
   or layouts.
 - Put reusable logic in `src/features`, `src/services`, `src/data`, shared hooks,
@@ -56,8 +56,8 @@
 
 - Run `pnpm type-check`, `pnpm lint`, `pnpm test`, and `pnpm build` before
   claiming a dev-suite change is ready.
-- Run `mrdj doctor --ci` before pushing app changes.
-- Use `mrdj clear-expo-start` or `mrdj clean-start` when Metro/cache/port state
+- Run `mds doctor --ci` before pushing app changes.
+- Use `mds clear-expo-start` or `mds clean-start` when Metro/cache/port state
   gets wedged.
 - Treat monorepo-aware generated app support as future work until the single-app
   MVP is stable.

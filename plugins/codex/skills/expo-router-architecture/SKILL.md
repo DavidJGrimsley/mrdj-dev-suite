@@ -30,4 +30,3 @@ Keep route files thin: routing and composition belong in `app/`, while business/
 
 - Prefer small, incremental extractions over broad rewrites.
 - Delegate framework routing primitives to official Expo Router guidance, then apply MDS rules for maintainable app-folder boundaries and Doctor-compatible architecture.
-

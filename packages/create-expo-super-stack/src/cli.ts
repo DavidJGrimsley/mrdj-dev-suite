@@ -6,16 +6,16 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { cancel, isCancel, log, text } from '@clack/prompts';
-import { SUPER_STACK_SUCCESS_MESSAGE, collectOnboardPlan, defaultOnboardPlan } from '@mrdj/cli/onboarding';
-import { scaffoldProjectMemory } from '@mrdj/cli/project-memory';
+import { SUPER_STACK_SUCCESS_MESSAGE, collectOnboardPlan, defaultOnboardPlan } from '@mr.dj2u/cli/onboarding';
+import { scaffoldProjectMemory } from '@mr.dj2u/cli/project-memory';
 
-import type { OnboardArgv } from '@mrdj/cli/onboarding';
+import type { OnboardArgv } from '@mr.dj2u/cli/onboarding';
 
 export interface ParsedArgs {
   projectName?: string;
   createExpoStackArgs: string[];
   helpRequested: boolean;
-  mrdj: {
+  mds: {
     appName?: string;
     audience?: string;
     coreFlows?: string;
@@ -73,36 +73,36 @@ export async function main(): Promise<void> {
   const parsed = withResolvedProjectName(initialParsed, await promptForMissingProjectName(initialParsed));
   validateCreateExpoStackArgs(parsed.createExpoStackArgs);
   const projectName = parsed.projectName ?? DEFAULT_PROJECT_NAME;
-  const projectParentDir = parsed.mrdj.projectParentDir ?? process.cwd();
+  const projectParentDir = parsed.mds.projectParentDir ?? process.cwd();
 
   printIntro(projectName, parsed.createExpoStackArgs, projectParentDir);
 
-  if (!parsed.mrdj.skipCreate) {
-    await runCreateExpoStack(parsed.createExpoStackArgs, parsed.mrdj.createExpoStackBin, projectParentDir);
+  if (!parsed.mds.skipCreate) {
+    await runCreateExpoStack(parsed.createExpoStackArgs, parsed.mds.createExpoStackBin, projectParentDir);
   } else {
-    console.log('Skipping create-expo-stack because --mrdj-skip-create was passed.');
+    console.log('Skipping create-expo-stack because --mds-skip-create was passed.');
   }
 
   const projectPath = await resolveGeneratedProjectPath(projectParentDir, projectName);
   const easSelected = await detectEasSetup(projectPath, parsed.createExpoStackArgs);
   const onboardArgv = buildOnboardArgv(projectPath, parsed, easSelected);
-  const plan = parsed.mrdj.yes
+  const plan = parsed.mds.yes
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
-  const movedAppDir = !parsed.mrdj.skipCreate && plan.answers.appDirectory === 'src'
+  const movedAppDir = !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
     ? await moveRootAppIntoSrc(projectPath)
     : null;
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
-    force: parsed.mrdj.force,
+    force: parsed.mds.force,
     guidelinesTemplate: plan.guidelinesTemplate,
     guidelinesTemplatePath: plan.guidelinesTemplatePath,
-    manageUniwind: parsed.mrdj.skipCreate,
+    manageUniwind: parsed.mds.skipCreate,
     richBoilerplate: plan.richBoilerplate,
   });
   const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName);
 
   console.log();
-  console.log('MrDJ onboarding complete.');
+  console.log('MDS onboarding complete.');
   for (const result of written) {
     console.log(`${result.wrote ? 'CREATED' : 'KEPT'} ${path.relative(process.cwd(), result.filePath)}`);
   }
@@ -133,7 +133,7 @@ export async function main(): Promise<void> {
   console.log();
   console.log('Next steps:');
   console.log(`  cd ${quoteDisplayArg(path.relative(process.cwd(), projectPath) || '.')}`);
-  if (noInstallRequested || parsed.mrdj.skipExpoFix || parsed.mrdj.skipCreate) {
+  if (noInstallRequested || parsed.mds.skipExpoFix || parsed.mds.skipCreate) {
     console.log(`  ${buildInstallCommand(packageManager).display}`);
     if (plan.answers.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
       console.log(`  ${buildExpoLatestSdkCommand(packageManager).display}`);
@@ -148,12 +148,12 @@ export async function main(): Promise<void> {
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
-  console.log('For the full dev-suite locally, use the generated scripts or install @mrdj/cli in the app.');
+  console.log('For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.');
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
   const createExpoStackArgs: string[] = [];
-  const mrdj: ParsedArgs['mrdj'] = {
+  const mds: ParsedArgs['mds'] = {
     force: false,
     skipExpoFix: false,
     yes: false,
@@ -178,203 +178,203 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
-    if (arg === '--help' || arg === '-h' || arg === '--mrdj-help') {
+    if (arg === '--help' || arg === '-h' || arg === '--mds-help') {
       helpRequested = true;
       continue;
     }
 
-    if (arg === '--mrdj-force') {
-      mrdj.force = true;
+    if (arg === '--mds-force') {
+      mds.force = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-rich') {
-      mrdj.rich = false;
+    if (arg === '--mds-no-rich') {
+      mds.rich = false;
       continue;
     }
 
-    if (arg === '--mrdj-rich') {
-      mrdj.rich = true;
+    if (arg === '--mds-rich') {
+      mds.rich = true;
       continue;
     }
 
-    if (arg === '--mrdj-yes' || arg === '--mrdj-non-interactive') {
-      mrdj.yes = true;
+    if (arg === '--mds-yes' || arg === '--mds-non-interactive') {
+      mds.yes = true;
       continue;
     }
 
-    if (arg === '--mrdj-skip-create') {
-      mrdj.skipCreate = true;
+    if (arg === '--mds-skip-create') {
+      mds.skipCreate = true;
       continue;
     }
 
-    if (arg === '--mrdj-skip-expo-fix' || arg === '--mrdj-no-expo-fix') {
-      mrdj.skipExpoFix = true;
+    if (arg === '--mds-skip-expo-fix' || arg === '--mds-no-expo-fix') {
+      mds.skipExpoFix = true;
       continue;
     }
 
-    if (arg.startsWith('--mrdj-create-expo-stack-bin=')) {
-      mrdj.createExpoStackBin = arg.slice('--mrdj-create-expo-stack-bin='.length);
+    if (arg.startsWith('--mds-create-expo-stack-bin=')) {
+      mds.createExpoStackBin = arg.slice('--mds-create-expo-stack-bin='.length);
       continue;
     }
 
-    if (arg === '--mrdj-guidelines-template') {
-      mrdj.guidelinesTemplate = true;
+    if (arg === '--mds-guidelines-template') {
+      mds.guidelinesTemplate = true;
       continue;
     }
 
-    if (arg.startsWith('--mrdj-guidelines-template=')) {
-      mrdj.guidelinesTemplate = true;
-      mrdj.guidelinesTemplatePath = arg.slice('--mrdj-guidelines-template='.length);
+    if (arg.startsWith('--mds-guidelines-template=')) {
+      mds.guidelinesTemplate = true;
+      mds.guidelinesTemplatePath = arg.slice('--mds-guidelines-template='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-guidelines-template-path=')) {
-      mrdj.guidelinesTemplate = true;
-      mrdj.guidelinesTemplatePath = arg.slice('--mrdj-guidelines-template-path='.length);
+    if (arg.startsWith('--mds-guidelines-template-path=')) {
+      mds.guidelinesTemplate = true;
+      mds.guidelinesTemplatePath = arg.slice('--mds-guidelines-template-path='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-defaults=')) {
-      mrdj.defaults = splitList(arg.slice('--mrdj-defaults='.length));
+    if (arg.startsWith('--mds-defaults=')) {
+      mds.defaults = splitList(arg.slice('--mds-defaults='.length));
       continue;
     }
 
-    if (arg.startsWith('--mrdj-app-name=')) {
-      mrdj.appName = arg.slice('--mrdj-app-name='.length);
+    if (arg.startsWith('--mds-app-name=')) {
+      mds.appName = arg.slice('--mds-app-name='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-audience=')) {
-      mrdj.audience = arg.slice('--mrdj-audience='.length);
+    if (arg.startsWith('--mds-audience=')) {
+      mds.audience = arg.slice('--mds-audience='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-core-flows=')) {
-      mrdj.coreFlows = arg.slice('--mrdj-core-flows='.length);
+    if (arg.startsWith('--mds-core-flows=')) {
+      mds.coreFlows = arg.slice('--mds-core-flows='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-data-needs=')) {
-      mrdj.dataNeeds = arg.slice('--mrdj-data-needs='.length);
+    if (arg.startsWith('--mds-data-needs=')) {
+      mds.dataNeeds = arg.slice('--mds-data-needs='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-data-start=')) {
-      const value = arg.slice('--mrdj-data-start='.length);
+    if (arg.startsWith('--mds-data-start=')) {
+      const value = arg.slice('--mds-data-start='.length);
       if (value === 'local' || value === 'supabase') {
-        mrdj.dataStart = value;
+        mds.dataStart = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mrdj-deployment-target=')) {
-      mrdj.deploymentTarget = arg.slice('--mrdj-deployment-target='.length);
+    if (arg.startsWith('--mds-deployment-target=')) {
+      mds.deploymentTarget = arg.slice('--mds-deployment-target='.length);
       continue;
     }
 
-    if (arg === '--mrdj-test-to-main') {
-      mrdj.testToMain = true;
+    if (arg === '--mds-test-to-main') {
+      mds.testToMain = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-test-to-main') {
-      mrdj.testToMain = false;
+    if (arg === '--mds-no-test-to-main') {
+      mds.testToMain = false;
       continue;
     }
 
-    if (arg.startsWith('--mrdj-platforms=')) {
-      mrdj.platforms = splitList(arg.slice('--mrdj-platforms='.length));
+    if (arg.startsWith('--mds-platforms=')) {
+      mds.platforms = splitList(arg.slice('--mds-platforms='.length));
       continue;
     }
 
-    if (arg.startsWith('--mrdj-first-platform=')) {
-      mrdj.firstPlatform = arg.slice('--mrdj-first-platform='.length);
+    if (arg.startsWith('--mds-first-platform=')) {
+      mds.firstPlatform = arg.slice('--mds-first-platform='.length);
       continue;
     }
 
-    if (arg.startsWith('--mrdj-platform-strategy=')) {
-      const value = arg.slice('--mrdj-platform-strategy='.length);
+    if (arg.startsWith('--mds-platform-strategy=')) {
+      const value = arg.slice('--mds-platform-strategy='.length);
       if (value === 'folders' || value === 'files-only') {
-        mrdj.platformStrategy = value;
+        mds.platformStrategy = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mrdj-app-directory=')) {
-      const value = arg.slice('--mrdj-app-directory='.length);
+    if (arg.startsWith('--mds-app-directory=')) {
+      const value = arg.slice('--mds-app-directory='.length);
       if (value === 'src' || value === 'root') {
-        mrdj.appDirectory = value;
+        mds.appDirectory = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mrdj-platform-layouts=')) {
-      const value = arg.slice('--mrdj-platform-layouts='.length);
+    if (arg.startsWith('--mds-platform-layouts=')) {
+      const value = arg.slice('--mds-platform-layouts='.length);
       if (value === 'shared' || value === 'platform-specific') {
-        mrdj.platformLayouts = value;
+        mds.platformLayouts = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mrdj-web-output=')) {
-      const value = arg.slice('--mrdj-web-output='.length);
+    if (arg.startsWith('--mds-web-output=')) {
+      const value = arg.slice('--mds-web-output='.length);
       if (value === 'static' || value === 'server' || value === 'spa' || value === 'none') {
-        mrdj.webOutput = value;
+        mds.webOutput = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mrdj-deployed-server=')) {
-      const value = arg.slice('--mrdj-deployed-server='.length);
+    if (arg.startsWith('--mds-deployed-server=')) {
+      const value = arg.slice('--mds-deployed-server='.length);
       if (value === 'standard-expo' || value === 'custom' || value === 'none') {
-        mrdj.deployedServer = value;
+        mds.deployedServer = value;
       }
       continue;
     }
 
-    if (arg === '--mrdj-create-expo-components') {
-      mrdj.createExpoComponents = true;
+    if (arg === '--mds-create-expo-components') {
+      mds.createExpoComponents = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-create-expo-components') {
-      mrdj.createExpoComponents = false;
+    if (arg === '--mds-no-create-expo-components') {
+      mds.createExpoComponents = false;
       continue;
     }
 
-    if (arg === '--mrdj-latest-expo-sdk') {
-      mrdj.latestExpoSdk = true;
+    if (arg === '--mds-latest-expo-sdk') {
+      mds.latestExpoSdk = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-latest-expo-sdk') {
-      mrdj.latestExpoSdk = false;
+    if (arg === '--mds-no-latest-expo-sdk') {
+      mds.latestExpoSdk = false;
       continue;
     }
 
-    if (arg === '--mrdj-expo-ui') {
-      mrdj.expoUi = true;
+    if (arg === '--mds-expo-ui') {
+      mds.expoUi = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-expo-ui') {
-      mrdj.expoUi = false;
+    if (arg === '--mds-no-expo-ui') {
+      mds.expoUi = false;
       continue;
     }
 
-    if (arg === '--mrdj-expo-native-tabs') {
-      mrdj.expoNativeTabs = true;
+    if (arg === '--mds-expo-native-tabs') {
+      mds.expoNativeTabs = true;
       continue;
     }
 
-    if (arg === '--mrdj-no-expo-native-tabs') {
-      mrdj.expoNativeTabs = false;
+    if (arg === '--mds-no-expo-native-tabs') {
+      mds.expoNativeTabs = false;
       continue;
     }
 
-    if (arg.startsWith('--mrdj-eas-uses=')) {
-      mrdj.easUses = splitList(arg.slice('--mrdj-eas-uses='.length));
+    if (arg.startsWith('--mds-eas-uses=')) {
+      mds.easUses = splitList(arg.slice('--mds-eas-uses='.length));
       continue;
     }
 
@@ -385,7 +385,7 @@ export function parseArgs(args: string[]): ParsedArgs {
     projectName,
     createExpoStackArgs,
     helpRequested,
-    mrdj,
+    mds,
   };
 }
 
@@ -394,31 +394,31 @@ export function renderHelpText(): string {
     'create-expo-super-stack',
     '',
     'Usage:',
-    '  create-expo-super-stack [project-name] [create-expo-stack options] [mrdj options]',
+    '  create-expo-super-stack [project-name] [create-expo-stack options] [mds options]',
     '',
     'Examples:',
     '  create-expo-super-stack my-app --expo-router --uniwind',
-    '  create-expo-super-stack ../MyApp --expo-router --mrdj-yes',
+    '  create-expo-super-stack ../MyApp --expo-router --mds-yes',
     '',
-    'Common mrdj options:',
-    '  --mrdj-yes                     Run non-interactive onboarding defaults',
-    '  --mrdj-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
-    '  --mrdj-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
-    '  --mrdj-guidelines-template     Use bundled MrDJ project/guidelines template',
-    '  --mrdj-app-name=<name>         Set display app name for project memory',
+    'Common mds options:',
+    '  --mds-yes                     Run non-interactive onboarding defaults',
+    '  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
+    '  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
+    '  --mds-guidelines-template     Use bundled MDS project/guidelines template',
+    '  --mds-app-name=<name>         Set display app name for project memory',
     '',
     'Help:',
     '  -h, --help                     Show this help and exit',
     '',
     'Note:',
-    '  Unknown non-mrdj flags are forwarded to create-expo-stack.',
+    '  Unknown non-mds flags are forwarded to create-expo-stack.',
   ].join('\n');
 }
 
 export function withResolvedProjectName(parsed: ParsedArgs, projectName: string): ParsedArgs {
   const target = resolveProjectTarget(parsed.projectName ?? projectName);
   const resolvedProjectName = target.projectName;
-  const createExpoStackArgs = parsed.mrdj.skipCreate
+  const createExpoStackArgs = parsed.mds.skipCreate
     ? parsed.createExpoStackArgs
     : replaceProjectArg(parsed.createExpoStackArgs, resolvedProjectName);
 
@@ -427,10 +427,10 @@ export function withResolvedProjectName(parsed: ParsedArgs, projectName: string)
       ...parsed,
       projectName: resolvedProjectName,
       createExpoStackArgs,
-      mrdj: {
-        ...parsed.mrdj,
+      mds: {
+        ...parsed.mds,
         projectParentDir: target.parentDir,
-        appName: parsed.mrdj.appName ?? resolvedProjectName,
+        appName: parsed.mds.appName ?? resolvedProjectName,
       },
     };
   }
@@ -439,10 +439,10 @@ export function withResolvedProjectName(parsed: ParsedArgs, projectName: string)
     ...parsed,
     projectName: resolvedProjectName,
     createExpoStackArgs,
-    mrdj: {
-      ...parsed.mrdj,
+    mds: {
+      ...parsed.mds,
       projectParentDir: target.parentDir,
-      appName: parsed.mrdj.appName ?? resolvedProjectName,
+      appName: parsed.mds.appName ?? resolvedProjectName,
     },
   };
 }
@@ -452,7 +452,7 @@ async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> 
     return parsed.projectName;
   }
 
-  if (parsed.mrdj.yes || parsed.mrdj.skipCreate) {
+  if (parsed.mds.yes || parsed.mds.skipCreate) {
     return DEFAULT_PROJECT_NAME;
   }
 
@@ -481,7 +481,7 @@ async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> 
 function printIntro(projectName: string, createExpoStackArgs: string[], projectParentDir = process.cwd()): void {
   console.log('create-expo-super-stack');
   console.log();
-  console.log('This uses create-expo-stack under the hood, then applies MrDJ onboarding.');
+  console.log('This uses create-expo-stack under the hood, then applies MDS onboarding.');
   console.log(`Delegating: create-expo-stack ${formatDisplayArgs(createExpoStackArgs)}`);
   console.log(`Target app: ${projectName}`);
   if (projectParentDir !== process.cwd()) {
@@ -563,7 +563,7 @@ export async function runExpoProjectChecks(
   options: ExpoProjectCheckOptions = {}
 ): Promise<void> {
   console.log();
-  console.log('Installing MrDJ-added dependencies, then running Expo dependency repair and doctor.');
+  console.log('Installing MDS-added dependencies, then running Expo dependency repair and doctor.');
   await runProjectCommand(projectPath, buildInstallCommand(packageManager));
   if (options.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
     await runProjectCommand(projectPath, buildExpoLatestSdkCommand(packageManager));
@@ -816,7 +816,7 @@ async function detectPackageManager(projectPath: string, args: string[]): Promis
 }
 
 function shouldRunExpoProjectChecks(parsed: ParsedArgs, noInstallRequested: boolean): boolean {
-  return !parsed.mrdj.skipCreate && !parsed.mrdj.skipExpoFix && !noInstallRequested;
+  return !parsed.mds.skipCreate && !parsed.mds.skipExpoFix && !noInstallRequested;
 }
 
 function hasNoInstallFlag(args: string[]): boolean {
@@ -1083,32 +1083,32 @@ function quoteDisplayArg(value: string): string {
 function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?: boolean): OnboardArgv {
   return {
     project: projectPath,
-    yes: parsed.mrdj.yes,
-    force: parsed.mrdj.force,
-    rich: parsed.mrdj.rich,
-    guidelinesTemplate: parsed.mrdj.guidelinesTemplate,
-    guidelinesTemplatePath: parsed.mrdj.guidelinesTemplatePath,
+    yes: parsed.mds.yes,
+    force: parsed.mds.force,
+    rich: parsed.mds.rich,
+    guidelinesTemplate: parsed.mds.guidelinesTemplate,
+    guidelinesTemplatePath: parsed.mds.guidelinesTemplatePath,
     easSelected,
-    appName: parsed.mrdj.appName,
-    audience: parsed.mrdj.audience,
-    coreFlows: parsed.mrdj.coreFlows,
-    dataNeeds: parsed.mrdj.dataNeeds,
-    dataStart: parsed.mrdj.dataStart,
-    deploymentTarget: parsed.mrdj.deploymentTarget,
-    defaults: parsed.mrdj.defaults,
-    testToMain: parsed.mrdj.testToMain,
-    platforms: parsed.mrdj.platforms,
-    firstPlatform: parsed.mrdj.firstPlatform,
-    platformStrategy: parsed.mrdj.platformStrategy,
-    appDirectory: parsed.mrdj.appDirectory ?? 'src',
-    platformLayouts: parsed.mrdj.platformLayouts,
-    webOutput: parsed.mrdj.webOutput,
-    deployedServer: parsed.mrdj.deployedServer,
-    createExpoComponents: parsed.mrdj.createExpoComponents,
-    latestExpoSdk: parsed.mrdj.latestExpoSdk,
-    expoUi: parsed.mrdj.expoUi,
-    expoNativeTabs: parsed.mrdj.expoNativeTabs,
-    easUses: parsed.mrdj.easUses,
+    appName: parsed.mds.appName,
+    audience: parsed.mds.audience,
+    coreFlows: parsed.mds.coreFlows,
+    dataNeeds: parsed.mds.dataNeeds,
+    dataStart: parsed.mds.dataStart,
+    deploymentTarget: parsed.mds.deploymentTarget,
+    defaults: parsed.mds.defaults,
+    testToMain: parsed.mds.testToMain,
+    platforms: parsed.mds.platforms,
+    firstPlatform: parsed.mds.firstPlatform,
+    platformStrategy: parsed.mds.platformStrategy,
+    appDirectory: parsed.mds.appDirectory ?? 'src',
+    platformLayouts: parsed.mds.platformLayouts,
+    webOutput: parsed.mds.webOutput,
+    deployedServer: parsed.mds.deployedServer,
+    createExpoComponents: parsed.mds.createExpoComponents,
+    latestExpoSdk: parsed.mds.latestExpoSdk,
+    expoUi: parsed.mds.expoUi,
+    expoNativeTabs: parsed.mds.expoNativeTabs,
+    easUses: parsed.mds.easUses,
   };
 }
 

@@ -16,13 +16,13 @@
 ### Follow-Up Fixes
 - [x] Clean up mojibake/encoding artifacts in generated markdown.
 - [x] Add tests for the first Doctor and CLI behavior.
-- [x] Replace the MCP placeholder with the real MCP SDK server/transport pattern from `mrdj-app-mcp`.
+- [x] Replace the MCP placeholder with the real MCP SDK server/transport pattern from `mds-app-mcp`.
 - [x] Move pattern markdown source of truth into `packages/knowledge` and generate MCP resources from it.
 
 ## Sprint 2: Knowledge Harvest
 
 - [x] Scan app repos: `time2pay`, `DJsPortfolio`, `PokePages`, `not-hot-dog`, `expo-super-template`.
-- [x] Scan MCP repos: `mrdj-app-mcp`, `mrdj-pokemon-mcp`, `mrdj-fne-mcp`.
+- [x] Scan MCP repos: `mds-app-mcp`, `mds-pokemon-mcp`, `mds-fne-mcp`.
 - [x] Scan package/CI repos: `core-monorepo`, `mercury-bank-sdk`, `quantum-api`, `ads-sdk`.
 - [x] Seed pattern docs for routing, API routes, Uniwind styling, Zustand, Drizzle/Supabase, deployment, and project organization.
 - [x] Add a first metadata catalog in `packages/knowledge/src/patterns`.
@@ -31,9 +31,9 @@
 - [x] Add a knowledge build script that validates markdown and generates MCP/plugin resource indexes.
 - [x] Create an animation performance guide/reference doc from Expo's article ["The real cost of React Native animations: benchmarking every approach"](https://expo.dev/blog/the-real-cost-of-react-native-animations-benchmarking-every-approach).
   - [x] Credit the original article/source prominently and link back to Expo/App & Flow wherever the guide uses their benchmark findings.
-  - [x] Extrapolate practical MrDJ guidance: when library choice matters, when it does not, how animated view count affects cost, and what to prefer for long-running/list-heavy animations.
+  - [x] Extrapolate practical MDS guidance: when library choice matters, when it does not, how animated view count affects cost, and what to prefer for long-running/list-heavy animations.
   - [x] Turn findings into Doctor/onboard rules where useful, such as warning on expensive animation patterns in large lists or unguarded debug-build benchmark assumptions.
-  - [x] Publish it as a knowledge guide and MCP resource, likely `packages/knowledge/src/guides/animation-performance.md` and `mrdj://guides/animation-performance`.
+  - [x] Publish it as a knowledge guide and MCP resource, likely `packages/knowledge/src/guides/animation-performance.md` and `mds://guides/animation-performance`.
 
 ## Sprint 3: Doctor Multi-Check
 
@@ -41,7 +41,7 @@
 - [x] Implement first-pass `runDoctor()` in `packages/doctor`.
 - [x] Add static checks for project docs, `.env` gitignore safety, script targets, styling stack, Expo config, env hygiene, and route architecture.
 - [x] Add script checks for lint, typecheck, tests, Expo Doctor, and production build profiles.
-- [x] Add CLI wiring for `mrdj doctor`, `--json`, `--fix`, `--ci`, `--full`, `--fast`, and script timeout.
+- [x] Add CLI wiring for `mds doctor`, `--json`, `--fix`, `--ci`, `--full`, `--fast`, and script timeout.
 
 ### Next
 - [x] Split Doctor into check modules: `checks/eslint.ts`, `checks/typescript.ts`, `checks/expo-doctor.ts`, `checks/app-architecture.ts`, `checks/ssr-safety.ts`, `checks/env-hygiene.ts`, `checks/seo-metadata.ts`.
@@ -56,12 +56,12 @@
 Turn the repeated request "push to git, open PR to test, poll it, fix failures, update PR, and merge to test" into a repeatable command and agent prompt.
 
 ### Current
-- [x] Add CLI placeholder/plan command: `mrdj test-and-iterate` / `mrdj ship`.
+- [x] Add CLI placeholder/plan command: `mds test-and-iterate` / `mds ship`.
 - [x] Add root alias: `pnpm ship:test`.
 
 ### Next
 - [x] Create `packages/cli/src/commands/test-and-iterate.ts`.
-- [x] Always run `mrdj doctor --ci` before mutating git.
+- [x] Always run `mds doctor --ci` before mutating git.
 - [x] Detect current branch, remote, default base, and existing PR using `gh`.
 - [x] Stage only intentional changes after showing `git status` (Phase 1 keeps staging manual).
 - [x] Print the commit, push, open/update PR, and check-polling workflow for dry-run use.
@@ -92,12 +92,12 @@ Do not compete with `rn-new` / `create-expo-stack` first. Build an agent-led pos
 ## Sprint 6: Upstream `create-expo-stack` Collaboration
 
 ### Goal
-Explore a friendly upstream contribution while keeping MrDJ-specific depth in `mrdj onboard`.
+Explore a friendly upstream contribution while keeping MDS-specific depth in `mds onboard`.
 
 - [x] Capture `https://github.com/roninoss/create-expo-stack` upstream conventions for a focused Uniwind-support PR.
 - [x] Define the focused Uniwind branch/PR scope without making Phase 1 depend on an external fork.
 - [x] Study the existing package-slice template conventions before coding.
-- [x] Keep `project/info.md`, `project/todo.md`, `project/style.md`, MCP config, and richer boilerplate in `mrdj onboard`, not the upstream PR.
+- [x] Keep `project/info.md`, `project/todo.md`, `project/style.md`, MCP config, and richer boilerplate in `mds onboard`, not the upstream PR.
 - [x] Track separate upstream follow-ups: clearer generated-file expectations, optional richer Zustand examples, and docs that point users to post-create onboarding tools.
 - [x] Use `f:\SoftwareDev\create-expo-stack` as the local fork for upstream-style work.
 - [x] Add upstream-friendly `--uniwind` support using package-slice templates.
@@ -115,15 +115,15 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
 - [x] Prefer the local `f:\SoftwareDev\create-expo-stack` fork for dev runs.
 - [x] Delegate Uniwind to `create-expo-stack --uniwind` instead of adding it afterward in the wrapper.
 - [x] Resolve generated project path from the project name or `cesconfig.jsonc`.
-- [x] Run MrDJ onboarding and rich boilerplate after generation.
-- [x] Run the full MrDJ onboarding questionnaire instead of only applying canned defaults.
+- [x] Run MDS onboarding and rich boilerplate after generation.
+- [x] Run the full MDS onboarding questionnaire instead of only applying canned defaults.
 - [x] Offer bundled/custom `project/guidelines.md` template support.
-- [x] Add `mrdj kill-port [ports...]`.
-- [x] Add `mrdj free-port [ports...]` with `mrdj kill-port` compatibility alias.
-- [x] Add `mrdj clear-expo-start` with alias `mrdj clean-start`.
+- [x] Add `mds kill-port [ports...]`.
+- [x] Add `mds free-port [ports...]` with `mds kill-port` compatibility alias.
+- [x] Add `mds clear-expo-start` with alias `mds clean-start`.
 - [x] Add generated app scripts for `free-port`, `kill-port` (compat), `clear-expo-start`, and `clean-start`.
 - [x] Add generated app scripts for `expo-install-fix`, `expo-doctor`, and `post-create-check`.
-- [x] Run Expo dependency repair/doctor after MrDJ adds dependencies when install was not skipped.
+- [x] Run Expo dependency repair/doctor after MDS adds dependencies when install was not skipped.
 - [x] Force Tailwind v4 for Uniwind so Tailwind 3 peer conflicts do not break `npm install`.
 - [x] Normalize NativeWind generated artifacts to Uniwind when rich boilerplate is applied.
 - [x] Rename rich demo components to `src/components/exposition`.
@@ -148,11 +148,11 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
 - [ ] Publish package only after an npm name check and a final end-to-end local generation pass.
 - [ ] Add a fully interactive agent-session path for `create-expo-super-stack` so a Codex/plugin prompt can guide the app setup from start to finish while using the CLI behind the scenes.
 - [ ] Let the agent-session intake accept pasted `project/info.md` sections, whole project memory files, or research-plan documents, then check and reshape them into the canonical `project/info.md` and `project/style.md` structure.
-- [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MrDJ onboarding.
+- [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MDS onboarding.
 - [ ] Save personal defaults globally for future app generation.
 - [ ] Add monorepo support after the single-app MVP is stable.
 - [ ] Run an Expo-owned skill delegation sweep so MDS guidance layers project memory/checks/workflow instead of duplicating framework docs.
-- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `MrDJ Dev Suite`.
+- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `MDS Dev Suite`.
 - [ ] Rename `kill-port` to `free-port` as the primary command while preserving `kill-port` compatibility alias.
 - [ ] Add canonical ship-test-loop prompt spec (Codex/Claude/MCP): meaningful commit message, open/update PR to test, wait ~2 minutes, poll PR comments + failed checks, fix and push, repeat up to 5 cycles, merge to test when all checks are green.
 
@@ -181,19 +181,19 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 3: Create The CLI
 
-- [x] Implement `mrdj doctor`.
-- [x] Implement `mrdj doctor --json`.
-- [x] Implement `mrdj doctor --fix`.
-- [x] Implement `mrdj init` / `mrdj onboard`.
-- [x] Implement `mrdj kill-port`.
-- [x] Implement `mrdj free-port` with `mrdj kill-port` compatibility alias.
-- [x] Implement `mrdj clear-expo-start` / `mrdj clean-start`.
+- [x] Implement `mds doctor`.
+- [x] Implement `mds doctor --json`.
+- [x] Implement `mds doctor --fix`.
+- [x] Implement `mds init` / `mds onboard`.
+- [x] Implement `mds kill-port`.
+- [x] Implement `mds free-port` with `mds kill-port` compatibility alias.
+- [x] Implement `mds clear-expo-start` / `mds clean-start`.
 - [x] Implement `create-expo-super-stack`.
-- [x] Implement `mrdj explain`.
-- [x] Implement `mrdj skills list`.
-- [x] Implement `mrdj skills show`.
-- [x] Implement `mrdj mcp install` with `--client claude|codex|cursor` (subsumes the originally separate `mrdj codex install` and `mrdj claude install` commands).
-- [x] Implement `mrdj report`.
+- [x] Implement `mds explain`.
+- [x] Implement `mds skills list`.
+- [x] Implement `mds skills show`.
+- [x] Implement `mds mcp install` with `--client claude|codex|cursor` (subsumes the originally separate `mds codex install` and `mds claude install` commands).
+- [x] Implement `mds report`.
 - [ ] Keep DWAH-specific commands future-facing until the personal suite proves itself, such as `dwah login`, `dwah link`, `dwah env pull`, `dwah env push`, `dwah deploy`, `dwah preview`, `dwah promote`, and `dwah rollback`.
 
 ### Phase 4: Agent Skills
@@ -249,36 +249,36 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Map each bundle asset to a single source of truth (knowledge package, MCP server, CLI) to avoid duplication and drift.
 - [x] Create a bootstrap flow that installs the bundle and verifies the agent can see tools and resources.
 - [x] Add a short multi-step validation script: run Doctor, fetch a knowledge guide, and execute a CLI workflow from the agent.
-- [x] Extend `mrdj agent install` to Claude Code and Codex so VS Code, Claude, and Codex each get a native bundle in one command.
+- [x] Extend `mds agent install` to Claude Code and Codex so VS Code, Claude, and Codex each get a native bundle in one command.
 - [x] Add a generated Claude Code `mds` custom agent plus generated commands and skills.
 - [x] Keep Codex as a plugin-first bundle and install it through a local marketplace entry plus MCP config.
 
 ### Phase 10: GitHub Action
 
-- [x] Add a repo-local `.github/actions/mrdj-doctor/` or publish `mrdj/doctor-action`.
-- [x] Support PR/push usage with `npx @mrdj/doctor --ci`.
+- [x] Add a repo-local `.github/actions/mds-doctor/` or publish `mds/doctor-action`.
+- [x] Support PR/push usage with `npx @mr.dj2u/doctor --ci`.
 - [x] Report a Doctor score plus errors and warnings in CI output.
 - [x] Include findings such as unsafe public secrets, missing canonical metadata, and route files containing business logic.
 
 ### Phase 11: Publishing, Personal Workflow And Dogfooding
 
-- [ ] Run a sweep to ensure MrDJ-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
-(Then maybe add a small audit checklist before adding any new MrDJ skill:
+- [ ] Run a sweep to ensure MDS-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
+(Then maybe add a small audit checklist before adding any new MDS skill:
 
 Does an Expo skill already cover this?
-If yes, is MrDJ only adding project-specific guidance?
+If yes, is MDS only adding project-specific guidance?
 Are we linking/delegating instead of duplicating?
 Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
-- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MrDJ Dev Suite` as suite name in brand references.
-- [ ] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
-- [ ] Support use inside an Expo app with `npx @mrdj/cli init`.
-- [ ] Open a PR to create expo stack from my local fork (added USniwind to CLI, made CLI match website, updated website with Uniwind.)
+- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MDS Dev Suite` as suite name in brand references.
+- [x] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
+- [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
+- [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
 - [ ] Support `npx create-expo-super-stack`.
-- [ ] Support `mrdj clear-expo-start`, `mrdj free-port`, and `mrdj kill-port` compatibility in generated apps.
-- [ ] Support `npx @mrdj/doctor`.
-- [ ] Support `npx @mrdj/cli codex install`.
-- [ ] Support `npx @mrdj/cli claude install`.
+- [x] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
+- [x] Support `npx @mr.dj2u/doctor`.
+- [ ] Support `npx @mr.dj2u/cli codex install`.
+- [ ] Support `npx @mr.dj2u/cli claude install`.
 - [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
 - [ ] Dogfood on DavidJGrimsley.com, Time2Pay, PokePages, Quantum API frontend, and any DWAH prototype.
 
@@ -287,7 +287,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Week 1: repo, Turborepo, shared package, knowledge package, skills markdown, docs folder, and initial MCP server skeleton.
 - [ ] Week 2: Doctor v0 with app file size, business logic keywords, SSR globals, public secret vars, SEO basics, and Expo config basics.
 - [ ] Week 3: MCP tools for project/file scans, skills/guides, and project reports.
-- [ ] Week 4: CLI installer with `mrdj init`, `mrdj doctor`, `mrdj mcp install`, `mrdj codex install`, and `mrdj claude install`.
+- [ ] Week 4: CLI installer with `mds init`, `mds doctor`, `mds mcp install`, `mds codex install`, and `mds claude install`.
 - [ ] Week 5: Codex and Claude bundles with shared skills, commands, MCP config, and install docs.
 - [ ] Week 6: real-world dogfood with reports, fixes, examples, and roadmap cleanup.
 
@@ -298,11 +298,11 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] `pnpm lint` passes.
 - [x] `pnpm build` passes.
 - [x] `node packages/cli/dist/cli.js doctor . --json --scripts=false` returns a structured report.
-- [x] `mrdj doctor --ci` mirrors each target repo's CI checks as closely as the repo permits.
+- [x] `mds doctor --ci` mirrors each target repo's CI checks as closely as the repo permits.
 - [x] MCP resource listing exposes the harvested patterns.
 - [x] Onboarding creates the four project memory files in a fresh Expo app.
 - [x] Generated `project/style.md` stays visual-only and `project/guidelines.md` carries technical/agent rules.
-- [x] Generated rich boilerplate uses `src/components/exposition`, not `src/components/mrdj`.
+- [x] Generated rich boilerplate uses `src/components/exposition`, not `src/components/mds`.
 - [x] Generated exposition pages include a temporary/prune-before-production notice.
 - [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
 - [x] Existing project memory can be normalized without losing original notes.
@@ -318,9 +318,11 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 ## Cleanup/Random todo
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
 - [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
+- [ ] Keep `mds free-port` primary and `mds kill-port` as compatibility alias in docs, prompts, and generated scripts.
+- [ ] Sweep for backwards compatibility/legacy support and remove them. For example, the `commands-src` path for Claude commands is a legacy artifact from before the unified knowledge source and should be removed to avoid confusion.
 - Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
 - [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 
-- [ ] Enhance the style guide component to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
 - Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own. 
 
 

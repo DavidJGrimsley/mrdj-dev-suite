@@ -44,7 +44,7 @@ describe('runDoctor', () => {
         lint: 'node -e "process.exit(0)"',
         typecheck: 'node -e "process.exit(0)"',
         test: 'node -e "process.exit(0)"',
-        'mds:doctor': 'npx @mrdj/cli doctor',
+        'mds:doctor': 'npx @mr.dj2u/cli doctor',
         'build:prod': 'eas build --profile production',
       },
     });
@@ -140,7 +140,7 @@ describe('scanFile', () => {
 });
 
 async function createTempProject(): Promise<string> {
-  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mrdj-doctor-'));
+  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-doctor-'));
   tempDirs.push(projectPath);
   await mkdir(path.join(projectPath, 'project'), { recursive: true });
   await writeFile(path.join(projectPath, 'project', 'info.md'), '# Info\n', 'utf8');

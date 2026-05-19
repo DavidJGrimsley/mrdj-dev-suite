@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
-import { fixDoctor, runDoctor } from '@mrdj/doctor';
+import { fixDoctor, runDoctor } from '@mr.dj2u/doctor';
 import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
@@ -15,7 +15,7 @@ import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mrdj/doctor';
+import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
@@ -39,7 +39,7 @@ export interface DoctorArgv {
 
 async function main(): Promise<void> {
   await yargs(hideBin(process.argv))
-    .scriptName('mrdj')
+    .scriptName('mds')
     .command(
       'doctor [path]',
       'Run production doctor checks on an Expo project',
@@ -246,7 +246,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['free-port [ports..]', 'kill-port [ports..]', 'killport [ports..]', 'Kill-Port [ports..]'],
+      ['free-port [ports..]', 'kill-port [ports..]'],
       'Free one or more local ports by stopping listening processes',
       (builder) =>
         builder
@@ -529,7 +529,7 @@ function resolveDoctorMode(argv: DoctorArgv): DoctorMode {
 }
 
 function printDoctorReport(report: DoctorReport): void {
-  console.log(chalk.bold(`mrdj doctor (${report.mode})`));
+  console.log(chalk.bold(`mds doctor (${report.mode})`));
   console.log(chalk.dim(report.projectPath));
   console.log();
 
