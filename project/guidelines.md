@@ -1,4 +1,4 @@
-# mds-dev-suite Guidelines
+# Mr. DJ's Dev Suite Guidelines
 
 ## Source Of Truth
 
@@ -11,7 +11,7 @@
 
 ## Repo Scope
 
-- `mds-dev-suite` owns the MDS CLI, Doctor, MCP server, knowledge package,
+- Mr. DJ's Dev Suite owns the MDS CLI, Doctor, MCP server, knowledge package,
   onboarding, rich boilerplate, and `create-expo-super-stack`.
 - `f:\SoftwareDev\create-expo-stack` is the upstream-style fork. Keep MDS
   memory, MCP, and rich boilerplate out of upstream PRs.
@@ -61,4 +61,3 @@
   gets wedged.
 - Treat monorepo-aware generated app support as future work until the single-app
   MVP is stable.
-

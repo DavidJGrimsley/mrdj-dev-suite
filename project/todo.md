@@ -152,7 +152,7 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
 - [ ] Save personal defaults globally for future app generation.
 - [ ] Add monorepo support after the single-app MVP is stable.
 - [ ] Run an Expo-owned skill delegation sweep so MDS guidance layers project memory/checks/workflow instead of duplicating framework docs.
-- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `MDS Dev Suite`.
+- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `Mr. DJ's Dev Suite`.
 - [ ] Rename `kill-port` to `free-port` as the primary command while preserving `kill-port` compatibility alias.
 - [ ] Add canonical ship-test-loop prompt spec (Codex/Claude/MCP): meaningful commit message, open/update PR to test, wait ~2 minutes, poll PR comments + failed checks, fix and push, repeat up to 5 cycles, merge to test when all checks are green.
 
@@ -262,7 +262,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 11: Publishing, Personal Workflow And Dogfooding
 
-- [ ] Run a sweep to ensure MDS-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
+- [x] Run a sweep to ensure MDS does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
 (Then maybe add a small audit checklist before adding any new MDS skill:
 
 Does an Expo skill already cover this?
@@ -270,8 +270,11 @@ If yes, is MDS only adding project-specific guidance?
 Are we linking/delegating instead of duplicating?
 Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
-- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MDS Dev Suite` as suite name in brand references.
+- [x] Finish naming cleanup: use `MDS` for tools while keeping `Mr. DJ's Dev Suite` as suite name in brand references.
 - [x] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
+- [ ] Add forked version of create expo stack to be used/bundled with super stack so the dev suite can work before the upstream PR is merged.
+- [ ] Republish npm packages.
+- [ ] Test npx create expo super stack as any other dev would.
 - [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
 - [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
 - [ ] Support `npx create-expo-super-stack`.
@@ -280,7 +283,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Support `npx @mr.dj2u/cli codex install`.
 - [ ] Support `npx @mr.dj2u/cli claude install`.
 - [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
-- [ ] Dogfood on DavidJGrimsley.com, Time2Pay, PokePages, Quantum API frontend, and any DWAH prototype.
+- [ ] Dogfood on Time2Pay, PokePages and the Dogfood app.
 
 ### MVP Week Roadmap
 
@@ -324,7 +327,9 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 
 - [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
 - Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own. 
-
+- [ ] Add support to use npx serve sim (New project by Evan Bacon) if it fits in the design.
+- [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
+- [ ] Consider adding agentic workflows for issues on github.
 
 
 ## Mono repo support

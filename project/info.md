@@ -1,4 +1,4 @@
-# mds-dev-suite Project Info
+# Mr. DJ's Dev Suite Project Info
 
 ## Mission
 

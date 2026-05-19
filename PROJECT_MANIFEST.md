@@ -1,5 +1,5 @@
-<!-- mds-dev-suite Project Manifest -->
-# Project Manifest: mds-dev-suite
+<!-- Mr. DJ's Dev Suite Project Manifest -->
+# Project Manifest: Mr. DJ's Dev Suite
 
 **Created**: 2025-01 | **Status**: Foundation Complete | **Phase**: 0 → 1 Transition
 
@@ -145,7 +145,7 @@ packages/mcp-server/src/
 
 ### Step 1: Validate Setup (5 minutes)
 ```bash
-cd f:\SoftwareDev\mds-dev-suite
+cd f:\SoftwareDev\mrdj-dev-suite
 pnpm install
 pnpm list -r
 ```
@@ -322,4 +322,4 @@ turbo run lint --dry  # Dry-run Turborepo tasks
 
 **Next Command**: User should run `pnpm install` to validate workspace setup, then indicate readiness to begin **Priority 1: Knowledge Harvest**.
 
-Generated: 2025-01 | mds-dev-suite Foundation Phase Complete
+Generated: 2025-01 | Mr. DJ's Dev Suite Foundation Phase Complete

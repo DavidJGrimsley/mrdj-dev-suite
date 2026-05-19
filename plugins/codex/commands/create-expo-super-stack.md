@@ -9,7 +9,7 @@ Create a new Expo app with the MDS Super Stack flow, then hand off to phase-base
 
 ## MCP-First Workflow
 
-1. Confirm the `mds-dev-suite` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Invoke the MCP prompt `create_expo_super_stack` from a parent directory.
 3. Follow the prompt intake flow and keep one question per turn until generation completes.
 4. After generation, move into the new app folder and invoke `continue_project` (or prompt `continue_mds_project`) for the first implementation session.

@@ -1,4 +1,4 @@
-# MDS Dev Suite VS Code Copilot Bundle
+# Mr. DJ's Dev Suite VS Code Copilot Bundle
 
 This bundle is generated from `packages/knowledge` and targets native VS Code Copilot customization surfaces:
 

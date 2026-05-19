@@ -1,4 +1,4 @@
-﻿# /review-expo-project
+# /review-expo-project
 
 Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 
@@ -9,7 +9,7 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 
 ## MCP-First Workflow
 
-1. Confirm the `mds-dev-suite` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Call `continue_project` to summarize current project state and blockers.
 3. Call `doctor_scan_project` with `projectPath` and `mode`.
 4. For each warning/error, call `doctor_explain_result`, then pull targeted guidance with `get_skill` (for example: `project-onboarding`, `debugging`, `deployment`).

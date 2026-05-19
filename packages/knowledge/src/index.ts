@@ -244,7 +244,7 @@ const REFERENCE_RESOURCES = [
     description: 'Inventory of harvested reference repos and cleanup rules.',
     resourcePath: 'reference/reference-repo-evacuation.md',
     keywords: ['reference repos', 'evacuation', 'phase 1'],
-    sourceRepos: ['mds-dev-suite'],
+    sourceRepos: ['mr-djs-dev-suite'],
   },
   {
     id: 'mcp-sdk-transport',
@@ -287,7 +287,7 @@ const CHECKLIST_RESOURCES = [
     description: 'Checklist for doctor/PR/fix/poll/merge loops into the test branch.',
     resourcePath: 'checklists/ship-test-loop.md',
     keywords: ['checklist', 'ship', 'test branch', 'pull request'],
-    sourceRepos: ['mds-dev-suite'],
+    sourceRepos: ['mr-djs-dev-suite'],
   },
   {
     id: 'unified-agent-bundle-validation',
@@ -295,7 +295,7 @@ const CHECKLIST_RESOURCES = [
     description: 'Phase 9 validation checklist for the unified agent bundle.',
     resourcePath: 'checklists/unified-agent-bundle-validation.md',
     keywords: ['phase 9', 'unified bundle', 'validation'],
-    sourceRepos: ['mds-dev-suite'],
+    sourceRepos: ['mr-djs-dev-suite'],
   },
 ] as const;
 
@@ -306,7 +306,7 @@ const EXAMPLE_RESOURCES = [
     description: 'Example iteration log for a PR loop into the test branch.',
     resourcePath: 'examples/ship-test-loop.md',
     keywords: ['example', 'ship', 'iteration'],
-    sourceRepos: ['mds-dev-suite'],
+    sourceRepos: ['mr-djs-dev-suite'],
   },
   {
     id: 'unified-agent-bundle-bootstrap',
@@ -314,7 +314,7 @@ const EXAMPLE_RESOURCES = [
     description: 'Phase 9 bootstrap example for unified agent bundle installation.',
     resourcePath: 'examples/unified-agent-bundle-bootstrap.md',
     keywords: ['phase 9', 'bundle', 'bootstrap'],
-    sourceRepos: ['mds-dev-suite'],
+    sourceRepos: ['mr-djs-dev-suite'],
   },
 ] as const;
 

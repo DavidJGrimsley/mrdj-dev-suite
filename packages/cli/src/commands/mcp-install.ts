@@ -23,8 +23,8 @@ export interface ResolvedServer {
   args: string[];
 }
 
-export const SERVER_KEY = 'mds-dev-suite';
-export const VSCODE_SERVER_KEY = 'mdsDevSuite';
+export const SERVER_KEY = 'mr-djs-dev-suite';
+export const VSCODE_SERVER_KEY = 'mds';
 
 export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> {
   const client = argv.client ?? 'claude';
@@ -273,18 +273,18 @@ function printClaudeProjectFollowup(targetDir: string): void {
   console.log();
   console.log(chalk.bold('Next steps for Claude Code (project scope):'));
   console.log(`  1. Open ${targetDir} as a workspace in Claude Code (or restart Claude Code if already open).`);
-  console.log('  2. Run /mcp to confirm the mds-dev-suite server is listed.');
-  console.log('  3. Invoke the prompt: /mcp__mds-dev-suite__onboard_new_expo_app');
+  console.log('  2. Run /mcp to confirm the mr-djs-dev-suite server is listed.');
+  console.log('  3. Invoke the prompt: /mcp__mr-djs-dev-suite__onboard_new_expo_app');
 }
 
 function printClaudeUserFollowup(): void {
   console.log();
   console.log(chalk.bold('Next steps for Claude Code (user scope):'));
   console.log('  1. Restart Claude Code so it picks up ~/.claude.json.');
-  console.log('  2. From any workspace, run /mcp to confirm mds-dev-suite is listed.');
+  console.log('  2. From any workspace, run /mcp to confirm mr-djs-dev-suite is listed.');
   console.log('  3. Available prompts:');
-  console.log('       /mcp__mds-dev-suite__create_expo_super_stack    (run from a parent dir to create a new app)');
-  console.log('       /mcp__mds-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
+  console.log('       /mcp__mr-djs-dev-suite__create_expo_super_stack    (run from a parent dir to create a new app)');
+  console.log('       /mcp__mr-djs-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
 }
 
 function printVscodeUserMcpInstructions(command: string, reason: 'dry-run' | 'missing-code-command'): void {

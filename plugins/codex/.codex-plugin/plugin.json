@@ -1,13 +1,13 @@
 {
-  "name": "mds-dev-suite",
+  "name": "mr-djs-dev-suite",
   "version": "0.1.0",
   "description": "MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
   "author": {
     "name": "DJ Grimsley",
     "url": "https://davidjgrimsley.com"
   },
-  "homepage": "https://github.com/DavidJGrimsley/mds-dev-suite",
-  "repository": "https://github.com/DavidJGrimsley/mds-dev-suite",
+  "homepage": "https://github.com/DavidJGrimsley/mr-djs-dev-suite",
+  "repository": "https://github.com/DavidJGrimsley/mr-djs-dev-suite",
   "license": "MIT",
   "keywords": [
     "expo",
@@ -20,7 +20,7 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "MDS Dev Suite",
+    "displayName": "Mr. DJ's Dev Suite",
     "shortDescription": "MCP-first Expo review, doctor, onboarding, and deploy workflows",
     "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.",
     "developerName": "MDS",
@@ -30,7 +30,7 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://github.com/DavidJGrimsley/mds-dev-suite",
+    "websiteURL": "https://github.com/DavidJGrimsley/mr-djs-dev-suite",
     "defaultPrompt": [
       "Review my Expo project and give me the next safe implementation steps.",
       "Run a deployment-readiness check with Doctor and fix blockers first.",

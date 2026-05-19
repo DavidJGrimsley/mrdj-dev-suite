@@ -34,3 +34,4 @@ Use a deterministic reset path first; do not work around unstable server state w
 
 - Prefer established MDS cleanup commands over custom shell sequences.
 - Avoid introducing alternate fallback port workflows that hide root-cause server state issues.
+- Delegate Expo or Metro mechanics to official Expo guidance, then apply MDS reset commands, script consistency, and onboarding defaults.

@@ -1,7 +1,7 @@
 # Reference Repo Evacuation
 
 Phase 1 captured the useful patterns from the temporary multi-root workspace so
-`mds-dev-suite` can run from a clean single-folder workspace.
+Mr. DJ's Dev Suite can run from a clean single-folder workspace.
 
 ## Captured Sources
 
@@ -27,5 +27,5 @@ Phase 1 captured the useful patterns from the temporary multi-root workspace so
 - Keep reference repos read-only during harvest.
 - Delete `temp/` clones after their patterns are promoted or intentionally
   discarded.
-- A new engineer should be able to open only `mds-dev-suite` and still access
+- A new engineer should be able to open only Mr. DJ's Dev Suite and still access
   all Phase 1 knowledge through `packages/knowledge`.

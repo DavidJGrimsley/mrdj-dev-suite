@@ -1,4 +1,4 @@
-# MDS Dev Suite — Agent Guidelines
+# Mr. DJ's Dev Suite — Agent Guidelines
 
 ## Before every git commit
 Always run `mds doctor --fast` (or via MCP `doctor_scan_project`) on the target project before committing. If the report has errors, fix them before proceeding. Warnings are acceptable to commit with.

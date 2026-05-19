@@ -62,7 +62,7 @@ describe('generateCodexPluginBundle', () => {
     const pluginRoot = path.join(repoRoot, 'plugins', 'codex');
     const manifestRaw = await readFile(path.join(pluginRoot, '.codex-plugin', 'plugin.json'), 'utf8');
     const manifest = JSON.parse(manifestRaw) as Record<string, unknown>;
-    expect(manifest.name).toBe('mds-dev-suite');
+    expect(manifest.name).toBe('mr-djs-dev-suite');
     expect(manifest.version).toBe('9.9.9');
     expect(manifest.skills).toBe('./skills/');
     expect(manifest.mcpServers).toBe('./.mcp.json');
@@ -72,7 +72,7 @@ describe('generateCodexPluginBundle', () => {
 
     const mcpRaw = await readFile(path.join(pluginRoot, '.mcp.json'), 'utf8');
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
-    expect(mcp.mcpServers['mds-dev-suite']).toEqual({
+    expect(mcp.mcpServers['mr-djs-dev-suite']).toEqual({
       command: 'npx',
       args: ['-y', '@mr.dj2u/mcp-server'],
     });
@@ -92,7 +92,7 @@ describe('generateCodexPluginBundle', () => {
     };
     expect(marketplace.plugins).toHaveLength(1);
     expect(marketplace.plugins[0]).toMatchObject({
-      name: 'mds-dev-suite',
+      name: 'mr-djs-dev-suite',
       source: {
         path: './plugins/codex',
       },
@@ -159,7 +159,7 @@ describe('generateCodexPluginBundle', () => {
               category: 'General',
             },
             {
-              name: 'mds-dev-suite',
+              name: 'mr-djs-dev-suite',
               source: {
                 source: 'local',
                 path: './old/path',
@@ -209,7 +209,7 @@ describe('generateCodexPluginBundle', () => {
     expect(marketplace.plugins).toHaveLength(2);
     expect(marketplace.plugins[0].name).toBe('another-plugin');
     expect(marketplace.plugins[1]).toMatchObject({
-      name: 'mds-dev-suite',
+      name: 'mr-djs-dev-suite',
       source: {
         source: 'local',
         path: './plugins/codex',

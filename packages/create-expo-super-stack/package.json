@@ -4,7 +4,7 @@
   "description": "Opinionated MDS wrapper around create-expo-stack with rich Expo onboarding",
   "type": "module",
   "bin": {
-    "create-expo-super-stack": "./dist/cli.js"
+    "create-expo-super-stack": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -23,6 +23,7 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "vitest run --passWithNoTests",
+    "prepack": "node ../../scripts/verify-publish-manifest.mjs .",
     "dev": "tsc --watch",
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },

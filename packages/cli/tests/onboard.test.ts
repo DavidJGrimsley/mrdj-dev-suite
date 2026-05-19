@@ -487,7 +487,7 @@ describe('runOnboardCommand', () => {
     expect(TEST_TO_MAIN_EXPLANATION).toContain('feature branches merge into a test branch');
     expect(PROJECT_INFO_EXPLANATION).toContain('product brief');
     expect(DATA_START_EXPLANATION).toContain('Local dummy data');
-    expect(SUPER_STACK_ONBOARDING_INTRO).toBe('Super Stack onboarding by Mr. DJ');
+    expect(SUPER_STACK_ONBOARDING_INTRO).toBe('MDS Super Stack onboarding');
     expect(SUPER_STACK_ONBOARDING_NOTE_TITLE).toBe("Let's plan the app");
     expect(SUPER_STACK_ONBOARDING_NOTE).toBe(
       'We will spend time defining the application and business now so the generated project memory gives agents real context.'

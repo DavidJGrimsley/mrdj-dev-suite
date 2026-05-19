@@ -29,3 +29,4 @@ Normalize fragmented input into decision-ready `project/info.md` and `project/st
 
 - Preserve user intent and wording where it is already clear.
 - Keep uncertainty visible and collaborative; do not fill strategic gaps with assumptions that can misdirect implementation.
+- Treat this as an MDS-only project-memory skill: use official framework guidance only after product intent is clear, then record the MDS workflow context agents need.

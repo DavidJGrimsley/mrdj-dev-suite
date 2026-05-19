@@ -2,9 +2,9 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const PLUGIN_ID = 'mds-dev-suite';
+export const PLUGIN_ID = 'mr-djs-dev-suite';
 export const PLUGIN_DIRECTORY = path.join('plugins', 'codex');
-export const MCP_SERVER_KEY = 'mds-dev-suite';
+export const MCP_SERVER_KEY = 'mr-djs-dev-suite';
 
 export const COMMAND_FILES = [
   'review-expo-project.md',
@@ -145,8 +145,8 @@ export function buildPluginManifest(options) {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',
     },
-    homepage: 'https://github.com/DavidJGrimsley/mds-dev-suite',
-    repository: 'https://github.com/DavidJGrimsley/mds-dev-suite',
+    homepage: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
+    repository: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
     license: 'MIT',
     keywords: [
       'expo',
@@ -159,14 +159,14 @@ export function buildPluginManifest(options) {
     skills: './skills/',
     mcpServers: './.mcp.json',
     interface: {
-      displayName: 'MDS Dev Suite',
+      displayName: "Mr. DJ's Dev Suite",
       shortDescription: 'MCP-first Expo review, doctor, onboarding, and deploy workflows',
       longDescription:
         'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
       developerName: 'MDS',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
-      websiteURL: 'https://github.com/DavidJGrimsley/mds-dev-suite',
+      websiteURL: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
       defaultPrompt: [
         'Review my Expo project and give me the next safe implementation steps.',
         'Run a deployment-readiness check with Doctor and fix blockers first.',
@@ -281,7 +281,7 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Call \`continue_project\` to summarize current project state and blockers.
 3. Call \`doctor_scan_project\` with \`projectPath\` and \`mode\`.
 4. For each warning/error, call \`doctor_explain_result\`, then pull targeted guidance with \`get_skill\` (for example: \`project-onboarding\`, \`debugging\`, \`deployment\`).
@@ -315,7 +315,7 @@ Run MDS Doctor as the primary health check for an Expo project.
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Call \`doctor_scan_project\` with selected arguments.
 3. For each non-pass result, call \`doctor_explain_result\`.
 4. If the check is release-related or web-facing, call \`generate_deploy_checklist\` before giving next steps.
@@ -347,7 +347,7 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Run \`doctor_scan_project\` in \`ci\` mode for release parity.
 3. Pull \`get_skill\` for \`deployment\`; if web is involved also pull \`seo-metadata\`.
 4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to confirm env hygiene, SSR safety, and metadata requirements.
@@ -379,7 +379,7 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Pull \`get_skill\` for \`seo-metadata\`.
 3. Optionally run \`doctor_scan_file\` for focused route files, then \`doctor_scan_project\` for full checks.
 4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to ensure canonical/indexing strategy is complete.
@@ -409,7 +409,7 @@ Create a new Expo app with the MDS Super Stack flow, then hand off to phase-base
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Invoke the MCP prompt \`create_expo_super_stack\` from a parent directory.
 3. Follow the prompt intake flow and keep one question per turn until generation completes.
 4. After generation, move into the new app folder and invoke \`continue_project\` (or prompt \`continue_mds_project\`) for the first implementation session.
@@ -438,7 +438,7 @@ Resume work on an onboarded project by following MDS phase order from \`project/
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Call \`continue_project\` first to get the active-phase brief.
 3. Pull \`get_skill\` for \`continue-development\` to enforce phase-first sequencing.
 4. If blockers appear, use \`doctor_scan_project\` and \`doctor_explain_result\` for targeted remediation before feature work.
@@ -467,7 +467,7 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 
 ## MCP-First Workflow
 
-1. Confirm the \`mds-dev-suite\` MCP server is available.
+1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
 2. Pull \`get_skill\` for \`research-plan-intake\` (and \`project-onboarding\` when onboarding context is mixed in).
 3. Call \`knowledge_list_resources\` for \`guide\` and \`reference\` resources as needed for structure and validation.
 4. Normalize clear context directly; ask focused follow-up only where ambiguity changes implementation direction.
@@ -490,9 +490,9 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 }
 
 export function renderPluginReadme() {
-  return `# MDS Dev Suite Codex Plugin
+  return `# Mr. DJ's Dev Suite Codex Plugin
 
-The MDS Dev Suite Codex plugin bundle is generated from \`packages/knowledge\` and ships the Codex-native MDS surface: plugin manifest, MCP server config, generated skills, and command prompts.
+The Mr. DJ's Dev Suite Codex plugin bundle is generated from \`packages/knowledge\` and ships the Codex-native MDS surface: plugin manifest, MCP server config, generated skills, and command prompts.
 
 ## What's Included
 
@@ -505,21 +505,21 @@ The source of truth for skills remains \`packages/knowledge/src/content/skills\`
 
 ## One-Command Install
 
-Project scope installs MCP into \`.codex/config.toml\`, copies this plugin into \`plugins/mds-dev-suite\`, and registers it in \`.agents/plugins/marketplace.json\`:
+Project scope installs MCP into \`.codex/config.toml\`, copies this plugin into \`plugins/mr-djs-dev-suite\`, and registers it in \`.agents/plugins/marketplace.json\`:
 
 \`\`\`sh
 mds agent install --client codex --scope project --target /path/to/your/expo-app
 mds agent verify --client codex --target /path/to/your/expo-app
 \`\`\`
 
-User scope installs MCP into \`~/.codex/config.toml\`, copies the plugin into \`~/plugins/mds-dev-suite\`, and registers it in \`~/.agents/plugins/marketplace.json\`:
+User scope installs MCP into \`~/.codex/config.toml\`, copies the plugin into \`~/plugins/mr-djs-dev-suite\`, and registers it in \`~/.agents/plugins/marketplace.json\`:
 
 \`\`\`sh
 mds agent install --client codex --scope user
 mds agent install --client codex --scope user --dry-run
 \`\`\`
 
-After install, restart Codex if needed and enable/install \`mds-dev-suite\` from the local marketplace.
+After install, restart Codex if needed and enable/install \`mr-djs-dev-suite\` from the local marketplace.
 
 ## MCP-Only Fallback
 

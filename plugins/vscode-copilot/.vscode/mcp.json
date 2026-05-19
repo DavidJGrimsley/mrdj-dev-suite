@@ -1,6 +1,6 @@
 {
   "servers": {
-    "mdsDevSuite": {
+    "mds": {
       "command": "npx",
       "args": [
         "-y",

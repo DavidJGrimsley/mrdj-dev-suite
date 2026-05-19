@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "mds-dev-suite": {
+    "mr-djs-dev-suite": {
       "command": "npx",
       "args": [
         "-y",

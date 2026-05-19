@@ -8,7 +8,7 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 
 ## MCP-First Workflow
 
-1. Confirm the `mds-dev-suite` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Call `continue_project` first to get the active-phase brief.
 3. Pull `get_skill` for `continue-development` to enforce phase-first sequencing.
 4. If blockers appear, use `doctor_scan_project` and `doctor_explain_result` for targeted remediation before feature work.

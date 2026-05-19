@@ -30,7 +30,7 @@ plugins/<client-name>/
 - Prompt/command markdown lives only in `packages/knowledge/src/content/prompts/`.
 - `plugins/<client>/skills/` remains generated output and is not manually edited.
 - Commands reference real MCP tool names from `packages/mcp-server`.
-- MCP config uses the `mds-dev-suite` server key.
+- MCP config uses the `mr-djs-dev-suite` server key.
 
 ## Adding a plugin capability
 

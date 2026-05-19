@@ -133,7 +133,7 @@ function renderClaudeMdsAgent() {
   return [
     '---',
     'name: mds',
-    'description: Use for MDS Dev Suite Expo project work: Doctor scans, project review, onboarding, deployment readiness, and phase-based continuation.',
+    "description: Use for Mr. DJ's Dev Suite Expo project work: Doctor scans, project review, onboarding, deployment readiness, and phase-based continuation.",
     'model: inherit',
     'skills:',
     '  - deployment',
@@ -148,7 +148,7 @@ function renderClaudeMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    'You are the MDS Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.',
+    "You are the Mr. DJ's Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.",
     '',
     '## Tool Routing',
     '',

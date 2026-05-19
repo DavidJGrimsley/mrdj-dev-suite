@@ -15,7 +15,7 @@ Run MDS Doctor as the primary health check for an Expo project.
 
 ## MCP-First Workflow
 
-1. Confirm the `mdsDevSuite` MCP server is available.
+1. Confirm the `mds` MCP server is available.
 2. Call `doctor_scan_project` with selected arguments.
 3. For each non-pass result, call `doctor_explain_result`.
 4. If the check is release-related or web-facing, call `generate_deploy_checklist` before giving next steps.

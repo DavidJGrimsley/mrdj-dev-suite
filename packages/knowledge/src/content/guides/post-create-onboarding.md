@@ -90,7 +90,7 @@ fills the section or deletes the marker line.
   whose work fills the MDS knowledge base.
 - **Success message surfaced.** After a successful run, the agent
   quotes the generator's `MDS onboarding complete` tail block back
-  verbatim so the Mr. DJ thank-you text appears in chat the same way
+  verbatim so the Mr. DJ personal thank-you text appears in chat the same way
   it does in a terminal CLI run.
 - **MDS Continue handoff.** The agent runs `mds continue` from the
   generated app folder, then tells the user-dev to open that app folder

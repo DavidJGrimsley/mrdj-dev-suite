@@ -240,7 +240,7 @@ export const PATTERN_METADATA = [
     name: 'Monorepo Structure',
     description: 'Workspace layout, shared packages, and Turborepo orchestration.',
     category: 'project',
-    sourceRepos: ['core-monorepo', 'mds-dev-suite'],
+    sourceRepos: ['core-monorepo', 'mr-djs-dev-suite'],
     resourcePath: 'patterns/project/monorepo-structure.md',
     keywords: ['monorepo', 'pnpm', 'turborepo', 'workspace'],
   },

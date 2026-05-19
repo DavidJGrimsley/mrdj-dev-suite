@@ -1,4 +1,4 @@
-﻿# /run-doctor
+# /run-doctor
 
 Run MDS Doctor as the primary health check for an Expo project.
 
@@ -10,7 +10,7 @@ Run MDS Doctor as the primary health check for an Expo project.
 
 ## MCP-First Workflow
 
-1. Confirm the `mds-dev-suite` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Call `doctor_scan_project` with selected arguments.
 3. For each non-pass result, call `doctor_explain_result`.
 4. Pull targeted implementation guidance with `get_skill` (typically `deployment`, `debugging`, or `dev-server-management`).

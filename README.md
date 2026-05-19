@@ -1,4 +1,4 @@
-# mds-dev-suite
+# Mr. DJ's Dev Suite
 
 Personal AI dev-suite for Expo developers.
 
@@ -120,7 +120,7 @@ node packages/cli/dist/cli.js mcp install --client vscode
 node packages/cli/dist/cli.js mcp install --dry-run
 
 # local dev: point the server at the workspace dist build
-node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mds-dev-suite\packages\mcp-server\dist\index.js"
+node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mrdj-dev-suite\packages\mcp-server\dist\index.js"
 
 # limit to one project (writes .mcp.json / .cursor/mcp.json / .codex/config.toml / .vscode/mcp.json into the target dir)
 node packages/cli/dist/cli.js mcp install --scope project --target F:\path\to\app
@@ -131,9 +131,9 @@ User-scope MCP writes to:
 - Claude Code: `~/.claude.json`
 - Cursor: `~/.cursor/mcp.json`
 - Codex: `~/.codex/config.toml`
-- VS Code Copilot: `code --add-mcp` with server key `mdsDevSuite`
+- VS Code Copilot: `code --add-mcp` with server key `mds`
 
-The merge preserves existing keys/blocks; only the `mds-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 
 ### Native Agent Bundles
 
@@ -141,7 +141,7 @@ Use `mds agent install` when you want the full native bundle for a client instea
 
 - VS Code Copilot: MCP plus `.vscode` settings, `.github/copilot-instructions.md`, `.github/agents/mds.agent.md`, `.github/prompts/*.prompt.md`, and generated `.github/skills/*/SKILL.md`.
 - Claude Code: MCP plus `CLAUDE.md` instructions, `.claude/agents/mds.md`, `.claude/commands/*.md`, and generated `.claude/skills/*/SKILL.md`.
-- Codex: MCP plus a local `mds-dev-suite` plugin copied into `plugins/mds-dev-suite` and registered in `.agents/plugins/marketplace.json`.
+- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite` and registered in `.agents/plugins/marketplace.json`.
 
 Project-scoped install and verify:
 
@@ -180,7 +180,7 @@ node packages/cli/dist/cli.js clear-expo-start /path/to/app --no-start
 
 ## Reference Repos
 
-The reference repos used for Phase 1 harvest are no longer required in the workspace. `temp/` research clones were removed, and `project/SUPERmds-dev-suite.code-workspace` now opens only this suite.
+The reference repos used for Phase 1 harvest are no longer required in the workspace. `temp/` research clones were removed, and the suite workspace file now opens only this repo.
 
 ## Local Rules
 

@@ -1,10 +1,10 @@
-# MDS Dev Suite - Claude Code Instructions
+# Mr. DJ's Dev Suite - Claude Code Instructions
 
 This file is merged by `mds agent install --client claude` into either a project `CLAUDE.md` or user `~/.claude/CLAUDE.md`.
 
 ## MDS MCP Tools Available
 
-When the `mds-dev-suite` MCP server is connected (check `/mcp`), use these tools before falling back to terminal commands:
+When the `mr-djs-dev-suite` MCP server is connected (check `/mcp`), use these tools before falling back to terminal commands:
 
 | Tool | Use it when |
 |------|-------------|

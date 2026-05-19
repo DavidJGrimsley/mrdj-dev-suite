@@ -87,7 +87,7 @@ describe('generateVscodeCopilotBundle', () => {
   it('builds a VS Code MCP config with the camel-case server key', () => {
     expect(buildVscodeMcpConfig()).toEqual({
       servers: {
-        mdsDevSuite: {
+        mds: {
           command: 'npx',
           args: ['-y', '@mr.dj2u/mcp-server'],
         },

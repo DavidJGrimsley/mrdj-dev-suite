@@ -3,7 +3,9 @@
   "version": "0.1.1",
   "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
   "type": "module",
-  "bin": "./dist/cli.js",
+  "bin": {
+    "mds-doctor": "dist/cli.js"
+  },
   "files": [
     "dist"
   ],
@@ -25,6 +27,7 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "vitest run --passWithNoTests",
+    "prepack": "node ../../scripts/verify-publish-manifest.mjs .",
     "dev": "tsc --watch",
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },
@@ -36,7 +39,13 @@
     "@types/node": "^20.10.0",
     "typescript": "^5.9.0"
   },
-  "keywords": ["expo", "doctor", "lint", "typescript", "quality"],
+  "keywords": [
+    "expo",
+    "doctor",
+    "lint",
+    "typescript",
+    "quality"
+  ],
   "author": "DJ",
   "license": "MIT",
   "publishConfig": {

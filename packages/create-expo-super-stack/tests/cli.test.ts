@@ -132,7 +132,7 @@ describe('create-expo-super-stack CLI helpers', () => {
   });
 
   it('normalizes path-like project targets before delegating to create-expo-stack', () => {
-    const cwd = path.join('F:', 'SoftwareDev', 'mds-dev-suite');
+    const cwd = path.join('F:', 'SoftwareDev', 'mr-djs-dev-suite');
     const target = resolveProjectTarget(path.join('F:', 'SoftwareDev', 'Smoke Path App'), cwd);
 
     expect(target.projectName).toBe('Smoke Path App');

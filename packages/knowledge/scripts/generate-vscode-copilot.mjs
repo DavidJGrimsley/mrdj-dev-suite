@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { buildCommandFiles, normalizeLineEndings } from './generate-codex-plugin.mjs';
 
 export const VSCODE_COPILOT_DIRECTORY = path.join('plugins', 'vscode-copilot');
-export const VSCODE_MCP_SERVER_KEY = 'mdsDevSuite';
+export const VSCODE_MCP_SERVER_KEY = 'mds';
 
 export async function generateVscodeCopilotBundleFromKnowledge(options = {}) {
   const packageRoot = options.packageRoot
@@ -194,7 +194,7 @@ export function buildVscodeWorkflowSkills() {
             description: `Run the MDS ${title} workflow in VS Code Copilot user scope.`,
           }),
           '',
-          content.replaceAll('mds-dev-suite', VSCODE_MCP_SERVER_KEY),
+          content.replaceAll('mr-djs-dev-suite', VSCODE_MCP_SERVER_KEY),
         ].join('\n'),
       ];
     })
@@ -220,7 +220,7 @@ function renderVscodePrompt(fileName, content) {
       description: `Run the MDS ${title} workflow with MCP-first diagnostics and CLI fallback.`,
     }),
     '',
-    content.replaceAll('mds-dev-suite', VSCODE_MCP_SERVER_KEY),
+    content.replaceAll('mr-djs-dev-suite', VSCODE_MCP_SERVER_KEY),
   ].join('\n');
 }
 
@@ -233,7 +233,7 @@ function renderMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    'You are the MDS Dev Suite agent for Expo projects. Prefer MCP tools first, then CLI fallbacks.',
+    "You are the Mr. DJ's Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.",
     '',
     '## Tool Routing',
     '',
@@ -254,7 +254,7 @@ function renderMdsAgent() {
 function renderCopilotInstructions() {
   return [
     '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->',
-    '# MDS Dev Suite Copilot Instructions',
+    "# Mr. DJ's Dev Suite Copilot Instructions",
     '',
     '- Treat `project/` as the source of truth for product intent, roadmap, style, and technical rules.',
     '- Prefer MDS MCP tools before broad edits: `doctor_scan_project`, `doctor_scan_file`, `generate_refactor_plan`, and `generate_deploy_checklist`.',
@@ -265,7 +265,7 @@ function renderCopilotInstructions() {
 }
 
 function renderVscodeReadme() {
-  return `# MDS Dev Suite VS Code Copilot Bundle
+  return `# Mr. DJ's Dev Suite VS Code Copilot Bundle
 
 This bundle is generated from \`packages/knowledge\` and targets native VS Code Copilot customization surfaces:
 

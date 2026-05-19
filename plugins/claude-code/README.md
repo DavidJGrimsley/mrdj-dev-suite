@@ -1,4 +1,4 @@
-# MDS Dev Suite - Claude Code Plugin
+# Mr. DJ's Dev Suite - Claude Code Plugin
 
 Gives Claude Code native MDS behavior for Expo projects: MCP tools, a custom `mds` agent, slash commands, generated skills, and project instructions.
 
@@ -7,7 +7,7 @@ Gives Claude Code native MDS behavior for Expo projects: MCP tools, a custom `md
 | Path | Purpose |
 |------|---------|
 | `CLAUDE.md` | Instructions merged into project `CLAUDE.md` or user `~/.claude/CLAUDE.md` |
-| `.mcp.json` | Pre-configured MCP server example for `mds-dev-suite` |
+| `.mcp.json` | Pre-configured MCP server example for `mr-djs-dev-suite` |
 | `agents/mds.md` | Claude Code custom agent for MDS workflows |
 | `commands/*.md` | Slash command markdown files copied to `.claude/commands/` |
 | `skills/*/SKILL.md` | Build-generated skills sourced from `packages/knowledge` |
@@ -28,7 +28,7 @@ mds agent install --client claude --scope user
 mds agent install --client claude --scope user --dry-run
 ```
 
-After install, restart Claude Code or reopen the workspace, run `/mcp`, and confirm `mds-dev-suite` is listed. Then use the `mds` agent or slash commands such as `/run-doctor`, `/review-expo-project`, and `/prepare-deploy`.
+After install, restart Claude Code or reopen the workspace, run `/mcp`, and confirm `mr-djs-dev-suite` is listed. Then use the `mds` agent or slash commands such as `/run-doctor`, `/review-expo-project`, and `/prepare-deploy`.
 
 ## MCP-Only Fallback
 

@@ -55,8 +55,8 @@ const INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->';
 const INSTRUCTIONS_END = '<!-- END MDS COPILOT INSTRUCTIONS -->';
 const CLAUDE_INSTRUCTIONS_BEGIN = '<!-- BEGIN MDS CLAUDE INSTRUCTIONS -->';
 const CLAUDE_INSTRUCTIONS_END = '<!-- END MDS CLAUDE INSTRUCTIONS -->';
-const MDS_SERVER_KEY = 'mds-dev-suite';
-const CODEX_PLUGIN_NAME = 'mds-dev-suite';
+const MDS_SERVER_KEY = 'mr-djs-dev-suite';
+const CODEX_PLUGIN_NAME = 'mr-djs-dev-suite';
 const CODEX_PLUGIN_SOURCE_PATH = `./plugins/${CODEX_PLUGIN_NAME}`;
 
 interface InstructionMarkers {
@@ -615,7 +615,7 @@ function printProjectInstallFollowup(target: string, client: AgentClient): void 
   if (client === 'vscode') {
     console.log(chalk.bold('Next steps for VS Code Copilot (project scope):'));
     console.log(`  1. Open ${target} in VS Code.`);
-    console.log('  2. Confirm the mdsDevSuite MCP server is enabled when Copilot prompts for MCP trust.');
+    console.log('  2. Confirm the mds MCP server is enabled when Copilot prompts for MCP trust.');
     console.log('  3. Run `mds agent verify --client vscode --target .` from the project root.');
     return;
   }
@@ -623,14 +623,14 @@ function printProjectInstallFollowup(target: string, client: AgentClient): void 
   if (client === 'claude') {
     console.log(chalk.bold('Next steps for Claude Code (project scope):'));
     console.log(`  1. Open ${target} in Claude Code or restart Claude Code if it is already open.`);
-    console.log('  2. Run `/mcp` to confirm the mds-dev-suite server is listed.');
+    console.log('  2. Run `/mcp` to confirm the mr-djs-dev-suite server is listed.');
     console.log('  3. Use the `mds` agent or MDS slash commands such as `/run-doctor`.');
     return;
   }
 
   console.log(chalk.bold('Next steps for Codex (project scope):'));
   console.log(`  1. Open ${target} in Codex.`);
-  console.log('  2. Install or enable the mds-dev-suite local plugin from the local marketplace.');
+  console.log('  2. Install or enable the mr-djs-dev-suite local plugin from the local marketplace.');
   console.log('  3. Run `mds agent verify --client codex --target .` from the project root.');
 }
 
@@ -639,15 +639,15 @@ function printUserInstallFollowup(target: string, client: Exclude<AgentClient, '
   if (client === 'claude') {
     console.log(chalk.bold('Next steps for Claude Code (user scope):'));
     console.log(`  1. Restart Claude Code so it picks up assets in ${target}.`);
-    console.log('  2. Run `/mcp` to confirm mds-dev-suite is listed.');
+    console.log('  2. Run `/mcp` to confirm mr-djs-dev-suite is listed.');
     console.log('  3. Use the `mds` agent or MDS slash commands from any workspace.');
     return;
   }
 
   console.log(chalk.bold('Next steps for Codex (user scope):'));
   console.log(`  1. Restart Codex so it picks up ${path.join(target, '.agents', 'plugins', 'marketplace.json')}.`);
-  console.log('  2. Install or enable the mds-dev-suite local plugin from the local marketplace.');
-  console.log('  3. Confirm the mds-dev-suite MCP server is configured in Codex settings.');
+  console.log('  2. Install or enable the mr-djs-dev-suite local plugin from the local marketplace.');
+  console.log('  3. Confirm the mr-djs-dev-suite MCP server is configured in Codex settings.');
 }
 
 async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
@@ -663,12 +663,12 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
 
   try {
     const parsed = JSON.parse(raw) as { servers?: Record<string, unknown> };
-    if (parsed.servers?.mdsDevSuite) {
+    if (parsed.servers?.mds) {
       return {
         name: 'VS Code MCP config',
         status: 'pass',
         path: filePath,
-        message: 'mdsDevSuite server is configured.',
+        message: 'mds server is configured.',
       };
     }
   } catch {
@@ -684,7 +684,7 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
     name: 'VS Code MCP config',
     status: 'fail',
     path: filePath,
-    message: 'mdsDevSuite server is missing from the servers object.',
+    message: 'mds server is missing from the servers object.',
   };
 }
 
@@ -757,7 +757,7 @@ async function checkMarketplaceEntry(filePath: string): Promise<AgentVerifyResul
       name: 'Codex marketplace entry',
       status: valid ? 'pass' : 'fail',
       path: filePath,
-      message: valid ? 'mds-dev-suite local plugin is registered.' : 'mds-dev-suite local plugin entry is missing or invalid.',
+      message: valid ? 'mr-djs-dev-suite local plugin is registered.' : 'mr-djs-dev-suite local plugin entry is missing or invalid.',
     };
   } catch {
     return {
