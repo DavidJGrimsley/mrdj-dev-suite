@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { access } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } from '@clack/prompts';
@@ -43,6 +44,7 @@ export interface OnboardArgv {
   easUses?: string | string[];
   dataStart?: 'local' | 'supabase';
   testToMain?: boolean;
+  saveDefaults?: boolean;
 }
 
 export interface OnboardPlan {
@@ -50,6 +52,7 @@ export interface OnboardPlan {
   guidelinesTemplate: boolean;
   guidelinesTemplatePath?: string;
   richBoilerplate: boolean;
+  saveDefaults: boolean;
 }
 
 type ExplainChoice = typeof EXPLAIN_CHOICE;
@@ -118,10 +121,32 @@ export const AGENT_DERIVED_CORE_FLOWS =
 export const SUPER_STACK_ONBOARDING_INTRO = 'MDS Super Stack onboarding';
 export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
-  'We will spend time defining the application and business now so the generated project memory gives agents real context.';
+  'We will plan first, especially for thin ideas. You can paste a research plan or existing project memory, and MDS will normalize it into canonical project files before generation.';
 export const SUPER_STACK_SUCCESS_MESSAGE =
   "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on GitHub at github.com/DavidJGrimsley/mrdj-dev-suite/issues.";
 const CHECKBOX_PROMPT_HINT = 'Use Space to select options, then Enter to continue.';
+const PERSONAL_DEFAULTS_FILE_NAME = 'onboard-defaults.json';
+
+interface PersonalOnboardDefaults {
+  defaults?: string[];
+  targetPlatforms?: string[];
+  firstTargetPlatform?: string;
+  platformFileStrategy?: OnboardAnswers['platformFileStrategy'];
+  appDirectory?: OnboardAnswers['appDirectory'];
+  platformLayoutMode?: OnboardAnswers['platformLayoutMode'];
+  webOutput?: OnboardAnswers['webOutput'];
+  deployedServer?: OnboardAnswers['deployedServer'];
+  expoServerAdapter?: ExpoServerAdapter;
+  customBackend?: boolean;
+  customBackendEntry?: string;
+  usesExpoUi?: boolean;
+  usesExpoNativeTabs?: boolean;
+  includeCreateExpoComponents?: boolean;
+  useLatestExpoSdk?: boolean;
+  dataStart?: OnboardAnswers['dataStart'];
+  testToMainSafeguards?: boolean;
+  easUses?: string[];
+}
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   const projectPath = path.resolve(argv.project ?? '.');
@@ -145,6 +170,12 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   }
   console.log();
   console.log('Selected defaults:', plan.answers.defaults.join(', '));
+  if (plan.saveDefaults) {
+    const defaultsPath = savePersonalOnboardDefaults(plan.answers);
+    if (defaultsPath) {
+      console.log(chalk.dim(`Saved personal onboarding defaults: ${defaultsPath}`));
+    }
+  }
   printOnboardingNextSteps();
 }
 
@@ -324,6 +355,13 @@ export async function collectOnboardPlan(
       TEST_TO_MAIN_EXPLANATION
     ));
   const defaults = deriveDefaults(argv.defaults, seed.defaults, dataStart, testToMainSafeguards);
+  const saveDefaults =
+    typeof argv.saveDefaults === 'boolean'
+      ? argv.saveDefaults
+      : await askYesNo(
+          'Save this configuration as your personal default for future app generation?',
+          false
+        );
   const advancedPackageSetup = argv.advancedSetup ?? true;
 
   outro(SUPER_STACK_SUCCESS_MESSAGE);
@@ -360,6 +398,7 @@ export async function collectOnboardPlan(
     guidelinesTemplate,
     guidelinesTemplatePath: argv.guidelinesTemplatePath,
     richBoilerplate: argv.rich ?? advancedPackageSetup,
+    saveDefaults,
   };
 }
 
@@ -370,6 +409,7 @@ export function defaultOnboardPlan(argv: OnboardArgv, projectPath = path.resolve
     guidelinesTemplate: argv.guidelinesTemplate ?? true,
     guidelinesTemplatePath: argv.guidelinesTemplatePath,
     richBoilerplate: argv.rich ?? answers.advancedPackageSetup,
+    saveDefaults: argv.saveDefaults === true,
   };
 }
 
@@ -447,22 +487,34 @@ export function formatDataNeedsSelection(selected: string[], customNotes?: strin
 }
 
 function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.project ?? '.')): OnboardAnswers {
-  const targetPlatforms = parsePlatforms(argv.platforms, ['web', 'ios', 'android']);
+  const savedDefaults = loadPersonalOnboardDefaults();
+  const targetPlatforms = parsePlatforms(
+    argv.platforms,
+    parsePlatforms(savedDefaults.targetPlatforms, ['web', 'ios', 'android'])
+  );
   const firstTargetPlatform =
-    argv.firstPlatform && targetPlatforms.includes(argv.firstPlatform) ? argv.firstPlatform : targetPlatforms[0] ?? 'web';
-  const easUses = parseList(argv.easUses, []);
-  const dataStart = argv.dataStart ?? 'local';
-  const testToMainSafeguards = argv.testToMain ?? true;
-  const webOutput = argv.webOutput ?? (targetPlatforms.includes('web') ? 'static' : 'none');
+    argv.firstPlatform && targetPlatforms.includes(argv.firstPlatform)
+      ? argv.firstPlatform
+      : savedDefaults.firstTargetPlatform && targetPlatforms.includes(savedDefaults.firstTargetPlatform)
+        ? savedDefaults.firstTargetPlatform
+        : targetPlatforms[0] ?? 'web';
+  const easUses = parseList(argv.easUses, parseList(savedDefaults.easUses, []));
+  const dataStart = argv.dataStart ?? savedDefaults.dataStart ?? 'local';
+  const testToMainSafeguards = argv.testToMain ?? savedDefaults.testToMainSafeguards ?? true;
+  const webOutput =
+    argv.webOutput ??
+    savedDefaults.webOutput ??
+    (targetPlatforms.includes('web') ? 'static' : 'none');
   const _deployedServer = normalizeDeployedServerChoice(
-    argv.deployedServer,
+    argv.deployedServer ?? savedDefaults.deployedServer,
     webOutput,
     targetPlatforms.some((platform) => platform !== 'web')
   );
 
-  const expoServerAdapter: ExpoServerAdapter = argv.expoServerAdapter ?? 'none';
-  const customBackend = argv.customBackend ?? false;
-  const customBackendEntry = argv.customBackendEntry ?? 'server.js';
+  const expoServerAdapter: ExpoServerAdapter =
+    argv.expoServerAdapter ?? savedDefaults.expoServerAdapter ?? 'none';
+  const customBackend = argv.customBackend ?? savedDefaults.customBackend ?? false;
+  const customBackendEntry = argv.customBackendEntry ?? savedDefaults.customBackendEntry ?? 'server.js';
 
   return {
     appName: argv.appName ?? path.basename(projectPath),
@@ -471,8 +523,9 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     dataNeeds: argv.dataNeeds ?? 'Local state first; add backend only when needed',
     deploymentTarget: argv.deploymentTarget ?? 'Expo web/native deployment',
     advancedPackageSetup: argv.advancedSetup ?? true,
-    includeCreateExpoComponents: argv.createExpoComponents ?? false,
-    useLatestExpoSdk: argv.latestExpoSdk ?? true,
+    includeCreateExpoComponents:
+      argv.createExpoComponents ?? savedDefaults.includeCreateExpoComponents ?? false,
+    useLatestExpoSdk: argv.latestExpoSdk ?? savedDefaults.useLatestExpoSdk ?? true,
     targetPlatforms,
     firstTargetPlatform,
     platformFileStrategy: argv.platformStrategy ?? 'files-only',
@@ -481,17 +534,183 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     expoServerAdapter,
     customBackend,
     customBackendEntry,
-    usesExpoUi: argv.expoUi ?? true,
-    usesExpoNativeTabs: argv.expoNativeTabs ?? true,
+    usesExpoUi: argv.expoUi ?? savedDefaults.usesExpoUi ?? true,
+    usesExpoNativeTabs: argv.expoNativeTabs ?? savedDefaults.usesExpoNativeTabs ?? true,
     easUses,
     projectInfoReady: false,
     projectStyleReady: false,
-    appDirectory: argv.appDirectory ?? detectAppDirectory(projectPath),
-    platformLayoutMode: argv.platformLayouts ?? 'shared',
+    appDirectory: argv.appDirectory ?? savedDefaults.appDirectory ?? detectAppDirectory(projectPath),
+    platformLayoutMode: argv.platformLayouts ?? savedDefaults.platformLayoutMode ?? 'shared',
     dataStart,
     testToMainSafeguards,
-    defaults: deriveDefaults(argv.defaults, ['project-docs', 'guidelines', 'uniwind', 'doctor'], dataStart, testToMainSafeguards),
+    defaults: deriveDefaults(
+      argv.defaults ?? savedDefaults.defaults,
+      ['project-docs', 'guidelines', 'uniwind', 'doctor'],
+      dataStart,
+      testToMainSafeguards
+    ),
   };
+}
+
+export function resolvePersonalOnboardDefaultsPath(): string {
+  const fromEnv = process.env.MDS_ONBOARD_DEFAULTS_PATH?.trim();
+  if (fromEnv) {
+    return path.resolve(fromEnv);
+  }
+
+  return path.join(os.homedir(), '.mds', PERSONAL_DEFAULTS_FILE_NAME);
+}
+
+function usePersonalOnboardDefaults(): boolean {
+  if (process.env.MDS_DISABLE_PERSONAL_DEFAULTS === '1') {
+    return false;
+  }
+
+  if (process.env.VITEST === 'true' || process.env.VITEST_WORKER_ID) {
+    return false;
+  }
+
+  return true;
+}
+
+export function loadPersonalOnboardDefaults(): PersonalOnboardDefaults {
+  if (!usePersonalOnboardDefaults()) {
+    return {};
+  }
+
+  const defaultsPath = resolvePersonalOnboardDefaultsPath();
+  if (!existsSync(defaultsPath)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(defaultsPath, 'utf8')) as unknown;
+    return normalizePersonalOnboardDefaults(parsed);
+  } catch {
+    return {};
+  }
+}
+
+export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | null {
+  if (!usePersonalOnboardDefaults()) {
+    return null;
+  }
+
+  const defaultsPath = resolvePersonalOnboardDefaultsPath();
+  const payload: PersonalOnboardDefaults = {
+    defaults: answers.defaults,
+    targetPlatforms: answers.targetPlatforms,
+    firstTargetPlatform: answers.firstTargetPlatform,
+    platformFileStrategy: answers.platformFileStrategy,
+    appDirectory: answers.appDirectory,
+    platformLayoutMode: answers.platformLayoutMode,
+    webOutput: answers.webOutput,
+    deployedServer: answers.deployedServer,
+    expoServerAdapter: answers.expoServerAdapter,
+    customBackend: answers.customBackend,
+    customBackendEntry: answers.customBackendEntry,
+    usesExpoUi: answers.usesExpoUi,
+    usesExpoNativeTabs: answers.usesExpoNativeTabs,
+    includeCreateExpoComponents: answers.includeCreateExpoComponents,
+    useLatestExpoSdk: answers.useLatestExpoSdk,
+    dataStart: answers.dataStart,
+    testToMainSafeguards: answers.testToMainSafeguards,
+    easUses: answers.easUses,
+  };
+
+  let tempPath: string | null = null;
+  try {
+    mkdirSync(path.dirname(defaultsPath), { recursive: true });
+    tempPath = `${defaultsPath}.tmp-${process.pid}-${Date.now()}`;
+    writeFileSync(tempPath, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    renameSync(tempPath, defaultsPath);
+    if (process.platform !== 'win32') {
+      chmodSync(defaultsPath, 0o600);
+    }
+    return defaultsPath;
+  } catch {
+    if (tempPath) {
+      rmSync(tempPath, { force: true });
+    }
+    return null;
+  }
+}
+
+function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaults {
+  if (typeof value !== 'object' || value === null) {
+    return {};
+  }
+
+  const raw = value as Record<string, unknown>;
+  const normalized: PersonalOnboardDefaults = {};
+  const defaults = normalizeStringArray(raw.defaults);
+  const targetPlatforms = normalizeStringArray(raw.targetPlatforms);
+  const firstTargetPlatform = normalizeChoice(raw.firstTargetPlatform, PLATFORM_OPTIONS);
+  const platformFileStrategy = normalizeChoice(raw.platformFileStrategy, ['folders', 'files-only'] as const);
+  const appDirectory = normalizeChoice(raw.appDirectory, ['src', 'root'] as const);
+  const platformLayoutMode = normalizeChoice(raw.platformLayoutMode, ['shared', 'platform-specific'] as const);
+  const webOutput = normalizeChoice(raw.webOutput, ['static', 'server', 'spa', 'none'] as const);
+  const deployedServer = normalizeChoice(raw.deployedServer, ['standard-expo', 'custom', 'none'] as const);
+  const expoServerAdapter = normalizeChoice(raw.expoServerAdapter, ['eas', 'express', 'bun', 'other'] as const);
+  const dataStart = normalizeChoice(raw.dataStart, ['local', 'supabase'] as const);
+  const customBackendEntry = normalizeString(raw.customBackendEntry);
+  const easUses = normalizeStringArray(raw.easUses);
+
+  if (defaults) normalized.defaults = defaults;
+  if (targetPlatforms) normalized.targetPlatforms = targetPlatforms;
+  if (firstTargetPlatform) normalized.firstTargetPlatform = firstTargetPlatform;
+  if (platformFileStrategy) normalized.platformFileStrategy = platformFileStrategy;
+  if (appDirectory) normalized.appDirectory = appDirectory;
+  if (platformLayoutMode) normalized.platformLayoutMode = platformLayoutMode;
+  if (webOutput) normalized.webOutput = webOutput;
+  if (deployedServer) normalized.deployedServer = deployedServer;
+  if (expoServerAdapter) normalized.expoServerAdapter = expoServerAdapter;
+  if (typeof raw.customBackend === 'boolean') normalized.customBackend = raw.customBackend;
+  if (customBackendEntry) normalized.customBackendEntry = customBackendEntry;
+  if (typeof raw.usesExpoUi === 'boolean') normalized.usesExpoUi = raw.usesExpoUi;
+  if (typeof raw.usesExpoNativeTabs === 'boolean') normalized.usesExpoNativeTabs = raw.usesExpoNativeTabs;
+  if (typeof raw.includeCreateExpoComponents === 'boolean') {
+    normalized.includeCreateExpoComponents = raw.includeCreateExpoComponents;
+  }
+  if (typeof raw.useLatestExpoSdk === 'boolean') normalized.useLatestExpoSdk = raw.useLatestExpoSdk;
+  if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
+  if (dataStart) normalized.dataStart = dataStart;
+  if (easUses) normalized.easUses = easUses;
+
+  return normalized;
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (typeof value === 'string') {
+    const normalized = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeChoice<T extends string>(value: unknown, choices: readonly T[]): T | undefined {
+  return typeof value === 'string' && choices.includes(value as T) ? (value as T) : undefined;
 }
 
 function detectAppDirectory(projectPath: string): OnboardAnswers['appDirectory'] {

@@ -221,6 +221,11 @@ async function main(): Promise<void> {
           .option('custom-backend-entry', {
             describe: 'Entry point for the custom backend server (e.g. server.js, api-server.ts)',
             type: 'string',
+          })
+          .option('save-defaults', {
+            describe:
+              'Persist selected onboarding defaults globally for future app generation (interactive runs ask unless this is set)',
+            type: 'boolean',
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
@@ -459,7 +464,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['test-and-iterate [branch]', 'ship [branch]'],
+      ['test-and-iterate [branch]', 'ship [branch]', 'push-merge-loop [branch]'],
       'Plan the push, PR, CI polling, fix, and merge-to-test workflow',
       (builder) =>
         builder

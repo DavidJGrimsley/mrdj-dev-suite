@@ -282,11 +282,11 @@ const REFERENCE_RESOURCES = [
 
 const CHECKLIST_RESOURCES = [
   {
-    id: 'ship-test-loop',
-    name: 'Ship-Test Loop Checklist',
+    id: 'push-merge-loop',
+    name: 'Push-Merge Loop Checklist',
     description: 'Checklist for doctor/PR/fix/poll/merge loops into the test branch.',
-    resourcePath: 'checklists/ship-test-loop.md',
-    keywords: ['checklist', 'ship', 'test branch', 'pull request'],
+    resourcePath: 'checklists/push-merge-loop.md',
+    keywords: ['checklist', 'push', 'merge', 'test branch', 'pull request'],
     sourceRepos: ['mr-djs-dev-suite'],
   },
   {
@@ -301,11 +301,11 @@ const CHECKLIST_RESOURCES = [
 
 const EXAMPLE_RESOURCES = [
   {
-    id: 'ship-test-loop',
-    name: 'Ship-Test Loop Example',
+    id: 'push-merge-loop',
+    name: 'Push-Merge Loop Example',
     description: 'Example iteration log for a PR loop into the test branch.',
-    resourcePath: 'examples/ship-test-loop.md',
-    keywords: ['example', 'ship', 'iteration'],
+    resourcePath: 'examples/push-merge-loop.md',
+    keywords: ['example', 'push', 'merge', 'iteration'],
     sourceRepos: ['mr-djs-dev-suite'],
   },
   {

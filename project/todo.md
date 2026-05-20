@@ -221,7 +221,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Make `packages/knowledge` the source of truth for rules, guides, skills, checklists, examples, prompt specs, and MCP tool/prompt metadata.
 - [x] Generate/copy knowledge outputs into `plugins/codex/skills`, `plugins/codex/commands`, `plugins/claude-code/skills`, `plugins/claude-code/commands`, and MCP/doc surfaces (MCP server resources/prompts wired from canonical knowledge + updated docs guides).
 - [x] Treat the knowledge package like a design system: one canonical source, many output surfaces.
-- [x] Add canonical ship-test-loop artifacts across surfaces: Codex command, Claude command, MCP prompt (`ship_test_loop`), checklist, and example.
+- [x] Add canonical push-merge-loop artifacts across surfaces: Codex command, Claude command, MCP prompt (`push_merge_loop`), checklist, and example.
 - [x] Add Phase 9 source artifacts in canonical knowledge content (bootstrap example + validation checklist) so bundle work starts from one source.
 
 ### Phase 8: MCP Tools To Build First
@@ -312,12 +312,17 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
 - [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
 - [x] Keep `mds free-port` primary in docs, prompts, and generated scripts.
-- [ ] Continue sweeping for backwards compatibility/legacy support that is no longer needed now that bundles are generated from canonical knowledge sources.
-- [ ] Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
-- [ ] Polish Codex/Claude Code plugin UX after the core plugin workflow remains stable in real projects.
-- [ ] Update the agentic Super Stack/onboarding intake to recommend planning first for thin ideas: accept a pasted research plan or project-memory file, reshape it into canonical `project/info.md` and `project/style.md`, and then continue generation.
-- [ ] Save personal defaults globally for future app generation.
+- [x] Continue legacy/backwards-compatibility cleanup now that Codex/Claude/VS Code bundle assets are generated from canonical knowledge sources.
+- [x] Enhance `mds continue` and the Continue workflow so new phase kickoff strongly prefers Plan mode before implementation.
+- [x] Update Super Stack/onboarding intake to recommend planning first for thin ideas, accept pasted research/project-memory files, and normalize into canonical `project/info.md` + `project/style.md` before generation.
+- [x] Save personal defaults globally for future app generation.
+- [x] Keep `/push-merge-loop` as the shipped PR iteration primitive (Doctor -> push/PR -> poll/fix -> merge handling).
+- [x] Add `/wrap-up` prompt for post-testing release preflight: mark completed todo items, run `mds doctor --ci`, review `git status`, and confirm intentionally omitted files before publish flow.
+- [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
+- [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
 - [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
-- [ ] Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appropriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agent plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run `git add .` if I did it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own, and fully automated merge should stay gated until the dry-run flow has proven itself.
+- [ ] Add a help prompt that explains all the prompts and tools and when to use them. This could be a CLI command like `mds help` AND a prompt that gives an overview of the suite and then options to dive deeper into each tool or prompt. This would be great for onboarding new users to the suite and also for providing a reference for existing users.
+- [ ] Ensure agentic onboarding aligns with everything in Create expo stack (forked) and create expo super stack and more.
 - [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
 - [ ] Consider adding agentic workflows for issues on github.
+

@@ -42,6 +42,7 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(help).toContain('Usage:');
     expect(help).toContain('create-expo-super-stack [project-name]');
     expect(help).toContain('--mds-yes');
+    expect(help).toContain('--mds-save-defaults');
     expect(help).toContain('-h, --help');
   });
 
@@ -199,6 +200,7 @@ describe('create-expo-super-stack CLI helpers', () => {
       '--mds-no-expo-ui',
       '--mds-expo-native-tabs',
       '--mds-eas-uses=building mobile applications,publishing mobile applications',
+      '--mds-save-defaults',
     ]);
 
     expect(parsed.mds.platforms).toEqual(['web', 'ios', 'android-tv']);
@@ -216,8 +218,14 @@ describe('create-expo-super-stack CLI helpers', () => {
       'building mobile applications',
       'publishing mobile applications',
     ]);
+    expect(parsed.mds.saveDefaults).toBe(true);
     // None of these mds-only flags should leak into the create-expo-stack args.
     expect(parsed.createExpoStackArgs).toEqual(['demo-app']);
+  });
+
+  it('supports explicit opt-out for saving onboarding defaults', () => {
+    const parsed = parseArgs(['demo-app', '--mds-no-save-defaults']);
+    expect(parsed.mds.saveDefaults).toBe(false);
   });
 
   it('rejects malformed enum values for the new mds flags instead of forwarding garbage', () => {

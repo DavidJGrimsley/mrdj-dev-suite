@@ -12,9 +12,10 @@ describe('knowledge catalog expansion', () => {
     const examples = listKnowledgeResources('example');
     const prompts = listKnowledgeResources('prompt');
 
-    expect(checklists.some((resource) => resource.id === 'ship-test-loop')).toBe(true);
+    expect(checklists.some((resource) => resource.id === 'push-merge-loop')).toBe(true);
     expect(examples.some((resource) => resource.id === 'unified-agent-bundle-bootstrap')).toBe(true);
-    expect(prompts.some((resource) => resource.id === 'ship-test-loop')).toBe(true);
+    expect(prompts.some((resource) => resource.id === 'push-merge-loop')).toBe(true);
+    expect(prompts.some((resource) => resource.id === 'wrap-up')).toBe(true);
   });
 
   it('exposes canonical prompt specs for codex, claude, and mcp surfaces', () => {
@@ -23,16 +24,33 @@ describe('knowledge catalog expansion', () => {
     const mcp = listPromptSpecs('mcp-prompt');
 
     expect(codex.some((spec) => spec.id === 'run-doctor')).toBe(true);
-    expect(codex.some((spec) => spec.id === 'ship-test-loop')).toBe(true);
+    expect(codex.some((spec) => spec.id === 'push-merge-loop')).toBe(true);
+    expect(codex.some((spec) => spec.id === 'wrap-up')).toBe(true);
     expect(claude.some((spec) => spec.id === 'project-research-plan')).toBe(true);
-    expect(mcp.some((spec) => spec.mcpPromptName === 'ship_test_loop')).toBe(true);
+    expect(claude.some((spec) => spec.id === 'wrap-up')).toBe(true);
+    expect(mcp.some((spec) => spec.mcpPromptName === 'push_merge_loop')).toBe(true);
+    expect(mcp.some((spec) => spec.mcpPromptName === 'wrap_up_release')).toBe(true);
   });
 
   it('reads prompt spec content', async () => {
-    const prompt = await readPromptSpec('ship-test-loop');
+    const prompt = await readPromptSpec('push-merge-loop');
+    const legacyPrompt = await readPromptSpec('ship-test-loop');
 
     expect(prompt).not.toBeNull();
     expect(prompt?.content).toContain('## Loop Rules');
     expect(prompt?.content).toContain('Repeat polling/fix cycles up to 5 total iterations.');
+    expect(legacyPrompt?.id).toBe('push-merge-loop');
+  });
+
+  it('reads wrap-up prompt guardrails and routing content', async () => {
+    const prompt = await readPromptSpec('wrap-up');
+
+    expect(prompt).not.toBeNull();
+    expect(prompt?.content).toContain('## Required Flow Order');
+    expect(prompt?.content).toContain('Never auto-merge to `main`');
+    expect(prompt?.content).toContain('Repeat up to 5 cycles total.');
+    expect(prompt?.content).toContain('gh-fix-ci');
+    expect(prompt?.content).toContain('gh-address-comments');
+    expect(prompt?.content).toContain('intentionally omitted files');
   });
 });

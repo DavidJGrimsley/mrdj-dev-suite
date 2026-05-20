@@ -24,7 +24,8 @@
     "onboard": "node packages/cli/dist/cli.js onboard",
     "create-expo-super-stack": "node packages/create-expo-super-stack/dist/cli.js",
     "test-and-iterate": "node packages/cli/dist/cli.js test-and-iterate",
-    "ship:test": "node packages/cli/dist/cli.js test-and-iterate --base test"
+    "ship:test": "node packages/cli/dist/cli.js test-and-iterate --base test",
+    "push:merge": "node packages/cli/dist/cli.js push-merge-loop --base test"
   },
   "devDependencies": {
     "@eslint/js": "^8.57.1",

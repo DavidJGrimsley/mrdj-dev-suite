@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
+  buildWrapUpPromptText,
   executeTool,
   listTools,
   listResources,
@@ -149,5 +150,23 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
     expect(prompt).toContain('Ask EXACTLY ONE question per message');
     expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
+  });
+
+  it('builds a wrap-up prompt with doctor, file-confirmation, and merge guardrails', () => {
+    const prompt = buildWrapUpPromptText(
+      'F:/ReactNativeApps/Experimental4',
+      'feature/wrap-up-flow',
+      'test',
+      'auto-test'
+    );
+
+    expect(prompt).toContain('Run the MDS wrap-up release workflow');
+    expect(prompt).toContain('Run `mds doctor --ci` before any git mutation.');
+    expect(prompt).toContain('confirm intentionally omitted files');
+    expect(prompt).toContain('gh-fix-ci');
+    expect(prompt).toContain('gh-address-comments');
+    expect(prompt).toContain('Repeat the fix/poll loop up to 5 total cycles');
+    expect(prompt).toContain('Never auto-merge to `main`.');
+    expect(prompt).toContain('project/release-policy.json');
   });
 });

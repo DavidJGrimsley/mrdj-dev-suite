@@ -1,4 +1,4 @@
-﻿# Ship-Test Loop Checklist
+# Push-Merge Loop Checklist
 
 Use this checklist when running the PR loop into `test`.
 
@@ -14,3 +14,4 @@ Use this checklist when running the PR loop into `test`.
 10. Push and poll again.
 11. Repeat up to 5 cycles.
 12. Merge only when checks are green and blockers are cleared.
+

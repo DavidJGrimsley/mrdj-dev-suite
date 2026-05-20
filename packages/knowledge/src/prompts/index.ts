@@ -135,21 +135,43 @@ const PROMPT_SPECS: PromptSpec[] = [
     mcpArgs: [{ name: 'projectPath', description: 'Path to the existing Expo app folder.' }],
   },
   {
-    id: 'ship-test-loop',
-    slug: 'ship-test-loop',
-    title: 'Ship Test Loop',
+    id: 'push-merge-loop',
+    slug: 'push-merge-loop',
+    title: 'Push Merge Loop',
     description:
       'Run the PR loop into test: doctor, commit, push, poll checks/comments, fix, repeat, merge.',
-    resourcePath: 'prompts/ship-test-loop.md',
-    keywords: ['ship', 'pull request', 'test branch', 'checks'],
+    resourcePath: 'prompts/push-merge-loop.md',
+    keywords: ['push', 'merge', 'pull request', 'test branch', 'checks'],
     surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
-    codexCommandFile: 'ship-test-loop.md',
-    claudeCommandFile: 'ship-test-loop.md',
-    mcpPromptName: 'ship_test_loop',
+    codexCommandFile: 'push-merge-loop.md',
+    claudeCommandFile: 'push-merge-loop.md',
+    mcpPromptName: 'push_merge_loop',
     mcpArgs: [
       { name: 'projectPath', description: 'Target repository path for the workflow.' },
       { name: 'branch', description: 'Feature branch name to push and open/update PR from.' },
       { name: 'base', description: 'Base branch (default: test).' },
+    ],
+  },
+  {
+    id: 'wrap-up',
+    slug: 'wrap-up',
+    title: 'Wrap Up',
+    description:
+      'Run release wrap-up after testing: todo completion, doctor, git inclusion checks, PR/check loops, and policy-based merge handling.',
+    resourcePath: 'prompts/wrap-up.md',
+    keywords: ['wrap up', 'release', 'pull request', 'doctor', 'merge policy'],
+    surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
+    codexCommandFile: 'wrap-up.md',
+    claudeCommandFile: 'wrap-up.md',
+    mcpPromptName: 'wrap_up_release',
+    mcpArgs: [
+      { name: 'projectPath', description: 'Target repository path for wrap-up flow.' },
+      { name: 'branch', description: 'Feature branch to push and open/update PR from.' },
+      { name: 'base', description: 'Target base branch (default: test).' },
+      {
+        name: 'mergeMode',
+        description: 'Optional override: auto-test (default) or manual-test.',
+      },
     ],
   },
   {
@@ -285,8 +307,15 @@ export function listPromptSpecs(surface?: PromptSurface): PromptSpec[] {
 }
 
 export function getPromptSpec(idOrSlug: string): PromptSpec | null {
+  const legacyAliases: Record<string, string> = {
+    'ship-test-loop': 'push-merge-loop',
+    ship_test_loop: 'push_merge_loop',
+  };
+  const normalized = legacyAliases[idOrSlug] ?? idOrSlug;
   return (
-    PROMPT_SPECS.find((spec) => spec.id === idOrSlug || spec.slug === idOrSlug || spec.mcpPromptName === idOrSlug) ??
+    PROMPT_SPECS.find(
+      (spec) => spec.id === normalized || spec.slug === normalized || spec.mcpPromptName === normalized
+    ) ??
     null
   );
 }

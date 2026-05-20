@@ -1,4 +1,4 @@
-﻿# /ship-test-loop
+# /push-merge-loop
 
 Execute the short PR iteration loop for the test branch with strict quality gates.
 
@@ -22,3 +22,4 @@ Push intentional changes with a meaningful commit message, open/update a PR to `
 - Do not skip Doctor between fix cycles.
 - Keep a concise changelog per iteration: what failed, what was changed, what passed.
 - If still failing after 5 cycles, stop and summarize remaining blockers with concrete next actions.
+
