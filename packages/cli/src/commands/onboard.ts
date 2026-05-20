@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -584,8 +584,8 @@ export function loadPersonalOnboardDefaults(): PersonalOnboardDefaults {
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(defaultsPath, 'utf8')) as PersonalOnboardDefaults;
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+    const parsed = JSON.parse(readFileSync(defaultsPath, 'utf8')) as unknown;
+    return normalizePersonalOnboardDefaults(parsed);
   } catch {
     return {};
   }
@@ -618,13 +618,99 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     easUses: answers.easUses,
   };
 
+  let tempPath: string | null = null;
   try {
     mkdirSync(path.dirname(defaultsPath), { recursive: true });
-    writeFileSync(defaultsPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    tempPath = `${defaultsPath}.tmp-${process.pid}-${Date.now()}`;
+    writeFileSync(tempPath, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    renameSync(tempPath, defaultsPath);
+    if (process.platform !== 'win32') {
+      chmodSync(defaultsPath, 0o600);
+    }
     return defaultsPath;
   } catch {
+    if (tempPath) {
+      rmSync(tempPath, { force: true });
+    }
     return null;
   }
+}
+
+function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaults {
+  if (typeof value !== 'object' || value === null) {
+    return {};
+  }
+
+  const raw = value as Record<string, unknown>;
+  const normalized: PersonalOnboardDefaults = {};
+  const defaults = normalizeStringArray(raw.defaults);
+  const targetPlatforms = normalizeStringArray(raw.targetPlatforms);
+  const firstTargetPlatform = normalizeChoice(raw.firstTargetPlatform, PLATFORM_OPTIONS);
+  const platformFileStrategy = normalizeChoice(raw.platformFileStrategy, ['folders', 'files-only'] as const);
+  const appDirectory = normalizeChoice(raw.appDirectory, ['src', 'root'] as const);
+  const platformLayoutMode = normalizeChoice(raw.platformLayoutMode, ['shared', 'platform-specific'] as const);
+  const webOutput = normalizeChoice(raw.webOutput, ['static', 'server', 'spa', 'none'] as const);
+  const deployedServer = normalizeChoice(raw.deployedServer, ['standard-expo', 'custom', 'none'] as const);
+  const expoServerAdapter = normalizeChoice(raw.expoServerAdapter, ['eas', 'express', 'bun', 'other'] as const);
+  const dataStart = normalizeChoice(raw.dataStart, ['local', 'supabase'] as const);
+  const customBackendEntry = normalizeString(raw.customBackendEntry);
+  const easUses = normalizeStringArray(raw.easUses);
+
+  if (defaults) normalized.defaults = defaults;
+  if (targetPlatforms) normalized.targetPlatforms = targetPlatforms;
+  if (firstTargetPlatform) normalized.firstTargetPlatform = firstTargetPlatform;
+  if (platformFileStrategy) normalized.platformFileStrategy = platformFileStrategy;
+  if (appDirectory) normalized.appDirectory = appDirectory;
+  if (platformLayoutMode) normalized.platformLayoutMode = platformLayoutMode;
+  if (webOutput) normalized.webOutput = webOutput;
+  if (deployedServer) normalized.deployedServer = deployedServer;
+  if (expoServerAdapter) normalized.expoServerAdapter = expoServerAdapter;
+  if (typeof raw.customBackend === 'boolean') normalized.customBackend = raw.customBackend;
+  if (customBackendEntry) normalized.customBackendEntry = customBackendEntry;
+  if (typeof raw.usesExpoUi === 'boolean') normalized.usesExpoUi = raw.usesExpoUi;
+  if (typeof raw.usesExpoNativeTabs === 'boolean') normalized.usesExpoNativeTabs = raw.usesExpoNativeTabs;
+  if (typeof raw.includeCreateExpoComponents === 'boolean') {
+    normalized.includeCreateExpoComponents = raw.includeCreateExpoComponents;
+  }
+  if (typeof raw.useLatestExpoSdk === 'boolean') normalized.useLatestExpoSdk = raw.useLatestExpoSdk;
+  if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
+  if (dataStart) normalized.dataStart = dataStart;
+  if (easUses) normalized.easUses = easUses;
+
+  return normalized;
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (typeof value === 'string') {
+    const normalized = value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeChoice<T extends string>(value: unknown, choices: readonly T[]): T | undefined {
+  return typeof value === 'string' && choices.includes(value as T) ? (value as T) : undefined;
 }
 
 function detectAppDirectory(projectPath: string): OnboardAnswers['appDirectory'] {

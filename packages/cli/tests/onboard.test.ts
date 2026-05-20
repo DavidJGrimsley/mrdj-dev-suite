@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,8 +19,11 @@ import {
   defaultOnboardPlan,
   deriveDefaults,
   formatDataNeedsSelection,
+  loadPersonalOnboardDefaults,
   getServerPrompt,
+  resolvePersonalOnboardDefaultsPath,
   runOnboardCommand,
+  savePersonalOnboardDefaults,
   validateRequiredInput,
 } from '../src/commands/onboard.js';
 import { scaffoldProjectMemory } from '../src/project-memory.js';
@@ -550,6 +554,108 @@ describe('runOnboardCommand', () => {
         '- Other/custom notes: Tournament bracket imports from CSV',
       ].join('\n')
     );
+  });
+
+  it('resolves personal defaults path from env when provided', () => {
+    const previous = process.env.MDS_ONBOARD_DEFAULTS_PATH;
+    const customPath = path.join(os.tmpdir(), 'mds-onboard-custom-defaults.json');
+    try {
+      process.env.MDS_ONBOARD_DEFAULTS_PATH = customPath;
+      expect(resolvePersonalOnboardDefaultsPath()).toBe(path.resolve(customPath));
+    } finally {
+      if (previous === undefined) {
+        delete process.env.MDS_ONBOARD_DEFAULTS_PATH;
+      } else {
+        process.env.MDS_ONBOARD_DEFAULTS_PATH = previous;
+      }
+    }
+  });
+
+  it('saves defaults atomically and normalizes malformed saved values when loading', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-defaults-'));
+    tempDirs.push(projectPath);
+    const defaultsPath = path.join(projectPath, 'onboard-defaults.json');
+    const previousPath = process.env.MDS_ONBOARD_DEFAULTS_PATH;
+    const previousDisable = process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+    const previousVitest = process.env.VITEST;
+    const previousVitestWorker = process.env.VITEST_WORKER_ID;
+
+    try {
+      process.env.MDS_ONBOARD_DEFAULTS_PATH = defaultsPath;
+      delete process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+      delete process.env.VITEST;
+      delete process.env.VITEST_WORKER_ID;
+
+      const savedPath = savePersonalOnboardDefaults(sampleAnswers('Defaults App'));
+      expect(savedPath).toBe(defaultsPath);
+      await expect(readFile(defaultsPath, 'utf8')).resolves.toContain('"defaults"');
+      if (process.platform !== 'win32') {
+        const fileStats = await stat(defaultsPath);
+        expect(fileStats.mode & 0o777).toBe(0o600);
+      }
+
+      await writeFile(
+        defaultsPath,
+        JSON.stringify({
+          defaults: ['guidelines', 42, '  '],
+          targetPlatforms: ['web', 'ios', false],
+          firstTargetPlatform: 1,
+          platformFileStrategy: 'invalid',
+          appDirectory: 'src',
+          platformLayoutMode: 'shared',
+          webOutput: 'server',
+          deployedServer: 'custom',
+          expoServerAdapter: 'express',
+          customBackend: 'true',
+          customBackendEntry: 10,
+          usesExpoUi: 'yes',
+          usesExpoNativeTabs: false,
+          includeCreateExpoComponents: true,
+          useLatestExpoSdk: false,
+          dataStart: 'supabase',
+          testToMainSafeguards: true,
+          easUses: ['hosting web apps', null],
+        }),
+        'utf8'
+      );
+
+      expect(loadPersonalOnboardDefaults()).toEqual({
+        defaults: ['guidelines'],
+        targetPlatforms: ['web', 'ios'],
+        appDirectory: 'src',
+        platformLayoutMode: 'shared',
+        webOutput: 'server',
+        deployedServer: 'custom',
+        expoServerAdapter: 'express',
+        usesExpoNativeTabs: false,
+        includeCreateExpoComponents: true,
+        useLatestExpoSdk: false,
+        dataStart: 'supabase',
+        testToMainSafeguards: true,
+        easUses: ['hosting web apps'],
+      });
+    } finally {
+      if (previousPath === undefined) {
+        delete process.env.MDS_ONBOARD_DEFAULTS_PATH;
+      } else {
+        process.env.MDS_ONBOARD_DEFAULTS_PATH = previousPath;
+      }
+      if (previousDisable === undefined) {
+        delete process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+      } else {
+        process.env.MDS_DISABLE_PERSONAL_DEFAULTS = previousDisable;
+      }
+      if (previousVitest === undefined) {
+        delete process.env.VITEST;
+      } else {
+        process.env.VITEST = previousVitest;
+      }
+      if (previousVitestWorker === undefined) {
+        delete process.env.VITEST_WORKER_ID;
+      } else {
+        process.env.VITEST_WORKER_ID = previousVitestWorker;
+      }
+    }
   });
 });
 

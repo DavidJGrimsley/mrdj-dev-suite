@@ -31,15 +31,15 @@ After restarting Claude Code, run `/mcp` to confirm `mr-djs-dev-suite`, then use
 The suite is designed around MDS workflows. You invoke a prompt, slash command, or installed agent; that workflow tells the client which MCP tools to call, which agent skills to apply, and which bundled knowledge to fetch.
 
 
-- Codex: `@Mr. DJ's Dev Suite` <command name>
-- Claude Code: /<command name>
+- Codex: ``@Mr. DJ's Dev Suite <command name>``
+- Claude Code: `/<command name>`
 - VS Code Copilot: simply mention the tool.
 
 
-- Create a new Expo app with `create-expo-super-stack`, 
+- Create a new Expo app with `create-expo-super-stack`
 - Onboard an existing app with `mds onboard`.
-- Get ready for pushing with wrap-up
-- Automate pushing, opening PR, polling and fixing issues with push-merge-loop
+- Get ready for pushing with `/wrap-up`.
+- Automate pushing, opening PR, polling, and fixing issues with `mds push-merge-loop`.
 
 ## Technical Overview, CLI Usage, and Product Workflows
 
@@ -230,4 +230,3 @@ The reference repos used for Phase 1 harvest are no longer required in the works
 - Use `f:\SoftwareDev\create-expo-stack` for upstream-style generator work and `f:\SoftwareDev\dogfood` as the practice app target.
 - Keep `temp/` ignored for cloned reference repos and scratch analysis.
 - Prefer small verified slices over huge generated claims of completion.
-
