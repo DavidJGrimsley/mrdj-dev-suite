@@ -144,18 +144,6 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
   missing Expo peers such as `expo-font`, and then run `expo-doctor`.
 - [x] Add `f:\SoftwareDev\dogfood` as the official practice app target.
 
-### Next
-- [ ] Publish package only after an npm name check and a final end-to-end local generation pass.
-- [ ] Add a fully interactive agent-session path for `create-expo-super-stack` so a Codex/plugin prompt can guide the app setup from start to finish while using the CLI behind the scenes.
-- [ ] Let the agent-session intake accept pasted `project/info.md` sections, whole project memory files, or research-plan documents, then check and reshape them into the canonical `project/info.md` and `project/style.md` structure.
-- [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MDS onboarding.
-- [ ] Save personal defaults globally for future app generation.
-- [ ] Add monorepo support after the single-app MVP is stable.
-- [ ] Run an Expo-owned skill delegation sweep so MDS guidance layers project memory/checks/workflow instead of duplicating framework docs.
-- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `Mr. DJ's Dev Suite`.
-- [ ] Rename `kill-port` to `free-port` as the primary command while preserving `kill-port` compatibility alias.
-- [ ] Add canonical ship-test-loop prompt spec (Codex/Claude/MCP): meaningful commit message, open/update PR to test, wait ~2 minutes, poll PR comments + failed checks, fix and push, repeat up to 5 cycles, merge to test when all checks are green.
-
 ## Full Product Roadmap
 
 This section restores the larger roadmap from `temp/plan.md`. The sprint board above is the current Phase 1 execution slice; this roadmap is the broader product plan.
@@ -321,23 +309,22 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - Monorepo-aware generated app scaffolding beyond the post-MVP todo.
 - Fully automated merge without a successful dry-run period.
 
-
-## Cleanup/Random todo
-- [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
-- [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
-- [x] Keep `mds free-port` primary in docs, prompts, and generated scripts.
-- [ ] Sweep for backwards compatibility/legacy support and remove them. For example, the `commands-src` path for Claude commands is a legacy artifact from before the unified knowledge source and should be removed to avoid confusion.
-- Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
-- [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 
-- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
-- Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own. 
-- [ ] Add support to use npx serve sim (New project by Evan Bacon) if it fits in the design.
-- [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
-- [ ] Consider adding agentic workflows for issues on github.
-
-
 ## Mono repo support
 - [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.
 - [ ] For onboarding, generate the project memory files and rich boilerplate inside the target package instead of the root, and adjust all file paths accordingly.
 - [ ] For Doctor, run checks only against the target package instead of the whole repo, and adjust any file path outputs accordingly.
 (previous todo, might be partially done but is related and we could finish it now: - [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.)
+
+## Random
+- [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
+- [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
+- [x] Keep `mds free-port` primary in docs, prompts, and generated scripts.
+- [ ] Continue sweeping for backwards compatibility/legacy support that is no longer needed now that bundles are generated from canonical knowledge sources.
+- [ ] Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
+- [ ] Update the agentic Super Stack/onboarding intake to recommend planning first for thin ideas: accept a pasted research plan or project-memory file, reshape it into canonical `project/info.md` and `project/style.md`, and then continue generation.
+- [ ] Save personal defaults globally for future app generation.
+- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [ ] Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own.
+- [ ] Add support to use npx serve sim (New project by Evan Bacon) if it fits in the design.
+- [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
+- [ ] Consider adding agentic workflows for issues on github.
