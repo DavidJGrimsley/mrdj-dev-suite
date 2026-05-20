@@ -28,19 +28,18 @@ After restarting Claude Code, run `/mcp` to confirm `mr-djs-dev-suite`, then use
 
 ### Use
 
-The suite is designed around MDS workflows. You invoke a prompt, slash command, or installed agent; that workflow tells the client which MCP tools to call, which agent skills to apply, and which bundled knowledge to fetch. In normal use, install the native bundle once and work through the client surface instead of memorizing individual CLI commands.
+The suite is designed around MDS workflows. You invoke a prompt, slash command, or installed agent; that workflow tells the client which MCP tools to call, which agent skills to apply, and which bundled knowledge to fetch.
 
-Good first prompts:
 
-- Codex: `@Mr. DJ's Dev Suite run doctor in full mode with scripts enabled`
-- Codex: `@Mr. DJ's Dev Suite continue development`
-- Claude Code after `mds agent install`: `/run-doctor`, `/continue-development`, `/review-expo-project`, `/prepare-deploy`
-- Claude Code when installed as a true Claude plugin: `/mr-djs-dev-suite:run-doctor`, `/mr-djs-dev-suite:continue-development`
-- VS Code Copilot: use the generated MDS agent and prompt files installed by `mds agent install --client vscode`
+- Codex: `@Mr. DJ's Dev Suite` <command name>
+- Claude Code: /<command name>
+- VS Code Copilot: simply mention the tool.
 
-Claude Code gets slash commands. Codex gets an `@Mr. DJ's Dev Suite` plugin mention and generated skills. VS Code Copilot gets agent, prompt, instruction, and skill files rather than Claude-style slash commands.
 
-Create a new Expo app with `create-expo-super-stack`, or onboard an existing app with `mds onboard`.
+- Create a new Expo app with `create-expo-super-stack`, 
+- Onboard an existing app with `mds onboard`.
+- Get ready for pushing with wrap-up
+- Automate pushing, opening PR, polling and fixing issues with push-merge-loop
 
 ## Technical Overview, CLI Usage, and Product Workflows
 
@@ -49,7 +48,7 @@ This includes the information on what happens when you run the above prompts. Yo
 ### Packages
 
 - `packages/doctor` - project checks for scripts, env safety, Expo config, route architecture, lint, typecheck, tests, Expo Doctor, and builds.
-- `packages/cli` - `mds doctor`, `mds onboard`, cleanup commands, and `mds test-and-iterate` entry points.
+- `packages/cli` - `mds doctor`, `mds onboard`, cleanup commands, and `mds push-merge-loop` (`mds test-and-iterate`) entry points.
 - `packages/create-expo-super-stack` - `npx create-expo-super-stack` wrapper around `create-expo-stack` plus MDS onboarding.
 - `packages/knowledge` - canonical source of truth for harvested patterns, guides, rules, skills, and reference notes.
 - `packages/mcp-server` - MCP SDK server exposing Doctor tools, knowledge resources, and onboarding prompts over stdio.
@@ -72,6 +71,7 @@ pnpm build
 pnpm doctor -- --ci
 pnpm create-expo-super-stack -- my-app --expo-router
 pnpm ship:test
+pnpm push:merge
 ```
 
 ### Product Workflows
@@ -87,7 +87,7 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 
 #### Ship To Test
 
-`mds test-and-iterate` is the Phase 1 dry-run shortcut for:
+`mds push-merge-loop` (alias: `mds test-and-iterate`) is the Phase 1 dry-run shortcut for:
 
 1. Run `mds doctor --ci`.
 2. Review git status and commit intentional changes.

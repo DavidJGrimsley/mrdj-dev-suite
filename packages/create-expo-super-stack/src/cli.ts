@@ -6,7 +6,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { cancel, isCancel, log, text } from '@clack/prompts';
-import { SUPER_STACK_SUCCESS_MESSAGE, collectOnboardPlan, defaultOnboardPlan } from '@mr.dj2u/cli/onboarding';
+import {
+  SUPER_STACK_SUCCESS_MESSAGE,
+  collectOnboardPlan,
+  defaultOnboardPlan,
+  savePersonalOnboardDefaults,
+} from '@mr.dj2u/cli/onboarding';
 import { scaffoldProjectMemory } from '@mr.dj2u/cli/project-memory';
 
 import type { OnboardArgv } from '@mr.dj2u/cli/onboarding';
@@ -45,6 +50,7 @@ export interface ParsedArgs {
     expoUi?: boolean;
     expoNativeTabs?: boolean;
     easUses?: string[];
+    saveDefaults?: boolean;
   };
 }
 
@@ -111,6 +117,12 @@ export async function main(): Promise<void> {
   }
   for (const result of identifierRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  if (plan.saveDefaults) {
+    const defaultsPath = savePersonalOnboardDefaults(plan.answers);
+    if (defaultsPath) {
+      console.log(`Saved personal onboarding defaults: ${defaultsPath}`);
+    }
   }
 
   const packageManager = await detectPackageManager(projectPath, parsed.createExpoStackArgs);
@@ -195,6 +207,16 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === '--mds-rich') {
       mds.rich = true;
+      continue;
+    }
+
+    if (arg === '--mds-save-defaults') {
+      mds.saveDefaults = true;
+      continue;
+    }
+
+    if (arg === '--mds-no-save-defaults') {
+      mds.saveDefaults = false;
       continue;
     }
 
@@ -402,6 +424,8 @@ export function renderHelpText(): string {
     '',
     'Common mds options:',
     '  --mds-yes                     Run non-interactive onboarding defaults',
+    '  --mds-save-defaults           Save onboarding answers as personal defaults',
+    '  --mds-no-save-defaults        Do not save onboarding answers as personal defaults',
     '  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
     '  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
     '  --mds-guidelines-template     Use bundled MDS project/guidelines template',
@@ -1122,6 +1146,7 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
     dataStart: parsed.mds.dataStart,
     deploymentTarget: parsed.mds.deploymentTarget,
     defaults: parsed.mds.defaults,
+    saveDefaults: parsed.mds.saveDefaults,
     testToMain: parsed.mds.testToMain,
     platforms: parsed.mds.platforms,
     firstPlatform: parsed.mds.firstPlatform,

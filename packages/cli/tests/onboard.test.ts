@@ -490,7 +490,7 @@ describe('runOnboardCommand', () => {
     expect(SUPER_STACK_ONBOARDING_INTRO).toBe('MDS Super Stack onboarding');
     expect(SUPER_STACK_ONBOARDING_NOTE_TITLE).toBe("Let's plan the app");
     expect(SUPER_STACK_ONBOARDING_NOTE).toBe(
-      'We will spend time defining the application and business now so the generated project memory gives agents real context.'
+      'We will plan first, especially for thin ideas. You can paste a research plan or existing project memory, and MDS will normalize it into canonical project files before generation.'
     );
     expect(SUPER_STACK_SUCCESS_MESSAGE).toContain(
       "You did it! You and your app are set up for success by completing this extensive onboarding."
@@ -511,8 +511,10 @@ describe('runOnboardCommand', () => {
     expect(plan.answers.appDirectory).toBe('src');
     expect(plan.answers.platformLayoutMode).toBe('shared');
     expect(plan.guidelinesTemplate).toBe(true);
+    expect(plan.saveDefaults).toBe(false);
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
+    expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
   });
 
   it('derives defaults without requiring the old comma-separated interactive prompt', () => {

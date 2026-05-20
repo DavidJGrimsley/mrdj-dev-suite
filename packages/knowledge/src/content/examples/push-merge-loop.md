@@ -1,6 +1,6 @@
-﻿# Ship-Test Loop Example
+# Push-Merge Loop Example
 
-Example iteration log for `/ship-test-loop`:
+Example iteration log for `/push-merge-loop`:
 
 - Iteration 1:
   - Failed: `lint` and one requested review change.
@@ -11,3 +11,4 @@ Example iteration log for `/ship-test-loop`:
   - Fixes: update stale skill ID expectation.
   - Result: all checks green.
 - Merge: PR merged into `test`.
+

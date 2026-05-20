@@ -17,9 +17,11 @@ export const COMMAND_FILES = [
   'run-doctor.md',
   'prepare-deploy.md',
   'fix-seo.md',
+  'push-merge-loop.md',
   'create-expo-super-stack.md',
   'continue-development.md',
   'project-research-plan.md',
+  'wrap-up.md',
 ];
 
 export const CODEX_WORKFLOW_SKILL_PREFIX = 'workflow-';
@@ -29,6 +31,10 @@ const WORKFLOW_SKILL_DESCRIPTIONS = {
     "Use when the user asks Mr. DJ's Dev Suite to run Doctor, run a health check, run CI checks, diagnose project status, or explain MDS Doctor findings.",
   'continue-development.md':
     "Use when the user asks Mr. DJ's Dev Suite to continue development, pick the next phase task, resume work, or inspect project/todo.md.",
+  'push-merge-loop.md':
+    "Use when the user asks Mr. DJ's Dev Suite to run the PR iteration loop: doctor, commit, push, poll checks, fix, and merge to test.",
+  'wrap-up.md':
+    "Use when the user has finished testing and wants Mr. DJ's Dev Suite to run the final wrap-up workflow (Doctor, git inclusion checks, PR loop, CI fix retries, and merge policy guardrails).",
 };
 
 export async function generateCodexPluginBundleFromKnowledge(options = {}) {
@@ -286,211 +292,7 @@ function isRecord(value) {
 }
 
 export function buildCommandFiles() {
-  return {
-    'review-expo-project.md': `# /review-expo-project
-
-Review an Expo project with MCP-first diagnostics and skill-guided remediation.
-
-## Arguments
-
-- \`projectPath\`: absolute or relative project path (default: current directory).
-- \`mode\`: Doctor mode (\`fast\`, \`ci\`, or \`full\`; default: \`ci\`).
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Call \`continue_project\` to summarize current project state and blockers.
-3. Call \`doctor_scan_project\` with \`projectPath\` and \`mode\`.
-4. For each warning/error, call \`doctor_explain_result\`, then pull targeted guidance with \`get_skill\` (for example: \`project-onboarding\`, \`debugging\`, \`deployment\`).
-5. If the findings affect release readiness, call \`generate_deploy_checklist\` so the next steps stay checklist-driven instead of PR-driven.
-6. Call \`knowledge_list_resources\` with \`kind: "guide"\` if extra reference context is needed.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. If MCP still cannot run, use direct CLI flows:
-   - \`mds continue <projectPath>\`
-   - \`mds doctor <projectPath> --ci\`
-
-## Verification And Output
-
-- Keep the response user-facing: summarize findings and next steps without echoing internal tool chatter or file-read noise.
-- Re-run \`doctor_scan_project\` (or \`mds doctor --ci\`) after fixes.
-- If the user is validating an installed agent bundle, include \`mds agent verify --client <client> --target <path>\` in the follow-up commands.
-- Output: blocker summary, failing checks, recommended next task, and concrete follow-up commands. Avoid proposing a PR unless the user explicitly asks for a GitHub workflow.
-`,
-    'run-doctor.md': `# /run-doctor
-
-Run MDS Doctor as the primary health check for an Expo project.
-
-## Arguments
-
-- \`projectPath\`: project root path (default: current directory).
-- \`mode\`: \`fast\`, \`ci\`, or \`full\` (default: \`ci\`).
-- \`runScripts\`: whether Doctor should execute project scripts (default: \`true\` for \`ci\` mode).
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Call \`doctor_scan_project\` with selected arguments.
-3. For each non-pass result, call \`doctor_explain_result\`.
-4. If the check is release-related or web-facing, call \`generate_deploy_checklist\` before giving next steps.
-5. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
-
-## MDS Routing Guardrails
-
-- Treat a request to run MDS Doctor as a request for the MDS MCP tool, not as a request to run app-local npm scripts.
-- Do not run \`npm run mds:doctor\`, \`npm run doctor\`, or other project package scripts as the MDS Doctor path unless the user explicitly asks for app scripts.
-- Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. Direct CLI alternatives:
-   - \`mds doctor <projectPath>\`
-   - \`mds doctor <projectPath> --ci\`
-   - \`mds doctor <projectPath> --json\`
-3. If \`mds\` is not on PATH, invoke the published CLI by binary name:
-   - \`npx -y -p @mr.dj2u/cli@latest mds doctor <projectPath> --ci\`
-
-## Verification And Output
-
-- Re-run Doctor after each fix batch.
-- Keep the response concise and user-facing; do not surface internal tool chatter or intermediate file reads.
-- Output: check summary, blocking errors first, and the exact command used for re-check.
-`,
-    'prepare-deploy.md': `# /prepare-deploy
-
-Prepare an Expo project for release using deployment-focused skills plus Doctor parity checks.
-
-## Arguments
-
-- \`projectPath\`: release candidate project path (default: current directory).
-- \`includeSeo\`: whether to include web metadata/indexing checks (default: \`true\` when web is targeted).
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Run \`doctor_scan_project\` in \`ci\` mode for release parity.
-3. Pull \`get_skill\` for \`deployment\`; if web is involved also pull \`seo-metadata\`.
-4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to confirm env hygiene, SSR safety, and metadata requirements.
-5. Call \`generate_deploy_checklist\` so SEO, scripts, and release-readiness gaps are reflected in the next steps.
-6. Produce a release checklist mapped to current failing checks.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. Direct CLI path:
-   - \`mds doctor <projectPath> --ci\`
-   - Run project scripts: \`lint\`, \`type-check\`, \`test\`, and production build/profile scripts.
-
-## Verification And Output
-
-- Re-run \`doctor_scan_project\` (or CLI equivalent) until blockers are cleared.
-- Keep the response user-facing and checklist-driven; avoid internal tool chatter and avoid asking for a PR unless the user requested GitHub workflow.
-- Output: release readiness status, unresolved blockers, and rollback/readiness notes.
-`,
-    'fix-seo.md': `# /fix-seo
-
-Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix verification.
-
-## Arguments
-
-- \`projectPath\`: Expo project path (default: current directory).
-- \`routeOrFile\`: optional route/file focus for targeted checks.
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Pull \`get_skill\` for \`seo-metadata\`.
-3. Optionally run \`doctor_scan_file\` for focused route files, then \`doctor_scan_project\` for full checks.
-4. Use \`knowledge_list_resources\` (\`kind: "rule"\`) to ensure canonical/indexing strategy is complete.
-5. Implement metadata, canonical, robots, and sitemap corrections in route ownership boundaries.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. Direct CLI checks:
-   - \`mds doctor <projectPath> --ci\`
-   - Run project-specific web build/preview commands to verify metadata output.
-
-## Verification And Output
-
-- Confirm canonical tags, social metadata, and sitemap/robots behavior on affected routes.
-- Output: changed files, resolved SEO gaps, and any remaining manual verification steps.
-`,
-    'create-expo-super-stack.md': readCanonicalPromptMarkdown('create-expo-super-stack.md'),
-    'continue-development.md': `# /continue-development
-
-Resume work on an onboarded project by following MDS phase order from \`project/todo.md\`.
-
-## Arguments
-
-- \`projectPath\`: onboarded app path (default: current directory).
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Call \`continue_project\` first to get the active-phase brief.
-3. Pull \`get_skill\` for \`continue-development\` to enforce phase-first sequencing.
-4. If blockers appear, use \`doctor_scan_project\` and \`doctor_explain_result\` for targeted remediation before feature work.
-
-## MDS Routing Guardrails
-
-- Treat a request to continue development with MDS as a request for the MDS MCP tool and phase rules first.
-- Do not jump directly into app edits until \`continue_project\` or the CLI fallback has identified the active phase and blockers.
-- Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. Direct CLI flow:
-   - \`mds continue <projectPath>\`
-   - \`mds doctor <projectPath>\` when blockers are unclear.
-3. If \`mds\` is not on PATH, invoke the published CLI by binary name:
-   - \`npx -y -p @mr.dj2u/cli@latest mds continue <projectPath>\`
-
-## Verification And Output
-
-- Confirm the chosen task belongs to the active phase or has an explicit deferral note.
-- Output: selected next task, blockers, and validation commands to run after implementation.
-`,
-    'project-research-plan.md': `# /project-research-plan
-
-Turn rough product notes/research into actionable MDS project memory and next-phase plan.
-
-## Arguments
-
-- \`projectPath\`: target project path (default: current directory).
-- \`inputs\`: attached notes/docs to normalize into canonical memory files.
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Pull \`get_skill\` for \`research-plan-intake\` (and \`project-onboarding\` when onboarding context is mixed in).
-3. Call \`knowledge_list_resources\` for \`guide\` and \`reference\` resources as needed for structure and validation.
-4. Normalize clear context directly; ask focused follow-up only where ambiguity changes implementation direction.
-5. Update project memory files and produce an implementation-ready next-phase plan.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client <client> --scope project\`
-2. Direct CLI fallback:
-   - Use \`mds onboard <projectPath>\` for structured intake when memory files are missing.
-   - Use \`mds continue <projectPath>\` after memory normalization to select the next task.
-
-## Verification And Output
-
-- Confirm \`project/info.md\`, \`project/style.md\`, and \`project/todo.md\` align with extracted research context.
-- Output: resolved unknowns, outstanding questions, and the recommended next implementation slice.
-`,
-  };
+  return Object.fromEntries(COMMAND_FILES.map((fileName) => [fileName, readCanonicalPromptMarkdown(fileName)]));
 }
 
 export function buildCodexWorkflowSkills() {

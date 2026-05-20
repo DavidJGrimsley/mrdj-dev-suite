@@ -65,6 +65,9 @@ export interface ContinueSessionBrief {
   handoff: string;
 }
 
+const PLAN_MODE_KICKOFF_STEP =
+  'Start this session in Plan mode: define success criteria, scope, risks, and acceptance checks before editing code.';
+
 interface PackageJsonSubset {
   packageManager?: string;
   scripts?: Record<string, string>;
@@ -167,6 +170,7 @@ export function chooseRecommendation(input: {
       title: 'Resolve TodoForContext markers',
       requiresApproval: true,
       plan: [
+        PLAN_MODE_KICKOFF_STEP,
         'Ask the user whether to fill each marker with context or delete the marker line to acknowledge no extra context is needed.',
         'Handle markers one at a time and keep edits limited to project memory files.',
         'Run `mds continue` again when marker cleanup is finished.',
@@ -180,6 +184,7 @@ export function chooseRecommendation(input: {
       title: 'Fix Doctor errors',
       requiresApproval: true,
       plan: [
+        PLAN_MODE_KICKOFF_STEP,
         'Review the failing Doctor checks listed in this brief.',
         'Fix the highest-impact error first, keeping edits scoped to the app folder.',
         'Rerun `mds doctor --fast --scripts=false` or `mds continue` after fixes.',
@@ -193,6 +198,7 @@ export function chooseRecommendation(input: {
       title: 'Review dirty git state',
       requiresApproval: true,
       plan: [
+        PLAN_MODE_KICKOFF_STEP,
         'Inspect the existing working tree before starting new work.',
         'Separate user changes from generated or agent-made changes.',
         'Only begin the next task once the user confirms how to handle the dirty state.',
@@ -206,6 +212,7 @@ export function chooseRecommendation(input: {
       title: `Continue ${input.nextTodo.section}: ${input.nextTodo.text}`,
       requiresApproval: true,
       plan: [
+        PLAN_MODE_KICKOFF_STEP,
         'Read project memory for the current phase and confirm the intended outcome.',
         'Implement the earliest unchecked todo item only after the user approves this plan.',
         'Run focused verification, then update project/todo.md if the task is complete.',
@@ -218,6 +225,7 @@ export function chooseRecommendation(input: {
     title: 'Prepare CI or deployment readiness',
     requiresApproval: true,
     plan: [
+      PLAN_MODE_KICKOFF_STEP,
       'Run the CI-equivalent checks with `mds doctor --ci`.',
       'Review release/deployment notes in project/release-flow.md when present.',
       'Prepare the next deployment or PR plan from a clean app-root session.',

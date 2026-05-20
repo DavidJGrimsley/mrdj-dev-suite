@@ -537,6 +537,32 @@ function registerPrompts(server: McpServer): void {
       ],
     })
   );
+
+  server.registerPrompt(
+    'wrap_up_release',
+    {
+      title: 'Wrap Up Release',
+      description:
+        'Run post-testing wrap-up: todo completion, Doctor CI gate, git inclusion checks, PR loops, and guarded merge handling.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        branch: z.string().optional(),
+        base: z.string().optional(),
+        mergeMode: z.enum(['auto-test', 'manual-test']).optional(),
+      },
+    },
+    ({ projectPath, branch, base, mergeMode }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildWrapUpPromptText(projectPath, branch, base, mergeMode),
+          },
+        },
+      ],
+    })
+  );
 }
 
 const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mr-djs-dev-suite/templates/info.md';
@@ -545,16 +571,17 @@ function fileIntakePhase(label: string): string {
   return [
     `====== ${label} ======`,
     '',
-    'If the user already has a project/info.md (and optionally project/style.md), they can paste or attach it here and you will use it as intake context.',
+    'Recommend planning first for thin ideas before scaffolding.',
+    'If the user already has a research plan or project memory (`project/info.md` and optionally `project/style.md`), they can paste or attach it here and you will use it as intake context.',
     '',
     'Tell the user (paraphrase is fine, but keep all four points):',
-    '  1. They can paste/attach an existing project/info.md now and you will skip questions whose answers are unambiguous in the file.',
+    '  1. They can paste/attach an existing research plan or project/info.md now and you will skip questions whose answers are unambiguous in the file.',
     `  2. Reference template (optional): ${INFO_TEMPLATE_URL} — if the URL is not yet hosted, offer to inline a copy of the template on request.`,
     '  3. Same offer applies to project/style.md. If they do not have one, you will ask a few short style questions later (colors, fonts, brand vibe) so the generated style.md is not empty.',
     '  4. If they have nothing, no problem — just say "skip" / "none" and you will build it from scratch as you go.',
     '',
     'Wait for the user to attach/paste content or to opt out. Then:',
-    '  - Parse what was provided. For each upcoming question, classify the answer as:',
+    '  - Parse what was provided and normalize it into canonical project memory structure. For each upcoming question, classify the answer as:',
     "      'clear'      → skip the question; tell the user briefly: \"(using your info.md value: <short paraphrase>)\".",
     "      'ambiguous'  → ask the question, citing the relevant line from the file as context.",
     "      'unknown'    → ask normally.",
@@ -754,6 +781,10 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. Yes (default)',
     '  2. No',
     '',
+    'Q3.19 — Save these onboarding answers as personal defaults for future app generation?',
+    '  1. No (default)',
+    '  2. Yes',
+    '',
     '====== Flag map (use these EXACTLY — DO NOT search for them in node_modules) ======',
     '',
     'create-expo-stack flags (Phase 2 answers):',
@@ -787,6 +818,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  Q3.16 → --mds-guidelines-template',
     '  Q3.17 → --mds-data-start=        (local|supabase)',
     '  Q3.18 → --mds-test-to-main or --mds-no-test-to-main',
+    '  Q3.19 → --mds-save-defaults or --mds-no-save-defaults',
     '  Always append: --mds-yes',
     '',
     '====== PHASE 4 — Confirm and generate ======',
@@ -833,13 +865,61 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     '',
     'After the tool returns:',
     '1. Briefly summarize what you found (2-3 sentences max). Name the next step in one sentence.',
-    '2. If TodoForContext markers exist:',
+    '2. Before any edits, recommend Plan mode first: define scope, success criteria, and validation steps.',
+    '3. If TodoForContext markers exist:',
     '   - Say something brief like: "Let me ask you a few questions to get to know the project and help you plan the vision."',
     '   - Then work through each marker by asking the question its hint implies. Do NOT ask the user whether to fill or delete — just ask the question.',
     '   - Ask EXACTLY ONE question per message. Never combine questions. Never ask sub-questions in the same message.',
     '   - After the user answers, write the answer into the file under the marker and delete the marker line. Then move to the next question.',
     '   - Do not offer "skip markers and implement anyway."',
-    '3. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
+    '4. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
+  ].join('\n');
+}
+
+export function buildWrapUpPromptText(
+  projectPath?: string,
+  branch?: string,
+  base?: string,
+  mergeMode?: 'auto-test' | 'manual-test'
+): string {
+  const target = projectPath ?? 'the current repository';
+  const resolvedBranch = branch ?? 'current branch';
+  const resolvedBase = base ?? 'test';
+  const resolvedMergeMode = mergeMode ?? 'auto-test';
+  return [
+    `Run the MDS wrap-up release workflow for ${target}.`,
+    '',
+    'Use this only when the developer says testing is complete and wants final release prep.',
+    '',
+    'Context for this run:',
+    `- projectPath: ${target}`,
+    `- branch: ${resolvedBranch}`,
+    `- base: ${resolvedBase}`,
+    `- mergeMode override: ${resolvedMergeMode}`,
+    '',
+    'Required flow order:',
+    '1. Mark only clearly completed items in `project/todo.md`.',
+    '2. Run `mds doctor --ci` before any git mutation.',
+    '3. Run `git status --short`, list changed files, and explicitly confirm intentionally omitted files with the developer.',
+    '4. Route GitHub context through `github`.',
+    '5. Route publish flow through `yeet` (commit/push/open-or-update PR).',
+    '6. Poll checks and unresolved review feedback.',
+    '7. For failing checks, route through `gh-fix-ci`; for blocking unresolved review threads, route through `gh-address-comments`.',
+    '8. Fix locally, rerun `mds doctor --ci`, push, and poll again.',
+    '9. Repeat the fix/poll loop up to 5 total cycles, then stop and ask for human help if blockers remain.',
+    '',
+    'Merge policy resolution order:',
+    '1. Explicit instruction from the developer in this session.',
+    '2. Optional repo config at `project/release-policy.json` with shape:',
+    '   { "wrapUp": { "autoMergeTest": true, "autoMergeMain": false } }',
+    '3. Defaults when config is absent: auto-merge to `test` enabled; manual merge for `main` always required.',
+    '',
+    'Guardrails:',
+    '- Never auto-merge to `main`.',
+    '- If the target flow does not use `test`, stop before merge and ask the developer to merge manually.',
+    '- Do not skip Doctor between fix cycles.',
+    '- Do not assume omitted files are intentional without explicit confirmation.',
+    '- Keep `/push-merge-loop` focused as the PR iteration primitive; this `/wrap-up` prompt orchestrates preflight plus ship loop.',
   ].join('\n');
 }
 
@@ -1379,3 +1459,4 @@ if (isDirectRun()) {
     process.exit(1);
   });
 }
+
