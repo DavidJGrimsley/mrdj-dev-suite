@@ -1,6 +1,6 @@
 # /create-expo-super-stack
 
-Create a new Expo app with the MDS Super Stack flow, then hand off to phase-based continuation.
+Create a new Expo app with the MDS Super Stack flow, using this knowledge package as the shared source of truth for agent-facing text and the published CLI as the execution source of truth.
 
 ## Arguments
 
@@ -10,9 +10,10 @@ Create a new Expo app with the MDS Super Stack flow, then hand off to phase-base
 ## MCP-First Workflow
 
 1. Confirm the `mr-djs-dev-suite` MCP server is available.
-2. Invoke the MCP prompt `create_expo_super_stack` from a parent directory.
-3. Follow the prompt intake flow and keep one question per turn until generation completes.
-4. After generation, move into the new app folder and invoke `continue_project` (or prompt `continue_mds_project`) for the first implementation session.
+2. Invoke the MCP prompt `create_expo_super_stack` from a parent directory when you want guided intake.
+3. Keep the conversation one question per turn and summarize the captured choices before generation.
+4. Treat the MCP prompt as the intake surface and the CLI as the generator, so CLI changes are picked up automatically when the published command changes.
+5. After generation, move into the new app folder and invoke `continue_project` (or prompt `continue_mds_project`) for the first implementation session.
 
 ## CLI / Manual Fallback
 
@@ -20,7 +21,7 @@ Create a new Expo app with the MDS Super Stack flow, then hand off to phase-base
    - `mds mcp install --client codex --scope project`
 2. Direct CLI generation:
    - `npx -y create-expo-super-stack <appName>`
-3. Then onboard/continue from inside the generated app:
+3. Then onboard/continue from inside the generated app using the current CLI behavior:
    - `mds continue <new-app-path>`
 
 ## Verification And Output

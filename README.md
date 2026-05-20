@@ -141,7 +141,7 @@ Use `mds agent install` when you want the full native bundle for a client instea
 
 - VS Code Copilot: MCP plus `.vscode` settings, `.github/copilot-instructions.md`, `.github/agents/mds.agent.md`, `.github/prompts/*.prompt.md`, and generated `.github/skills/*/SKILL.md`.
 - Claude Code: MCP plus `CLAUDE.md` instructions, `.claude/agents/mds.md`, `.claude/commands/*.md`, and generated `.claude/skills/*/SKILL.md`.
-- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite` and registered in `.agents/plugins/marketplace.json`.
+- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite`, registered in `.agents/plugins/marketplace.json`, and enabled as `mr-djs-dev-suite@mds-local` in Codex config.
 
 Project-scoped install and verify:
 
@@ -152,7 +152,7 @@ node packages/cli/dist/cli.js agent install --client codex --scope project --tar
 
 node packages/cli/dist/cli.js agent verify --client vscode --target F:\path\to\app
 node packages/cli/dist/cli.js agent verify --client claude --target F:\path\to\app
-node packages/cli/dist/cli.js agent verify --client codex --target F:\path\to\app
+node packages/cli/dist/cli.js agent verify --client codex --scope project --target F:\path\to\app
 ```
 
 User-scoped installs:
@@ -162,12 +162,16 @@ node packages/cli/dist/cli.js agent install --client vscode --scope user
 node packages/cli/dist/cli.js agent install --client claude --scope user
 node packages/cli/dist/cli.js agent install --client codex --scope user
 
+node packages/cli/dist/cli.js agent verify --client vscode --scope user
+node packages/cli/dist/cli.js agent verify --client claude --scope user
+node packages/cli/dist/cli.js agent verify --client codex --scope user
+
 node packages/cli/dist/cli.js agent install --client vscode --scope user --dry-run
 node packages/cli/dist/cli.js agent install --client claude --scope user --dry-run
 node packages/cli/dist/cli.js agent install --client codex --scope user --dry-run
 ```
 
-Verification checks the client files, runs a fast no-script Doctor scan, fetches a bundled knowledge guide, and executes the MDS Continue workflow. Use `mds mcp install --client <client>` when you only want the MCP server, and `mds agent install --client <client>` when you want MCP plus the native instructions/agent/skills/plugin layer.
+Project-scope verification checks the client files, runs a fast no-script Doctor scan, fetches a bundled knowledge guide, and executes the MDS Continue workflow. User-scope verification checks the global client assets only. Use `mds mcp install --client <client>` when you only want the MCP server, and `mds agent install --client <client>` when you want MCP plus the native instructions/agent/skills/plugin layer.
 
 ### Dev Cleanup
 

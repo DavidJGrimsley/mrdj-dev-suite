@@ -210,7 +210,7 @@ const SKILL_RESOURCES = [
     id: 'super-stack-startup',
     name: 'Super Stack Startup Skill',
     description:
-      'Instructions for running create-expo-super-stack and handing off to phase-based app development.',
+      'Instructions for running create-expo-super-stack while keeping packages/knowledge as the source of truth and handing off to phase-based app development.',
     resourcePath: 'skills/super-stack-startup.md',
     keywords: ['create-expo-super-stack', 'startup', 'onboarding flow'],
   },

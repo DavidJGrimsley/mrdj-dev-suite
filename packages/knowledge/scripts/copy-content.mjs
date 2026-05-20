@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generateCodexPluginBundleFromKnowledge } from './generate-codex-plugin.mjs';
+import { buildCommandFiles, generateCodexPluginBundleFromKnowledge } from './generate-codex-plugin.mjs';
 import { generateVscodeCopilotBundleFromKnowledge } from './generate-vscode-copilot.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -82,21 +82,20 @@ for (const filePath of skillFiles) {
   await writeFile(path.join(skillDir, 'SKILL.md'), skillMd, 'utf8');
 }
 
-// Generate user-invoked command skills from commands-src/ (disable auto-invocation).
+// Generate user-invoked command skills from the canonical knowledge prompt content.
 // These are generated after knowledge skills so command versions win any name collision.
-const commandsSrcDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands-src');
-const commandFiles = await listMarkdownFiles(commandsSrcDir).catch(() => []);
+const commandFiles = Object.entries(buildCommandFiles()).map(([fileName, content]) => ({
+  fileName,
+  content,
+}));
 
-if (commandFiles.length > 0) {
-  await rm(claudeCodeCommandsDir, { recursive: true, force: true });
-}
+await rm(claudeCodeCommandsDir, { recursive: true, force: true });
 await mkdir(claudeCodeCommandsDir, { recursive: true });
-for (const filePath of commandFiles) {
-  const content = await readFile(filePath, 'utf8');
-  const id = path.basename(filePath, '.md');
+for (const { fileName, content } of commandFiles) {
+  const id = path.basename(fileName, '.md');
   const description = content.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim() ?? id;
 
-  await writeFile(path.join(claudeCodeCommandsDir, path.basename(filePath)), content, 'utf8');
+  await writeFile(path.join(claudeCodeCommandsDir, fileName), content, 'utf8');
 
   const skillDir = path.join(claudeCodeSkillsDir, id);
   await mkdir(skillDir, { recursive: true });

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   runAgentInstallCommand,
+  runAgentVerifyCommand,
   verifyClaudeAgentInstall,
   verifyCodexAgentInstall,
   verifyVscodeAgentInstall,
@@ -178,6 +179,10 @@ describe('Codex agent install', () => {
     expect(config).toContain('[mcp_servers.mr-djs-dev-suite]');
     expect(config).toContain('command = "node"');
     expect(config).toContain('args = ["/abs/server.js"]');
+    expect(config).toContain('[marketplaces.mds-local]');
+    expect(config).toContain(`source = ${JSON.stringify(target)}`);
+    expect(config).toContain('[plugins."mr-djs-dev-suite@mds-local"]');
+    expect(config).toContain('enabled = true');
 
     const marketplace = JSON.parse(await readFile(path.join(target, '.agents', 'plugins', 'marketplace.json'), 'utf8'));
     expect(marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'other')).toBeTruthy();
@@ -190,6 +195,57 @@ describe('Codex agent install', () => {
 
     const verify = await verifyCodexAgentInstall(target);
     expect(verify.passed).toBe(true);
+  });
+
+  it('installs user-scoped Codex config, marketplace, plugin, and verifies without project checks', async () => {
+    const bundleRoot = await createCodexBundle();
+    const fakeHome = await createTempDir('mds-codex-home-');
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+
+    await runAgentInstallCommand({
+      client: 'codex',
+      scope: 'user',
+      bundlePath: bundleRoot,
+      serverPath: '/abs/server.js',
+    });
+
+    const config = await readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8');
+    expect(config).toContain('[mcp_servers.mr-djs-dev-suite]');
+    expect(config).toContain('[marketplaces.mds-local]');
+    expect(config).toContain(`source = ${JSON.stringify(fakeHome)}`);
+    expect(config).toContain('[plugins."mr-djs-dev-suite@mds-local"]');
+    expect(config).toContain('enabled = true');
+
+    const marketplace = JSON.parse(await readFile(path.join(fakeHome, '.agents', 'plugins', 'marketplace.json'), 'utf8'));
+    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mr-djs-dev-suite');
+    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mr-djs-dev-suite' });
+    expect(await readFile(path.join(fakeHome, 'plugins', 'mr-djs-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
+      '"name": "mr-djs-dev-suite"'
+    );
+
+    const verify = await verifyCodexAgentInstall(fakeHome, 'user');
+    expect(verify.passed).toBe(true);
+    expect(verify.scope).toBe('user');
+    expect(verify.checks.some((check) => check.name === 'Doctor validation')).toBe(false);
+  });
+
+  it('falls back to user-scope Codex verification when project assets are absent and no scope was provided', async () => {
+    const bundleRoot = await createCodexBundle();
+    const fakeHome = await createTempDir('mds-codex-home-');
+    const target = await createTempDir('mds-codex-empty-target-');
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+
+    await runAgentInstallCommand({
+      client: 'codex',
+      scope: 'user',
+      bundlePath: bundleRoot,
+      serverPath: '/abs/server.js',
+    });
+
+    const verify = await runAgentVerifyCommand({ client: 'codex', target });
+    expect(verify.passed).toBe(true);
+    expect(verify.scope).toBe('user');
+    expect(verify.target).toBe(fakeHome);
   });
 
   it('supports user-scope dry-runs without mutating the home directory', async () => {

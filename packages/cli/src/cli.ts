@@ -342,7 +342,6 @@ async function main(): Promise<void> {
           .option('scope', {
             describe: 'Install for the current user or just the target project',
             choices: ['user', 'project'] as const,
-            default: 'project' as const,
           })
           .option('target', {
             describe: 'Project directory for project-scope install or verify',

@@ -1,4 +1,5 @@
 import { cp, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,8 +11,9 @@ import { readKnowledgeResource } from '@mr.dj2u/knowledge';
 import { buildContinueSessionBrief } from '../continue.js';
 import {
   installVscodeUserMcp,
+  renderCodexBlock,
   resolveServerInvocation,
-  writeCodexConfig,
+  stripExistingCodexBlock,
   writeJsonMcpConfig,
   writeVscodeMcpConfig,
 } from './mcp-install.js';
@@ -41,6 +43,7 @@ export interface AgentInstallResult {
 
 export interface AgentVerifyResult {
   client: AgentClient;
+  scope: AgentScope;
   target: string;
   passed: boolean;
   checks: Array<{
@@ -58,6 +61,13 @@ const CLAUDE_INSTRUCTIONS_END = '<!-- END MDS CLAUDE INSTRUCTIONS -->';
 const MDS_SERVER_KEY = 'mr-djs-dev-suite';
 const CODEX_PLUGIN_NAME = 'mr-djs-dev-suite';
 const CODEX_PLUGIN_SOURCE_PATH = `./plugins/${CODEX_PLUGIN_NAME}`;
+const CODEX_MARKETPLACE_NAME = 'mds-local';
+const CODEX_PLUGIN_CONFIG_ID = `${CODEX_PLUGIN_NAME}@${CODEX_MARKETPLACE_NAME}`;
+const BUNDLED_PLUGIN_DIRS: Record<AgentClient, string> = {
+  vscode: 'vscode-copilot',
+  claude: 'claude-code',
+  codex: 'codex',
+};
 
 interface InstructionMarkers {
   begin: string;
@@ -103,12 +113,12 @@ export async function runAgentInstallCommand(argv: AgentArgv): Promise<AgentInst
 
 export async function runAgentVerifyCommand(argv: AgentArgv): Promise<AgentVerifyResult> {
   const client = argv.client ?? 'vscode';
-  const target = path.resolve(argv.target ?? '.');
-  const result = await verifyAgentInstall(client, target);
+  const result = await resolveAgentVerifyResult(client, argv);
 
   console.log(chalk.bold('mds agent verify'));
   console.log(chalk.dim(`client: ${client}`));
-  console.log(chalk.dim(`target: ${target}`));
+  console.log(chalk.dim(`scope:  ${result.scope}`));
+  console.log(chalk.dim(`target: ${result.target}`));
   console.log();
   for (const check of result.checks) {
     const label = check.status === 'pass' ? chalk.green('PASS') : chalk.red('FAIL');
@@ -123,19 +133,62 @@ export async function runAgentVerifyCommand(argv: AgentArgv): Promise<AgentVerif
   return result;
 }
 
-export async function verifyAgentInstall(client: AgentClient, target: string): Promise<AgentVerifyResult> {
+async function resolveAgentVerifyResult(client: AgentClient, argv: AgentArgv): Promise<AgentVerifyResult> {
+  if (argv.scope) {
+    const target = resolveAgentVerifyTarget(client, argv.scope, argv.target);
+    return await verifyAgentInstall(client, target, argv.scope);
+  }
+
+  const projectTarget = resolveAgentVerifyTarget(client, 'project', argv.target);
+  const projectResult = await verifyAgentInstall(client, projectTarget, 'project');
+  if (projectResult.passed) {
+    return projectResult;
+  }
+
+  const userTarget = resolveAgentVerifyTarget(client, 'user', argv.target);
+  const userResult = await verifyAgentInstall(client, userTarget, 'user');
+  return userResult.passed ? userResult : projectResult;
+}
+
+export async function verifyAgentInstall(
+  client: AgentClient,
+  target: string,
+  scope: AgentScope = 'project'
+): Promise<AgentVerifyResult> {
   switch (client) {
     case 'vscode':
-      return await verifyVscodeAgentInstall(target);
+      return await verifyVscodeAgentInstall(target, scope);
     case 'claude':
-      return await verifyClaudeAgentInstall(target);
+      return await verifyClaudeAgentInstall(target, scope);
     case 'codex':
-      return await verifyCodexAgentInstall(target);
+      return await verifyCodexAgentInstall(target, scope);
   }
 }
 
-export async function verifyVscodeAgentInstall(target: string): Promise<AgentVerifyResult> {
+export async function verifyVscodeAgentInstall(
+  target: string,
+  scope: AgentScope = 'project'
+): Promise<AgentVerifyResult> {
   const checks: AgentVerifyResult['checks'] = [];
+
+  if (scope === 'user') {
+    const instructionsPath = path.join(target, 'instructions.md');
+    const agentPath = path.join(target, 'agents', 'mds.agent.md');
+    const skillsPath = path.join(target, 'skills');
+
+    checks.push(await checkContainsMarker('copilot instructions', instructionsPath, INSTRUCTIONS_BEGIN));
+    checks.push(await checkExists('MDS custom agent', agentPath));
+    checks.push(await checkDirectoryContains('skill files', skillsPath, 'SKILL.md'));
+
+    return {
+      client: 'vscode',
+      scope,
+      target,
+      passed: checks.every((check) => check.status === 'pass'),
+      checks,
+    };
+  }
+
   const mcpPath = path.join(target, '.vscode', 'mcp.json');
   const settingsPath = path.join(target, '.vscode', 'settings.json');
   const instructionsPath = path.join(target, '.github', 'copilot-instructions.md');
@@ -153,49 +206,63 @@ export async function verifyVscodeAgentInstall(target: string): Promise<AgentVer
 
   return {
     client: 'vscode',
+    scope,
     target,
     passed: checks.every((check) => check.status === 'pass'),
     checks,
   };
 }
 
-export async function verifyClaudeAgentInstall(target: string): Promise<AgentVerifyResult> {
+export async function verifyClaudeAgentInstall(
+  target: string,
+  scope: AgentScope = 'project'
+): Promise<AgentVerifyResult> {
   const checks: AgentVerifyResult['checks'] = [];
-  const mcpPath = path.join(target, '.mcp.json');
+  const claudeRoot = scope === 'user' ? target : path.join(target, '.claude');
+  const mcpPath = scope === 'user' ? path.join(path.dirname(target), '.claude.json') : path.join(target, '.mcp.json');
   const instructionsPath = path.join(target, 'CLAUDE.md');
-  const agentPath = path.join(target, '.claude', 'agents', 'mds.md');
-  const commandsPath = path.join(target, '.claude', 'commands');
-  const skillsPath = path.join(target, '.claude', 'skills');
+  const agentPath = path.join(claudeRoot, 'agents', 'mds.md');
+  const commandsPath = path.join(claudeRoot, 'commands');
+  const skillsPath = path.join(claudeRoot, 'skills');
 
   checks.push(await checkJsonMcp('Claude MCP config', mcpPath));
   checks.push(await checkContainsMarker('Claude instructions', instructionsPath, CLAUDE_INSTRUCTIONS_BEGIN));
   checks.push(await checkExists('MDS Claude agent', agentPath));
   checks.push(await checkDirectoryContains('Claude slash commands', commandsPath, '.md'));
   checks.push(await checkDirectoryContains('Claude skills', skillsPath, 'SKILL.md'));
-  checks.push(...(await runValidationChecks(target)));
+  if (scope === 'project') {
+    checks.push(...(await runValidationChecks(target)));
+  }
 
   return {
     client: 'claude',
+    scope,
     target,
     passed: checks.every((check) => check.status === 'pass'),
     checks,
   };
 }
 
-export async function verifyCodexAgentInstall(target: string): Promise<AgentVerifyResult> {
+export async function verifyCodexAgentInstall(
+  target: string,
+  scope: AgentScope = 'project'
+): Promise<AgentVerifyResult> {
   const checks: AgentVerifyResult['checks'] = [];
   const configPath = path.join(target, '.codex', 'config.toml');
   const marketplacePath = path.join(target, '.agents', 'plugins', 'marketplace.json');
   const pluginRoot = path.join(target, 'plugins', CODEX_PLUGIN_NAME);
 
-  checks.push(await checkCodexConfig(configPath));
+  checks.push(await checkCodexConfig(configPath, target));
   checks.push(await checkMarketplaceEntry(marketplacePath));
   checks.push(await checkExists('Codex plugin manifest', path.join(pluginRoot, '.codex-plugin', 'plugin.json')));
   checks.push(await checkDirectoryContains('Codex plugin skills', path.join(pluginRoot, 'skills'), 'SKILL.md'));
-  checks.push(...(await runValidationChecks(target)));
+  if (scope === 'project') {
+    checks.push(...(await runValidationChecks(target)));
+  }
 
   return {
     client: 'codex',
+    scope,
     target,
     passed: checks.every((check) => check.status === 'pass'),
     checks,
@@ -305,8 +372,7 @@ async function installCodexAgent(
   writtenPaths: string[]
 ): Promise<AgentInstallResult> {
   const target = scope === 'user' ? os.homedir() : path.resolve(argv.target ?? '.');
-  await writeCodexConfig(path.join(target, '.codex', 'config.toml'), server, dryRun);
-  writtenPaths.push(path.join(target, '.codex', 'config.toml'));
+  await writeCodexAgentConfig(path.join(target, '.codex', 'config.toml'), server, target, dryRun, writtenPaths);
   await installCodexPluginAssets(bundleRoot, target, dryRun, writtenPaths);
   if (scope === 'user') {
     printUserInstallFollowup(target, 'codex');
@@ -390,6 +456,12 @@ export function resolvePluginBundleRoot(client: AgentClient, bundlePath?: string
   }
 
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageRoot = path.resolve(moduleDir, '..', '..');
+  const bundledDir = path.join(packageRoot, 'bundles', BUNDLED_PLUGIN_DIRS[client]);
+  if (pathExistsSync(bundledDir)) {
+    return bundledDir;
+  }
+
   const repoRoot = path.resolve(moduleDir, '..', '..', '..', '..');
 
   switch (client) {
@@ -399,6 +471,21 @@ export function resolvePluginBundleRoot(client: AgentClient, bundlePath?: string
       return path.join(repoRoot, 'plugins', 'claude-code');
     case 'codex':
       return path.join(repoRoot, 'plugins', 'codex');
+  }
+}
+
+function resolveAgentVerifyTarget(client: AgentClient, scope: AgentScope, target?: string): string {
+  if (scope === 'project') {
+    return path.resolve(target ?? '.');
+  }
+
+  switch (client) {
+    case 'vscode':
+      return path.join(os.homedir(), '.copilot');
+    case 'claude':
+      return path.join(os.homedir(), '.claude');
+    case 'codex':
+      return os.homedir();
   }
 }
 
@@ -462,6 +549,28 @@ async function installCodexPluginAssets(
     dryRun,
     writtenPaths
   );
+}
+
+async function writeCodexAgentConfig(
+  configPath: string,
+  server: ReturnType<typeof resolveServerInvocation>,
+  marketplaceSourceRoot: string,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  const existing = (await readTextIfExists(configPath)) ?? '';
+  const cleaned = [
+    (content: string) => stripExistingCodexBlock(content, MDS_SERVER_KEY),
+    (content: string) => stripTomlBlock(content, `[marketplaces.${CODEX_MARKETPLACE_NAME}]`),
+    (content: string) => stripTomlBlock(content, `[plugins.${JSON.stringify(CODEX_PLUGIN_CONFIG_ID)}]`),
+  ].reduce((content, strip) => strip(content), existing);
+  const next = appendTomlBlocks(cleaned, [
+    renderCodexBlock(MDS_SERVER_KEY, server),
+    renderCodexMarketplaceBlock(CODEX_MARKETPLACE_NAME, marketplaceSourceRoot),
+    renderCodexPluginEnableBlock(CODEX_PLUGIN_CONFIG_ID),
+  ]);
+
+  await writeText(configPath, next, dryRun, writtenPaths);
 }
 
 async function upsertInstructions(
@@ -536,6 +645,46 @@ function upsertMarkedBlock(existing: string, block: string, markers: Instruction
   }
 
   return existing.trim().length > 0 ? `${existing.trimEnd()}\n\n${trimmedBlock}\n` : `${trimmedBlock}\n`;
+}
+
+function appendTomlBlocks(existing: string, blocks: string[]): string {
+  const content = existing.trimEnd();
+  const blockText = blocks.map((block) => block.trim()).filter(Boolean).join('\n\n');
+  return content.length > 0 ? `${content}\n\n${blockText}\n` : `${blockText}\n`;
+}
+
+function stripTomlBlock(content: string, header: string): string {
+  const start = content.indexOf(header);
+  if (start === -1) {
+    return content;
+  }
+
+  const after = content.slice(start);
+  const nextHeader = after.search(/\n\[[^\]]+]/);
+  const end = nextHeader === -1 ? content.length : start + nextHeader + 1;
+  const before = content.slice(0, start).replace(/\n+$/, '');
+  const tail = content.slice(end).replace(/^\n+/, '');
+  return [before, tail].filter(Boolean).join('\n\n');
+}
+
+function readTomlBlock(content: string, header: string): string {
+  const start = content.indexOf(header);
+  if (start === -1) {
+    return '';
+  }
+
+  const after = content.slice(start);
+  const nextHeader = after.search(/\n\[[^\]]+]/);
+  const end = nextHeader === -1 ? content.length : start + nextHeader + 1;
+  return content.slice(start, end);
+}
+
+function renderCodexMarketplaceBlock(name: string, sourceRoot: string): string {
+  return [`[marketplaces.${name}]`, 'source_type = "local"', `source = ${JSON.stringify(sourceRoot)}`, ''].join('\n');
+}
+
+function renderCodexPluginEnableBlock(pluginConfigId: string): string {
+  return [`[plugins.${JSON.stringify(pluginConfigId)}]`, 'enabled = true', ''].join('\n');
 }
 
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
@@ -630,8 +779,8 @@ function printProjectInstallFollowup(target: string, client: AgentClient): void 
 
   console.log(chalk.bold('Next steps for Codex (project scope):'));
   console.log(`  1. Open ${target} in Codex.`);
-  console.log('  2. Install or enable the mr-djs-dev-suite local plugin from the local marketplace.');
-  console.log('  3. Run `mds agent verify --client codex --target .` from the project root.');
+  console.log(`  2. Restart Codex if needed so it picks up the ${CODEX_PLUGIN_CONFIG_ID} local plugin.`);
+  console.log('  3. Run `mds agent verify --client codex --scope project --target .` from the project root.');
 }
 
 function printUserInstallFollowup(target: string, client: Exclude<AgentClient, 'vscode'>): void {
@@ -645,9 +794,9 @@ function printUserInstallFollowup(target: string, client: Exclude<AgentClient, '
   }
 
   console.log(chalk.bold('Next steps for Codex (user scope):'));
-  console.log(`  1. Restart Codex so it picks up ${path.join(target, '.agents', 'plugins', 'marketplace.json')}.`);
-  console.log('  2. Install or enable the mr-djs-dev-suite local plugin from the local marketplace.');
-  console.log('  3. Confirm the mr-djs-dev-suite MCP server is configured in Codex settings.');
+  console.log(`  1. Restart Codex so it picks up the ${CODEX_PLUGIN_CONFIG_ID} local plugin.`);
+  console.log('  2. Confirm the mr-djs-dev-suite MCP server is configured in Codex settings.');
+  console.log('  3. Run `mds agent verify --client codex --scope user` from any workspace.');
 }
 
 async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
@@ -726,14 +875,32 @@ async function checkJsonMcp(name: string, filePath: string): Promise<AgentVerify
   };
 }
 
-async function checkCodexConfig(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
-  const raw = await readTextIfExists(filePath);
-  const hasServer = raw?.includes(`[mcp_servers.${MDS_SERVER_KEY}]`) ?? false;
+async function checkCodexConfig(
+  filePath: string,
+  marketplaceSourceRoot: string
+): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = (await readTextIfExists(filePath)) ?? '';
+  const marketplaceHeader = `[marketplaces.${CODEX_MARKETPLACE_NAME}]`;
+  const pluginHeader = `[plugins.${JSON.stringify(CODEX_PLUGIN_CONFIG_ID)}]`;
+  const marketplaceBlock = readTomlBlock(raw, marketplaceHeader);
+  const pluginBlock = readTomlBlock(raw, pluginHeader);
+  const hasServer = raw.includes(`[mcp_servers.${MDS_SERVER_KEY}]`);
+  const hasMarketplace = marketplaceBlock.includes(`source = ${JSON.stringify(marketplaceSourceRoot)}`);
+  const hasEnabledPlugin = pluginBlock.includes('enabled = true');
+  const missing = [
+    hasServer ? null : 'MCP server block',
+    hasMarketplace ? null : `${CODEX_MARKETPLACE_NAME} marketplace block`,
+    hasEnabledPlugin ? null : `${CODEX_PLUGIN_CONFIG_ID} plugin enable block`,
+  ].filter((entry): entry is string => entry !== null);
+
   return {
     name: 'Codex MCP config',
-    status: hasServer ? 'pass' : 'fail',
+    status: missing.length === 0 ? 'pass' : 'fail',
     path: filePath,
-    message: hasServer ? `${MDS_SERVER_KEY} server is configured.` : 'Codex MCP server block is missing.',
+    message:
+      missing.length === 0
+        ? `${MDS_SERVER_KEY} server, local marketplace, and plugin enable blocks are configured.`
+        : `Missing ${missing.join(', ')}.`,
   };
 }
 
@@ -881,3 +1048,8 @@ function parseJsonObject(raw: string, filePath: string): Record<string, unknown>
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+function pathExistsSync(filePath: string): boolean {
+  return existsSync(filePath);
+}
+

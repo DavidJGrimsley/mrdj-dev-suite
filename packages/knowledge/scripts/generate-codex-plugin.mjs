@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 export const PLUGIN_ID = 'mr-djs-dev-suite';
 export const PLUGIN_DIRECTORY = path.join('plugins', 'codex');
@@ -398,36 +399,7 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 - Confirm canonical tags, social metadata, and sitemap/robots behavior on affected routes.
 - Output: changed files, resolved SEO gaps, and any remaining manual verification steps.
 `,
-    'create-expo-super-stack.md': `# /create-expo-super-stack
-
-Create a new Expo app with the MDS Super Stack flow, then hand off to phase-based continuation.
-
-## Arguments
-
-- \`parentDir\`: folder where the new app directory should be created.
-- \`appName\`: app folder name.
-
-## MCP-First Workflow
-
-1. Confirm the \`mr-djs-dev-suite\` MCP server is available.
-2. Invoke the MCP prompt \`create_expo_super_stack\` from a parent directory.
-3. Follow the prompt intake flow and keep one question per turn until generation completes.
-4. After generation, move into the new app folder and invoke \`continue_project\` (or prompt \`continue_mds_project\`) for the first implementation session.
-
-## CLI / Manual Fallback
-
-1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
-2. Direct CLI generation:
-   - \`npx -y create-expo-super-stack <appName>\`
-3. Then onboard/continue from inside the generated app:
-   - \`mds continue <new-app-path>\`
-
-## Verification And Output
-
-- Confirm generated app has \`project/info.md\`, \`project/todo.md\`, \`project/style.md\`, and \`project/guidelines.md\`.
-- Output: generated app path, onboarding status, and immediate next command.
-`,
+    'create-expo-super-stack.md': readCanonicalPromptMarkdown('create-expo-super-stack.md'),
     'continue-development.md': `# /continue-development
 
 Resume work on an onboarded project by following MDS phase order from \`project/todo.md\`.
@@ -505,21 +477,22 @@ The source of truth for skills remains \`packages/knowledge/src/content/skills\`
 
 ## One-Command Install
 
-Project scope installs MCP into \`.codex/config.toml\`, copies this plugin into \`plugins/mr-djs-dev-suite\`, and registers it in \`.agents/plugins/marketplace.json\`:
+Project scope installs MCP plus the local marketplace/plugin enable blocks into \`.codex/config.toml\`, copies this plugin into \`plugins/mr-djs-dev-suite\`, and registers it in \`.agents/plugins/marketplace.json\`:
 
 \`\`\`sh
 mds agent install --client codex --scope project --target /path/to/your/expo-app
-mds agent verify --client codex --target /path/to/your/expo-app
+mds agent verify --client codex --scope project --target /path/to/your/expo-app
 \`\`\`
 
-User scope installs MCP into \`~/.codex/config.toml\`, copies the plugin into \`~/plugins/mr-djs-dev-suite\`, and registers it in \`~/.agents/plugins/marketplace.json\`:
+User scope installs MCP plus the local marketplace/plugin enable blocks into \`~/.codex/config.toml\`, copies the plugin into \`~/plugins/mr-djs-dev-suite\`, and registers it in \`~/.agents/plugins/marketplace.json\`:
 
 \`\`\`sh
 mds agent install --client codex --scope user
+mds agent verify --client codex --scope user
 mds agent install --client codex --scope user --dry-run
 \`\`\`
 
-After install, restart Codex if needed and enable/install \`mr-djs-dev-suite\` from the local marketplace.
+After install, restart Codex if needed so it picks up \`mr-djs-dev-suite@mds-local\`.
 
 ## MCP-Only Fallback
 
@@ -555,6 +528,12 @@ function renderJson(value) {
 function ensureTrailingNewline(value) {
   const normalized = normalizeLineEndings(value).trimEnd();
   return `${normalized}\n`;
+}
+
+function readCanonicalPromptMarkdown(fileName) {
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const promptPath = path.join(packageRoot, 'src', 'content', 'prompts', fileName);
+  return normalizeLineEndings(readFileSync(promptPath, 'utf8'));
 }
 
 function isMissingFileError(error) {

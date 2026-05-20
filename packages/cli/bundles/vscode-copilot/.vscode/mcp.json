@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "mds": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mr.dj2u/mcp-server"
+      ]
+    }
+  }
+}

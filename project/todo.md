@@ -282,9 +282,12 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Support `npx @mr.dj2u/doctor`.
 - [x] Support Codex install via `npx @mr.dj2u/cli agent install --client codex` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client codex`.
 - [x] Support Claude install via `npx @mr.dj2u/cli agent install --client claude` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client claude`.
-- [ ] Review and update prompt/skill text in MCP/plugin surfaces (agentic create expo super stack - CLI-backed flows pick up CLI changes once that updated CLI version is what gets executed so this may be a non-issue) to remove any lag from the CLI and ensure that the source of truth in `packages/knowledge` prevents this drift in the future.
-- [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
+- [x] Review and update prompt/skill text in MCP/plugin surfaces (agentic create expo super stack - CLI-backed flows pick up CLI changes once that updated CLI version is what gets executed so this may be a non-issue) to remove any lag from the CLI and ensure that the source of truth in `packages/knowledge` prevents this drift in the future.
+- [x] Bundle the custom agent for VS Code Copilot, and the plugins for Claude and Codex with the CLI so it can be installed with `mds agent install` with the client flag.
+- [ ] Use the custom agent for VS Code Copilot to run through the full post-create onboarding flow in a new Expo app, then run Doctor, explain the results, and create a fix plan.
+- [ ] Use the plugin in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
 - [ ] Dogfood on Time2Pay, PokePages and the Dogfood app.
+- [ ] Add/update the how to section of the README with the recommended workflow: start with how to install for Copilot, Codex, or Claude, then a "How to use this suite": `create-expo-super-stack` for new apps, then use `mds doctor`, `mds explain`, and `mds report` in regular development, and use the agent skills for project review, guidance, and workflow automation.
 
 ### MVP Week Roadmap
 

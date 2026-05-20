@@ -37,5 +37,5 @@ plugins/<client-name>/
 ## Agent behavior
 
 - Prefer extending canonical knowledge specs over patching generated plugin files.
-- Keep command prompts action-oriented and MCP-first with clear fallback paths.
+- Keep command prompts action-oriented and generated from canonical prompt specs, with clear fallback paths.
 - Delegate framework guidance to Expo-owned skills/docs when available; layer MDS project-memory and workflow guidance on top.
