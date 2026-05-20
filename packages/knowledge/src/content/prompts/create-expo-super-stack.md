@@ -18,7 +18,7 @@ Create a new Expo app with the MDS Super Stack flow, using this knowledge packag
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mds mcp install --client codex --scope project`
+   - `mds mcp install --client <client> --scope project`
 2. Direct CLI generation:
    - `npx -y create-expo-super-stack <appName>`
 3. Then onboard/continue from inside the generated app using the current CLI behavior:

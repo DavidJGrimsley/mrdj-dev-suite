@@ -18,7 +18,7 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mds mcp install --client codex --scope project`
+   - `mds mcp install --client <client> --scope project`
 2. Direct CLI checks:
    - `mds doctor <projectPath> --ci`
    - Run project-specific web build/preview commands to verify metadata output.

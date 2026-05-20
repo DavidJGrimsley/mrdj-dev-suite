@@ -89,6 +89,8 @@ describe('generateCodexPluginBundle', () => {
     expect(workflowDoctorRaw).toContain('doctor_scan_project');
     expect(workflowDoctorRaw).toContain('npx -y -p @mr.dj2u/cli@latest mds doctor');
     expect(workflowDoctorRaw).toContain('Do not run `npm run mds:doctor`');
+    expect(workflowDoctorRaw).toContain('MDS Routing Guardrails');
+    expect(workflowDoctorRaw).not.toContain('Codex Routing Guardrails');
 
     const commandEntries = await readdir(path.join(pluginRoot, 'commands'));
     expect(commandEntries.sort()).toEqual([...COMMAND_FILES].sort());

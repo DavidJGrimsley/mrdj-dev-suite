@@ -1,8 +1,11 @@
 {
   "mcpServers": {
-    "mds-dev-suite": {
+    "mr-djs-dev-suite": {
       "command": "npx",
-      "args": ["-y", "@mr.dj2u/mcp-server"]
+      "args": [
+        "-y",
+        "@mr.dj2u/mcp-server@0.1.2"
+      ]
     }
   }
 }

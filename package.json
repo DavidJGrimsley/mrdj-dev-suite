@@ -1,6 +1,6 @@
 {
   "name": "mr-djs-dev-suite",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "Personal AI dev-suite for Expo developers: doctor, onboarding, automation, and knowledge base",

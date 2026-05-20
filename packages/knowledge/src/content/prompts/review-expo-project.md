@@ -18,7 +18,7 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mds mcp install --client codex --scope project`
+   - `mds mcp install --client <client> --scope project`
 2. If MCP still cannot run, use direct CLI flows:
    - `mds continue <projectPath>`
    - `mds doctor <projectPath> --ci`

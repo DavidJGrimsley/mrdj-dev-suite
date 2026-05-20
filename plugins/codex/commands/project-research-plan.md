@@ -18,7 +18,7 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mds mcp install --client codex --scope project`
+   - `mds mcp install --client <client> --scope project`
 2. Direct CLI fallback:
    - Use `mds onboard <projectPath>` for structured intake when memory files are missing.
    - Use `mds continue <projectPath>` after memory normalization to select the next task.

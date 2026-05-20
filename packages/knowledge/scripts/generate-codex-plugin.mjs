@@ -162,8 +162,8 @@ export function buildPluginManifest(options) {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',
     },
-    homepage: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
-    repository: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
+    homepage: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
+    repository: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
     license: 'MIT',
     keywords: [
       'expo',
@@ -183,7 +183,7 @@ export function buildPluginManifest(options) {
       developerName: 'MDS',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
-      websiteURL: 'https://github.com/DavidJGrimsley/mr-djs-dev-suite',
+      websiteURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
       defaultPrompt: [
         'Review my Expo project and give me the next safe implementation steps.',
         'Run a deployment-readiness check with Doctor and fix blockers first.',
@@ -308,7 +308,7 @@ Review an Expo project with MCP-first diagnostics and skill-guided remediation.
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. If MCP still cannot run, use direct CLI flows:
    - \`mds continue <projectPath>\`
    - \`mds doctor <projectPath> --ci\`
@@ -338,16 +338,16 @@ Run MDS Doctor as the primary health check for an Expo project.
 4. If the check is release-related or web-facing, call \`generate_deploy_checklist\` before giving next steps.
 5. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
 
-## Codex Routing Guardrails
+## MDS Routing Guardrails
 
-- Treat \`@Mr. DJ's Dev Suite run doctor\` as a request for the plugin MCP tool, not as a request to run app-local npm scripts.
+- Treat a request to run MDS Doctor as a request for the MDS MCP tool, not as a request to run app-local npm scripts.
 - Do not run \`npm run mds:doctor\`, \`npm run doctor\`, or other project package scripts as the MDS Doctor path unless the user explicitly asks for app scripts.
 - Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
 
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. Direct CLI alternatives:
    - \`mds doctor <projectPath>\`
    - \`mds doctor <projectPath> --ci\`
@@ -382,7 +382,7 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. Direct CLI path:
    - \`mds doctor <projectPath> --ci\`
    - Run project scripts: \`lint\`, \`type-check\`, \`test\`, and production build/profile scripts.
@@ -413,7 +413,7 @@ Apply SEO metadata fixes for Expo web routes with MCP guidance and post-fix veri
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. Direct CLI checks:
    - \`mds doctor <projectPath> --ci\`
    - Run project-specific web build/preview commands to verify metadata output.
@@ -439,16 +439,16 @@ Resume work on an onboarded project by following MDS phase order from \`project/
 3. Pull \`get_skill\` for \`continue-development\` to enforce phase-first sequencing.
 4. If blockers appear, use \`doctor_scan_project\` and \`doctor_explain_result\` for targeted remediation before feature work.
 
-## Codex Routing Guardrails
+## MDS Routing Guardrails
 
-- Treat \`@Mr. DJ's Dev Suite continue development\` as a request for the plugin MCP tool and MDS phase rules first.
+- Treat a request to continue development with MDS as a request for the MDS MCP tool and phase rules first.
 - Do not jump directly into app edits until \`continue_project\` or the CLI fallback has identified the active phase and blockers.
 - Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
 
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. Direct CLI flow:
    - \`mds continue <projectPath>\`
    - \`mds doctor <projectPath>\` when blockers are unclear.
@@ -480,7 +480,7 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - \`mds mcp install --client codex --scope project\`
+   - \`mds mcp install --client <client> --scope project\`
 2. Direct CLI fallback:
    - Use \`mds onboard <projectPath>\` for structured intake when memory files are missing.
    - Use \`mds continue <projectPath>\` after memory normalization to select the next task.

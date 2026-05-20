@@ -1,12 +1,20 @@
 {
-  "name": "mds-dev-suite",
-  "description": "Expo project intelligence for Claude Code: Doctor diagnostics, architecture skills, MCP tools, custom MDS agent, and project-memory commands for Expo Router apps.",
-  "version": "0.1.0",
+  "name": "mr-djs-dev-suite",
+  "displayName": "Mr. DJ's Dev Suite",
+  "version": "0.1.6",
+  "description": "MCP-first Expo review, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code.",
   "author": {
-    "name": "David Grimsley",
-    "url": "https://github.com/DavidJGrimsley"
+    "name": "DJ Grimsley",
+    "url": "https://davidjgrimsley.com"
   },
-  "homepage": "https://github.com/DavidJGrimsley/mds-dev-suite",
-  "repository": "https://github.com/DavidJGrimsley/mds-dev-suite",
-  "license": "MIT"
+  "homepage": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  "repository": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  "license": "MIT",
+  "keywords": [
+    "expo",
+    "react-native",
+    "mcp",
+    "doctor",
+    "claude-code"
+  ]
 }

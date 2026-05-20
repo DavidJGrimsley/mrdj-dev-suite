@@ -1,7 +1,12 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildCommandFiles, generateCodexPluginBundleFromKnowledge } from './generate-codex-plugin.mjs';
+import {
+  MCP_SERVER_KEY,
+  PUBLISHED_MCP_SERVER_ARGS,
+  buildCommandFiles,
+  generateCodexPluginBundleFromKnowledge,
+} from './generate-codex-plugin.mjs';
 import { generateVscodeCopilotBundleFromKnowledge } from './generate-vscode-copilot.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,6 +65,7 @@ if (process.env.MRDJ_SKIP_VSCODE_COPILOT_GENERATION !== '1') {
 const claudeCodeSkillsDir = path.join(repoRoot, 'plugins', 'claude-code', 'skills');
 const claudeCodeCommandsDir = path.join(repoRoot, 'plugins', 'claude-code', 'commands');
 const claudeCodeAgentsDir = path.join(repoRoot, 'plugins', 'claude-code', 'agents');
+const claudeCodePluginDir = path.join(repoRoot, 'plugins', 'claude-code');
 const skillSource = path.join(source, 'skills');
 const skillFiles = await listMarkdownFiles(skillSource);
 
@@ -106,8 +112,19 @@ for (const { fileName, content } of commandFiles) {
 
 await mkdir(claudeCodeAgentsDir, { recursive: true });
 await writeFile(path.join(claudeCodeAgentsDir, 'mds.md'), renderClaudeMdsAgent(), 'utf8');
+await mkdir(path.join(claudeCodePluginDir, '.claude-plugin'), { recursive: true });
 await writeFile(
-  path.join(repoRoot, 'plugins', 'claude-code', 'settings.json'),
+  path.join(claudeCodePluginDir, '.claude-plugin', 'plugin.json'),
+  `${JSON.stringify(buildClaudePluginManifest(await readWorkspaceVersion()), null, 2)}\n`,
+  'utf8'
+);
+await writeFile(
+  path.join(claudeCodePluginDir, '.mcp.json'),
+  `${JSON.stringify(buildClaudeMcpConfig(), null, 2)}\n`,
+  'utf8'
+);
+await writeFile(
+  path.join(claudeCodePluginDir, 'settings.json'),
   `${JSON.stringify({ agent: 'mds' }, null, 2)}\n`,
   'utf8'
 );
@@ -167,4 +184,39 @@ function renderClaudeMdsAgent() {
     '- When MCP is unavailable, use CLI fallbacks such as `mds doctor`, `mds continue`, and `mds report`.',
     '',
   ].join('\n');
+}
+
+async function readWorkspaceVersion() {
+  const raw = await readFile(path.join(repoRoot, 'package.json'), 'utf8');
+  const parsed = JSON.parse(raw);
+  return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.0';
+}
+
+function buildClaudePluginManifest(version) {
+  return {
+    name: 'mr-djs-dev-suite',
+    displayName: "Mr. DJ's Dev Suite",
+    version,
+    description:
+      'MCP-first Expo review, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code.',
+    author: {
+      name: 'DJ Grimsley',
+      url: 'https://davidjgrimsley.com',
+    },
+    homepage: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
+    repository: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
+    license: 'MIT',
+    keywords: ['expo', 'react-native', 'mcp', 'doctor', 'claude-code'],
+  };
+}
+
+function buildClaudeMcpConfig() {
+  return {
+    mcpServers: {
+      [MCP_SERVER_KEY]: {
+        command: 'npx',
+        args: PUBLISHED_MCP_SERVER_ARGS,
+      },
+    },
+  };
 }
