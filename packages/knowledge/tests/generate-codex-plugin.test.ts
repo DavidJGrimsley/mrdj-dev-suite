@@ -56,7 +56,8 @@ describe('generateCodexPluginBundle', () => {
       commands,
     });
 
-    expect(result.skillIds).toEqual(['alpha-skill', 'zeta-skill']);
+    const workflowSkillIds = COMMAND_FILES.map((fileName) => `workflow-${fileName.replace(/\.md$/, '')}`).sort();
+    expect(result.skillIds).toEqual(['alpha-skill', ...workflowSkillIds, 'zeta-skill'].sort());
     expect(result.commandFiles).toEqual(COMMAND_FILES);
 
     const pluginRoot = path.join(repoRoot, 'plugins', 'codex');
@@ -78,7 +79,16 @@ describe('generateCodexPluginBundle', () => {
     });
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));
-    expect(skillsDirEntries.sort()).toEqual(['alpha-skill', 'zeta-skill']);
+    expect(skillsDirEntries.sort()).toEqual(['alpha-skill', ...workflowSkillIds, 'zeta-skill'].sort());
+
+    const workflowDoctorRaw = await readFile(
+      path.join(pluginRoot, 'skills', 'workflow-run-doctor', 'SKILL.md'),
+      'utf8'
+    );
+    expect(workflowDoctorRaw).toContain('name: "MDS Run Doctor"');
+    expect(workflowDoctorRaw).toContain('doctor_scan_project');
+    expect(workflowDoctorRaw).toContain('npx -y -p @mr.dj2u/cli@latest mds doctor');
+    expect(workflowDoctorRaw).toContain('Do not run `npm run mds:doctor`');
 
     const commandEntries = await readdir(path.join(pluginRoot, 'commands'));
     expect(commandEntries.sort()).toEqual([...COMMAND_FILES].sort());

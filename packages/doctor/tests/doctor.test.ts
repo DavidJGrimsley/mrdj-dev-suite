@@ -44,7 +44,7 @@ describe('runDoctor', () => {
         lint: 'node -e "process.exit(0)"',
         typecheck: 'node -e "process.exit(0)"',
         test: 'node -e "process.exit(0)"',
-        'mds:doctor': 'npx @mr.dj2u/cli doctor',
+        'mds:doctor': 'npx -y -p @mr.dj2u/cli@latest mds doctor',
         'build:prod': 'eas build --profile production',
       },
     });

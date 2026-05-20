@@ -22,6 +22,15 @@ export const COMMAND_FILES = [
   'project-research-plan.md',
 ];
 
+export const CODEX_WORKFLOW_SKILL_PREFIX = 'workflow-';
+
+const WORKFLOW_SKILL_DESCRIPTIONS = {
+  'run-doctor.md':
+    "Use when the user asks Mr. DJ's Dev Suite to run Doctor, run a health check, run CI checks, diagnose project status, or explain MDS Doctor findings.",
+  'continue-development.md':
+    "Use when the user asks Mr. DJ's Dev Suite to continue development, pick the next phase task, resume work, or inspect project/todo.md.",
+};
+
 export async function generateCodexPluginBundleFromKnowledge(options = {}) {
   const packageRoot = options.packageRoot
     ? path.resolve(options.packageRoot)
@@ -115,7 +124,9 @@ export async function generateCodexPluginBundle(options) {
     });
   }
 
-  for (const skill of skillContents) {
+  const workflowSkillContents = buildCodexWorkflowSkills();
+
+  for (const skill of [...skillContents, ...workflowSkillContents]) {
     files.push({
       relativePath: path.posix.join('skills', skill.id, 'SKILL.md'),
       content: ensureTrailingNewline(skill.content),
@@ -136,7 +147,7 @@ export async function generateCodexPluginBundle(options) {
   return {
     pluginRoot,
     marketplacePath,
-    skillIds: skillContents.map((skill) => skill.id),
+    skillIds: [...skillContents, ...workflowSkillContents].map((skill) => skill.id).sort(),
     commandFiles: COMMAND_FILES,
   };
 }
@@ -327,6 +338,12 @@ Run MDS Doctor as the primary health check for an Expo project.
 4. If the check is release-related or web-facing, call \`generate_deploy_checklist\` before giving next steps.
 5. Pull targeted implementation guidance with \`get_skill\` (typically \`deployment\`, \`debugging\`, or \`dev-server-management\`).
 
+## Codex Routing Guardrails
+
+- Treat \`@Mr. DJ's Dev Suite run doctor\` as a request for the plugin MCP tool, not as a request to run app-local npm scripts.
+- Do not run \`npm run mds:doctor\`, \`npm run doctor\`, or other project package scripts as the MDS Doctor path unless the user explicitly asks for app scripts.
+- Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
+
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
@@ -335,6 +352,8 @@ Run MDS Doctor as the primary health check for an Expo project.
    - \`mds doctor <projectPath>\`
    - \`mds doctor <projectPath> --ci\`
    - \`mds doctor <projectPath> --json\`
+3. If \`mds\` is not on PATH, invoke the published CLI by binary name:
+   - \`npx -y -p @mr.dj2u/cli@latest mds doctor <projectPath> --ci\`
 
 ## Verification And Output
 
@@ -420,6 +439,12 @@ Resume work on an onboarded project by following MDS phase order from \`project/
 3. Pull \`get_skill\` for \`continue-development\` to enforce phase-first sequencing.
 4. If blockers appear, use \`doctor_scan_project\` and \`doctor_explain_result\` for targeted remediation before feature work.
 
+## Codex Routing Guardrails
+
+- Treat \`@Mr. DJ's Dev Suite continue development\` as a request for the plugin MCP tool and MDS phase rules first.
+- Do not jump directly into app edits until \`continue_project\` or the CLI fallback has identified the active phase and blockers.
+- Never invoke \`@mrdj/cli\`; that package name is wrong. The published CLI package is \`@mr.dj2u/cli\` and its executable is \`mds\`.
+
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
@@ -427,6 +452,8 @@ Resume work on an onboarded project by following MDS phase order from \`project/
 2. Direct CLI flow:
    - \`mds continue <projectPath>\`
    - \`mds doctor <projectPath>\` when blockers are unclear.
+3. If \`mds\` is not on PATH, invoke the published CLI by binary name:
+   - \`npx -y -p @mr.dj2u/cli@latest mds continue <projectPath>\`
 
 ## Verification And Output
 
@@ -464,6 +491,35 @@ Turn rough product notes/research into actionable MDS project memory and next-ph
 - Output: resolved unknowns, outstanding questions, and the recommended next implementation slice.
 `,
   };
+}
+
+export function buildCodexWorkflowSkills() {
+  return Object.entries(buildCommandFiles()).map(([fileName, content]) => {
+    const id = `${CODEX_WORKFLOW_SKILL_PREFIX}${fileName.replace(/\.md$/, '')}`;
+    const title = titleFromCommandFile(fileName);
+    const description =
+      WORKFLOW_SKILL_DESCRIPTIONS[fileName] ??
+      `Use when the user asks Mr. DJ's Dev Suite to run the ${title} workflow.`;
+
+    return {
+      id,
+      content: [
+        renderFrontmatter({
+          name: `MDS ${title}`,
+          description,
+        }),
+        '',
+        '# Codex Workflow Routing',
+        '',
+        '- This is a Mr. DJ\'s Dev Suite plugin workflow. Prefer the bundled MCP tools before terminal fallbacks.',
+        '- When an MCP tool named in this workflow is available, call that tool directly instead of running app-local npm scripts.',
+        '- Do not use stale package names such as `@mrdj/cli`. The CLI package is `@mr.dj2u/cli`; the executable is `mds`.',
+        '- If the MCP server is unavailable, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.',
+        '',
+        content,
+      ].join('\n'),
+    };
+  });
 }
 
 export function renderPluginReadme() {
@@ -528,6 +584,26 @@ function normalizePath(value) {
 
 function renderJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function titleFromCommandFile(fileName) {
+  return fileName
+    .replace(/\.md$/, '')
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function renderFrontmatter(fields) {
+  return [
+    '---',
+    ...Object.entries(fields).map(([key, value]) => `${key}: ${quoteYaml(value)}`),
+    '---',
+  ].join('\n');
+}
+
+function quoteYaml(value) {
+  return JSON.stringify(String(value).replace(/\s+/g, ' ').trim());
 }
 
 function ensureTrailingNewline(value) {

@@ -1,7 +1,14 @@
 ---
-mode: "agent"
-description: "Run the MDS Continue Development workflow with MCP-first diagnostics and CLI fallback."
+name: "MDS Continue Development"
+description: "Use when the user asks Mr. DJ's Dev Suite to continue development, pick the next phase task, resume work, or inspect project/todo.md."
 ---
+
+# Codex Workflow Routing
+
+- This is a Mr. DJ's Dev Suite plugin workflow. Prefer the bundled MCP tools before terminal fallbacks.
+- When an MCP tool named in this workflow is available, call that tool directly instead of running app-local npm scripts.
+- Do not use stale package names such as `@mrdj/cli`. The CLI package is `@mr.dj2u/cli`; the executable is `mds`.
+- If the MCP server is unavailable, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.
 
 # /continue-development
 
@@ -13,7 +20,7 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 
 ## MCP-First Workflow
 
-1. Confirm the `mds` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Call `continue_project` first to get the active-phase brief.
 3. Pull `get_skill` for `continue-development` to enforce phase-first sequencing.
 4. If blockers appear, use `doctor_scan_project` and `doctor_explain_result` for targeted remediation before feature work.

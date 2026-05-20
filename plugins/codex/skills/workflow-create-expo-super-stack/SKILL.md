@@ -1,0 +1,42 @@
+---
+name: "MDS Create Expo Super Stack"
+description: "Use when the user asks Mr. DJ's Dev Suite to run the Create Expo Super Stack workflow."
+---
+
+# Codex Workflow Routing
+
+- This is a Mr. DJ's Dev Suite plugin workflow. Prefer the bundled MCP tools before terminal fallbacks.
+- When an MCP tool named in this workflow is available, call that tool directly instead of running app-local npm scripts.
+- Do not use stale package names such as `@mrdj/cli`. The CLI package is `@mr.dj2u/cli`; the executable is `mds`.
+- If the MCP server is unavailable, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.
+
+# /create-expo-super-stack
+
+Create a new Expo app with the MDS Super Stack flow, using this knowledge package as the shared source of truth for agent-facing text and the published CLI as the execution source of truth.
+
+## Arguments
+
+- `parentDir`: folder where the new app directory should be created.
+- `appName`: app folder name.
+
+## MCP-First Workflow
+
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
+2. Invoke the MCP prompt `create_expo_super_stack` from a parent directory when you want guided intake.
+3. Keep the conversation one question per turn and summarize the captured choices before generation.
+4. Treat the MCP prompt as the intake surface and the CLI as the generator, so CLI changes are picked up automatically when the published command changes.
+5. After generation, move into the new app folder and invoke `continue_project` (or prompt `continue_mds_project`) for the first implementation session.
+
+## CLI / Manual Fallback
+
+1. If MCP is not configured, install it manually:
+   - `mds mcp install --client codex --scope project`
+2. Direct CLI generation:
+   - `npx -y create-expo-super-stack <appName>`
+3. Then onboard/continue from inside the generated app using the current CLI behavior:
+   - `mds continue <new-app-path>`
+
+## Verification And Output
+
+- Confirm generated app has `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
+- Output: generated app path, onboarding status, and immediate next command.
