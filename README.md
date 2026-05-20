@@ -1,4 +1,4 @@
-# Mr. DJ's Dev Suite
+# Mr. DJ's Dev Suite (MDS)
 
 Personal AI dev-suite for Expo developers.
 
