@@ -11,6 +11,8 @@ import { readKnowledgeResource } from '@mr.dj2u/knowledge';
 import { buildContinueSessionBrief } from '../continue.js';
 import {
   installVscodeUserMcp,
+  PUBLISHED_MCP_SERVER_ARGS,
+  WINDOWS_PUBLISHED_MCP_SERVER_ARGS,
   renderCodexBlock,
   resolveServerInvocation,
   stripExistingCodexBlock,
@@ -255,6 +257,7 @@ export async function verifyCodexAgentInstall(
   checks.push(await checkCodexConfig(configPath, target));
   checks.push(await checkMarketplaceEntry(marketplacePath));
   checks.push(await checkExists('Codex plugin manifest', path.join(pluginRoot, '.codex-plugin', 'plugin.json')));
+  checks.push(await checkCodexPluginMcpConfig(path.join(pluginRoot, '.mcp.json')));
   checks.push(await checkDirectoryContains('Codex plugin skills', path.join(pluginRoot, 'skills'), 'SKILL.md'));
   if (scope === 'project') {
     checks.push(...(await runValidationChecks(target)));
@@ -373,7 +376,7 @@ async function installCodexAgent(
 ): Promise<AgentInstallResult> {
   const target = scope === 'user' ? os.homedir() : path.resolve(argv.target ?? '.');
   await writeCodexAgentConfig(path.join(target, '.codex', 'config.toml'), server, target, dryRun, writtenPaths);
-  await installCodexPluginAssets(bundleRoot, target, dryRun, writtenPaths);
+  await installCodexPluginAssets(bundleRoot, target, server, dryRun, writtenPaths);
   if (scope === 'user') {
     printUserInstallFollowup(target, 'codex');
   } else {
@@ -538,11 +541,13 @@ async function installClaudeSharedAssets(
 async function installCodexPluginAssets(
   bundleRoot: string,
   installRoot: string,
+  server: ReturnType<typeof resolveServerInvocation>,
   dryRun: boolean,
   writtenPaths: string[]
 ): Promise<void> {
   const pluginRoot = path.join(installRoot, 'plugins', CODEX_PLUGIN_NAME);
   await copyTree(bundleRoot, pluginRoot, dryRun, writtenPaths);
+  await writeCodexPluginMcpConfig(pluginRoot, server, dryRun, writtenPaths);
   await upsertCodexMarketplace(
     path.join(installRoot, '.agents', 'plugins', 'marketplace.json'),
     CODEX_PLUGIN_SOURCE_PATH,
@@ -571,6 +576,23 @@ async function writeCodexAgentConfig(
   ]);
 
   await writeText(configPath, next, dryRun, writtenPaths);
+}
+
+async function writeCodexPluginMcpConfig(
+  pluginRoot: string,
+  server: ReturnType<typeof resolveServerInvocation>,
+  dryRun: boolean,
+  writtenPaths: string[]
+): Promise<void> {
+  const config = {
+    mcpServers: {
+      [MDS_SERVER_KEY]: {
+        command: server.command,
+        args: server.args,
+      },
+    },
+  };
+  await writeText(path.join(pluginRoot, '.mcp.json'), `${JSON.stringify(config, null, 2)}\n`, dryRun, writtenPaths);
 }
 
 async function upsertInstructions(
@@ -779,8 +801,10 @@ function printProjectInstallFollowup(target: string, client: AgentClient): void 
 
   console.log(chalk.bold('Next steps for Codex (project scope):'));
   console.log(`  1. Open ${target} in Codex.`);
-  console.log(`  2. Restart Codex if needed so it picks up the ${CODEX_PLUGIN_CONFIG_ID} local plugin.`);
-  console.log('  3. Run `mds agent verify --client codex --scope project --target .` from the project root.');
+  console.log("  2. Type `@Mr. DJ's Dev Suite` in chat to get the install pop-up.");
+  console.log('  3. Hit Install.');
+  console.log("Use with `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.");
+  console.log('Run `mds agent verify --client codex --scope project --target .` from the project root.');
 }
 
 function printUserInstallFollowup(target: string, client: Exclude<AgentClient, 'vscode'>): void {
@@ -794,9 +818,11 @@ function printUserInstallFollowup(target: string, client: Exclude<AgentClient, '
   }
 
   console.log(chalk.bold('Next steps for Codex (user scope):'));
-  console.log(`  1. Restart Codex so it picks up the ${CODEX_PLUGIN_CONFIG_ID} local plugin.`);
-  console.log('  2. Confirm the mr-djs-dev-suite MCP server is configured in Codex settings.');
-  console.log('  3. Run `mds agent verify --client codex --scope user` from any workspace.');
+  console.log("  1. Restart Codex so it picks up the Mr. DJ's Dev Suite plugin.");
+  console.log("  2. Type `@Mr. DJ's Dev Suite` in chat to get the install pop-up.");
+  console.log('  3. Hit Install.');
+  console.log("Use with `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.");
+  console.log('Run `mds agent verify --client codex --scope user` from any workspace.');
 }
 
 async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
@@ -884,13 +910,16 @@ async function checkCodexConfig(
   const pluginHeader = `[plugins.${JSON.stringify(CODEX_PLUGIN_CONFIG_ID)}]`;
   const marketplaceBlock = readTomlBlock(raw, marketplaceHeader);
   const pluginBlock = readTomlBlock(raw, pluginHeader);
-  const hasServer = raw.includes(`[mcp_servers.${MDS_SERVER_KEY}]`);
+  const directServerBlock = readTomlBlock(raw, `[mcp_servers.${MDS_SERVER_KEY}]`);
   const hasMarketplace = marketplaceBlock.includes(`source = ${JSON.stringify(marketplaceSourceRoot)}`);
   const hasEnabledPlugin = pluginBlock.includes('enabled = true');
+  const hasLegacyDirectServer =
+    directServerBlock.includes('args = ["-y", "@mr.dj2u/mcp-server"]') ||
+    directServerBlock.includes("args = ['-y', '@mr.dj2u/mcp-server']");
   const missing = [
-    hasServer ? null : 'MCP server block',
     hasMarketplace ? null : `${CODEX_MARKETPLACE_NAME} marketplace block`,
     hasEnabledPlugin ? null : `${CODEX_PLUGIN_CONFIG_ID} plugin enable block`,
+    hasLegacyDirectServer ? 'working MCP server command' : null,
   ].filter((entry): entry is string => entry !== null);
 
   return {
@@ -899,9 +928,65 @@ async function checkCodexConfig(
     path: filePath,
     message:
       missing.length === 0
-        ? `${MDS_SERVER_KEY} server, local marketplace, and plugin enable blocks are configured.`
+        ? `Local marketplace and plugin enable blocks are configured.`
         : `Missing ${missing.join(', ')}.`,
   };
+}
+
+async function checkCodexPluginMcpConfig(filePath: string): Promise<AgentVerifyResult['checks'][number]> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return {
+      name: 'Codex plugin MCP config',
+      status: 'fail',
+      path: filePath,
+      message: '.mcp.json is missing.',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
+    const server = isRecord(parsed.mcpServers?.[MDS_SERVER_KEY]) ? parsed.mcpServers[MDS_SERVER_KEY] : null;
+    const valid = isValidCodexMcpServerInvocation(server);
+
+    return {
+      name: 'Codex plugin MCP config',
+      status: valid ? 'pass' : 'fail',
+      path: filePath,
+      message: valid
+        ? 'mr-djs-dev-suite MCP server invocation is valid.'
+        : `mr-djs-dev-suite MCP server must use \`npx ${PUBLISHED_MCP_SERVER_ARGS.join(' ')}\` or a local node server path.`,
+    };
+  } catch {
+    return {
+      name: 'Codex plugin MCP config',
+      status: 'fail',
+      path: filePath,
+      message: '.mcp.json is not valid JSON.',
+    };
+  }
+}
+
+function isValidCodexMcpServerInvocation(server: Record<string, unknown> | null): boolean {
+  const command = typeof server?.command === 'string' ? server.command : '';
+  const args = Array.isArray(server?.args) ? server.args : [];
+
+  if (command === 'node') {
+    return args.length > 0 && args.every((arg) => typeof arg === 'string');
+  }
+
+  if (command === 'npx') {
+    return args.length === PUBLISHED_MCP_SERVER_ARGS.length && args.every((arg, index) => arg === PUBLISHED_MCP_SERVER_ARGS[index]);
+  }
+
+  if (command === 'cmd' || command === 'cmd.exe') {
+    return (
+      args.length === WINDOWS_PUBLISHED_MCP_SERVER_ARGS.length &&
+      args.every((arg, index) => arg === WINDOWS_PUBLISHED_MCP_SERVER_ARGS[index])
+    );
+  }
+
+  return false;
 }
 
 async function checkMarketplaceEntry(filePath: string): Promise<AgentVerifyResult['checks'][number]> {

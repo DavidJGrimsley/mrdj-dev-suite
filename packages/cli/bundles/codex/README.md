@@ -28,7 +28,7 @@ mds agent verify --client codex --scope user
 mds agent install --client codex --scope user --dry-run
 ```
 
-After install, restart Codex if needed so it picks up `mr-djs-dev-suite@mds-local`.
+After install, restart Codex so it picks up the local marketplace. Then type `@Mr. DJ's Dev Suite` in chat to get the install pop-up, hit Install, and use `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.
 
 ## MCP-Only Fallback
 

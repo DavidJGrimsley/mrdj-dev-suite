@@ -1,6 +1,6 @@
 {
   "name": "@mr.dj2u/mcp-server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server for mds suite (Claude integration point)",
   "type": "module",
   "files": [
@@ -23,7 +23,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "mds-mcp-server": "./dist/index.js"
+    "mcp-server": "./dist/stdio.js",
+    "mds-mcp-server": "./dist/stdio.js"
   },
   "scripts": {
     "build": "tsc",

@@ -9,6 +9,8 @@ import {
   resolveServerInvocation,
   runMcpInstallCommand,
   stripExistingCodexBlock,
+  WINDOWS_PUBLISHED_MCP_SERVER_ARGS,
+  PUBLISHED_MCP_SERVER_ARGS,
 } from '../src/commands/mcp-install.js';
 
 const tempDirs: string[] = [];
@@ -36,8 +38,8 @@ describe('resolveServerInvocation', () => {
 
   it('falls back to npx when no path is provided and the server is not resolvable', () => {
     expect(resolveServerInvocation({})).toEqual({
-      command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server'],
+      command: process.platform === 'win32' ? 'cmd' : 'npx',
+      args: process.platform === 'win32' ? WINDOWS_PUBLISHED_MCP_SERVER_ARGS : PUBLISHED_MCP_SERVER_ARGS,
     });
   });
 });

@@ -133,7 +133,7 @@ User-scope MCP writes to:
 - Codex: `~/.codex/config.toml`
 - VS Code Copilot: `code --add-mcp` with server key `mds`
 
-The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server@0.1.2`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 
 ### Native Agent Bundles
 
@@ -141,7 +141,7 @@ Use `mds agent install` when you want the full native bundle for a client instea
 
 - VS Code Copilot: MCP plus `.vscode` settings, `.github/copilot-instructions.md`, `.github/agents/mds.agent.md`, `.github/prompts/*.prompt.md`, and generated `.github/skills/*/SKILL.md`.
 - Claude Code: MCP plus `CLAUDE.md` instructions, `.claude/agents/mds.md`, `.claude/commands/*.md`, and generated `.claude/skills/*/SKILL.md`.
-- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite`, registered in `.agents/plugins/marketplace.json`, and enabled as `mr-djs-dev-suite@mds-local` in Codex config.
+- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite`, registered in `.agents/plugins/marketplace.json`, and enabled as `mr-djs-dev-suite@mds-local` in Codex config. Restart Codex, type `@Mr. DJ's Dev Suite`, and hit Install when Codex shows the local plugin approval pop-up.
 
 Project-scoped install and verify:
 

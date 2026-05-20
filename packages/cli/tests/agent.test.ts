@@ -192,6 +192,8 @@ describe('Codex agent install', () => {
     expect(await readFile(path.join(target, 'plugins', 'mr-djs-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
       '"name": "mr-djs-dev-suite"'
     );
+    const pluginMcp = JSON.parse(await readFile(path.join(target, 'plugins', 'mr-djs-dev-suite', '.mcp.json'), 'utf8'));
+    expect(pluginMcp.mcpServers['mr-djs-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
 
     const verify = await verifyCodexAgentInstall(target);
     expect(verify.passed).toBe(true);
@@ -201,6 +203,7 @@ describe('Codex agent install', () => {
     const bundleRoot = await createCodexBundle();
     const fakeHome = await createTempDir('mds-codex-home-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await runAgentInstallCommand({
       client: 'codex',
@@ -208,6 +211,13 @@ describe('Codex agent install', () => {
       bundlePath: bundleRoot,
       serverPath: '/abs/server.js',
     });
+
+    const output = logSpy.mock.calls.flat().join('\n');
+    expect(output).toContain("Restart Codex so it picks up the Mr. DJ's Dev Suite plugin.");
+    expect(output).toContain("Type `@Mr. DJ's Dev Suite` in chat to get the install pop-up.");
+    expect(output).toContain('Hit Install.');
+    expect(output).toContain("Use with `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.");
+    expect(output).toContain('Run `mds agent verify --client codex --scope user` from any workspace.');
 
     const config = await readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8');
     expect(config).toContain('[mcp_servers.mr-djs-dev-suite]');
@@ -318,7 +328,21 @@ async function createCodexBundle(): Promise<string> {
     path.join(bundleRoot, '.codex-plugin', 'plugin.json'),
     JSON.stringify({ name: 'mr-djs-dev-suite', version: '0.1.0' }, null, 2)
   );
-  await writeFileWithDirs(path.join(bundleRoot, '.mcp.json'), JSON.stringify({ mcpServers: {} }, null, 2));
+  await writeFileWithDirs(
+    path.join(bundleRoot, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'mr-djs-dev-suite': {
+            command: 'npx',
+            args: ['-y', '@mr.dj2u/mcp-server@0.1.2'],
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
   await writeFileWithDirs(path.join(bundleRoot, 'commands', 'run-doctor.md'), '# Run Doctor\n');
   await writeFileWithDirs(path.join(bundleRoot, 'skills', 'deployment', 'SKILL.md'), '---\ndescription: Deploy safely\n---\n');
   return bundleRoot;
