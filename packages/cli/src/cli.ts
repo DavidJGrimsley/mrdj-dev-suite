@@ -246,7 +246,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['free-port [ports..]', 'kill-port [ports..]'],
+      'free-port [ports..]',
       'Free one or more local ports by stopping listening processes',
       (builder) =>
         builder
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      ['clear-expo-start [path]', 'clean-start [path]'],
+      'clear-expo-start [path]',
       'Kill Expo/server ports, clear local caches, and start Expo with --clear',
       (builder) =>
         builder
@@ -342,7 +342,6 @@ async function main(): Promise<void> {
           .option('scope', {
             describe: 'Install for the current user or just the target project',
             choices: ['user', 'project'] as const,
-            default: 'project' as const,
           })
           .option('target', {
             describe: 'Project directory for project-scope install or verify',

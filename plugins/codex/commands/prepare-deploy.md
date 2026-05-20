@@ -9,7 +9,7 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 
 ## MCP-First Workflow
 
-1. Confirm the `mds-dev-suite` MCP server is available.
+1. Confirm the `mr-djs-dev-suite` MCP server is available.
 2. Run `doctor_scan_project` in `ci` mode for release parity.
 3. Pull `get_skill` for `deployment`; if web is involved also pull `seo-metadata`.
 4. Use `knowledge_list_resources` (`kind: "rule"`) to confirm env hygiene, SSR safety, and metadata requirements.
@@ -19,7 +19,7 @@ Prepare an Expo project for release using deployment-focused skills plus Doctor 
 ## CLI / Manual Fallback
 
 1. If MCP is not configured, install it manually:
-   - `mds mcp install --client codex --scope project`
+   - `mds mcp install --client <client> --scope project`
 2. Direct CLI path:
    - `mds doctor <projectPath> --ci`
    - Run project scripts: `lint`, `type-check`, `test`, and production build/profile scripts.

@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "mds-dev-suite",
+      "name": "mr-djs-dev-suite",
       "source": {
         "source": "local",
         "path": "./plugins/codex"

@@ -19,14 +19,14 @@ onboarding pass.
    Uniwind repair for existing apps, Software Mansion core examples, Supabase or
    local data guidance, MCP/Codex/Claude instructions, and CI/release safeguards.
 6. Scaffold only selected pieces.
-7. Add generated cleanup scripts such as `clear-expo-start` and `free-port` (with `kill-port` compatibility alias).
+7. Add generated cleanup scripts such as `clear-expo-start` and `free-port`.
 8. Install added dependencies, run `expo install --fix`, install known missing
    Expo peers such as `expo-font` for `@expo/vector-icons`, then run Doctor.
 
 ## Agentic Onboarding (MCP)
 
 The terminal `mds onboard` command writes the project memory files. The
-agentic version is a conversation with Claude Code, Codex, or Cursor that
+agentic version is a conversation with Copilot, Claude Code, Codex, or Cursor that
 fills those files in collaboratively.
 
 Install **once, globally** (user scope, default) so every workspace gets
@@ -90,7 +90,7 @@ fills the section or deletes the marker line.
   whose work fills the MDS knowledge base.
 - **Success message surfaced.** After a successful run, the agent
   quotes the generator's `MDS onboarding complete` tail block back
-  verbatim so the Mr. DJ thank-you text appears in chat the same way
+  verbatim so the Mr. DJ personal thank-you text appears in chat the same way
   it does in a terminal CLI run.
 - **MDS Continue handoff.** The agent runs `mds continue` from the
   generated app folder, then tells the user-dev to open that app folder
@@ -111,3 +111,33 @@ fills the section or deletes the marker line.
   `project/guidelines.md`.
 - Treat monorepo-aware scaffolding as a future step after the single-app MVP is
   stable.
+
+## VS Code & GitHub Copilot Integration
+
+This guide is authored as canonical knowledge consumed by agent bundles; it is not the agent itself. To enable the generated Copilot/VS Code surface and the custom MDS agent in a workspace, regenerate the VS Code bundle and install the generated prompts/settings into the target repository or your user profile.
+
+- Regenerate VS Code assets (from repository root):
+
+```powershell
+pnpm --filter @mr.dj2u/knowledge build:vscode
+```
+
+- Copy the generated workspace assets into your project (PowerShell):
+
+```powershell
+Copy-Item -Path .\plugins\vscode-copilot\.github\* -Destination . -Recurse -Force
+Copy-Item -Path .\plugins\vscode-copilot\.vscode\* -Destination .\.vscode -Recurse -Force
+```
+
+- Then restart VS Code. Ensure the `GitHub Copilot Chat` extension is installed and enabled. The generated `.vscode/settings.json` enables agent skill locations and prompt file lookup under `.github/prompts`.
+
+- If you prefer user-scope installs, copy the `user/.copilot` content into your user profile per the extension docs, or run `mds agent install --client codex --scope user` (if available) to automate the merge.
+
+## Install Path & What This MD Is For
+
+- This markdown is a human- and agent-facing guide. It documents the onboarding flow and explains what the agent prompts do. It is used as input to the `packages/knowledge` build which generates plugin/agent bundles for Codex, Claude Code, and VS Code Copilot.
+- The agent itself is not this file — it is a runtime that loads generated prompts/skills from the plugin bundles or the MCP server. To activate the agent surfaces you must either:
+  - Install the MCP prompts via `mds mcp install --client <client>` (user or project scope), or
+  - Copy the generated plugin files from `plugins/vscode-copilot` / `plugins/codex` / `plugins/claude-code` into the target workspace or user profile and restart the corresponding client.
+
+If you want, I can: regenerate the VS Code bundle now, copy the assets into the current workspace, and verify Copilot sees the prompts. Say "Do it" and I'll run the build and copy steps for you.

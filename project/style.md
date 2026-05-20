@@ -1,4 +1,4 @@
-# mds-dev-suite Style
+# Mr. DJ's Dev Suite Style
 
 ## Visual Direction
 

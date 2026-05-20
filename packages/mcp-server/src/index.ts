@@ -42,8 +42,8 @@ export interface MCPResource {
 export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
-      name: 'mds-dev-suite',
-      version: '0.1.0',
+      name: 'mr-djs-dev-suite',
+      version: '0.1.2',
       description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
@@ -65,7 +65,7 @@ export function createMrdjMcpServer(): McpServer {
 export async function startStdioServer(): Promise<void> {
   const server = createMrdjMcpServer();
   await server.connect(new StdioServerTransport());
-  console.error('mds-dev-suite MCP server running on stdio');
+  console.error('mr-djs-dev-suite MCP server running on stdio');
   process.stdin.resume();
 }
 
@@ -539,7 +539,7 @@ function registerPrompts(server: McpServer): void {
   );
 }
 
-const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mds-dev-suite/templates/info.md';
+const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mr-djs-dev-suite/templates/info.md';
 
 function fileIntakePhase(label: string): string {
   return [
@@ -572,7 +572,7 @@ function creditsAndWaitMessage(): string {
     '  """',
     '  Generating now. This typically takes 2-5 minutes. While we wait, let\'s shout out and recognize how this is working.',
     '',
-    '  create-expo-super-stack by Mr. DJ (who also built this agentic flow) wraps create-expo-stack by Roni Oss with major contributions by Dan Stepanov. Big thanks to them and to several other teams and individuals whose work and educational materials fill the MDS-dev-suite knowledge base:',
+    "  create-expo-super-stack by Mr. DJ (who also built this agentic flow) wraps create-expo-stack by Roni Oss with major contributions by Dan Stepanov. Big thanks to them and to several other teams and individuals whose work and educational materials fill Mr. DJ's Dev Suite knowledge base:",
     '',
     '    - Expo team (Evan Bacon for Expo Router, Brent Vatne, Charlie Cheever, and the broader Expo crew)',
     '    - React and React Native core teams',
@@ -587,7 +587,7 @@ function creditsAndWaitMessage(): string {
     '    - Catalin Miron for the React Native animation tutorials',
     '    - Infinite Red / Jamon Holmgren for Ignite and the broader RN community',
     '',
-    '  Their contributions to the software development community are what fill the pages of the MDS-dev-suite knowledge base, alongside contributions and organization by Mr. DJ. Please enjoy the experience of the MDS-dev-suite plugin as you continue your development.',
+    "  Their contributions to the software development community are what fill the pages of Mr. DJ's Dev Suite knowledge base, alongside contributions and organization by Mr. DJ. Please enjoy the experience of the Mr. DJ's Dev Suite plugin as you continue your development.",
     '  """',
     '',
     'Then surface generator output as it arrives. Do not echo the assembled command. If the generator surfaces an interactive prompt despite flags, relay it to the user.',
@@ -1375,7 +1375,7 @@ function isDirectRun(): boolean {
 if (isDirectRun()) {
   startStdioServer().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('Fatal error in mds-dev-suite MCP server:', message);
+    console.error('Fatal error in mr-djs-dev-suite MCP server:', message);
     process.exit(1);
   });
 }

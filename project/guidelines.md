@@ -1,4 +1,4 @@
-# mds-dev-suite Guidelines
+# Mr. DJ's Dev Suite Guidelines
 
 ## Source Of Truth
 
@@ -11,10 +11,12 @@
 
 ## Repo Scope
 
-- `mds-dev-suite` owns the MDS CLI, Doctor, MCP server, knowledge package,
+- Mr. DJ's Dev Suite owns the MDS CLI, Doctor, MCP server, knowledge package,
   onboarding, rich boilerplate, and `create-expo-super-stack`.
 - `f:\SoftwareDev\create-expo-stack` is the upstream-style fork. Keep MDS
   memory, MCP, and rich boilerplate out of upstream PRs.
+- `@mr.dj2u/create-expo-stack` is a temporary scoped fork package for public
+  `create-expo-super-stack` dogfooding until the upstream PR lands.
 - `f:\SoftwareDev\dogfood` is the practice app for testing generated flows.
 
 ## TypeScript And Packages
@@ -57,8 +59,7 @@
 - Run `pnpm type-check`, `pnpm lint`, `pnpm test`, and `pnpm build` before
   claiming a dev-suite change is ready.
 - Run `mds doctor --ci` before pushing app changes.
-- Use `mds clear-expo-start` or `mds clean-start` when Metro/cache/port state
+- Use `mds clear-expo-start` when Metro/cache/port state
   gets wedged.
 - Treat monorepo-aware generated app support as future work until the single-app
   MVP is stable.
-

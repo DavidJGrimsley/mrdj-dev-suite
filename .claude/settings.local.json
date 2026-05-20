@@ -1,21 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "mcp__mds-dev-suite__doctor_scan_project",
+      "mcp__mr-djs-dev-suite__doctor_scan_project",
       "Bash(node packages/cli/dist/cli.js doctor . --fast)",
-      "mcp__mds-dev-suite__continue_project",
-      "mcp__mds-dev-suite__knowledge_list_resources",
-      "mcp__mds-dev-suite__generate_setup_tasks",
+      "mcp__mr-djs-dev-suite__continue_project",
+      "mcp__mr-djs-dev-suite__knowledge_list_resources",
+      "mcp__mr-djs-dev-suite__generate_setup_tasks",
       "Bash(node packages/cli/dist/cli.js doctor \"F:\\\\ReactNativeApps\\\\dogfoodapps\\\\purina1\" --fast)",
-      "mcp__mds-dev-suite__get_skill",
+      "mcp__mr-djs-dev-suite__get_skill",
       "Bash(node packages/cli/dist/cli.js continue \"F:\\\\ReactNativeApps\\\\dogfoodapps\\\\purina1\")",
       "Bash(node packages/cli/dist/cli.js skills list)",
-      "mcp__mds-dev-suite__get_guide",
+      "mcp__mr-djs-dev-suite__get_guide",
       "Bash(node packages/cli/dist/cli.js doctor \"F:\\\\ReactNativeApps\\\\dogfoodapps\\\\purina1\" --json)",
       "Bash(node -e \"const d=require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\); const j=JSON.parse\\(d\\); console.log\\('Valid JSON:', true\\); console.log\\('Check count:', j.checks?.length\\); console.log\\('Summary:', JSON.stringify\\(j.summary\\)\\)\")",
       "Bash(node -e \"const j=require\\('/tmp/doctor_out.json'\\); console.log\\('Valid JSON: true'\\); console.log\\('Checks:', j.checks?.length\\); console.log\\('Summary:', JSON.stringify\\(j.summary\\)\\);\")",
       "PowerShell(cd \"F:\\\\SoftwareDev\\\\MDS-claude-plugin\"; node packages/cli/dist/cli.js doctor \"F:\\\\ReactNativeApps\\\\dogfoodapps\\\\purina1\" --json 2>&1 | Out-File -Encoding utf8 \"C:\\\\Temp\\\\doctor_out.json\"; $content = Get-Content \"C:\\\\Temp\\\\doctor_out.json\" -Raw; $j = $content | ConvertFrom-Json; Write-Host \"Valid JSON: true\"; Write-Host \"Check count: $\\($j.checks.Count\\)\"; Write-Host \"Summary: errors=$\\($j.summary.errors\\) warnings=$\\($j.summary.warnings\\) passed=$\\($j.summary.passed\\)\")",
-      "mcp__mds-dev-suite__doctor_scan_file",
+      "mcp__mr-djs-dev-suite__doctor_scan_file",
       "PowerShell($null = New-Item -Path \"C:\\\\Users\\\\DJLeg\\\\AppData\\\\Local\\\\Temp\\\\doctor_out.json\" -Force; cd \"F:\\\\SoftwareDev\\\\MDS-claude-plugin\"; node packages/cli/dist/cli.js doctor \"F:\\\\ReactNativeApps\\\\dogfoodapps\\\\purina1\" --json 2>&1 | Where-Object { $_ -notmatch '^\\\\x1b' } | Set-Content -Encoding utf8 \"C:\\\\Users\\\\DJLeg\\\\AppData\\\\Local\\\\Temp\\\\doctor_out.json\"; $content = Get-Content \"C:\\\\Users\\\\DJLeg\\\\AppData\\\\Local\\\\Temp\\\\doctor_out.json\" -Raw; try { $j = $content | ConvertFrom-Json; Write-Host \"Valid JSON: true\"; Write-Host \"Check count: $\\($j.checks.Count\\)\"; Write-Host \"Summary: e=$\\($j.summary.errors\\) w=$\\($j.summary.warnings\\) p=$\\($j.summary.passed\\)\" } catch { Write-Host \"JSON parse error: $_\" })"
     ]
   }

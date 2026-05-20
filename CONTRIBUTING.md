@@ -1,4 +1,4 @@
-# Contributing to mds-dev-suite
+# Contributing to Mr. DJ's Dev Suite
 
 Thank you for contributing! This guide explains how to work within the monorepo structure, follow our standards, and submit changes.
 
@@ -11,7 +11,7 @@ Thank you for contributing! This guide explains how to work within the monorepo 
 ### Initial Setup
 ```bash
 # Clone the repository
-git clone <repo-url> && cd mds-dev-suite
+git clone <repo-url> && cd <repo-folder>
 
 # Install dependencies
 pnpm install
@@ -422,4 +422,4 @@ Before submitting a PR, verify:
 
 ## Thank You!
 
-Your contributions help make mds-dev-suite better for all Expo developers. We appreciate your time and effort! 🙏
+Your contributions help make Mr. DJ's Dev Suite better for all Expo developers. We appreciate your time and effort! 🙏

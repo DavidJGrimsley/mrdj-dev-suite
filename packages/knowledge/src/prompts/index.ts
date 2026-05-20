@@ -87,7 +87,7 @@ const PROMPT_SPECS: PromptSpec[] = [
     slug: 'create-expo-super-stack',
     title: 'Create Expo Super Stack',
     description:
-      'Start a guided app creation flow from a parent directory and hand off to continue.',
+      'Start a guided app creation flow from a parent directory while keeping the knowledge package as the text source of truth.',
     resourcePath: 'prompts/create-expo-super-stack.md',
     keywords: ['create-expo-super-stack', 'onboarding', 'generator'],
     surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],

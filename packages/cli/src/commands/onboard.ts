@@ -115,12 +115,12 @@ export const SERVER_OUTPUT_EXPLANATION =
   'Expo Router API routes require Expo web output set to server. Static and SPA exports can still call Supabase, external APIs, serverless functions, or a separate custom backend, but they cannot host Expo Router API routes inside the static export.';
 export const AGENT_DERIVED_CORE_FLOWS =
   'Agent should derive the first core user flows from project/info.md during intake.';
-export const SUPER_STACK_ONBOARDING_INTRO = 'Super Stack onboarding by Mr. DJ';
+export const SUPER_STACK_ONBOARDING_INTRO = 'MDS Super Stack onboarding';
 export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
   'We will spend time defining the application and business now so the generated project memory gives agents real context.';
 export const SUPER_STACK_SUCCESS_MESSAGE =
-  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on GitHub at github.com/mds-dev-suite/issues.";
+  "You did it! You and your app are set up for success by completing this extensive onboarding. You're amazing. Mr. DJ thanks you for using this tool and any feedback can be given at MDS@DavidJGrimsley.com or by raising an issue on GitHub at github.com/DavidJGrimsley/mrdj-dev-suite/issues.";
 const CHECKBOX_PROMPT_HINT = 'Use Space to select options, then Enter to continue.';
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
@@ -561,7 +561,7 @@ async function askProjectMemoryReadiness(
       );
 
       if (answer === 'create') {
-        log.success(`No problem, Mr. DJ's Super-Stack will create project/${fileName} from a template.`);
+        log.success(`No problem, MDS Super Stack will create project/${fileName} from a template.`);
         return false;
       }
       if (answer === 'recheck' && (await fileExists(filePath))) {
@@ -618,7 +618,7 @@ async function askDataNeeds(fallback: string): Promise<string> {
 
 async function askEasIntent(argv: OnboardArgv, fallback: boolean): Promise<boolean> {
   if (argv.easSelected === true) {
-    log.success("EAS setup was detected, so Mr. DJ's Super-Stack will remember EAS in the roadmap.");
+    log.success('EAS setup was detected, so MDS Super Stack will remember EAS in the roadmap.');
     return true;
   }
 

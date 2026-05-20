@@ -99,7 +99,7 @@ export async function main(): Promise<void> {
     manageUniwind: parsed.mds.skipCreate,
     richBoilerplate: plan.richBoilerplate,
   });
-  const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName);
+  const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName, plan.answers.targetPlatforms);
 
   console.log();
   console.log('MDS onboarding complete.');
@@ -624,6 +624,22 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
     };
   }
 
+  const scopedForkCandidates = [
+    path.join(packageRoot, 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
+    path.join(packageRoot, '..', '..', 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
+  ];
+
+  for (const candidate of scopedForkCandidates) {
+    if (await pathExists(candidate)) {
+      return {
+        command: process.execPath,
+        args: [candidate],
+        display: `node ${candidate}`,
+        shell: false,
+      };
+    }
+  }
+
   const candidates = [
     path.join(packageRoot, 'node_modules', '.bin', executable),
     path.join(packageRoot, '..', '..', 'node_modules', '.bin', executable),
@@ -720,7 +736,11 @@ async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; 
   return { from: rootAppDir, to: srcAppDir };
 }
 
-export async function repairExpoProjectIdentifiers(projectPath: string, projectName: string): Promise<string[]> {
+export async function repairExpoProjectIdentifiers(
+  projectPath: string,
+  projectName: string,
+  targetPlatforms: string[] = []
+): Promise<string[]> {
   const appJsonPath = path.join(projectPath, 'app.json');
   const raw = await readOptionalText(appJsonPath);
   if (!raw) {
@@ -756,6 +776,12 @@ export async function repairExpoProjectIdentifiers(projectPath: string, projectN
   }
   if (hasScheme && JSON.stringify(currentScheme) !== JSON.stringify(nextScheme)) {
     expo.scheme = nextScheme;
+    changed = true;
+  }
+  const shouldIncludeWeb = targetPlatforms.includes('web');
+  const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
+  if (shouldIncludeWeb && !currentPlatforms.includes('web')) {
+    expo.platforms = [...currentPlatforms, 'web'];
     changed = true;
   }
 

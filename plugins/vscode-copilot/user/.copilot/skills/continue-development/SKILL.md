@@ -34,3 +34,4 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 
 - Optimize for forward progress without losing roadmap integrity.
 - Avoid silently reordering roadmap priorities; ask for confirmation before major sequencing changes.
+- Treat this as an MDS-only workflow skill: use official Expo or React Native guidance for framework mechanics, then apply MDS phase order, project memory, and Doctor checks.

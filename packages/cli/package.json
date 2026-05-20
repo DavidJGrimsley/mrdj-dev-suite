@@ -1,14 +1,15 @@
 {
   "name": "@mr.dj2u/cli",
-  "version": "0.1.1",
+  "version": "0.1.6",
   "description": "CLI entry point for mds commands (doctor, onboard, test-and-iterate)",
   "type": "module",
   "bin": {
-    "mds": "./dist/cli.js"
+    "mds": "dist/cli.js"
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "bundles"
   ],
   "exports": {
     ".": {
@@ -35,6 +36,7 @@
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
     "test": "vitest run --passWithNoTests",
+    "prepack": "node ./scripts/copy-agent-bundles.mjs && node ../../scripts/verify-publish-manifest.mjs .",
     "dev": "tsc --watch",
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },

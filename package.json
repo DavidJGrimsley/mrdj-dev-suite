@@ -1,6 +1,6 @@
 {
-  "name": "mds-dev-suite",
-  "version": "0.1.0",
+  "name": "mr-djs-dev-suite",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "Personal AI dev-suite for Expo developers: doctor, onboarding, automation, and knowledge base",
@@ -17,6 +17,7 @@
     "typecheck": "pnpm type-check",
     "test": "turbo run test",
     "ci": "pnpm type-check && pnpm lint && pnpm test && pnpm build",
+    "check:publish-manifests": "node scripts/verify-publish-manifest.mjs",
     "clean": "turbo run clean && node -e \"const fs=require('node:fs'); for (const p of ['node_modules','dist']) fs.rmSync(p,{recursive:true,force:true});\"",
     "doctor": "node packages/cli/dist/cli.js doctor",
     "doctor:ci": "node packages/cli/dist/cli.js doctor --ci",

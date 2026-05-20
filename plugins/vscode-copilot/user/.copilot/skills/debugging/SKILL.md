@@ -34,3 +34,4 @@ Debug by narrowing scope quickly: reproduce, isolate, capture evidence, apply th
 
 - Start with high-risk failures (security, data loss, crashers), then address lower-risk warnings.
 - Keep users unblocked with concrete next commands and avoid speculative broad refactors before evidence is clear.
+- Delegate framework primitive questions to official Expo or React Native guidance, then apply MDS reproduction discipline, Doctor checks, and project-memory context.

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   runAgentInstallCommand,
+  runAgentVerifyCommand,
   verifyClaudeAgentInstall,
   verifyCodexAgentInstall,
   verifyVscodeAgentInstall,
@@ -47,7 +48,7 @@ describe('VS Code agent install', () => {
 
     const mcp = JSON.parse(await readFile(path.join(target, '.vscode', 'mcp.json'), 'utf8'));
     expect(mcp.servers.existing).toEqual({ command: 'echo' });
-    expect(mcp.servers.mdsDevSuite).toEqual({ command: 'node', args: ['/abs/server.js'] });
+    expect(mcp.servers.mds).toEqual({ command: 'node', args: ['/abs/server.js'] });
     const settings = JSON.parse(await readFile(path.join(target, '.vscode', 'settings.json'), 'utf8'));
     expect(settings['editor.formatOnSave']).toBe(true);
     expect(settings['chat.useAgentSkills']).toBe(true);
@@ -106,7 +107,7 @@ describe('Claude agent install', () => {
 
     const mcp = JSON.parse(await readFile(path.join(target, '.mcp.json'), 'utf8'));
     expect(mcp.mcpServers.other).toEqual({ command: 'echo' });
-    expect(mcp.mcpServers['mds-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
+    expect(mcp.mcpServers['mr-djs-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
     expect(await readFile(path.join(target, '.claude', 'agents', 'mds.md'), 'utf8')).toContain('name: mds');
     expect(await readFile(path.join(target, '.claude', 'commands', 'run-doctor.md'), 'utf8')).toContain('# Run Doctor');
     expect(await readFile(path.join(target, '.claude', 'skills', 'deployment', 'SKILL.md'), 'utf8')).toContain(
@@ -175,21 +176,86 @@ describe('Codex agent install', () => {
     });
 
     const config = await readFile(path.join(target, '.codex', 'config.toml'), 'utf8');
-    expect(config).toContain('[mcp_servers.mds-dev-suite]');
+    expect(config).toContain('[mcp_servers.mr-djs-dev-suite]');
     expect(config).toContain('command = "node"');
     expect(config).toContain('args = ["/abs/server.js"]');
+    expect(config).toContain('[marketplaces.mds-local]');
+    expect(config).toContain(`source = ${JSON.stringify(target)}`);
+    expect(config).toContain('[plugins."mr-djs-dev-suite@mds-local"]');
+    expect(config).toContain('enabled = true');
 
     const marketplace = JSON.parse(await readFile(path.join(target, '.agents', 'plugins', 'marketplace.json'), 'utf8'));
     expect(marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'other')).toBeTruthy();
-    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mds-dev-suite');
-    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mds-dev-suite' });
+    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mr-djs-dev-suite');
+    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mr-djs-dev-suite' });
     expect(mdsEntry.policy).toEqual({ installation: 'AVAILABLE', authentication: 'ON_INSTALL' });
-    expect(await readFile(path.join(target, 'plugins', 'mds-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
-      '"name": "mds-dev-suite"'
+    expect(await readFile(path.join(target, 'plugins', 'mr-djs-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
+      '"name": "mr-djs-dev-suite"'
     );
+    const pluginMcp = JSON.parse(await readFile(path.join(target, 'plugins', 'mr-djs-dev-suite', '.mcp.json'), 'utf8'));
+    expect(pluginMcp.mcpServers['mr-djs-dev-suite']).toEqual({ command: 'node', args: ['/abs/server.js'] });
 
     const verify = await verifyCodexAgentInstall(target);
     expect(verify.passed).toBe(true);
+  });
+
+  it('installs user-scoped Codex config, marketplace, plugin, and verifies without project checks', async () => {
+    const bundleRoot = await createCodexBundle();
+    const fakeHome = await createTempDir('mds-codex-home-');
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    await runAgentInstallCommand({
+      client: 'codex',
+      scope: 'user',
+      bundlePath: bundleRoot,
+      serverPath: '/abs/server.js',
+    });
+
+    const output = logSpy.mock.calls.flat().join('\n');
+    expect(output).toContain("Restart Codex so it picks up the Mr. DJ's Dev Suite plugin.");
+    expect(output).toContain("Type `@Mr. DJ's Dev Suite` in chat to get the install pop-up.");
+    expect(output).toContain('Hit Install.');
+    expect(output).toContain("Use with `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.");
+    expect(output).toContain('Run `mds agent verify --client codex --scope user` from any workspace.');
+
+    const config = await readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8');
+    expect(config).toContain('[mcp_servers.mr-djs-dev-suite]');
+    expect(config).toContain('[marketplaces.mds-local]');
+    expect(config).toContain(`source = ${JSON.stringify(fakeHome)}`);
+    expect(config).toContain('[plugins."mr-djs-dev-suite@mds-local"]');
+    expect(config).toContain('enabled = true');
+
+    const marketplace = JSON.parse(await readFile(path.join(fakeHome, '.agents', 'plugins', 'marketplace.json'), 'utf8'));
+    const mdsEntry = marketplace.plugins.find((plugin: { name: string }) => plugin.name === 'mr-djs-dev-suite');
+    expect(mdsEntry.source).toEqual({ source: 'local', path: './plugins/mr-djs-dev-suite' });
+    expect(await readFile(path.join(fakeHome, 'plugins', 'mr-djs-dev-suite', '.codex-plugin', 'plugin.json'), 'utf8')).toContain(
+      '"name": "mr-djs-dev-suite"'
+    );
+
+    const verify = await verifyCodexAgentInstall(fakeHome, 'user');
+    expect(verify.passed).toBe(true);
+    expect(verify.scope).toBe('user');
+    expect(verify.checks.some((check) => check.name === 'Doctor validation')).toBe(false);
+  });
+
+  it('falls back to user-scope Codex verification when project assets are absent and no scope was provided', async () => {
+    const bundleRoot = await createCodexBundle();
+    const fakeHome = await createTempDir('mds-codex-home-');
+    const target = await createTempDir('mds-codex-empty-target-');
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+
+    await runAgentInstallCommand({
+      client: 'codex',
+      scope: 'user',
+      bundlePath: bundleRoot,
+      serverPath: '/abs/server.js',
+    });
+
+    const verify = await runAgentVerifyCommand({ client: 'codex', target });
+    expect(verify.passed).toBe(true);
+    expect(verify.scope).toBe('user');
+    expect(verify.target).toBe(fakeHome);
   });
 
   it('supports user-scope dry-runs without mutating the home directory', async () => {
@@ -208,7 +274,7 @@ describe('Codex agent install', () => {
     expect(result.dryRun).toBe(true);
     expect(result.target).toBe(fakeHome);
     expect(
-      result.writtenPaths.some((filePath) => filePath.endsWith(path.join('plugins', 'mds-dev-suite', 'commands', 'run-doctor.md')))
+      result.writtenPaths.some((filePath) => filePath.endsWith(path.join('plugins', 'mr-djs-dev-suite', 'commands', 'run-doctor.md')))
     ).toBe(true);
     await expect(readFile(path.join(fakeHome, '.codex', 'config.toml'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(fakeHome, '.agents', 'plugins', 'marketplace.json'), 'utf8')).rejects.toThrow();
@@ -260,9 +326,23 @@ async function createCodexBundle(): Promise<string> {
   const bundleRoot = await createTempDir('mds-codex-bundle-');
   await writeFileWithDirs(
     path.join(bundleRoot, '.codex-plugin', 'plugin.json'),
-    JSON.stringify({ name: 'mds-dev-suite', version: '0.1.0' }, null, 2)
+    JSON.stringify({ name: 'mr-djs-dev-suite', version: '0.1.0' }, null, 2)
   );
-  await writeFileWithDirs(path.join(bundleRoot, '.mcp.json'), JSON.stringify({ mcpServers: {} }, null, 2));
+  await writeFileWithDirs(
+    path.join(bundleRoot, '.mcp.json'),
+    JSON.stringify(
+      {
+        mcpServers: {
+          'mr-djs-dev-suite': {
+            command: 'npx',
+            args: ['-y', '@mr.dj2u/mcp-server@0.1.2'],
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
   await writeFileWithDirs(path.join(bundleRoot, 'commands', 'run-doctor.md'), '# Run Doctor\n');
   await writeFileWithDirs(path.join(bundleRoot, 'skills', 'deployment', 'SKILL.md'), '---\ndescription: Deploy safely\n---\n');
   return bundleRoot;

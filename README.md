@@ -1,14 +1,52 @@
-# mds-dev-suite
+# Mr. DJ's Dev Suite (MDS)
 
 Personal AI dev-suite for Expo developers.
 
 The suite turns patterns from real apps into a reusable Doctor, MCP knowledge base, onboarding assistant, and GitHub workflow helper.
 
-## Status
+## Recommended Usage
 
-Phase 1 is self-contained. The workspace is scaffolded, harvested knowledge lives in `packages/knowledge`, Doctor has modular checks and tests, MCP uses the real SDK stdio transport, and onboard/ship commands have working Phase 1 command modules.
+### Install
 
-## Packages
+Run `npm install -g @mr.dj2u/cli` once to get the `mds` command globally.
+
+#### VS Code Custom Agent
+
+`mds agent install --client vscode`
+
+#### Codex Plugin
+
+`mds agent install --client codex`
+
+After restarting Codex, type `@Mr. DJ's Dev Suite`, approve the install pop-up, and use the plugin mention in chat.
+
+#### Claude Code Plugin
+
+`mds agent install --client claude`
+
+After restarting Claude Code, run `/mcp` to confirm `mr-djs-dev-suite`, then use the `mds` agent or MDS slash commands.
+
+### Use
+
+The suite is designed around MDS workflows. You invoke a prompt, slash command, or installed agent; that workflow tells the client which MCP tools to call, which agent skills to apply, and which bundled knowledge to fetch. In normal use, install the native bundle once and work through the client surface instead of memorizing individual CLI commands.
+
+Good first prompts:
+
+- Codex: `@Mr. DJ's Dev Suite run doctor in full mode with scripts enabled`
+- Codex: `@Mr. DJ's Dev Suite continue development`
+- Claude Code after `mds agent install`: `/run-doctor`, `/continue-development`, `/review-expo-project`, `/prepare-deploy`
+- Claude Code when installed as a true Claude plugin: `/mr-djs-dev-suite:run-doctor`, `/mr-djs-dev-suite:continue-development`
+- VS Code Copilot: use the generated MDS agent and prompt files installed by `mds agent install --client vscode`
+
+Claude Code gets slash commands. Codex gets an `@Mr. DJ's Dev Suite` plugin mention and generated skills. VS Code Copilot gets agent, prompt, instruction, and skill files rather than Claude-style slash commands.
+
+Create a new Expo app with `create-expo-super-stack`, or onboard an existing app with `mds onboard`.
+
+## Technical Overview, CLI Usage, and Product Workflows
+
+This includes the information on what happens when you run the above prompts. You shouldn't need to read this to use the tools, but it's here if you're curious about the inner workings or want to run the CLI commands directly.
+
+### Packages
 
 - `packages/doctor` - project checks for scripts, env safety, Expo config, route architecture, lint, typecheck, tests, Expo Doctor, and builds.
 - `packages/cli` - `mds doctor`, `mds onboard`, cleanup commands, and `mds test-and-iterate` entry points.
@@ -16,7 +54,7 @@ Phase 1 is self-contained. The workspace is scaffolded, harvested knowledge live
 - `packages/knowledge` - canonical source of truth for harvested patterns, guides, rules, skills, and reference notes.
 - `packages/mcp-server` - MCP SDK server exposing Doctor tools, knowledge resources, and onboarding prompts over stdio.
 
-## Quick Start
+### Quick Start
 
 ```bash
 pnpm install
@@ -36,9 +74,9 @@ pnpm create-expo-super-stack -- my-app --expo-router
 pnpm ship:test
 ```
 
-## Product Workflows
+### Product Workflows
 
-### Doctor
+#### Doctor
 
 `mds doctor` is the production-readiness check. The CI profile is meant to run the same checks you expect before pushing: lint, typecheck, tests, Expo Doctor, and production build scripts when the target repo has them.
 
@@ -47,7 +85,7 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --ci
 node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 ```
 
-### Ship To Test
+#### Ship To Test
 
 `mds test-and-iterate` is the Phase 1 dry-run shortcut for:
 
@@ -60,20 +98,20 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 
 Mutating git steps remain manual during the dry-run proving period. `--execute` runs Doctor first and stops if the project is not ready.
 
-### Create Expo Super Stack
+#### Create Expo Super Stack
 
-`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MDS project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app.
+`create-expo-super-stack` runs `create-expo-stack` under the hood, prints the delegated command, then applies MDS project memory, phase-based onboarding, exposition pages, dev-suite scripts, and Software Mansion core examples. Styling flags are passed through to `create-expo-stack`; Super Stack does not force Uniwind unless you run onboarding directly against an existing app. Until the upstream Uniwind PR lands, the package prefers the temporary scoped fork `@mr.dj2u/create-expo-stack` after local fork overrides and before the official fallback.
 
 ```bash
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router --mds-guidelines-template
 ```
 
-### Onboard
+#### Onboard
 
 `mds onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
 
-### MDS Continue
+#### MDS Continue
 
 `mds continue` prints an MDS Continue session brief for an already-onboarded app. It checks unresolved `TodoForContext` markers, `project/todo.md`, git status, package scripts, package manager, and a fast no-scripts Doctor scan, then proposes the next session plan without changing files.
 
@@ -120,7 +158,7 @@ node packages/cli/dist/cli.js mcp install --client vscode
 node packages/cli/dist/cli.js mcp install --dry-run
 
 # local dev: point the server at the workspace dist build
-node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mds-dev-suite\packages\mcp-server\dist\index.js"
+node packages/cli/dist/cli.js mcp install --server-path "F:\SoftwareDev\mrdj-dev-suite\packages\mcp-server\dist\index.js"
 
 # limit to one project (writes .mcp.json / .cursor/mcp.json / .codex/config.toml / .vscode/mcp.json into the target dir)
 node packages/cli/dist/cli.js mcp install --scope project --target F:\path\to\app
@@ -131,9 +169,9 @@ User-scope MCP writes to:
 - Claude Code: `~/.claude.json`
 - Cursor: `~/.cursor/mcp.json`
 - Codex: `~/.codex/config.toml`
-- VS Code Copilot: `code --add-mcp` with server key `mdsDevSuite`
+- VS Code Copilot: `code --add-mcp` with server key `mds`
 
-The merge preserves existing keys/blocks; only the `mds-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server@0.1.2`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 
 ### Native Agent Bundles
 
@@ -141,7 +179,7 @@ Use `mds agent install` when you want the full native bundle for a client instea
 
 - VS Code Copilot: MCP plus `.vscode` settings, `.github/copilot-instructions.md`, `.github/agents/mds.agent.md`, `.github/prompts/*.prompt.md`, and generated `.github/skills/*/SKILL.md`.
 - Claude Code: MCP plus `CLAUDE.md` instructions, `.claude/agents/mds.md`, `.claude/commands/*.md`, and generated `.claude/skills/*/SKILL.md`.
-- Codex: MCP plus a local `mds-dev-suite` plugin copied into `plugins/mds-dev-suite` and registered in `.agents/plugins/marketplace.json`.
+- Codex: MCP plus a local `mr-djs-dev-suite` plugin copied into `plugins/mr-djs-dev-suite`, registered in `.agents/plugins/marketplace.json`, and enabled as `mr-djs-dev-suite@mds-local` in Codex config. Restart Codex, type `@Mr. DJ's Dev Suite`, and hit Install when Codex shows the local plugin approval pop-up.
 
 Project-scoped install and verify:
 
@@ -152,7 +190,7 @@ node packages/cli/dist/cli.js agent install --client codex --scope project --tar
 
 node packages/cli/dist/cli.js agent verify --client vscode --target F:\path\to\app
 node packages/cli/dist/cli.js agent verify --client claude --target F:\path\to\app
-node packages/cli/dist/cli.js agent verify --client codex --target F:\path\to\app
+node packages/cli/dist/cli.js agent verify --client codex --scope project --target F:\path\to\app
 ```
 
 User-scoped installs:
@@ -162,12 +200,16 @@ node packages/cli/dist/cli.js agent install --client vscode --scope user
 node packages/cli/dist/cli.js agent install --client claude --scope user
 node packages/cli/dist/cli.js agent install --client codex --scope user
 
+node packages/cli/dist/cli.js agent verify --client vscode --scope user
+node packages/cli/dist/cli.js agent verify --client claude --scope user
+node packages/cli/dist/cli.js agent verify --client codex --scope user
+
 node packages/cli/dist/cli.js agent install --client vscode --scope user --dry-run
 node packages/cli/dist/cli.js agent install --client claude --scope user --dry-run
 node packages/cli/dist/cli.js agent install --client codex --scope user --dry-run
 ```
 
-Verification checks the client files, runs a fast no-script Doctor scan, fetches a bundled knowledge guide, and executes the MDS Continue workflow. Use `mds mcp install --client <client>` when you only want the MCP server, and `mds agent install --client <client>` when you want MCP plus the native instructions/agent/skills/plugin layer.
+Project-scope verification checks the client files, runs a fast no-script Doctor scan, fetches a bundled knowledge guide, and executes the MDS Continue workflow. User-scope verification checks the global client assets only. Use `mds mcp install --client <client>` when you only want the MCP server, and `mds agent install --client <client>` when you want MCP plus the native instructions/agent/skills/plugin layer.
 
 ### Dev Cleanup
 
@@ -180,7 +222,7 @@ node packages/cli/dist/cli.js clear-expo-start /path/to/app --no-start
 
 ## Reference Repos
 
-The reference repos used for Phase 1 harvest are no longer required in the workspace. `temp/` research clones were removed, and `project/SUPERmds-dev-suite.code-workspace` now opens only this suite.
+The reference repos used for Phase 1 harvest are no longer required in the workspace. `temp/` research clones were removed, and the suite workspace file now opens only this repo.
 
 ## Local Rules
 

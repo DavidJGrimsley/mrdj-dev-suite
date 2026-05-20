@@ -30,7 +30,7 @@ plugins/<client-name>/
 - Prompt/command markdown lives only in `packages/knowledge/src/content/prompts/`.
 - `plugins/<client>/skills/` remains generated output and is not manually edited.
 - Commands reference real MCP tool names from `packages/mcp-server`.
-- MCP config uses the `mds-dev-suite` server key.
+- MCP config uses the `mr-djs-dev-suite` server key.
 
 ## Adding a plugin capability
 
@@ -42,5 +42,5 @@ plugins/<client-name>/
 ## Agent behavior
 
 - Prefer extending canonical knowledge specs over patching generated plugin files.
-- Keep command prompts action-oriented and MCP-first with clear fallback paths.
+- Keep command prompts action-oriented and generated from canonical prompt specs, with clear fallback paths.
 - Delegate framework guidance to Expo-owned skills/docs when available; layer MDS project-memory and workflow guidance on top.

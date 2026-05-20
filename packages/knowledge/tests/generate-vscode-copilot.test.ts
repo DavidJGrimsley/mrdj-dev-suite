@@ -60,7 +60,7 @@ describe('generateVscodeCopilotBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { servers: Record<string, { command: string; args: string[] }> };
     expect(mcp.servers[VSCODE_MCP_SERVER_KEY]).toEqual({
       command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server'],
+      args: ['-y', '@mr.dj2u/mcp-server@0.1.2'],
     });
     const settingsRaw = await readFile(path.join(bundleRoot, '.vscode', 'settings.json'), 'utf8');
     const settings = JSON.parse(settingsRaw) as Record<string, unknown>;
@@ -87,9 +87,9 @@ describe('generateVscodeCopilotBundle', () => {
   it('builds a VS Code MCP config with the camel-case server key', () => {
     expect(buildVscodeMcpConfig()).toEqual({
       servers: {
-        mdsDevSuite: {
+        mds: {
           command: 'npx',
-          args: ['-y', '@mr.dj2u/mcp-server'],
+          args: ['-y', '@mr.dj2u/mcp-server@0.1.2'],
         },
       },
     });

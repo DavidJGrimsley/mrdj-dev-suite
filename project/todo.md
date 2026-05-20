@@ -144,18 +144,6 @@ Ship the public wrapper and the daily cleanup commands that make new Expo app st
   missing Expo peers such as `expo-font`, and then run `expo-doctor`.
 - [x] Add `f:\SoftwareDev\dogfood` as the official practice app target.
 
-### Next
-- [ ] Publish package only after an npm name check and a final end-to-end local generation pass.
-- [ ] Add a fully interactive agent-session path for `create-expo-super-stack` so a Codex/plugin prompt can guide the app setup from start to finish while using the CLI behind the scenes.
-- [ ] Let the agent-session intake accept pasted `project/info.md` sections, whole project memory files, or research-plan documents, then check and reshape them into the canonical `project/info.md` and `project/style.md` structure.
-- [ ] Add intake guidance telling users with little product direction to ask an AI agent for a research plan first, then feed that plan into MDS onboarding.
-- [ ] Save personal defaults globally for future app generation.
-- [ ] Add monorepo support after the single-app MVP is stable.
-- [ ] Run an Expo-owned skill delegation sweep so MDS guidance layers project memory/checks/workflow instead of duplicating framework docs.
-- [ ] Finish naming cleanup: use `MDS` in user-facing tool text while keeping the suite name `MDS Dev Suite`.
-- [ ] Rename `kill-port` to `free-port` as the primary command while preserving `kill-port` compatibility alias.
-- [ ] Add canonical ship-test-loop prompt spec (Codex/Claude/MCP): meaningful commit message, open/update PR to test, wait ~2 minutes, poll PR comments + failed checks, fix and push, repeat up to 5 cycles, merge to test when all checks are green.
-
 ## Full Product Roadmap
 
 This section restores the larger roadmap from `temp/plan.md`. The sprint board above is the current Phase 1 execution slice; this roadmap is the broader product plan.
@@ -194,7 +182,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [x] Implement `mds skills show`.
 - [x] Implement `mds mcp install` with `--client claude|codex|cursor` (subsumes the originally separate `mds codex install` and `mds claude install` commands).
 - [x] Implement `mds report`.
-- [ ] Keep DWAH-specific commands future-facing until the personal suite proves itself, such as `dwah login`, `dwah link`, `dwah env pull`, `dwah env push`, `dwah deploy`, `dwah preview`, `dwah promote`, and `dwah rollback`.
+- [ ] Keep DWAH-specific commands and hosting/preview layers future-facing until the personal suite proves itself, such as `dwah login`, `dwah link`, `dwah env pull`, `dwah env push`, `dwah deploy`, `dwah preview`, `dwah promote`, and `dwah rollback`.
 
 ### Phase 4: Agent Skills
 
@@ -262,7 +250,7 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 11: Publishing, Personal Workflow And Dogfooding
 
-- [ ] Run a sweep to ensure MDS-dev-suite(MDS) does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
+- [x] Run a sweep to ensure MDS does not replace official Expo skills. When an Expo-owned skill exists, MDS delegates framework guidance to that skill and layers on project-specific memory, checks, defaults, and workflow automation.
 (Then maybe add a small audit checklist before adding any new MDS skill:
 
 Does an Expo skill already cover this?
@@ -270,17 +258,24 @@ If yes, is MDS only adding project-specific guidance?
 Are we linking/delegating instead of duplicating?
 Is the new rule checkable by Doctor or useful to onboarding?
 Would this still be useful if the Expo docs/plugin improved tomorrow?)
-- [ ] Finish naming cleanup: use `MDS` for tools while keeping `MDS Dev Suite` as suite name in brand references.
+- [x] Finish naming cleanup: use `MDS` for tools while keeping `Mr. DJ's Dev Suite` as suite name in brand references.
 - [x] Publish all packages to npm that are required for the CLI, unified agent bundle and the entire dev suite workflow.
-- [ ] Support use inside an Expo app with `npx @mr.dj2u/cli init`.
-- [ ] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
-- [ ] Support `npx create-expo-super-stack`.
-- [x] Support `mds clear-expo-start`, `mds free-port`, and `mds kill-port` compatibility in generated apps.
+- [x] Add temporary `@mr.dj2u/create-expo-stack@2.21.3-mrdj.0` fork dependency/resolver path to `create-expo-super-stack` so the dev suite can work before the upstream PR is merged.
+- [x] Republish npm packages (`@mr.dj2u/knowledge`, `@mr.dj2u/doctor`, `@mr.dj2u/cli`, `create-expo-super-stack`, and `@mr.dj2u/mcp-server` are all at `0.1.1`; scoped fork `@mr.dj2u/create-expo-stack@2.21.3-mrdj.0` is published).
+- [x] Test npx create expo super stack as any other dev would (smoke-tested with `npx -y create-expo-super-stack phase11-smoke-app --expo-router --uniwind --no-install --mds-yes --mds-skip-expo-fix`).
+- [x] Support use inside an Expo app with `npx @mr.dj2u/cli init` (verified on 2026-05-19 in `f:\phase11-smoke\phase11-smoke-app`).
+- [x] Open a PR to create expo stack from my local fork (added Uniwind to CLI, made CLI match website, updated website with Uniwind.)
+- [x] Support `npx create-expo-super-stack`.
+- [x] Support `mds clear-expo-start` and `mds free-port` in generated apps.
 - [x] Support `npx @mr.dj2u/doctor`.
-- [ ] Support `npx @mr.dj2u/cli codex install`.
-- [ ] Support `npx @mr.dj2u/cli claude install`.
-- [ ] Use the suite in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
-- [ ] Dogfood on DavidJGrimsley.com, Time2Pay, PokePages, Quantum API frontend, and any DWAH prototype.
+- [x] Support Codex install via `npx @mr.dj2u/cli agent install --client codex` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client codex`.
+- [x] Support Claude install via `npx @mr.dj2u/cli agent install --client claude` and MCP-only setup via `npx @mr.dj2u/cli mcp install --client claude`.
+- [x] Review and update prompt/skill text in MCP/plugin surfaces (agentic create expo super stack - CLI-backed flows pick up CLI changes once that updated CLI version is what gets executed so this may be a non-issue) to remove any lag from the CLI and ensure that the source of truth in `packages/knowledge` prevents this drift in the future.
+- [x] Bundle the custom agent for VS Code Copilot, and the plugins for Claude and Codex with the CLI so it can be installed with `mds agent install` with the client flag.
+- [x] Use the custom agent for VS Code Copilot to run through the full post-create onboarding flow in a new Expo app, then run Doctor, explain the results, and create a fix plan.
+- [x] Use the plugin in Codex/Claude to review an Expo project, run Doctor, explain issues for beginners, create a fix plan, and fix highest-risk SSR/env issues first.
+- [ ] Dogfood on Time2Pay, PokePages and the Dogfood app.
+- [ ] Add/update the how to section of the README with the recommended workflow: start with how to install for Copilot, Codex, or Claude, then a "How to use this suite": `create-expo-super-stack` for new apps, then use `mds doctor`, `mds explain`, and `mds report` in regular development, and use the agent skills for project review, guidance, and workflow automation.
 
 ### MVP Week Roadmap
 
@@ -307,28 +302,22 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
 - [x] Existing project memory can be normalized without losing original notes.
 
-## Out Of Scope For Phase 1
-
-- Codex/Claude Code plugin UI polish.
-- DWAH hosting/preview layer.
-- Monorepo-aware generated app scaffolding beyond the post-MVP todo.
-- Fully automated merge without a successful dry-run period.
-
-
-## Cleanup/Random todo
-- [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
-- [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
-- [ ] Keep `mds free-port` primary and `mds kill-port` as compatibility alias in docs, prompts, and generated scripts.
-- [ ] Sweep for backwards compatibility/legacy support and remove them. For example, the `commands-src` path for Claude commands is a legacy artifact from before the unified knowledge source and should be removed to avoid confusion.
-- Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
-- [ ] Alter the agentic stack generator not only ask for a project info file but recommend that the user takes time to plan out the app according to the template. 
-- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
-- Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appopriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agents plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run 'git add .' if I dit it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own. 
-
-
-
 ## Mono repo support
 - [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.
 - [ ] For onboarding, generate the project memory files and rich boilerplate inside the target package instead of the root, and adjust all file paths accordingly.
 - [ ] For Doctor, run checks only against the target package instead of the whole repo, and adjust any file path outputs accordingly.
 (previous todo, might be partially done but is related and we could finish it now: - [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.)
+
+## Random
+- [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
+- [x] In onboarding, after asking about platform-specific needs, ask if the different platforms need their own layouts; keep monorepo structure as separate future work.
+- [x] Keep `mds free-port` primary in docs, prompts, and generated scripts.
+- [ ] Continue sweeping for backwards compatibility/legacy support that is no longer needed now that bundles are generated from canonical knowledge sources.
+- [ ] Encourage/force the user to use plan mode when starting a new phase. This is how I work and it is the best way to avoid confusion and extra work and to get the correct results.
+- [ ] Polish Codex/Claude Code plugin UX after the core plugin workflow remains stable in real projects.
+- [ ] Update the agentic Super Stack/onboarding intake to recommend planning first for thin ideas: accept a pasted research plan or project-memory file, reshape it into canonical `project/info.md` and `project/style.md`, and then continue generation.
+- [ ] Save personal defaults globally for future app generation.
+- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [ ] Make a wrap up prompt that is for when the dev has tested everything fully. This prompt should mark the appropriate todo items complete, run the doctor checks locally, do a git status check and confirm that the files the agent plans to leave out are ones the dev wants left out (sometimes I edit a file like todo.md and the agent doesn't put it in the commit. we should confirm before leaving files out as I almost always would run `git add .` if I did it manually), then do the git commit flow of pushing to a branch, opening a PR to test (or main if the dev doesn't use test), and then polling the PR for results. If the PR checks fail, the agent should fetch the logs, summarize the issues, and then fix them locally before pushing again. This loop should repeat up to 5 times before giving up and asking for human help. If all checks pass, merge to test. If the dev doesn't use test, then this sequence should stop just before the merge and tell the dev to merge it manually. The agent should NEVER merge to main on its own, and fully automated merge should stay gated until the dry-run flow has proven itself.
+- [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
+- [ ] Consider adding agentic workflows for issues on github.
