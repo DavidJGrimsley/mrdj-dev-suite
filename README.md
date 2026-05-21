@@ -107,9 +107,22 @@ node packages/create-expo-super-stack/dist/cli.js my-app --expo-router
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router --mds-guidelines-template
 ```
 
+Personal defaults (optional):
+
+- `create-expo-super-stack` can save your onboarding answers as a personal default for future app generation.
+- This is opt-in. Use `--mds-save-defaults` to save, or `--mds-no-save-defaults` to explicitly opt out.
+- Saved defaults do not skip the onboarding interview entirely. They are used as prefilled/seeded choices; interactive runs still ask questions.
+- Non-interactive runs (`--mds-yes`) use provided flags plus seeded defaults where values are missing.
+
 #### Onboard
 
 `mds onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
+
+Personal defaults (optional):
+
+- At the end of an interactive onboarding session, MDS asks whether you want to save the configuration as your personal default for future app generation.
+- This is opt-in. For non-interactive flows, pass `--save-defaults` to persist, or omit it to avoid saving.
+- Saved defaults do not skip all questions next time. They are used as prefilled/seeded choices; interactive runs still ask questions.
 
 #### MDS Continue
 

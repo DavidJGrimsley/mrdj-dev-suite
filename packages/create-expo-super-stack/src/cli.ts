@@ -19,6 +19,7 @@ export interface ParsedArgs {
     appName?: string;
     audience?: string;
     coreFlows?: string;
+    screens?: string;
     dataNeeds?: string;
     dataStart?: 'local' | 'supabase';
     deploymentTarget?: string;
@@ -255,6 +256,11 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg.startsWith('--mds-screens=')) {
+      mds.screens = arg.slice('--mds-screens='.length);
+      continue;
+    }
+
     if (arg.startsWith('--mds-data-needs=')) {
       mds.dataNeeds = arg.slice('--mds-data-needs='.length);
       continue;
@@ -406,6 +412,7 @@ export function renderHelpText(): string {
     '  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
     '  --mds-guidelines-template     Use bundled MDS project/guidelines template',
     '  --mds-app-name=<name>         Set display app name for project memory',
+    '  --mds-screens=                List must-include screens for project memory',
     '',
     'Help:',
     '  -h, --help                     Show this help and exit',
@@ -1118,6 +1125,7 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
     appName: parsed.mds.appName,
     audience: parsed.mds.audience,
     coreFlows: parsed.mds.coreFlows,
+    screens: parsed.mds.screens,
     dataNeeds: parsed.mds.dataNeeds,
     dataStart: parsed.mds.dataStart,
     deploymentTarget: parsed.mds.deploymentTarget,

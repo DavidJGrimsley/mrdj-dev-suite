@@ -88,7 +88,7 @@ describe('MDS Continue', () => {
     expect(brief.recommendation.priority).toBe('todo');
   });
 
-  it('selects the first unchecked todo when markers, Doctor errors, and git dirt are clear', async () => {
+  it('hard-stops with user guidance when the next unchecked item is in Phase 0', async () => {
     const projectPath = await createOnboardedProject({
       todo: [
         '# Todo',
@@ -107,9 +107,29 @@ describe('MDS Continue', () => {
 
     const brief = await buildContinueSessionBrief(projectPath);
 
-    expect(brief.recommendation.priority).toBe('todo');
+    expect(brief.recommendation.priority).toBe('phase-0-user-review');
     expect(brief.nextTodo?.section).toBe('Phase 0: Orientation');
     expect(brief.nextTodo?.text).toBe('Confirm visual direction.');
+    expect(brief.recommendation.plan[0]).toContain('Phase 0 is not agent work');
+  });
+
+  it('continues normal todo recommendations for non-Phase-0 items', async () => {
+    const projectPath = await createOnboardedProject({
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+
+    expect(brief.recommendation.priority).toBe('todo');
+    expect(brief.nextTodo?.section).toBe('Phase 1: App Shell');
+    expect(brief.nextTodo?.text).toBe('Build the app shell.');
   });
 
   it('prints JSON for agent/tool usage', async () => {

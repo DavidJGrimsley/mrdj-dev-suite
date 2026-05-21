@@ -11,6 +11,7 @@ export interface OnboardAnswers {
   appName: string;
   audience: string;
   coreFlows: string;
+  screens?: string;
   dataNeeds: string;
   deploymentTarget: string;
   advancedPackageSetup: boolean;
@@ -105,6 +106,7 @@ const INFO_HEADINGS = [
   'Non-Goals',
   'Core Features',
   'Core User Flows',
+  'Must-Include Screens Or Flows',
   'Data And Backend',
   'Platforms',
   'Package Choices',
@@ -257,8 +259,8 @@ export async function scaffoldRichBoilerplate(
       force
     ),
     await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen.tsx'),
-      renderStyleGuideScreen(answers),
+      path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+      renderStylistScreen(answers),
       force
     ),
     await writeIfAllowed(
@@ -306,8 +308,8 @@ export async function scaffoldRichBoilerplate(
         routeForce
       ),
       await writeIfAllowed(
-        path.join(expositionRouteDir, 'style-guide.tsx'),
-        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen')),
+        path.join(expositionRouteDir, 'stylist.tsx'),
+        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen')),
         routeForce
       ),
       await writeIfAllowed(
@@ -393,6 +395,12 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     '## Core User Flows',
     '',
     answers.coreFlows,
+    '',
+    '## Must-Include Screens Or Flows',
+    '',
+    answers.screens?.trim()
+      ? answers.screens
+      : '# TodoForContext(optional): List any known screens or flows that must be included in planning and implementation.',
     '',
     '## Data And Backend',
     '',
@@ -487,18 +495,15 @@ export function renderTodo(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} TODO`,
     '',
-    '## Next Steps After Onboarding',
-    '',
-    '- [ ] Play with styling in the style-guide page.',
-    '- [ ] Browse exposition pages to understand included base packages.',
-    '- [ ] Review `project/` files for accuracy and planning adjustments.',
-    '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
-    '- [ ] Tell the agent to commence development phase by phase.',
-    '',
     '## Phase 0: Orientation And Planning',
     '',
-    '- [ ] Confirm app purpose, audience, and primary flows in `project/info.md`.',
-    '- [ ] Confirm visual direction in `project/style.md` after using the style-guide page.',
+    '- [ ] Browse exposition pages to understand included base packages.',
+    "- [ ] Review styling in the 'Stylist' page.",
+    '- [ ] Review `project/` files for accuracy and planning adjustments.',
+    '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed. (There may be none of these if the agent was thorough in onboarding, but if there are any, they should be resolved before development starts.)',
+    '',
+    '- [x] Confirm app purpose, audience, and primary flows in `project/info.md`.',
+    '- [ ] Confirm visual direction in `project/style.md` after using the Stylist page.',
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
     ...(needsReview
@@ -593,7 +598,7 @@ export function renderStyle(answers: OnboardAnswers, existingStyle?: string | nu
     '',
     '## Style Questions To Revisit',
     '',
-    '# TodoForContext(optional): Add unresolved visual decisions to revisit later in `/exposition/style-guide`; delete this marker if there are none.',
+    '# TodoForContext(optional): Add unresolved visual decisions to revisit later in `/exposition/stylist`; delete this marker if there are none.',
     '',
     ...importedNotes,
     '',
@@ -909,6 +914,7 @@ function applyGuidelinesTemplate(template: string, answers: OnboardAnswers): str
     appName: answers.appName,
     audience: answers.audience,
     coreFlows: answers.coreFlows,
+    screens: answers.screens ?? '',
     dataNeeds: answers.dataNeeds,
     deploymentTarget: answers.deploymentTarget,
     advancedPackageSetup: formatBoolean(answers.advancedPackageSetup),
@@ -1029,6 +1035,10 @@ function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {
     'Local state first; add backend only when needed',
     'Expo web/native deployment',
   ]);
+
+  if (!answers.screens?.trim()) {
+    return true;
+  }
 
   return [answers.audience, answers.coreFlows, answers.dataNeeds, answers.deploymentTarget].some((value) =>
     genericValues.has(value.trim())
@@ -1477,7 +1487,7 @@ function renderRichRootLayout(projectPath: string, appDir: string): string {
     "        <Stack.Screen name=\"index\" options={{ title: 'Home' }} />",
     "        <Stack.Screen name=\"onboarding\" options={{ title: 'Onboarding' }} />",
     "        <Stack.Screen name=\"exposition/index\" options={{ title: 'Exposition' }} />",
-    "        <Stack.Screen name=\"exposition/style-guide\" options={{ title: 'Style Guide' }} />",
+    "        <Stack.Screen name=\"exposition/stylist\" options={{ title: 'Stylist' }} />",
     "        <Stack.Screen name=\"exposition/data\" options={{ title: 'Data' }} />",
     "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
     '      </Stack>',
@@ -1912,7 +1922,7 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     '',
     'const expositionLinks = [',
     "  { href: '/exposition' as const, title: 'Package exposition', body: 'Review included base packages and decide what stays.' },",
-    "  { href: '/exposition/style-guide' as const, title: 'Style guide', body: 'Test colors, type, motion, and component density.' },",
+    "  { href: '/exposition/stylist' as const, title: 'Stylist', body: 'Test colors, type, motion, and component density.' },",
     "  { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },",
     '];',
     '',
@@ -2238,7 +2248,7 @@ function renderExpositionScreen(answers: OnboardAnswers): string {
   ].join('\n');
 }
 
-function renderStyleGuideScreen(answers: OnboardAnswers): string {
+function renderStylistScreen(answers: OnboardAnswers): string {
   return [
     "import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';",
     '',
@@ -2252,10 +2262,10 @@ function renderStyleGuideScreen(answers: OnboardAnswers): string {
     "  ['Warning', '#f97316'],",
     '];',
     '',
-    'export default function StyleGuideScreen() {',
+    'export default function StylistScreen() {',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
-    `      <Text style={styles.title}>${answers.appName} Style Guide</Text>`,
+    `      <Text style={styles.title}>${answers.appName} Stylist</Text>`,
     '      <Text style={styles.intro}>Use this page to explore type, spacing, color, and component tone with the client before the production UI hardens.</Text>',
     '      <ExpositionNotice />',
     '      <View style={styles.section}>',

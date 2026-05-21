@@ -666,6 +666,8 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '',
     'Q3.3 — What should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. (Press enter / say "defer" to let an agent derive this later from project/info.md.)',
     '',
+    'Q3.3a — What screens do you know you will need in the app as of now? (Press enter / say "defer" to leave a TodoForContext marker.)',
+    '',
     'Q3.4 — Which data categories does the app need? (multi-select — reply with comma-separated numbers, or label text, or "all")',
     '  1. Local UI/app state (default)',
     '  2. User accounts/authentication',
@@ -770,6 +772,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  Q3.1 → --mds-app-name=',
     '  Q3.2 → --mds-audience=',
     '  Q3.3 → --mds-core-flows=',
+    '  Q3.3a → --mds-screens=',
     '  Q3.4 → --mds-data-needs=         (comma-joined labels)',
     '  Q3.5 → --mds-platforms=          (comma-joined slugs from: web,ios,android,apple-tv,android-tv)',
     '  Q3.6 → --mds-first-platform=',
@@ -883,6 +886,8 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '',
     'Q1.3 — What should users be able to do first? (1-3 core flows; press enter to defer)',
     '',
+    'Q1.3a — What screens do you know you will need in the app as of now? (Press enter / say "defer" to leave a TodoForContext marker.)',
+    '',
     'Q1.4 — Which data categories does the app need? (multi-select)',
     '  1. Local UI/app state (default)',
     '  2. User accounts/authentication',
@@ -967,6 +972,7 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '  Q1.1 → --app-name=             (wrap value in double quotes if it contains spaces)',
     '  Q1.2 → --audience=',
     '  Q1.3 → --core-flows=',
+    '  Q1.3a → --screens=',
     '  Q1.4 → --data-needs=           (comma-joined labels)',
     '  Q1.5 → --platforms=            (comma-joined slugs from: web,ios,android,apple-tv,android-tv)',
     '  Q1.6 → --first-platform=',
@@ -1333,7 +1339,7 @@ function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
   const selected = defaults.length > 0 ? defaults : ['project-docs', 'doctor', 'uniwind'];
   const tasks = [
     `Detect package manager, Expo SDK, router, app folder, aliases, and styling stack in ${projectPath}.`,
-    'Ask for app goal, audience, core flows, data needs, and deployment target.',
+    'Ask for app goal, audience, core flows, must-include screens/flows, data needs, and deployment target.',
   ];
 
   if (selected.includes('project-docs')) {
