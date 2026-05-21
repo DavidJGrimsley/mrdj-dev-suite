@@ -13,6 +13,7 @@ import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
+import { runStylistSyncCommand } from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
@@ -24,6 +25,7 @@ import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
+import type { StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -295,6 +297,33 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runClearExpoStartCommand(argv as ClearExpoStartArgv);
+      }
+    )
+    .command(
+      'stylist sync [path]',
+      'Sync canonical stylist tokens into project/style.md, global.css, and src/theme/tokens.ts',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('input-file', {
+            describe: 'Path to a JSON theme payload',
+            type: 'string',
+          })
+          .option('input-json', {
+            describe: 'Inline JSON theme payload',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print sync result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runStylistSyncCommand(argv as StylistSyncArgv);
       }
     )
     .command(

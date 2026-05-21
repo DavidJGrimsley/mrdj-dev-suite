@@ -86,7 +86,13 @@ describe('runOnboardCommand', () => {
       '## Motion Tone'
     );
     await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
+      'MDS_STYLIST_THEME_START'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
       '## Style Questions To Revisit'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'theme.json'), 'utf8')).resolves.toContain(
+      '"version": 1'
     );
     await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.not.toContain(
       'Keep Expo Router route files thin'
@@ -105,7 +111,13 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('ExpositionNotice');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
-    ).resolves.toContain('ExpositionNotice');
+    ).resolves.toContain('reanimated-color-picker');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
+    ).resolves.toContain('Save Theme');
+    await expect(readFile(path.join(projectPath, 'src', 'theme', 'tokens.ts'), 'utf8')).resolves.toContain(
+      'stylistThemeTokens'
+    );
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('ExpositionNotice');
@@ -127,6 +139,9 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'app', 'exposition', 'data.tsx'), 'utf8')).resolves.toContain(
       'data-screen'
     );
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.toContain("mds', 'stylist', 'sync'");
     await expect(readFile(path.join(projectPath, 'src', 'components', 'mds', 'index.ts'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'), 'utf8')).resolves.toContain(
       'AnimatedPressable'
@@ -136,6 +151,9 @@ describe('runOnboardCommand', () => {
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       "Review styling in the 'Stylist' page"
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'Apply Stylist synced theme tokens to production UI components and screens.'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
       'Next Steps After Onboarding'
@@ -181,7 +199,9 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['clear-expo-start']).toBe(
       'npx -y -p @mr.dj2u/cli@latest mds clear-expo-start'
     );
+    expect(packageJson.scripts['mds:stylist:sync']).toBe('npx -y -p @mr.dj2u/cli@latest mds stylist sync .');
     expect(packageJson.dependencies['expo-sqlite']).toBe('~55.0.15');
+    expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
   });
@@ -314,6 +334,9 @@ describe('runOnboardCommand', () => {
     );
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
       "@import 'uniwind'"
+    );
+    await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
+      'MDS_STYLIST_THEME_START'
     );
     await expect(readFile(path.join(projectPath, 'nativewind-env.d.ts'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(projectPath, 'tailwind.config.js'), 'utf8')).rejects.toThrow();

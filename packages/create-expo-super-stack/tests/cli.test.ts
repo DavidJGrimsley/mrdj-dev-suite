@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildAddDevDependencyCommand,
   buildExpoDoctorCommand,
   buildExpoFontInstallCommand,
   buildExpoInstallFixCommand,
@@ -13,9 +14,13 @@ import {
   detectEasSetup,
   isCliEntryPoint,
   parseArgs,
+  prepareCreateExpoStackArgsForWrapper,
   repairExpoProjectIdentifiers,
+  repairMovedSrcAppImports,
   renderHelpText,
+  resolveMissingWindowsTailwindOxideBinding,
   resolveProjectTarget,
+  resolveWindowsTailwindOxidePackage,
   shouldInstallExpoFontPeerFromPackageJson,
   shouldRunExpoLatestSdkCommandFromPackageJson,
   toExpoScheme,
@@ -67,8 +72,15 @@ describe('create-expo-super-stack CLI helpers', () => {
   it('uses non-failing pnpm strict dependency build settings during install', () => {
     const command = buildInstallCommand('pnpm');
 
-    expect(command.display).toBe('pnpm install --config.strict-dep-builds=false');
-    expect(command.args).toEqual(['install', '--config.strict-dep-builds=false']);
+    expect(command.display).toBe('pnpm install --config.strict-dep-builds=false --ignore-workspace');
+    expect(command.args).toEqual(['install', '--config.strict-dep-builds=false', '--ignore-workspace']);
+    expect(command.env).toEqual({ PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' });
+  });
+
+  it('builds add-dev-dependency command for pnpm workspace app projects', () => {
+    const command = buildAddDevDependencyCommand('pnpm', '@tailwindcss/oxide-win32-x64-msvc@4.2.1');
+    expect(command.display).toBe('pnpm --ignore-workspace add -D @tailwindcss/oxide-win32-x64-msvc@4.2.1');
+    expect(command.args).toEqual(['--ignore-workspace', 'add', '-D', '@tailwindcss/oxide-win32-x64-msvc@4.2.1']);
     expect(command.env).toEqual({ PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' });
   });
 
@@ -230,6 +242,23 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(parsed.mds.saveDefaults).toBe(false);
   });
 
+  it('adds --no-install to create-expo-stack delegation when super-stack owns dependency repair', () => {
+    expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router'])).toEqual([
+      'demo-app',
+      '--expo-router',
+      '--no-install',
+    ]);
+    expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router', '--no-install'])).toEqual([
+      'demo-app',
+      '--expo-router',
+      '--no-install',
+    ]);
+    expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router'], true)).toEqual([
+      'demo-app',
+      '--expo-router',
+    ]);
+  });
+
   it('rejects malformed enum values for the new mds flags instead of forwarding garbage', () => {
     const parsed = parseArgs([
       'demo-app',
@@ -278,6 +307,86 @@ describe('create-expo-super-stack CLI helpers', () => {
       expect(repaired.expo.slug).toBe('bandana-designer');
       expect(repaired.expo.scheme).toBe('bandana-designer');
       expect(repaired.expo.platforms).toContain('web');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs moved src/app tab layout imports after app directory migration', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-src-app-imports-'));
+    try {
+      const tabsDir = path.join(projectPath, 'src', 'app', '(tabs)');
+      await mkdir(tabsDir, { recursive: true });
+      const tabsLayoutPath = path.join(tabsDir, '_layout.tsx');
+      await writeFile(
+        tabsLayoutPath,
+        [
+          'import { HeaderButton } from "../../components/HeaderButton";',
+          'import { TabBarIcon } from "../../components/TabBarIcon";',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([tabsLayoutPath]);
+
+      const repaired = await readFile(tabsLayoutPath, 'utf8');
+      expect(repaired).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
+      expect(repaired).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves the expected Windows Tailwind oxide package for known arches', () => {
+    expect(
+      resolveWindowsTailwindOxidePackage({
+        platform: 'win32',
+        arch: 'x64',
+        nodeTargetType: 'executable',
+      }),
+    ).toBe('@tailwindcss/oxide-win32-x64-msvc');
+    expect(
+      resolveWindowsTailwindOxidePackage({
+        platform: 'win32',
+        arch: 'x64',
+        nodeTargetType: 'shared_library',
+      }),
+    ).toBe('@tailwindcss/oxide-win32-x64-gnu');
+    expect(
+      resolveWindowsTailwindOxidePackage({
+        platform: 'darwin',
+        arch: 'x64',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('detects a missing Windows Tailwind oxide binding for uniwind projects', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-windows-oxide-'));
+    try {
+      await mkdir(path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide'), { recursive: true });
+      await writeFile(
+        path.join(projectPath, 'package.json'),
+        JSON.stringify({
+          dependencies: {
+            uniwind: '^1.6.4',
+          },
+        }),
+        'utf8',
+      );
+      await writeFile(
+        path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide', 'package.json'),
+        JSON.stringify({ version: '4.2.1' }),
+        'utf8',
+      );
+
+      const resolved = await resolveMissingWindowsTailwindOxideBinding(projectPath);
+      if (process.platform === 'win32') {
+        expect(resolved).toBeDefined();
+        expect(resolved).toContain('@4.2.1');
+      } else {
+        expect(resolved).toBeUndefined();
+      }
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

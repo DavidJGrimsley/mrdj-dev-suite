@@ -971,7 +971,7 @@ function handleCancel<T>(value: T | symbol): T {
 function printOnboardingNextSteps(): void {
   console.log('Onboarding Phase 0 checklist:');
   console.log('1. Browse exposition pages to understand included base packages.');
-  console.log("2. Review styling in the 'Stylist' page.");
+  console.log("2. Review styling in the 'Stylist' page and save theme tokens.");
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log(
     '4. Resolve every # TodoForContext(optional): marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'

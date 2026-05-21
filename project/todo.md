@@ -321,8 +321,12 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
 - [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
 - [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [ ] Go through generated exposition pages and fix any bugs.
 - [ ] Add a help prompt that explains all the prompts and tools and when to use them. This could be a CLI command like `mds help` AND a prompt that gives an overview of the suite and then options to dive deeper into each tool or prompt. This would be great for onboarding new users to the suite and also for providing a reference for existing users.
+- [ ] Set up CI for npm packages
 - [ ] Ensure agentic onboarding aligns with everything in Create expo stack (forked) and create expo super stack and more.
 - [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
+- [ ] Confirm/add scripts from my other projects such as copy-icons, generate-sitemap(for static( i don't think it worked on server output but we want to ensure the sitemap is rebuilt every time we build) unless expo or some other package exists and is better)
 - [ ] Consider adding agentic workflows for issues on github.
+- [ ] Consider publishing the stylist component to npm
 

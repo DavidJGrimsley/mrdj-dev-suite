@@ -81,11 +81,12 @@ export async function main(): Promise<void> {
   validateCreateExpoStackArgs(parsed.createExpoStackArgs);
   const projectName = parsed.projectName ?? DEFAULT_PROJECT_NAME;
   const projectParentDir = parsed.mds.projectParentDir ?? process.cwd();
+  const createExpoStackArgs = prepareCreateExpoStackArgsForWrapper(parsed.createExpoStackArgs, parsed.mds.skipExpoFix);
 
-  printIntro(projectName, parsed.createExpoStackArgs, projectParentDir);
+  printIntro(projectName, createExpoStackArgs, projectParentDir);
 
   if (!parsed.mds.skipCreate) {
-    await runCreateExpoStack(parsed.createExpoStackArgs, parsed.mds.createExpoStackBin, projectParentDir);
+    await runCreateExpoStack(createExpoStackArgs, parsed.mds.createExpoStackBin, projectParentDir);
   } else {
     console.log('Skipping create-expo-stack because --mds-skip-create was passed.');
   }
@@ -99,6 +100,9 @@ export async function main(): Promise<void> {
   const movedAppDir = !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
     ? await moveRootAppIntoSrc(projectPath)
     : null;
+  const movedImportRepairs = movedAppDir
+    ? await repairMovedSrcAppImports(projectPath)
+    : [];
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
     force: parsed.mds.force,
     guidelinesTemplate: plan.guidelinesTemplate,
@@ -115,6 +119,9 @@ export async function main(): Promise<void> {
   }
   if (movedAppDir) {
     console.log(`MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`);
+  }
+  for (const result of movedImportRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   for (const result of identifierRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
@@ -139,7 +146,7 @@ export async function main(): Promise<void> {
 
   console.log();
   console.log('Onboarding next steps:');
-  console.log('1. Play with styling in the style-guide page.');
+  console.log("1. Play with styling in the 'Stylist' page and save theme tokens.");
   console.log('2. Browse exposition pages to understand included base packages.');
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log('4. Tell the agent to commence development phase by phase.');
@@ -162,6 +169,14 @@ export async function main(): Promise<void> {
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
   console.log('For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.');
+}
+
+export function prepareCreateExpoStackArgsForWrapper(args: string[], skipExpoFix = false): string[] {
+  if (skipExpoFix || hasNoInstallFlag(args)) {
+    return args;
+  }
+
+  return [...args, '--no-install'];
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -596,6 +611,10 @@ export async function runExpoProjectChecks(
   console.log();
   console.log('Installing MDS-added dependencies, then running Expo dependency repair and doctor.');
   await runProjectCommand(projectPath, buildInstallCommand(packageManager));
+  const missingWindowsOxideBinding = await resolveMissingWindowsTailwindOxideBinding(projectPath);
+  if (missingWindowsOxideBinding) {
+    await runProjectCommand(projectPath, buildAddDevDependencyCommand(packageManager, missingWindowsOxideBinding));
+  }
   if (options.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
     await runProjectCommand(projectPath, buildExpoLatestSdkCommand(packageManager));
   } else if (options.useLatestExpoSdk) {
@@ -767,6 +786,25 @@ async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; 
   return { from: rootAppDir, to: srcAppDir };
 }
 
+export async function repairMovedSrcAppImports(projectPath: string): Promise<string[]> {
+  const tabsLayoutPath = path.join(projectPath, 'src', 'app', '(tabs)', '_layout.tsx');
+  const raw = await readOptionalText(tabsLayoutPath);
+  if (!raw) {
+    return [];
+  }
+
+  const updated = raw
+    .replace('"../../components/HeaderButton"', '"../../../components/HeaderButton"')
+    .replace('"../../components/TabBarIcon"', '"../../../components/TabBarIcon"');
+
+  if (updated === raw) {
+    return [];
+  }
+
+  await writeFile(tabsLayoutPath, updated, 'utf8');
+  return [tabsLayoutPath];
+}
+
 export async function repairExpoProjectIdentifiers(
   projectPath: string,
   projectName: string,
@@ -893,8 +931,8 @@ export function buildInstallCommand(packageManager: PackageManager): CommandSpec
     case 'pnpm':
       return {
         command: 'pnpm',
-        args: ['install', '--config.strict-dep-builds=false'],
-        display: 'pnpm install --config.strict-dep-builds=false',
+        args: ['install', '--config.strict-dep-builds=false', '--ignore-workspace'],
+        display: 'pnpm install --config.strict-dep-builds=false --ignore-workspace',
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
       };
     case 'yarn':
@@ -923,8 +961,8 @@ export function buildExpoInstallFixCommand(packageManager: PackageManager): Comm
     case 'pnpm':
       return {
         command: 'pnpm',
-        args: ['exec', 'expo', 'install', '--fix'],
-        display: 'pnpm exec expo install --fix',
+        args: ['--ignore-workspace', 'exec', 'expo', 'install', '--fix'],
+        display: 'pnpm --ignore-workspace exec expo install --fix',
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
       };
     case 'yarn':
@@ -953,8 +991,8 @@ export function buildExpoLatestSdkCommand(packageManager: PackageManager): Comma
     case 'pnpm':
       return {
         command: 'pnpm',
-        args: ['exec', 'expo', 'install', 'expo@latest'],
-        display: 'pnpm exec expo install expo@latest',
+        args: ['--ignore-workspace', 'exec', 'expo', 'install', 'expo@latest'],
+        display: 'pnpm --ignore-workspace exec expo install expo@latest',
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
       };
     case 'yarn':
@@ -1010,8 +1048,8 @@ export function buildExpoFontInstallCommand(packageManager: PackageManager): Com
     case 'pnpm':
       return {
         command: 'pnpm',
-        args: ['exec', 'expo', 'install', 'expo-font'],
-        display: 'pnpm exec expo install expo-font',
+        args: ['--ignore-workspace', 'exec', 'expo', 'install', 'expo-font'],
+        display: 'pnpm --ignore-workspace exec expo install expo-font',
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
       };
     case 'yarn':
@@ -1040,8 +1078,8 @@ export function buildExpoDoctorCommand(packageManager: PackageManager): CommandS
     case 'pnpm':
       return {
         command: 'pnpm',
-        args: ['dlx', 'expo-doctor'],
-        display: 'pnpm dlx expo-doctor',
+        args: ['--ignore-workspace', 'dlx', 'expo-doctor'],
+        display: 'pnpm --ignore-workspace dlx expo-doctor',
       };
     case 'yarn':
       return {
@@ -1062,6 +1100,91 @@ export function buildExpoDoctorCommand(packageManager: PackageManager): CommandS
         display: 'npx expo-doctor',
       };
   }
+}
+
+export function buildAddDevDependencyCommand(packageManager: PackageManager, dependency: string): CommandSpec {
+  switch (packageManager) {
+    case 'pnpm':
+      return {
+        command: 'pnpm',
+        args: ['--ignore-workspace', 'add', '-D', dependency],
+        display: `pnpm --ignore-workspace add -D ${dependency}`,
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
+      };
+    case 'yarn':
+      return {
+        command: 'yarn',
+        args: ['add', '--dev', dependency],
+        display: `yarn add --dev ${dependency}`,
+      };
+    case 'bun':
+      return {
+        command: 'bun',
+        args: ['add', '--dev', dependency],
+        display: `bun add --dev ${dependency}`,
+      };
+    case 'npm':
+      return {
+        command: 'npm',
+        args: ['install', '--save-dev', dependency],
+        display: `npm install --save-dev ${dependency}`,
+      };
+  }
+}
+
+export function resolveWindowsTailwindOxidePackage({
+  platform = process.platform,
+  arch = process.arch,
+  nodeTargetType = (process.config?.variables as unknown as Record<string, string | undefined> | undefined)?.node_target_type,
+  shlibSuffix = (process.config?.variables as unknown as Record<string, string | undefined> | undefined)?.shlib_suffix,
+}: {
+  platform?: string;
+  arch?: string;
+  nodeTargetType?: string | undefined;
+  shlibSuffix?: string | undefined;
+} = {}): string | undefined {
+  if (platform !== 'win32') {
+    return undefined;
+  }
+
+  if (arch === 'x64') {
+    const usesGnu = shlibSuffix === 'dll.a' || nodeTargetType === 'shared_library';
+    return usesGnu ? '@tailwindcss/oxide-win32-x64-gnu' : '@tailwindcss/oxide-win32-x64-msvc';
+  }
+
+  if (arch === 'ia32') {
+    return '@tailwindcss/oxide-win32-ia32-msvc';
+  }
+
+  if (arch === 'arm64') {
+    return '@tailwindcss/oxide-win32-arm64-msvc';
+  }
+
+  return undefined;
+}
+
+export async function resolveMissingWindowsTailwindOxideBinding(projectPath: string): Promise<string | undefined> {
+  const packageName = resolveWindowsTailwindOxidePackage();
+  if (!packageName) {
+    return undefined;
+  }
+
+  const packageJson = await readJson(path.join(projectPath, 'package.json'));
+  const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
+  const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
+  const hasUniwind = typeof dependencies.uniwind === 'string' || typeof devDependencies.uniwind === 'string';
+  if (!hasUniwind) {
+    return undefined;
+  }
+
+  if (await pathExists(path.join(projectPath, 'node_modules', packageName))) {
+    return undefined;
+  }
+
+  const oxidePackageJsonPath = path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide', 'package.json');
+  const oxidePackage = await readJson(oxidePackageJsonPath);
+  const oxideVersion = readString(oxidePackage.version);
+  return oxideVersion ? `${packageName}@${oxideVersion}` : packageName;
 }
 
 export async function shouldInstallExpoFontPeer(projectPath: string): Promise<boolean> {
