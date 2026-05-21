@@ -31,6 +31,13 @@ type TailwindShade = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 
 type ColorInputMode = 'picker' | 'families';
 type PaletteFamilies = Record<PaletteColorKey, TailwindColorFamily>;
 type PaletteShades = Record<PaletteColorKey, TailwindShade>;
+type LivePickerPreview = {
+  colorInputMode: ColorInputMode;
+  colorMode: StylistColorMode;
+  hex: string;
+  key: PaletteColorKey;
+  scheme: StylistColorScheme;
+};
 type FontRoleKey =
   | 'fontDisplay'
   | 'fontTitle'
@@ -302,15 +309,11 @@ function ensureReadableTextColor(
   surface: string,
   scheme: StylistColorScheme
 ): string {
-  if (scheme === 'dark') {
-    return contrastRatio('#ffffff', surface) >= contrastRatio(text, surface) ? '#ffffff' : text;
-  }
-
   if (contrastRatio(text, surface) >= 7) {
     return text;
   }
 
-  const target = '#000000';
+  const target = scheme === 'dark' ? '#ffffff' : '#000000';
   for (const amount of [0.25, 0.4, 0.55, 0.7, 0.85, 1]) {
     const candidate = mixHex(text, target, amount);
     if (contrastRatio(candidate, surface) >= 7) {
@@ -428,9 +431,14 @@ function nudgeShadeTowardCenter(shade: TailwindShade): TailwindShade {
 
 function deriveAutomaticPalette(
   families: StylistSemanticFamilies,
-  scheme: StylistColorScheme
+  scheme: StylistColorScheme,
+  useSharedSemanticShades = false
 ): StylistColorPalette {
-  const semanticShade: TailwindShade = scheme === 'light' ? 500 : 400;
+  const semanticShade: TailwindShade = useSharedSemanticShades
+    ? 500
+    : scheme === 'light'
+      ? 500
+      : 400;
   const backgroundShade: TailwindShade = scheme === 'light' ? 50 : 950;
   let surfaceShade: TailwindShade = scheme === 'light' ? 100 : 900;
 
@@ -443,7 +451,7 @@ function deriveAutomaticPalette(
   }
 
   const text = ensureReadableTextColor(
-    getTailwindColor(families.primary, scheme === 'light' ? 900 : 50),
+    getTailwindColor(families.primary, scheme === 'light' ? 900 : 200),
     surface,
     scheme
   );
@@ -485,7 +493,7 @@ function deriveAutomaticPaletteFromPrimary(
     background: shades[scheme === 'light' ? 50 : 950],
     surface: shades[scheme === 'light' ? 100 : 900],
     text: ensureReadableTextColor(
-      shades[scheme === 'light' ? 900 : 50],
+      shades[scheme === 'light' ? 900 : 200],
       shades[scheme === 'light' ? 100 : 900],
       scheme
     ),
@@ -533,8 +541,13 @@ function reconcileTheme(
   const bgLight = ensureDistinctBackgroundSurface(bgLightSource, 'light');
   const bgDark = ensureDistinctBackgroundSurface(bgDarkSource, 'dark');
 
-  const automaticFamilyLight = deriveAutomaticPalette(theme.families.light, 'light');
-  const automaticFamilyDark = deriveAutomaticPalette(familiesDark, 'dark');
+  const useSharedSemanticShades = theme.colorSystem.familyMode === 'one';
+  const automaticFamilyLight = deriveAutomaticPalette(
+    theme.families.light,
+    'light',
+    useSharedSemanticShades
+  );
+  const automaticFamilyDark = deriveAutomaticPalette(familiesDark, 'dark', useSharedSemanticShades);
 
   const automaticLightSource =
     colorInputMode === 'families'
@@ -705,6 +718,7 @@ export default function StylistScreen() {
     )
   );
   const [selectedColor, setSelectedColor] = useState<PaletteColorKey>('primary');
+  const [livePickerPreview, setLivePickerPreview] = useState<LivePickerPreview | null>(null);
   const [saveMessage, setSaveMessage] = useState('');
   const [nativeDraft, setNativeDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -725,16 +739,64 @@ export default function StylistScreen() {
   });
 
   const activeScheme = theme.colorSystem.previewScheme;
-  const previewColors = theme.colors[activeScheme];
+  const basePreviewColors = theme.colors[activeScheme];
+  const baseEditablePalette =
+    theme.colorSystem.mode === 'automatic'
+      ? theme.palettes.automatic[activeScheme]
+      : theme.palettes.bg[activeScheme];
+  const livePickerMatchesActiveView =
+    livePickerPreview?.scheme === activeScheme &&
+    livePickerPreview.colorMode === theme.colorSystem.mode &&
+    livePickerPreview.colorInputMode === colorInputMode;
+  const previewColors = useMemo(() => {
+    if (!livePickerPreview || !livePickerMatchesActiveView) {
+      return basePreviewColors;
+    }
+
+    if (theme.colorSystem.mode === 'automatic') {
+      return ensureDistinctBackgroundSurface(
+        deriveAutomaticPaletteFromPrimary(
+          {
+            ...theme.palettes.automatic[activeScheme],
+            [livePickerPreview.key]: livePickerPreview.hex,
+          },
+          activeScheme
+        ),
+        activeScheme
+      );
+    }
+
+    return ensureDistinctBackgroundSurface(
+      {
+        ...theme.palettes.bg[activeScheme],
+        [livePickerPreview.key]: livePickerPreview.hex,
+      },
+      activeScheme
+    );
+  }, [
+    activeScheme,
+    basePreviewColors,
+    livePickerMatchesActiveView,
+    livePickerPreview,
+    theme.colorSystem.mode,
+    theme.palettes.automatic,
+    theme.palettes.bg,
+  ]);
   const controlTextColor = ensureReadableTextColor(
     previewColors.text,
     previewColors.surface,
     activeScheme
   );
-  const editablePalette =
-    theme.colorSystem.mode === 'automatic'
-      ? theme.palettes.automatic[activeScheme]
-      : theme.palettes.bg[activeScheme];
+  const editablePalette = useMemo(() => {
+    if (!livePickerPreview || !livePickerMatchesActiveView) {
+      return baseEditablePalette;
+    }
+
+    return {
+      ...baseEditablePalette,
+      [livePickerPreview.key]: livePickerPreview.hex,
+    };
+  }, [baseEditablePalette, livePickerMatchesActiveView, livePickerPreview]);
   const activeFamilyScheme: StylistColorScheme =
     theme.colorSystem.familyMode === 'one' ? 'light' : activeScheme;
   const activeFamilies = theme.families[activeFamilyScheme];
@@ -751,6 +813,21 @@ export default function StylistScreen() {
       gap: theme.layout.spacing.sm,
     }),
     [previewColors, theme.layout]
+  );
+
+  const galleryTokens = useMemo(
+    () => ({
+      rowGap: theme.layout.spacing.sm,
+      compactGap: theme.layout.spacing.xs,
+      cardPadding: theme.layout.spacing.md,
+      sectionPadding: theme.layout.spacing.lg,
+      pillPaddingHorizontal: theme.layout.spacing.sm,
+      pillPaddingVertical: Math.max(4, theme.layout.spacing.xs),
+      inputGap: theme.layout.spacing.sm,
+      inputMinHeight: Math.max(42, theme.layout.spacing.xl),
+      radius: theme.layout.radius,
+    }),
+    [theme.layout]
   );
 
   const availableFontFamilies = useMemo(() => {
@@ -1039,25 +1116,66 @@ export default function StylistScreen() {
         ...prev.palettes,
         [targetPalette]: {
           ...prev.palettes[targetPalette],
-          [activeScheme]: {
-            ...prev.palettes[targetPalette][activeScheme],
-            [key]: hex,
-          },
+          ...(prev.colorSystem.familyMode === 'one'
+            ? {
+                light: {
+                  ...prev.palettes[targetPalette].light,
+                  [key]: hex,
+                },
+                dark: {
+                  ...prev.palettes[targetPalette].dark,
+                  [key]: hex,
+                },
+              }
+            : {
+                [activeScheme]: {
+                  ...prev.palettes[targetPalette][activeScheme],
+                  [key]: hex,
+                },
+              }),
         },
       },
     }));
   }
 
-  function applyPickerColor(hex: string) {
-    const targetKey = isLockedAutomaticPickerKey(
-      theme.colorSystem.mode,
-      colorInputMode,
-      selectedColor
-    )
+  function getPickerTargetKey(): PaletteColorKey {
+    return isLockedAutomaticPickerKey(theme.colorSystem.mode, colorInputMode, selectedColor)
       ? 'primary'
       : selectedColor;
+  }
 
-    updateManualColor(targetKey, hex);
+  function previewPickerColor(hex: string) {
+    const nextPreview = {
+      colorInputMode,
+      colorMode: theme.colorSystem.mode,
+      hex: hex.toLowerCase(),
+      key: getPickerTargetKey(),
+      scheme: activeScheme,
+    };
+    setLivePickerPreview((prev) => {
+      if (
+        prev?.hex === nextPreview.hex &&
+        prev.key === nextPreview.key &&
+        prev.scheme === nextPreview.scheme &&
+        prev.colorMode === nextPreview.colorMode &&
+        prev.colorInputMode === nextPreview.colorInputMode
+      ) {
+        return prev;
+      }
+
+      return nextPreview;
+    });
+  }
+
+  function applyPickerColor(hex: string) {
+    const targetKey = getPickerTargetKey();
+    const nextHex = hex.toLowerCase();
+    setLivePickerPreview(null);
+    if (baseEditablePalette[targetKey].toLowerCase() === nextHex) {
+      return;
+    }
+
+    updateManualColor(targetKey, nextHex);
   }
 
   function updateFontRole(role: FontRoleKey, fontFamily: string) {
@@ -1073,6 +1191,34 @@ export default function StylistScreen() {
         ...prev.typography,
         [role]: normalized,
         fontFamily: role === 'fontDisplay' ? normalized : prev.typography.fontFamily,
+      },
+    }));
+  }
+
+  function applyNotoFonts() {
+    const notoRoles: Record<FontRoleKey, string> = {
+      fontDisplay: 'Noto Sans Display',
+      fontTitle: 'Noto Sans Display',
+      fontSubtitle: 'Noto Serif Display',
+      fontBody: 'Noto Sans',
+      fontCaption: 'Noto Serif',
+      fontMono: 'Noto Sans Mono',
+    };
+
+    setExplicitFontRoles({
+      fontDisplay: true,
+      fontTitle: true,
+      fontSubtitle: true,
+      fontBody: true,
+      fontCaption: true,
+      fontMono: true,
+    });
+    updateTheme((prev) => ({
+      ...prev,
+      typography: {
+        ...prev.typography,
+        ...notoRoles,
+        fontFamily: notoRoles.fontDisplay,
       },
     }));
   }
@@ -1283,9 +1429,9 @@ export default function StylistScreen() {
           {colorInputMode === 'picker' ? (
             <>
               <ColorPicker
-                value={editablePalette[selectedColor]}
+                value={baseEditablePalette[selectedColor]}
                 onChangeJS={({ hex }: { hex: string }) => {
-                  applyPickerColor(hex);
+                  previewPickerColor(hex);
                 }}
                 onCompleteJS={({ hex }: { hex: string }) => {
                   applyPickerColor(hex);
@@ -1469,7 +1615,14 @@ export default function StylistScreen() {
             styles.typographySection,
             { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
           ]}>
-          <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Typography</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Typography</Text>
+            <Pressable
+              onPress={applyNotoFonts}
+              style={[styles.presetButton, { borderColor: controlTextColor }]}>
+              <Text style={[styles.presetButtonText, { color: controlTextColor }]}>Noto</Text>
+            </Pressable>
+          </View>
           <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
             Search and choose a font per role. Display also syncs `fontFamily` for compatibility.
           </Text>
@@ -1479,6 +1632,7 @@ export default function StylistScreen() {
                 key={field.key}
                 grid
                 label={field.label}
+                labelColor={controlTextColor}
                 value={explicitFontRoles[field.key] ? theme.typography[field.key] : ''}
                 placeholder=""
                 options={availableFontFamilies}
@@ -1497,24 +1651,28 @@ export default function StylistScreen() {
             <NumberField
               grid
               label="Display"
+              labelColor={controlTextColor}
               value={theme.typography.displaySize}
               onChange={(value) => updateNumeric('displaySize', value)}
             />
             <NumberField
               grid
               label="Heading"
+              labelColor={controlTextColor}
               value={theme.typography.headingSize}
               onChange={(value) => updateNumeric('headingSize', value)}
             />
             <NumberField
               grid
               label="Body"
+              labelColor={controlTextColor}
               value={theme.typography.bodySize}
               onChange={(value) => updateNumeric('bodySize', value)}
             />
             <NumberField
               grid
               label="Caption"
+              labelColor={controlTextColor}
               value={theme.typography.captionSize}
               onChange={(value) => updateNumeric('captionSize', value)}
             />
@@ -1524,17 +1682,28 @@ export default function StylistScreen() {
         <View
           style={[
             styles.section,
-            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
+            {
+              backgroundColor: previewColors.surface,
+              borderRadius: theme.layout.radius,
+              padding: galleryTokens.sectionPadding,
+            },
           ]}>
           <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Component Gallery</Text>
           <Text style={[styles.helperText, { color: controlTextColor }]}>
-            Token previews using cards, status views, input states, and spacing rhythm.
+            Token previews using cards, status views, input states, and spacing rhythm. These are
+            just example components.
           </Text>
-          <View style={styles.galleryRow}>
+          <View style={[styles.galleryRow, { gap: galleryTokens.rowGap }]}>
             <View
               style={[
                 styles.galleryCard,
-                { borderColor: previewColors.primary, backgroundColor: previewColors.background },
+                {
+                  borderColor: previewColors.primary,
+                  backgroundColor: previewColors.background,
+                  borderRadius: galleryTokens.radius,
+                  gap: galleryTokens.compactGap,
+                  padding: galleryTokens.cardPadding,
+                },
               ]}>
               <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
                 Default Card
@@ -1547,7 +1716,12 @@ export default function StylistScreen() {
               style={[
                 styles.galleryCard,
                 styles.galleryCardSoft,
-                { borderColor: previewColors.secondary },
+                {
+                  borderColor: previewColors.secondary,
+                  borderRadius: galleryTokens.radius,
+                  gap: galleryTokens.compactGap,
+                  padding: galleryTokens.cardPadding,
+                },
               ]}>
               <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
                 Soft Card
@@ -1557,7 +1731,7 @@ export default function StylistScreen() {
               </Text>
             </View>
           </View>
-          <View style={styles.statusRow}>
+          <View style={[styles.statusRow, { gap: galleryTokens.compactGap }]}>
             {[
               { label: 'Success', color: previewColors.success },
               { label: 'Warning', color: previewColors.warning },
@@ -1566,19 +1740,53 @@ export default function StylistScreen() {
             ].map((status) => (
               <View
                 key={status.label}
-                style={[styles.statusPill, { backgroundColor: status.color }]}>
+                style={[
+                  styles.statusPill,
+                  {
+                    backgroundColor: status.color,
+                    borderRadius: galleryTokens.radius,
+                    paddingHorizontal: galleryTokens.pillPaddingHorizontal,
+                    paddingVertical: galleryTokens.pillPaddingVertical,
+                  },
+                ]}>
                 <Text style={styles.statusPillText}>{status.label}</Text>
               </View>
             ))}
           </View>
-          <View style={styles.inputStatesRow}>
-            <TextInput style={styles.input} placeholder="Default input" />
+          <View style={[styles.inputStatesRow, { gap: galleryTokens.inputGap }]}>
             <TextInput
-              style={[styles.input, { borderColor: previewColors.warning }]}
+              style={[
+                styles.input,
+                {
+                  borderRadius: galleryTokens.radius,
+                  minHeight: galleryTokens.inputMinHeight,
+                  paddingHorizontal: galleryTokens.cardPadding,
+                },
+              ]}
+              placeholder="Default input"
+            />
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  borderColor: previewColors.warning,
+                  borderRadius: galleryTokens.radius,
+                  minHeight: galleryTokens.inputMinHeight,
+                  paddingHorizontal: galleryTokens.cardPadding,
+                },
+              ]}
               placeholder="Warning state input"
             />
             <TextInput
-              style={[styles.input, { opacity: 0.6 }]}
+              style={[
+                styles.input,
+                {
+                  borderRadius: galleryTokens.radius,
+                  minHeight: galleryTokens.inputMinHeight,
+                  opacity: 0.6,
+                  paddingHorizontal: galleryTokens.cardPadding,
+                },
+              ]}
               placeholder="Disabled input"
               editable={false}
             />
@@ -1596,6 +1804,7 @@ export default function StylistScreen() {
           </Text>
           <NumberField
             label="Corner Radius"
+            labelColor={controlTextColor}
             value={theme.layout.radius}
             onChange={(value) => updateNumeric('radius', value)}
           />
@@ -1605,6 +1814,7 @@ export default function StylistScreen() {
                 grid
                 key={key}
                 label={`Spacing ${key}`}
+                labelColor={controlTextColor}
                 value={theme.layout.spacing[key]}
                 onChange={(value) => updateNumeric(key, value)}
               />
@@ -1616,7 +1826,7 @@ export default function StylistScreen() {
           <View style={styles.spacingPreview}>
             {spacingKeys.map((key) => (
               <View key={`preview-${key}`} style={styles.spacingPreviewRow}>
-                <Text style={styles.spacingLabel}>{key}</Text>
+                <Text style={[styles.spacingLabel, { color: controlTextColor }]}>{key}</Text>
                 <View
                   style={[
                     styles.spacingBar,
@@ -1763,6 +1973,7 @@ function NumberField(props: {
   value: number;
   onChange: (value: string) => void;
   grid?: boolean;
+  labelColor?: string;
 }) {
   const [draft, setDraft] = useState(String(props.value));
 
@@ -1772,7 +1983,9 @@ function NumberField(props: {
 
   return (
     <View style={[styles.field, props.grid ? styles.gridField : styles.fullField]}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, props.labelColor ? { color: props.labelColor } : null]}>
+        {props.label}
+      </Text>
       <TextInput
         value={draft}
         onChangeText={setDraft}
@@ -1790,6 +2003,7 @@ function NumberField(props: {
 
 function FontFamilyCombobox(props: {
   label: string;
+  labelColor?: string;
   value: string;
   placeholder: string;
   options: string[];
@@ -1834,7 +2048,9 @@ function FontFamilyCombobox(props: {
         props.grid ? styles.gridField : styles.fullField,
         isOpen ? styles.fieldOverlayOpen : null,
       ]}>
-      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <Text style={[styles.fieldLabel, props.labelColor ? { color: props.labelColor } : null]}>
+        {props.label}
+      </Text>
       <View style={styles.comboboxWrap}>
         <TextInput
           value={query}
@@ -2075,6 +2291,16 @@ const styles = StyleSheet.create({
   inlineToggleLabel: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  presetButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  presetButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   helperText: {
     fontSize: 13,
