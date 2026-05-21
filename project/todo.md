@@ -331,3 +331,5 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Consider adding agentic workflows for issues on github.
 - [ ] Consider publishing the stylist component to npm
 
+## Future Goals
+- [ ] The agent should not only run tests and doctor after finishing work but it should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.

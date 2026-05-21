@@ -1,10 +1,21 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker';
 import tailwindColors from 'tailwindcss/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable, ExpositionNotice } from '../../components/exposition';
+import { EMBEDDED_GOOGLE_FONTS } from './embedded-fonts';
 import stylistThemeTokens, {
   type StylistColorMode,
   type StylistColorPalette,
@@ -20,6 +31,24 @@ type TailwindShade = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 
 type ColorInputMode = 'picker' | 'families';
 type PaletteFamilies = Record<PaletteColorKey, TailwindColorFamily>;
 type PaletteShades = Record<PaletteColorKey, TailwindShade>;
+type FontRoleKey =
+  | 'fontDisplay'
+  | 'fontTitle'
+  | 'fontSubtitle'
+  | 'fontBody'
+  | 'fontCaption'
+  | 'fontMono';
+type StylistTypographyRoles = {
+  fontDisplay: string;
+  fontTitle: string;
+  fontSubtitle: string;
+  fontBody: string;
+  fontCaption: string;
+  fontMono: string;
+};
+type ExtendedStylistThemeTokens = Omit<StylistThemeTokens, 'typography'> & {
+  typography: StylistThemeTokens['typography'] & StylistTypographyRoles;
+};
 
 type TailwindColorFamily =
   | 'slate'
@@ -56,7 +85,13 @@ const paletteColorKeys: PaletteColorKey[] = [
 ];
 
 const semanticColorKeys: SemanticColorKey[] = ['primary', 'secondary', 'success', 'warning'];
-const spacingKeys: Array<keyof StylistThemeTokens['layout']['spacing']> = ['xs', 'sm', 'md', 'lg', 'xl'];
+const spacingKeys: Array<keyof StylistThemeTokens['layout']['spacing']> = [
+  'xs',
+  'sm',
+  'md',
+  'lg',
+  'xl',
+];
 const schemeKeys: StylistColorScheme[] = ['light', 'dark'];
 const familyModeOptions: Array<{ label: string; value: StylistFamilyMode }> = [
   { label: '1 family', value: 'one' },
@@ -71,6 +106,54 @@ const colorInputModeOptions: Array<{ label: string; value: ColorInputMode }> = [
   { label: 'Tailwind Families', value: 'families' },
 ];
 const NATIVE_SAVE_COMMAND = 'npm run mds:stylist:sync -- --input-file project/theme.json';
+const GOOGLE_FONTS_KEY_STORAGE = 'mds.stylist.googleFontsApiKey';
+const GOOGLE_FONTS_BANNER_DISMISSED_STORAGE = 'mds.stylist.googleFontsBannerDismissed';
+const GOOGLE_FONTS_API_URL = 'https://www.googleapis.com/webfonts/v1/webfonts';
+const WEB_SYSTEM_FONTS = new Set([
+  'system',
+  'arial',
+  'helvetica',
+  'times new roman',
+  'georgia',
+  'courier new',
+  'monospace',
+  'sans-serif',
+  'serif',
+  'ui-sans-serif',
+]);
+const NATIVE_SAFE_FONTS = new Set([
+  'system',
+  'arial',
+  'helvetica',
+  'times new roman',
+  'georgia',
+  'courier new',
+  'monospace',
+  'sans-serif',
+  'serif',
+  'notoserif',
+  'noto sans',
+]);
+const fontRoleFields: Array<{ key: FontRoleKey; label: string; placeholder: string }> = [
+  { key: 'fontDisplay', label: 'Display', placeholder: 'Display font family' },
+  { key: 'fontTitle', label: 'Title', placeholder: 'Title font family' },
+  { key: 'fontSubtitle', label: 'Subtitle', placeholder: 'Subtitle font family' },
+  { key: 'fontBody', label: 'Body', placeholder: 'Body font family' },
+  { key: 'fontCaption', label: 'Caption', placeholder: 'Caption font family' },
+  { key: 'fontMono', label: 'Mono', placeholder: 'Mono font family' },
+];
+const builtInFontChoices = [
+  'System',
+  'monospace',
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Georgia',
+  'Courier New',
+  'sans-serif',
+  'serif',
+];
+const loadedWebFonts = new Set<string>();
 
 const tailwindFamilies: TailwindColorFamily[] = [
   'slate',
@@ -199,6 +282,45 @@ function mixHex(base: string, mix: string, amount: number): string {
   );
 }
 
+function relativeLuminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex);
+  const toLinear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
+  const darker = Math.min(relativeLuminance(a), relativeLuminance(b));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function ensureReadableTextColor(
+  text: string,
+  surface: string,
+  scheme: StylistColorScheme
+): string {
+  if (scheme === 'dark') {
+    return contrastRatio('#ffffff', surface) >= contrastRatio(text, surface) ? '#ffffff' : text;
+  }
+
+  if (contrastRatio(text, surface) >= 7) {
+    return text;
+  }
+
+  const target = '#000000';
+  for (const amount of [0.25, 0.4, 0.55, 0.7, 0.85, 1]) {
+    const candidate = mixHex(text, target, amount);
+    if (contrastRatio(candidate, surface) >= 7) {
+      return candidate;
+    }
+  }
+
+  return target;
+}
+
 function generateTailwindLikeScale(primaryHex: string): Record<TailwindShade, string> {
   const white = '#ffffff';
   const black = '#000000';
@@ -304,7 +426,10 @@ function nudgeShadeTowardCenter(shade: TailwindShade): TailwindShade {
   return order[next] ?? shade;
 }
 
-function deriveAutomaticPalette(families: StylistSemanticFamilies, scheme: StylistColorScheme): StylistColorPalette {
+function deriveAutomaticPalette(
+  families: StylistSemanticFamilies,
+  scheme: StylistColorScheme
+): StylistColorPalette {
   const semanticShade: TailwindShade = scheme === 'light' ? 500 : 400;
   const backgroundShade: TailwindShade = scheme === 'light' ? 50 : 950;
   let surfaceShade: TailwindShade = scheme === 'light' ? 100 : 900;
@@ -317,10 +442,16 @@ function deriveAutomaticPalette(families: StylistSemanticFamilies, scheme: Styli
     surface = getTailwindColor(families.primary, surfaceShade);
   }
 
+  const text = ensureReadableTextColor(
+    getTailwindColor(families.primary, scheme === 'light' ? 900 : 50),
+    surface,
+    scheme
+  );
+
   return {
     background,
     surface,
-    text: getTailwindColor(families.primary, scheme === 'light' ? 900 : 50),
+    text,
     primary: getTailwindColor(families.primary, semanticShade),
     secondary: getTailwindColor(families.secondary, semanticShade),
     success: getTailwindColor(families.success, semanticShade),
@@ -353,7 +484,11 @@ function deriveAutomaticPaletteFromPrimary(
     ...source,
     background: shades[scheme === 'light' ? 50 : 950],
     surface: shades[scheme === 'light' ? 100 : 900],
-    text: shades[scheme === 'light' ? 900 : 50],
+    text: ensureReadableTextColor(
+      shades[scheme === 'light' ? 900 : 50],
+      shades[scheme === 'light' ? 100 : 900],
+      scheme
+    ),
   };
 }
 
@@ -447,25 +582,155 @@ function isLockedAutomaticPickerKey(
   return mode === 'automatic' && inputMode === 'picker' && automaticLockedKeys.includes(key);
 }
 
+function normalizeFontFamilyName(value: string): string {
+  return value.replace(/^['"]|['"]$/g, '').trim();
+}
+
+function normalizeThemeTypography(theme: StylistThemeTokens): ExtendedStylistThemeTokens {
+  const fallback = normalizeFontFamilyName(theme.typography.fontFamily) || 'System';
+
+  return {
+    ...theme,
+    typography: {
+      ...theme.typography,
+      fontFamily: fallback,
+      fontDisplay:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontDisplay ?? fallback
+        ) || fallback,
+      fontTitle:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontTitle ?? fallback
+        ) || fallback,
+      fontSubtitle:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontSubtitle ?? fallback
+        ) || fallback,
+      fontBody:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontBody ?? fallback
+        ) || fallback,
+      fontCaption:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontCaption ?? fallback
+        ) || fallback,
+      fontMono:
+        normalizeFontFamilyName(
+          (theme.typography as Partial<StylistTypographyRoles>).fontMono ?? 'monospace'
+        ) || 'monospace',
+    },
+  };
+}
+
+function withFontFamilyAlias(theme: ExtendedStylistThemeTokens): ExtendedStylistThemeTokens {
+  return {
+    ...theme,
+    typography: {
+      ...theme.typography,
+      fontFamily: normalizeFontFamilyName(theme.typography.fontDisplay) || 'System',
+    },
+  };
+}
+
+function makeFontCssFamily(fontFamily: string): string {
+  const normalized = normalizeFontFamilyName(fontFamily);
+  if (!normalized) {
+    return 'System';
+  }
+
+  return normalized.includes(' ') ? `"${normalized}"` : normalized;
+}
+
+function isNativeUnsafeFont(fontFamily: string): boolean {
+  const key = normalizeFontFamilyName(fontFamily).toLowerCase();
+  if (!key) {
+    return false;
+  }
+
+  return !NATIVE_SAFE_FONTS.has(key);
+}
+
+function resolvePreviewFontFamily(fontFamily: string): string {
+  if (Platform.OS !== 'web' && isNativeUnsafeFont(fontFamily)) {
+    return 'System';
+  }
+  return makeFontCssFamily(fontFamily);
+}
+
+function buildGoogleFontsStylesheetUrl(fontFamily: string): string {
+  const familyParam = normalizeFontFamilyName(fontFamily).replace(/\s+/g, '+');
+  return `https://fonts.googleapis.com/css2?family=${familyParam}:wght@400;500;700;800&display=swap`;
+}
+
+function ensureWebFontLoaded(fontFamily: string): void {
+  if (Platform.OS !== 'web' || typeof document === 'undefined') {
+    return;
+  }
+
+  const normalized = normalizeFontFamilyName(fontFamily);
+  if (!normalized) {
+    return;
+  }
+
+  if (WEB_SYSTEM_FONTS.has(normalized.toLowerCase()) || loadedWebFonts.has(normalized)) {
+    return;
+  }
+
+  const existing = document.querySelector(`link[data-stylist-font="${normalized}"]`);
+  if (existing) {
+    loadedWebFonts.add(normalized);
+    return;
+  }
+
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = buildGoogleFontsStylesheetUrl(normalized);
+  link.setAttribute('data-stylist-font', normalized);
+  document.head.appendChild(link);
+  loadedWebFonts.add(normalized);
+}
+
 export default function StylistScreen() {
   const insets = useSafeAreaInsets();
   const [colorInputMode, setColorInputMode] = useState<ColorInputMode>('picker');
-  const [bgFamilies, setBgFamilies] = useState<Record<StylistColorScheme, PaletteFamilies>>(
-    defaultBgFamilies
-  );
-  const [bgFamilyShades, setBgFamilyShades] = useState<Record<StylistColorScheme, PaletteShades>>(
-    defaultBgFamilyShades
-  );
-  const [theme, setTheme] = useState<StylistThemeTokens>(
-    reconcileTheme(stylistThemeTokens, 'picker', defaultBgFamilies, defaultBgFamilyShades)
+  const [bgFamilies, setBgFamilies] =
+    useState<Record<StylistColorScheme, PaletteFamilies>>(defaultBgFamilies);
+  const [bgFamilyShades, setBgFamilyShades] =
+    useState<Record<StylistColorScheme, PaletteShades>>(defaultBgFamilyShades);
+  const [theme, setTheme] = useState<ExtendedStylistThemeTokens>(
+    withFontFamilyAlias(
+      normalizeThemeTypography(
+        reconcileTheme(stylistThemeTokens, 'picker', defaultBgFamilies, defaultBgFamilyShades)
+      )
+    )
   );
   const [selectedColor, setSelectedColor] = useState<PaletteColorKey>('primary');
   const [saveMessage, setSaveMessage] = useState('');
   const [nativeDraft, setNativeDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState('');
+  const [storedApiKey, setStoredApiKey] = useState('');
+  const [fontBannerDismissed, setFontBannerDismissed] = useState(false);
+  const [remoteFonts, setRemoteFonts] = useState<string[]>([]);
+  const [loadingFonts, setLoadingFonts] = useState(false);
+  const [fontFetchError, setFontFetchError] = useState('');
+  const [fontRefreshIndex, setFontRefreshIndex] = useState(0);
+  const [explicitFontRoles, setExplicitFontRoles] = useState<Record<FontRoleKey, boolean>>({
+    fontDisplay: false,
+    fontTitle: false,
+    fontSubtitle: false,
+    fontBody: false,
+    fontCaption: false,
+    fontMono: false,
+  });
 
   const activeScheme = theme.colorSystem.previewScheme;
   const previewColors = theme.colors[activeScheme];
+  const controlTextColor = ensureReadableTextColor(
+    previewColors.text,
+    previewColors.surface,
+    activeScheme
+  );
   const editablePalette =
     theme.colorSystem.mode === 'automatic'
       ? theme.palettes.automatic[activeScheme]
@@ -488,8 +753,27 @@ export default function StylistScreen() {
     [previewColors, theme.layout]
   );
 
+  const availableFontFamilies = useMemo(() => {
+    const merged = new Map<string, string>();
+    for (const family of [...builtInFontChoices, ...EMBEDDED_GOOGLE_FONTS, ...remoteFonts]) {
+      const normalized = normalizeFontFamilyName(family);
+      if (!normalized) {
+        continue;
+      }
+      const key = normalized.toLowerCase();
+      if (!merged.has(key)) {
+        merged.set(key, normalized);
+      }
+    }
+    return Array.from(merged.values()).sort((a, b) => a.localeCompare(b));
+  }, [remoteFonts]);
+
   useEffect(() => {
-    setTheme((prev) => reconcileTheme(prev, colorInputMode, bgFamilies, bgFamilyShades));
+    setTheme((prev) =>
+      withFontFamilyAlias(
+        normalizeThemeTypography(reconcileTheme(prev, colorInputMode, bgFamilies, bgFamilyShades))
+      )
+    );
   }, [bgFamilies, bgFamilyShades, colorInputMode]);
 
   useEffect(() => {
@@ -503,8 +787,117 @@ export default function StylistScreen() {
     }
   }, [colorInputMode, selectedColor, theme.colorSystem.mode]);
 
-  function updateTheme(mutator: (prev: StylistThemeTokens) => StylistThemeTokens) {
-    setTheme((prev) => reconcileTheme(mutator(prev), colorInputMode, bgFamilies, bgFamilyShades));
+  useEffect(() => {
+    let isMounted = true;
+
+    async function hydrateFontSettings() {
+      try {
+        const [savedKey, dismissed] = await Promise.all([
+          AsyncStorage.getItem(GOOGLE_FONTS_KEY_STORAGE),
+          AsyncStorage.getItem(GOOGLE_FONTS_BANNER_DISMISSED_STORAGE),
+        ]);
+        if (!isMounted) {
+          return;
+        }
+        const nextKey = savedKey?.trim() ?? '';
+        setStoredApiKey(nextKey);
+        setApiKeyDraft(nextKey);
+        setFontBannerDismissed(dismissed === 'true' && !nextKey);
+      } catch {
+        if (isMounted) {
+          setFontBannerDismissed(false);
+        }
+      }
+    }
+
+    void hydrateFontSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    ensureWebFontLoaded(theme.typography.fontDisplay);
+    ensureWebFontLoaded(theme.typography.fontTitle);
+    ensureWebFontLoaded(theme.typography.fontSubtitle);
+    ensureWebFontLoaded(theme.typography.fontBody);
+    ensureWebFontLoaded(theme.typography.fontCaption);
+    ensureWebFontLoaded(theme.typography.fontMono);
+  }, [
+    theme.typography.fontDisplay,
+    theme.typography.fontTitle,
+    theme.typography.fontSubtitle,
+    theme.typography.fontBody,
+    theme.typography.fontCaption,
+    theme.typography.fontMono,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLiveFonts(apiKey: string) {
+      if (!apiKey) {
+        setRemoteFonts([]);
+        setFontFetchError('');
+        return;
+      }
+
+      setLoadingFonts(true);
+      setFontFetchError('');
+      try {
+        const response = await fetch(
+          `${GOOGLE_FONTS_API_URL}?sort=popularity&key=${encodeURIComponent(apiKey)}`
+        );
+        const payload = (await response.json()) as {
+          items?: Array<{ family?: string }>;
+          error?: { message?: string };
+        };
+        if (!response.ok) {
+          throw new Error(payload?.error?.message ?? 'Could not load Google Fonts list.');
+        }
+
+        const fetched = (payload.items ?? [])
+          .map((item) => normalizeFontFamilyName(item.family ?? ''))
+          .filter((value) => value.length > 0);
+
+        if (!cancelled) {
+          setRemoteFonts(fetched);
+          setFontFetchError('');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRemoteFonts([]);
+          setFontFetchError(
+            error instanceof Error ? error.message : 'Could not load Google Fonts list.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingFonts(false);
+        }
+      }
+    }
+
+    void loadLiveFonts(storedApiKey);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storedApiKey, fontRefreshIndex]);
+
+  function updateTheme(mutator: (prev: ExtendedStylistThemeTokens) => ExtendedStylistThemeTokens) {
+    setTheme((prev) =>
+      withFontFamilyAlias(
+        normalizeThemeTypography(
+          reconcileTheme(mutator(prev), colorInputMode, bgFamilies, bgFamilyShades)
+        )
+      )
+    );
   }
 
   function updateNumeric(path: string, raw: string) {
@@ -561,12 +954,8 @@ export default function StylistScreen() {
   }
 
   function updateFamilyMode(mode: StylistFamilyMode) {
-    setBgFamilies((prev) =>
-      mode === 'one' ? { ...prev, dark: { ...prev.light } } : prev
-    );
-    setBgFamilyShades((prev) =>
-      mode === 'one' ? { ...prev, dark: { ...prev.light } } : prev
-    );
+    setBgFamilies((prev) => (mode === 'one' ? { ...prev, dark: { ...prev.light } } : prev));
+    setBgFamilyShades((prev) => (mode === 'one' ? { ...prev, dark: { ...prev.light } } : prev));
     updateTheme((prev) => ({
       ...prev,
       colorSystem: {
@@ -671,7 +1060,52 @@ export default function StylistScreen() {
     updateManualColor(targetKey, hex);
   }
 
+  function updateFontRole(role: FontRoleKey, fontFamily: string) {
+    const normalized = normalizeFontFamilyName(fontFamily);
+    if (!normalized) {
+      return;
+    }
+
+    setExplicitFontRoles((prev) => ({ ...prev, [role]: true }));
+    updateTheme((prev) => ({
+      ...prev,
+      typography: {
+        ...prev.typography,
+        [role]: normalized,
+        fontFamily: role === 'fontDisplay' ? normalized : prev.typography.fontFamily,
+      },
+    }));
+  }
+
+  async function saveFontApiSettings() {
+    const nextKey = apiKeyDraft.trim();
+    try {
+      await AsyncStorage.setItem(GOOGLE_FONTS_KEY_STORAGE, nextKey);
+      await AsyncStorage.setItem(
+        GOOGLE_FONTS_BANNER_DISMISSED_STORAGE,
+        nextKey ? 'false' : String(fontBannerDismissed)
+      );
+      setStoredApiKey(nextKey);
+      setFontBannerDismissed(false);
+      setSaveMessage(
+        nextKey ? 'Google Fonts key saved. Live list is refreshing.' : 'Google Fonts key cleared.'
+      );
+    } catch {
+      setSaveMessage('Unable to save Google Fonts API key on this device.');
+    }
+  }
+
+  async function dismissFontBanner() {
+    try {
+      await AsyncStorage.setItem(GOOGLE_FONTS_BANNER_DISMISSED_STORAGE, 'true');
+    } catch {
+      // no-op
+    }
+    setFontBannerDismissed(true);
+  }
+
   async function saveTheme() {
+    const payloadTheme = withFontFamilyAlias(theme);
     setSaving(true);
     setSaveMessage('');
     try {
@@ -679,7 +1113,7 @@ export default function StylistScreen() {
         const response = await fetch('/exposition/stylist-sync', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(theme),
+          body: JSON.stringify(payloadTheme),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -687,9 +1121,11 @@ export default function StylistScreen() {
         }
         setSaveMessage(`Synced ${payload.updatedFiles?.length ?? 0} files from Stylist.`);
       } else {
-        const draft = JSON.stringify(theme, null, 2);
+        const draft = JSON.stringify(payloadTheme, null, 2);
         setNativeDraft(draft);
-        setSaveMessage('Draft saved in Stylist. Run the sync command from your project root terminal.');
+        setSaveMessage(
+          'Draft saved in Stylist. Run the sync command from your project root terminal.'
+        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown save error.';
@@ -712,32 +1148,74 @@ export default function StylistScreen() {
             paddingBottom: Math.max(insets.bottom + 40, 96),
           },
         ]}
-        style={[styles.screen, { backgroundColor: previewColors.background }]}
-      >
+        style={[styles.screen, { backgroundColor: previewColors.background }]}>
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: previewColors.text }]}>{'StylistCheck Stylist'}</Text>
+          <Text style={[styles.title, { color: previewColors.text }]}>
+            {'StylistCheck Stylist'}
+          </Text>
           <Pressable
             onPress={saveTheme}
             disabled={saving}
-            style={[styles.saveButton, styles.saveButtonInline, { backgroundColor: previewColors.primary }]}
-          >
+            style={[
+              styles.saveButton,
+              styles.saveButtonInline,
+              { backgroundColor: previewColors.primary },
+            ]}>
             <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
           </Pressable>
         </View>
-        <Text style={[styles.intro, { color: previewColors.text }]}>Adjust design tokens - don't forget to hit Save Theme so the changes will be applied to your app color theme files.</Text>
+        <Text style={[styles.intro, { color: previewColors.text }]}>
+          Adjust design tokens - do not forget to hit Save Theme so the changes will be applied to
+          your app color theme files.
+        </Text>
+        {!fontBannerDismissed || !storedApiKey ? (
+          <View style={[styles.fontBanner, { borderColor: previewColors.primary }]}>
+            <View style={styles.fontBannerHeader}>
+              <Text style={styles.fontBannerTitle}>Google Fonts API Key (Optional)</Text>
+              <Pressable onPress={dismissFontBanner} style={styles.bannerDismissButton}>
+                <Text style={styles.bannerDismissText}>X</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.fontBannerBody}>
+              Embedded curated fonts are already built in. Add your Google Fonts API key only if you
+              want the live catalog sync. System and common fallback fonts are included too.
+            </Text>
+            <TextInput
+              value={apiKeyDraft}
+              onChangeText={setApiKeyDraft}
+              placeholder="Paste Google Fonts API key"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
+            <View style={styles.fontBannerActions}>
+              <Pressable
+                onPress={saveFontApiSettings}
+                style={[styles.bannerAction, { backgroundColor: previewColors.primary }]}>
+                <Text style={styles.bannerActionText}>Save Key</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setFontRefreshIndex((prev) => prev + 1)}
+                style={[styles.bannerAction, styles.bannerActionGhost]}>
+                <Text style={styles.bannerActionGhostText}>Refresh List</Text>
+              </Pressable>
+            </View>
+            {loadingFonts ? (
+              <Text style={styles.fontBannerBody}>Loading live Google Fonts list...</Text>
+            ) : null}
+            {fontFetchError ? <Text style={styles.fontError}>{fontFetchError}</Text> : null}
+          </View>
+        ) : null}
         <ExpositionNotice />
 
-        <View style={previewCard}>
-          <Text style={{ color: previewColors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.displaySize, fontWeight: '900' }}>Display headline</Text>
-          <Text style={{ color: previewColors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.headingSize, fontWeight: '800' }}>Section heading</Text>
-          <Text style={{ color: previewColors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.bodySize }}>Readable body copy for product screens, onboarding, settings, and forms.</Text>
-          <Text style={{ color: previewColors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.captionSize, textTransform: 'uppercase' }}>Caption and metadata text</Text>
-          <AnimatedPressable label="Call to Action" backgroundColor={previewColors.secondary} textColor={previewColors.text} />
-        </View>
-
-        <View style={[styles.section, { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius }]}>
+        <View
+          style={[
+            styles.section,
+            styles.sectionOverlay,
+            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
+          ]}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionTitle, { color: previewColors.text }]}>Colors</Text>
+            <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Colors</Text>
             <View style={styles.inlineToggle}>
               {colorInputModeOptions.map((option) => {
                 const isSelected = colorInputMode === option.value;
@@ -745,14 +1223,15 @@ export default function StylistScreen() {
                   <Pressable
                     key={option.value}
                     onPress={() => setColorInputMode(option.value)}
-                    style={[styles.inlineToggleOption, isSelected && styles.inlineToggleOptionSelected]}
-                  >
+                    style={[
+                      styles.inlineToggleOption,
+                      isSelected && styles.inlineToggleOptionSelected,
+                    ]}>
                     <Text
                       style={[
                         styles.inlineToggleLabel,
                         { color: isSelected ? '#f8fafc' : previewColors.text },
-                      ]}
-                    >
+                      ]}>
                       {option.label}
                     </Text>
                   </Pressable>
@@ -761,15 +1240,16 @@ export default function StylistScreen() {
             </View>
           </View>
 
-          <Text style={[styles.helperText, { color: previewColors.text }]}>
+          <Text style={[styles.helperText, { color: controlTextColor }]}>
             {theme.colorSystem.mode === 'automatic'
               ? 'Automatic mode derives background, surface, and text from the primary color in real time.'
               : `BG mode lets you set palette colors directly for the active ${activeScheme} scheme.`}
           </Text>
 
           {theme.colorSystem.mode === 'automatic' && colorInputMode === 'picker' ? (
-            <Text style={[styles.helperText, styles.lockedNote, { color: previewColors.text }]}>
-              Background, surface, and text are disabled here because they are derived from the primary color.
+            <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
+              Background, surface, and text are disabled here because they are derived from the
+              primary color.
             </Text>
           ) : null}
 
@@ -793,8 +1273,7 @@ export default function StylistScreen() {
                       borderColor: isSelected ? previewColors.text : '#9ca3af',
                       opacity: locked ? 0.45 : 1,
                     },
-                  ]}
-                >
+                  ]}>
                   <Text style={styles.colorChipLabel}>{key}</Text>
                 </Pressable>
               );
@@ -811,8 +1290,7 @@ export default function StylistScreen() {
                 onCompleteJS={({ hex }: { hex: string }) => {
                   applyPickerColor(hex);
                 }}
-                style={styles.picker}
-              >
+                style={styles.picker}>
                 <Preview hideInitialColor />
                 <Panel1 />
                 <HueSlider />
@@ -834,108 +1312,293 @@ export default function StylistScreen() {
               </View>
             </>
           ) : (
-              <View style={styles.familyBlock}>
-              {(theme.colorSystem.mode === 'automatic' ? semanticColorKeys : paletteColorKeys).map((key) => {
-                const familyValue =
-                  theme.colorSystem.mode === 'automatic'
-                    ? activeFamilies[key as SemanticColorKey]
-                    : activeBgFamilies[key as PaletteColorKey];
-                const shadeValue =
-                  theme.colorSystem.mode === 'automatic'
-                    ? null
-                    : activeBgFamilyShades[key as PaletteColorKey];
+            <View style={styles.familyBlock}>
+              {(theme.colorSystem.mode === 'automatic' ? semanticColorKeys : paletteColorKeys).map(
+                (key) => {
+                  const familyValue =
+                    theme.colorSystem.mode === 'automatic'
+                      ? activeFamilies[key as SemanticColorKey]
+                      : activeBgFamilies[key as PaletteColorKey];
+                  const shadeValue =
+                    theme.colorSystem.mode === 'automatic'
+                      ? null
+                      : activeBgFamilyShades[key as PaletteColorKey];
 
-                return (
-                  <View key={key} style={styles.familyRow}>
-                    <Text style={[styles.familyTitle, { color: previewColors.text }]}>{`${key} family (${activeFamilyScheme})`}</Text>
-                    <View style={styles.familyOptions}>
-                      {tailwindFamilies.map((family) => (
-                        <Pressable
-                          key={`${key}-${family}`}
-                          onPress={() => {
-                            if (theme.colorSystem.mode === 'automatic') {
-                              updateFamily(key as SemanticColorKey, family);
-                            } else {
-                              updateBgFamily(key as PaletteColorKey, family);
-                            }
-                          }}
-                          style={[
-                            styles.familyOption,
-                            familyValue === family && {
-                              backgroundColor: previewColors.primary,
-                              borderColor: previewColors.primary,
-                            },
-                          ]}
-                        >
-                          <Text
+                  return (
+                    <View key={key} style={styles.familyRow}>
+                      <Text
+                        style={[
+                          styles.familyTitle,
+                          { color: previewColors.text },
+                        ]}>{`${key} family (${activeFamilyScheme})`}</Text>
+                      <View style={styles.familyOptions}>
+                        {tailwindFamilies.map((family) => (
+                          <Pressable
+                            key={`${key}-${family}`}
+                            onPress={() => {
+                              if (theme.colorSystem.mode === 'automatic') {
+                                updateFamily(key as SemanticColorKey, family);
+                              } else {
+                                updateBgFamily(key as PaletteColorKey, family);
+                              }
+                            }}
                             style={[
-                              styles.familyOptionText,
-                              { color: familyValue === family ? '#f8fafc' : previewColors.text },
-                            ]}
-                          >
-                            {family}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    {theme.colorSystem.mode === 'bg' ? (
-                      <View style={styles.shadeRow}>
-                        {shadeOptions.map((shade) => {
-                          const shadeColor = getTailwindColor(
-                            familyValue,
-                            shade
-                          );
-                          const isSelectedShade = shadeValue === shade;
-                          return (
-                            <Pressable
-                              key={`${key}-${shade}`}
-                              onPress={() => updateBgShade(key as PaletteColorKey, shade)}
+                              styles.familyOption,
+                              familyValue === family && {
+                                backgroundColor: previewColors.primary,
+                                borderColor: previewColors.primary,
+                              },
+                            ]}>
+                            <Text
                               style={[
-                                styles.shadeDot,
-                                {
-                                  backgroundColor: shadeColor,
-                                  borderColor: isSelectedShade ? previewColors.text : '#cbd5e1',
-                                  borderWidth: isSelectedShade ? 3 : 1,
-                                },
-                              ]}
-                              accessibilityLabel={`${key} shade ${shade}`}
-                            />
-                          );
-                        })}
+                                styles.familyOptionText,
+                                { color: familyValue === family ? '#f8fafc' : previewColors.text },
+                              ]}>
+                              {family}
+                            </Text>
+                          </Pressable>
+                        ))}
                       </View>
-                    ) : null}
-                  </View>
-                );
-              })}
+                      {theme.colorSystem.mode === 'bg' ? (
+                        <View style={styles.shadeRow}>
+                          {shadeOptions.map((shade) => {
+                            const shadeColor = getTailwindColor(familyValue, shade);
+                            const isSelectedShade = shadeValue === shade;
+                            return (
+                              <Pressable
+                                key={`${key}-${shade}`}
+                                onPress={() => updateBgShade(key as PaletteColorKey, shade)}
+                                style={[
+                                  styles.shadeDot,
+                                  {
+                                    backgroundColor: shadeColor,
+                                    borderColor: isSelectedShade ? previewColors.text : '#cbd5e1',
+                                    borderWidth: isSelectedShade ? 3 : 1,
+                                  },
+                                ]}
+                                accessibilityLabel={`${key} shade ${shade}`}
+                              />
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                }
+              )}
             </View>
           )}
         </View>
 
-        <View style={[styles.section, { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius }]}>
-          <Text style={[styles.sectionTitle, { color: previewColors.text }]}>Typography</Text>
-          <Text style={[styles.helperText, styles.lockedNote, { color: previewColors.text }]}>
-            Hit enter or click out of the text box to take effect.
+        <View style={previewCard}>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontDisplay),
+              fontSize: theme.typography.displaySize,
+              fontWeight: '900',
+            }}>
+            Display headline
           </Text>
-          <TextInput
-            value={theme.typography.fontFamily}
-            onChangeText={(fontFamily) => updateTheme((prev) => ({ ...prev, typography: { ...prev.typography, fontFamily } }))}
-            style={styles.input}
-            placeholder="Font family"
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontTitle),
+              fontSize: theme.typography.headingSize,
+              fontWeight: '800',
+            }}>
+            Section heading
+          </Text>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontSubtitle),
+              fontSize: theme.typography.bodySize + 1,
+              fontWeight: '600',
+            }}>
+            Subtitle copy for card sections and hero support text.
+          </Text>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontBody),
+              fontSize: theme.typography.bodySize,
+            }}>
+            Readable body copy for product screens, onboarding, settings, and forms.
+          </Text>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontCaption),
+              fontSize: theme.typography.captionSize,
+              textTransform: 'uppercase',
+            }}>
+            Caption and metadata text
+          </Text>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontMono),
+              fontSize: 11,
+              textTransform: 'uppercase',
+              opacity: 0.82,
+            }}>
+            Monospaced sample
+          </Text>
+          <Text
+            style={{
+              color: previewColors.text,
+              fontFamily: resolvePreviewFontFamily(theme.typography.fontMono),
+              fontSize: 12,
+              backgroundColor: previewColors.background,
+              padding: 8,
+              borderRadius: 8,
+            }}>
+            {'const typography = "monospaced";'}
+          </Text>
+          <AnimatedPressable
+            label="Call to Action"
+            backgroundColor={previewColors.secondary}
+            textColor={previewColors.text}
           />
-          <View style={styles.grid}>
-            <NumberField grid label="Display" value={theme.typography.displaySize} onChange={(value) => updateNumeric('displaySize', value)} />
-            <NumberField grid label="Heading" value={theme.typography.headingSize} onChange={(value) => updateNumeric('headingSize', value)} />
-            <NumberField grid label="Body" value={theme.typography.bodySize} onChange={(value) => updateNumeric('bodySize', value)} />
-            <NumberField grid label="Caption" value={theme.typography.captionSize} onChange={(value) => updateNumeric('captionSize', value)} />
+        </View>
+
+        <View
+          style={[
+            styles.section,
+            styles.typographySection,
+            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
+          ]}>
+          <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Typography</Text>
+          <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
+            Search and choose a font per role. Display also syncs `fontFamily` for compatibility.
+          </Text>
+          <View style={[styles.grid, styles.fontPickerGrid]}>
+            {fontRoleFields.map((field) => (
+              <FontFamilyCombobox
+                key={field.key}
+                grid
+                label={field.label}
+                value={explicitFontRoles[field.key] ? theme.typography[field.key] : ''}
+                placeholder=""
+                options={availableFontFamilies}
+                onSelect={(fontFamily) => updateFontRole(field.key, fontFamily)}
+              />
+            ))}
+          </View>
+          {Platform.OS !== 'web' &&
+          fontRoleFields.some((field) => isNativeUnsafeFont(theme.typography[field.key])) ? (
+            <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
+              Some selected Google fonts are not bundled on native, so iOS/Android preview falls
+              back to System.
+            </Text>
+          ) : null}
+          <View style={[styles.grid, styles.tokenSizeGrid]}>
+            <NumberField
+              grid
+              label="Display"
+              value={theme.typography.displaySize}
+              onChange={(value) => updateNumeric('displaySize', value)}
+            />
+            <NumberField
+              grid
+              label="Heading"
+              value={theme.typography.headingSize}
+              onChange={(value) => updateNumeric('headingSize', value)}
+            />
+            <NumberField
+              grid
+              label="Body"
+              value={theme.typography.bodySize}
+              onChange={(value) => updateNumeric('bodySize', value)}
+            />
+            <NumberField
+              grid
+              label="Caption"
+              value={theme.typography.captionSize}
+              onChange={(value) => updateNumeric('captionSize', value)}
+            />
           </View>
         </View>
 
-        <View style={[styles.section, { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius }]}>
-          <Text style={[styles.sectionTitle, { color: previewColors.text }]}>Layout Tokens</Text>
-          <Text style={[styles.helperText, styles.lockedNote, { color: previewColors.text }]}>
+        <View
+          style={[
+            styles.section,
+            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
+          ]}>
+          <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Component Gallery</Text>
+          <Text style={[styles.helperText, { color: controlTextColor }]}>
+            Token previews using cards, status views, input states, and spacing rhythm.
+          </Text>
+          <View style={styles.galleryRow}>
+            <View
+              style={[
+                styles.galleryCard,
+                { borderColor: previewColors.primary, backgroundColor: previewColors.background },
+              ]}>
+              <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
+                Default Card
+              </Text>
+              <Text style={[styles.galleryCardBody, { color: previewColors.text }]}>
+                Solid surface card for primary content blocks.
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.galleryCard,
+                styles.galleryCardSoft,
+                { borderColor: previewColors.secondary },
+              ]}>
+              <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
+                Soft Card
+              </Text>
+              <Text style={[styles.galleryCardBody, { color: previewColors.text }]}>
+                Layered panel with lower contrast for secondary content.
+              </Text>
+            </View>
+          </View>
+          <View style={styles.statusRow}>
+            {[
+              { label: 'Success', color: previewColors.success },
+              { label: 'Warning', color: previewColors.warning },
+              { label: 'Primary', color: previewColors.primary },
+              { label: 'Secondary', color: previewColors.secondary },
+            ].map((status) => (
+              <View
+                key={status.label}
+                style={[styles.statusPill, { backgroundColor: status.color }]}>
+                <Text style={styles.statusPillText}>{status.label}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.inputStatesRow}>
+            <TextInput style={styles.input} placeholder="Default input" />
+            <TextInput
+              style={[styles.input, { borderColor: previewColors.warning }]}
+              placeholder="Warning state input"
+            />
+            <TextInput
+              style={[styles.input, { opacity: 0.6 }]}
+              placeholder="Disabled input"
+              editable={false}
+            />
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.section,
+            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
+          ]}>
+          <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Layout Tokens</Text>
+          <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
             Hit enter or click out of the text box to take effect.
           </Text>
-          <NumberField label="Radius" value={theme.layout.radius} onChange={(value) => updateNumeric('radius', value)} />
+          <NumberField
+            label="Corner Radius"
+            value={theme.layout.radius}
+            onChange={(value) => updateNumeric('radius', value)}
+          />
           <View style={styles.grid}>
             {spacingKeys.map((key) => (
               <NumberField
@@ -947,9 +1610,83 @@ export default function StylistScreen() {
               />
             ))}
           </View>
+          <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
+            Bar width mirrors each spacing token so scale jumps are easy to spot.
+          </Text>
+          <View style={styles.spacingPreview}>
+            {spacingKeys.map((key) => (
+              <View key={`preview-${key}`} style={styles.spacingPreviewRow}>
+                <Text style={styles.spacingLabel}>{key}</Text>
+                <View
+                  style={[
+                    styles.spacingBar,
+                    {
+                      width: Math.max(10, theme.layout.spacing[key] * 3),
+                      backgroundColor: previewColors.primary,
+                      borderRadius: Math.max(4, theme.layout.radius / 2),
+                    },
+                  ]}
+                />
+              </View>
+            ))}
+          </View>
+          <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
+            Practical preview: XS controls list gaps, SM pads the first 3 items, and MD pads the
+            list container.
+          </Text>
+          <View
+            style={[
+              styles.layoutPreviewContainer,
+              {
+                borderColor: previewColors.primary,
+                borderRadius: theme.layout.radius,
+                padding: theme.layout.spacing.md,
+                gap: theme.layout.spacing.xs,
+              },
+            ]}>
+            {spacingKeys.map((spacingKey, index) => (
+              <View
+                key={`layout-preview-${spacingKey}`}
+                style={[
+                  styles.layoutPreviewCard,
+                  {
+                    borderRadius: Math.max(6, theme.layout.radius - 2),
+                    padding: index < 3 ? theme.layout.spacing.sm : theme.layout.spacing[spacingKey],
+                    borderColor: previewColors.secondary,
+                    backgroundColor: previewColors.background,
+                  },
+                ]}>
+                <Text style={[styles.layoutPreviewTitle, { color: previewColors.text }]}>
+                  {spacingKey.toUpperCase()} -{' '}
+                  {spacingKey === 'xs'
+                    ? 'Extra Small'
+                    : spacingKey === 'sm'
+                      ? 'Small'
+                      : spacingKey === 'md'
+                        ? 'Medium'
+                        : spacingKey === 'lg'
+                          ? 'Large'
+                          : 'Extra Large'}
+                </Text>
+                <Text style={[styles.layoutPreviewBody, { color: previewColors.text }]}>
+                  {spacingKey === 'xs'
+                    ? 'Used for the gap between these list items.'
+                    : spacingKey === 'sm'
+                      ? 'Used for the padding for the first 3 list items.'
+                      : spacingKey === 'md'
+                        ? 'Used for the padding around the list.'
+                        : spacingKey === 'lg'
+                          ? "Reserved for roomier layout sections (this list item's padding)."
+                          : "Reserved for extra-roomy layout sections (this list item's padding)."}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
-        {saveMessage ? <Text style={[styles.saveMessage, { color: previewColors.text }]}>{saveMessage}</Text> : null}
+        {saveMessage ? (
+          <Text style={[styles.saveMessage, { color: previewColors.text }]}>{saveMessage}</Text>
+        ) : null}
         {Platform.OS !== 'web' ? (
           <View style={styles.nativeHelp}>
             <Text style={styles.nativeTitle}>Native fallback</Text>
@@ -968,8 +1705,7 @@ export default function StylistScreen() {
             borderColor: previewColors.primary,
             top: Math.max(insets.top + 8, 14),
           },
-        ]}
-      >
+        ]}>
         <ToggleRow
           label="Color Mode"
           options={colorModeOptions}
@@ -1009,9 +1745,11 @@ function ToggleRow(props: {
             <Pressable
               key={option.value}
               onPress={() => props.onChange(option.value)}
-              style={[styles.toggleOption, isSelected && styles.toggleOptionSelected]}
-            >
-              <Text style={[styles.toggleOptionText, isSelected && styles.toggleOptionTextSelected]}>{option.label}</Text>
+              style={[styles.toggleOption, isSelected && styles.toggleOptionSelected]}>
+              <Text
+                style={[styles.toggleOptionText, isSelected && styles.toggleOptionTextSelected]}>
+                {option.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -1020,7 +1758,12 @@ function ToggleRow(props: {
   );
 }
 
-function NumberField(props: { label: string; value: number; onChange: (value: string) => void; grid?: boolean }) {
+function NumberField(props: {
+  label: string;
+  value: number;
+  onChange: (value: string) => void;
+  grid?: boolean;
+}) {
   const [draft, setDraft] = useState(String(props.value));
 
   useEffect(() => {
@@ -1041,6 +1784,104 @@ function NumberField(props: { label: string; value: number; onChange: (value: st
         keyboardType="numeric"
         style={styles.input}
       />
+    </View>
+  );
+}
+
+function FontFamilyCombobox(props: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: string[];
+  onSelect: (value: string) => void;
+  grid?: boolean;
+}) {
+  const [query, setQuery] = useState(props.value);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(props.value);
+  }, [props.value]);
+
+  const filteredOptions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return props.options.filter((option) => option.toLowerCase() !== 'system');
+    }
+    return props.options.filter((option) => option.toLowerCase().includes(q));
+  }, [props.options, query]);
+
+  function commitValue(next: string) {
+    const normalized = normalizeFontFamilyName(next);
+    if (!normalized) {
+      setQuery(props.value);
+      setIsOpen(false);
+      return;
+    }
+    props.onSelect(normalized);
+    setQuery(normalized);
+    setIsOpen(false);
+  }
+
+  function openDropdown() {
+    setIsOpen(true);
+  }
+
+  return (
+    <View
+      style={[
+        styles.field,
+        props.grid ? styles.gridField : styles.fullField,
+        isOpen ? styles.fieldOverlayOpen : null,
+      ]}>
+      <Text style={styles.fieldLabel}>{props.label}</Text>
+      <View style={styles.comboboxWrap}>
+        <TextInput
+          value={query}
+          onChangeText={(value) => {
+            setQuery(value);
+            if (!isOpen) {
+              openDropdown();
+            }
+          }}
+          onFocus={() => {
+            openDropdown();
+          }}
+          onBlur={() => {
+            setTimeout(() => {
+              setIsOpen(false);
+            }, 120);
+          }}
+          onSubmitEditing={() => commitValue(query)}
+          placeholder={props.placeholder}
+          autoCorrect={false}
+          autoCapitalize="none"
+          style={styles.input}
+        />
+        {isOpen ? (
+          <View style={styles.comboboxDropdown}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              style={styles.comboboxScroll}>
+              {filteredOptions.length === 0 ? (
+                <Text style={styles.comboboxEmpty}>No matching fonts</Text>
+              ) : (
+                filteredOptions.map((option) => (
+                  <Pressable
+                    key={`${props.label}-${option}`}
+                    onPressIn={() => {
+                      commitValue(option);
+                    }}
+                    style={styles.comboboxOption}>
+                    <Text style={styles.comboboxOptionText}>{option}</Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1124,9 +1965,85 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
+  fontBanner: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  fontBannerHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  fontBannerTitle: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  fontBannerBody: {
+    color: '#374151',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  bannerDismissButton: {
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 26,
+    width: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerDismissText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  fontBannerActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bannerAction: {
+    alignItems: 'center',
+    borderRadius: 10,
+    justifyContent: 'center',
+    minHeight: 36,
+    paddingHorizontal: 12,
+  },
+  bannerActionText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bannerActionGhost: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+  },
+  bannerActionGhostText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  fontError: {
+    color: '#b91c1c',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   section: {
     gap: 12,
     padding: 16,
+  },
+  sectionOverlay: {
+    overflow: 'visible',
+    zIndex: 40,
+  },
+  typographySection: {
+    overflow: 'visible',
+    zIndex: 90,
   },
   sectionHeaderRow: {
     alignItems: 'center',
@@ -1247,13 +2164,101 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'capitalize',
   },
+  galleryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  galleryCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    gap: 4,
+    minWidth: 220,
+    padding: 12,
+  },
+  galleryCardSoft: {
+    backgroundColor: 'rgba(148,163,184,0.14)',
+  },
+  galleryCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  galleryCardBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    opacity: 0.92,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  statusPillText: {
+    color: '#f8fafc',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  inputStatesRow: {
+    gap: 8,
+  },
+  spacingPreview: {
+    gap: 8,
+  },
+  spacingPreviewRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  spacingLabel: {
+    color: '#374151',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    width: 32,
+  },
+  spacingBar: {
+    height: 12,
+  },
+  layoutPreviewContainer: {
+    borderWidth: 1,
+  },
+  layoutPreviewCard: {
+    borderWidth: 1,
+  },
+  layoutPreviewTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  layoutPreviewBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    opacity: 0.9,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
   },
+  fontPickerGrid: {
+    overflow: 'visible',
+    zIndex: 120,
+  },
+  tokenSizeGrid: {
+    zIndex: 1,
+  },
   field: {
     gap: 6,
+  },
+  fieldOverlayOpen: {
+    zIndex: 500,
   },
   fullField: {
     width: '100%',
@@ -1267,6 +2272,42 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontSize: 12,
     fontWeight: '700',
+  },
+  comboboxWrap: {
+    position: 'relative',
+  },
+  comboboxDropdown: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    borderWidth: 1,
+    left: 0,
+    elevation: 24,
+    position: 'absolute',
+    right: 0,
+    top: 44,
+    maxHeight: 360,
+    overflow: 'hidden',
+    zIndex: 2000,
+  },
+  comboboxScroll: {
+    maxHeight: 360,
+  },
+  comboboxOption: {
+    borderBottomColor: '#e5e7eb',
+    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  comboboxOptionText: {
+    color: '#111827',
+    fontSize: 13,
+  },
+  comboboxEmpty: {
+    color: '#6b7280',
+    fontSize: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   input: {
     backgroundColor: '#ffffff',
