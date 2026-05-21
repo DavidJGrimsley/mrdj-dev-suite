@@ -28,13 +28,86 @@ describe('runStylistSyncCommand', () => {
 
     const payload = {
       version: 1,
+      colorSystem: {
+        mode: 'bg',
+        previewScheme: 'light',
+        familyMode: 'two',
+      },
+      families: {
+        light: {
+          primary: 'blue',
+          secondary: 'violet',
+          success: 'emerald',
+          warning: 'amber',
+        },
+        dark: {
+          primary: 'sky',
+          secondary: 'indigo',
+          success: 'green',
+          warning: 'orange',
+        },
+      },
+      palettes: {
+        bg: {
+          light: {
+            background: '#fefefe',
+            surface: '#f1f5f9',
+            text: '#0f172a',
+            primary: '#0ea5e9',
+            secondary: '#8b5cf6',
+            success: '#22c55e',
+            warning: '#f59e0b',
+          },
+          dark: {
+            background: '#0a0a0a',
+            surface: '#1f2937',
+            text: '#f8fafc',
+            primary: '#38bdf8',
+            secondary: '#a78bfa',
+            success: '#4ade80',
+            warning: '#fb923c',
+          },
+        },
+        automatic: {
+          light: {
+            background: '#eff6ff',
+            surface: '#dbeafe',
+            text: '#1e3a8a',
+            primary: '#3b82f6',
+            secondary: '#8b5cf6',
+            success: '#10b981',
+            warning: '#f59e0b',
+          },
+          dark: {
+            background: '#172554',
+            surface: '#1e3a8a',
+            text: '#eff6ff',
+            primary: '#60a5fa',
+            secondary: '#a78bfa',
+            success: '#34d399',
+            warning: '#fbbf24',
+          },
+        },
+      },
       colors: {
-        background: '#fefefe',
-        surface: '#f1f5f9',
-        text: '#0f172a',
-        primary: '#0ea5e9',
-        success: '#22c55e',
-        warning: '#f59e0b',
+        light: {
+          background: '#fefefe',
+          surface: '#f1f5f9',
+          text: '#0f172a',
+          primary: '#0ea5e9',
+          secondary: '#8b5cf6',
+          success: '#22c55e',
+          warning: '#f59e0b',
+        },
+        dark: {
+          background: '#0a0a0a',
+          surface: '#1f2937',
+          text: '#f8fafc',
+          primary: '#38bdf8',
+          secondary: '#a78bfa',
+          success: '#4ade80',
+          warning: '#fb923c',
+        },
       },
       typography: {
         fontFamily: 'System',
@@ -67,6 +140,9 @@ describe('runStylistSyncCommand', () => {
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
       '--color-primary: #0ea5e9;'
     );
+    await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
+      '--color-secondary: #8b5cf6;'
+    );
     await expect(readFile(path.join(projectPath, 'src', 'theme', 'tokens.ts'), 'utf8')).resolves.toContain(
       'stylistThemeTokens'
     );
@@ -98,13 +174,86 @@ describe('runStylistSyncCommand', () => {
         path: projectPath,
         inputJson: JSON.stringify({
           version: 1,
+          colorSystem: {
+            mode: 'bg',
+            previewScheme: 'light',
+            familyMode: 'one',
+          },
+          families: {
+            light: {
+              primary: 'blue',
+              secondary: 'violet',
+              success: 'emerald',
+              warning: 'amber',
+            },
+            dark: {
+              primary: 'blue',
+              secondary: 'violet',
+              success: 'emerald',
+              warning: 'amber',
+            },
+          },
+          palettes: {
+            bg: {
+              light: {
+                background: 'white',
+                surface: '#f1f5f9',
+                text: '#0f172a',
+                primary: '#0ea5e9',
+                secondary: '#8b5cf6',
+                success: '#22c55e',
+                warning: '#f59e0b',
+              },
+              dark: {
+                background: '#0a0a0a',
+                surface: '#1f2937',
+                text: '#f8fafc',
+                primary: '#38bdf8',
+                secondary: '#a78bfa',
+                success: '#4ade80',
+                warning: '#fb923c',
+              },
+            },
+            automatic: {
+              light: {
+                background: '#eff6ff',
+                surface: '#dbeafe',
+                text: '#1e3a8a',
+                primary: '#3b82f6',
+                secondary: '#8b5cf6',
+                success: '#10b981',
+                warning: '#f59e0b',
+              },
+              dark: {
+                background: '#172554',
+                surface: '#1e3a8a',
+                text: '#eff6ff',
+                primary: '#60a5fa',
+                secondary: '#a78bfa',
+                success: '#34d399',
+                warning: '#fbbf24',
+              },
+            },
+          },
           colors: {
-            background: 'white',
-            surface: '#f1f5f9',
-            text: '#0f172a',
-            primary: '#0ea5e9',
-            success: '#22c55e',
-            warning: '#f59e0b',
+            light: {
+              background: '#fefefe',
+              surface: '#f1f5f9',
+              text: '#0f172a',
+              primary: '#0ea5e9',
+              secondary: '#8b5cf6',
+              success: '#22c55e',
+              warning: '#f59e0b',
+            },
+            dark: {
+              background: '#0a0a0a',
+              surface: '#1f2937',
+              text: '#f8fafc',
+              primary: '#38bdf8',
+              secondary: '#a78bfa',
+              success: '#4ade80',
+              warning: '#fb923c',
+            },
           },
           typography: {
             fontFamily: 'System',
@@ -119,7 +268,7 @@ describe('runStylistSyncCommand', () => {
           },
         }),
       })
-    ).rejects.toThrow('colors.background must use #RRGGBB format.');
+    ).rejects.toThrow('palettes.bg.light.background must use #RRGGBB format.');
   });
 
   it('handles missing optional files by creating managed outputs', async () => {

@@ -20,3 +20,6 @@ plugins/claude-code/skills/
 .claude/worktrees/
 
 *.code-workspace
+
+# Local nested-repo backup folders used when flattening embedded git repos
+**/.git.backup-*/

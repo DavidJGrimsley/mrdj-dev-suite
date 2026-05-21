@@ -1,15 +1,52 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+export type StylistColorScheme = 'light' | 'dark';
+export type StylistColorMode = 'bg' | 'automatic';
+export type StylistFamilyMode = 'one' | 'two';
+export type StylistSemanticColorKey = 'primary' | 'secondary' | 'success' | 'warning';
+
+export interface StylistColorPalette {
+  background: string;
+  surface: string;
+  text: string;
+  primary: string;
+  secondary: string;
+  success: string;
+  warning: string;
+}
+
+export interface StylistSemanticFamilies {
+  primary: string;
+  secondary: string;
+  success: string;
+  warning: string;
+}
+
 export interface StylistTheme {
   version: 1;
+  colorSystem: {
+    mode: StylistColorMode;
+    previewScheme: StylistColorScheme;
+    familyMode: StylistFamilyMode;
+  };
+  families: {
+    light: StylistSemanticFamilies;
+    dark: StylistSemanticFamilies;
+  };
+  palettes: {
+    bg: {
+      light: StylistColorPalette;
+      dark: StylistColorPalette;
+    };
+    automatic: {
+      light: StylistColorPalette;
+      dark: StylistColorPalette;
+    };
+  };
   colors: {
-    background: string;
-    surface: string;
-    text: string;
-    primary: string;
-    success: string;
-    warning: string;
+    light: StylistColorPalette;
+    dark: StylistColorPalette;
   };
   typography: {
     fontFamily: string;
@@ -45,13 +82,86 @@ const TODO_THEME_TASK =
 
 export const DEFAULT_STYLIST_THEME: StylistTheme = {
   version: 1,
+  colorSystem: {
+    mode: 'bg',
+    previewScheme: 'light',
+    familyMode: 'one',
+  },
+  families: {
+    light: {
+      primary: 'blue',
+      secondary: 'violet',
+      success: 'emerald',
+      warning: 'amber',
+    },
+    dark: {
+      primary: 'blue',
+      secondary: 'violet',
+      success: 'emerald',
+      warning: 'amber',
+    },
+  },
+  palettes: {
+    bg: {
+      light: {
+        background: '#f8fafc',
+        surface: '#e2e8f0',
+        text: '#111827',
+        primary: '#2563eb',
+        secondary: '#7c3aed',
+        success: '#16a34a',
+        warning: '#f97316',
+      },
+      dark: {
+        background: '#09090b',
+        surface: '#18181b',
+        text: '#f8fafc',
+        primary: '#60a5fa',
+        secondary: '#a78bfa',
+        success: '#4ade80',
+        warning: '#fb923c',
+      },
+    },
+    automatic: {
+      light: {
+        background: '#eff6ff',
+        surface: '#dbeafe',
+        text: '#1e3a8a',
+        primary: '#3b82f6',
+        secondary: '#8b5cf6',
+        success: '#10b981',
+        warning: '#f59e0b',
+      },
+      dark: {
+        background: '#172554',
+        surface: '#1e3a8a',
+        text: '#eff6ff',
+        primary: '#60a5fa',
+        secondary: '#a78bfa',
+        success: '#34d399',
+        warning: '#fbbf24',
+      },
+    },
+  },
   colors: {
-    background: '#ffffff',
-    surface: '#f9fafb',
-    text: '#111827',
-    primary: '#2563eb',
-    success: '#16a34a',
-    warning: '#f97316',
+    light: {
+      background: '#f8fafc',
+      surface: '#e2e8f0',
+      text: '#111827',
+      primary: '#2563eb',
+      secondary: '#7c3aed',
+      success: '#16a34a',
+      warning: '#f97316',
+    },
+    dark: {
+      background: '#09090b',
+      surface: '#18181b',
+      text: '#f8fafc',
+      primary: '#60a5fa',
+      secondary: '#a78bfa',
+      success: '#4ade80',
+      warning: '#fb923c',
+    },
   },
   typography: {
     fontFamily: 'System',
@@ -158,20 +268,52 @@ export function normalizeStylistTheme(value: unknown): StylistTheme {
     throw new Error('Theme payload must be an object.');
   }
 
+  if (value.version !== 1) {
+    throw new Error('version must be 1.');
+  }
+
+  const colorSystem = ensureRecord(value.colorSystem, 'colorSystem');
+  const families = ensureRecord(value.families, 'families');
+  const familiesLight = ensureRecord(families.light, 'families.light');
+  const familiesDark = ensureRecord(families.dark, 'families.dark');
+  const palettes = ensureRecord(value.palettes, 'palettes');
+  const paletteBg = ensureRecord(palettes.bg, 'palettes.bg');
+  const paletteAutomatic = ensureRecord(palettes.automatic, 'palettes.automatic');
+  const paletteBgLight = ensureRecord(paletteBg.light, 'palettes.bg.light');
+  const paletteBgDark = ensureRecord(paletteBg.dark, 'palettes.bg.dark');
+  const paletteAutomaticLight = ensureRecord(paletteAutomatic.light, 'palettes.automatic.light');
+  const paletteAutomaticDark = ensureRecord(paletteAutomatic.dark, 'palettes.automatic.dark');
   const colors = ensureRecord(value.colors, 'colors');
+  const colorsLight = ensureRecord(colors.light, 'colors.light');
+  const colorsDark = ensureRecord(colors.dark, 'colors.dark');
   const typography = ensureRecord(value.typography, 'typography');
   const layout = ensureRecord(value.layout, 'layout');
   const spacing = ensureRecord(layout.spacing, 'layout.spacing');
 
   const theme: StylistTheme = {
     version: 1,
+    colorSystem: {
+      mode: ensureEnumValue(colorSystem.mode, 'colorSystem.mode', ['bg', 'automatic']),
+      previewScheme: ensureEnumValue(colorSystem.previewScheme, 'colorSystem.previewScheme', ['light', 'dark']),
+      familyMode: ensureEnumValue(colorSystem.familyMode, 'colorSystem.familyMode', ['one', 'two']),
+    },
+    families: {
+      light: ensureSemanticFamilies(familiesLight, 'families.light'),
+      dark: ensureSemanticFamilies(familiesDark, 'families.dark'),
+    },
+    palettes: {
+      bg: {
+        light: ensureColorPalette(paletteBgLight, 'palettes.bg.light'),
+        dark: ensureColorPalette(paletteBgDark, 'palettes.bg.dark'),
+      },
+      automatic: {
+        light: ensureColorPalette(paletteAutomaticLight, 'palettes.automatic.light'),
+        dark: ensureColorPalette(paletteAutomaticDark, 'palettes.automatic.dark'),
+      },
+    },
     colors: {
-      background: ensureHexColor(colors.background, 'colors.background'),
-      surface: ensureHexColor(colors.surface, 'colors.surface'),
-      text: ensureHexColor(colors.text, 'colors.text'),
-      primary: ensureHexColor(colors.primary, 'colors.primary'),
-      success: ensureHexColor(colors.success, 'colors.success'),
-      warning: ensureHexColor(colors.warning, 'colors.warning'),
+      light: ensureColorPalette(colorsLight, 'colors.light'),
+      dark: ensureColorPalette(colorsDark, 'colors.dark'),
     },
     typography: {
       fontFamily: ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
@@ -192,6 +334,13 @@ export function normalizeStylistTheme(value: unknown): StylistTheme {
     },
   };
 
+  ensureDistinctPalette(theme.palettes.bg.light, 'palettes.bg.light');
+  ensureDistinctPalette(theme.palettes.bg.dark, 'palettes.bg.dark');
+  ensureDistinctPalette(theme.palettes.automatic.light, 'palettes.automatic.light');
+  ensureDistinctPalette(theme.palettes.automatic.dark, 'palettes.automatic.dark');
+  ensureDistinctPalette(theme.colors.light, 'colors.light');
+  ensureDistinctPalette(theme.colors.dark, 'colors.dark');
+
   return theme;
 }
 
@@ -210,15 +359,18 @@ function renderStyleThemeBlock(theme: StylistTheme): string {
 }
 
 export function renderGlobalCssThemeBlock(theme: StylistTheme): string {
+  const light = theme.colors.light;
+  const dark = theme.colors.dark;
   return [
     GLOBAL_CSS_THEME_BLOCK_START,
     ':root {',
-    `  --color-background: ${theme.colors.background};`,
-    `  --color-surface: ${theme.colors.surface};`,
-    `  --color-typography: ${theme.colors.text};`,
-    `  --color-primary: ${theme.colors.primary};`,
-    `  --color-success: ${theme.colors.success};`,
-    `  --color-warning: ${theme.colors.warning};`,
+    `  --color-background: ${light.background};`,
+    `  --color-surface: ${light.surface};`,
+    `  --color-typography: ${light.text};`,
+    `  --color-primary: ${light.primary};`,
+    `  --color-secondary: ${light.secondary};`,
+    `  --color-success: ${light.success};`,
+    `  --color-warning: ${light.warning};`,
     `  --radius-md: ${theme.layout.radius}px;`,
     `  --spacing-1: ${theme.layout.spacing.xs}px;`,
     `  --spacing-2: ${theme.layout.spacing.sm}px;`,
@@ -231,6 +383,18 @@ export function renderGlobalCssThemeBlock(theme: StylistTheme): string {
     `  --font-size-caption: ${theme.typography.captionSize}px;`,
     '}',
     '',
+    '@media (prefers-color-scheme: dark) {',
+    '  :root {',
+    `    --color-background: ${dark.background};`,
+    `    --color-surface: ${dark.surface};`,
+    `    --color-typography: ${dark.text};`,
+    `    --color-primary: ${dark.primary};`,
+    `    --color-secondary: ${dark.secondary};`,
+    `    --color-success: ${dark.success};`,
+    `    --color-warning: ${dark.warning};`,
+    '  }',
+    '}',
+    '',
     '.stylist-theme-root {',
     '  background-color: var(--color-background);',
     '  color: var(--color-typography);',
@@ -241,15 +405,51 @@ export function renderGlobalCssThemeBlock(theme: StylistTheme): string {
 
 export function renderThemeTokensFile(theme: StylistTheme): string {
   return [
+    "export type StylistColorScheme = 'light' | 'dark';",
+    "export type StylistColorMode = 'bg' | 'automatic';",
+    "export type StylistFamilyMode = 'one' | 'two';",
+    '',
+    'export interface StylistColorPalette {',
+    '  background: string;',
+    '  surface: string;',
+    '  text: string;',
+    '  primary: string;',
+    '  secondary: string;',
+    '  success: string;',
+    '  warning: string;',
+    '}',
+    '',
+    'export interface StylistSemanticFamilies {',
+    '  primary: string;',
+    '  secondary: string;',
+    '  success: string;',
+    '  warning: string;',
+    '}',
+    '',
     'export interface StylistThemeTokens {',
     '  version: 1;',
+    '  colorSystem: {',
+    '    mode: StylistColorMode;',
+    '    previewScheme: StylistColorScheme;',
+    '    familyMode: StylistFamilyMode;',
+    '  };',
+    '  families: {',
+    '    light: StylistSemanticFamilies;',
+    '    dark: StylistSemanticFamilies;',
+    '  };',
+    '  palettes: {',
+    '    bg: {',
+    '      light: StylistColorPalette;',
+    '      dark: StylistColorPalette;',
+    '    };',
+    '    automatic: {',
+    '      light: StylistColorPalette;',
+    '      dark: StylistColorPalette;',
+    '    };',
+    '  };',
     '  colors: {',
-    '    background: string;',
-    '    surface: string;',
-    '    text: string;',
-    '    primary: string;',
-    '    success: string;',
-    '    warning: string;',
+    '    light: StylistColorPalette;',
+    '    dark: StylistColorPalette;',
     '  };',
     '  typography: {',
     '    fontFamily: string;',
@@ -397,6 +597,47 @@ function ensureNumberInRange(
   }
 
   return Math.round(value * 1000) / 1000;
+}
+
+function ensureColorPalette(value: Record<string, unknown>, label: string): StylistColorPalette {
+  const palette: StylistColorPalette = {
+    background: ensureHexColor(value.background, `${label}.background`),
+    surface: ensureHexColor(value.surface, `${label}.surface`),
+    text: ensureHexColor(value.text, `${label}.text`),
+    primary: ensureHexColor(value.primary, `${label}.primary`),
+    secondary: ensureHexColor(value.secondary, `${label}.secondary`),
+    success: ensureHexColor(value.success, `${label}.success`),
+    warning: ensureHexColor(value.warning, `${label}.warning`),
+  };
+
+  return palette;
+}
+
+function ensureDistinctPalette(palette: StylistColorPalette, label: string): void {
+  if (palette.background === palette.surface) {
+    throw new Error(`${label}.background and ${label}.surface cannot match.`);
+  }
+}
+
+function ensureSemanticFamilies(value: Record<string, unknown>, label: string): StylistSemanticFamilies {
+  return {
+    primary: ensureNonEmptyString(value.primary, `${label}.primary`),
+    secondary: ensureNonEmptyString(value.secondary, `${label}.secondary`),
+    success: ensureNonEmptyString(value.success, `${label}.success`),
+    warning: ensureNonEmptyString(value.warning, `${label}.warning`),
+  };
+}
+
+function ensureEnumValue<T extends string>(
+  value: unknown,
+  label: string,
+  allowed: readonly T[]
+): T {
+  if (typeof value !== 'string' || !allowed.includes(value as T)) {
+    throw new Error(`${label} must be one of: ${allowed.join(', ')}.`);
+  }
+
+  return value as T;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
