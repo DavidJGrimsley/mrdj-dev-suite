@@ -62,6 +62,12 @@ describe('runOnboardCommand', () => {
       '## Monetization Strategy'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '## Must-Include Screens Or Flows'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '# TodoForContext(optional): List any known screens or flows that must be included in planning and implementation.'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '# TodoForContext(optional): Add monetization notes'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
@@ -98,7 +104,7 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'), 'utf8')
     ).resolves.toContain('ExpositionNotice');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen.tsx'), 'utf8')
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
     ).resolves.toContain('ExpositionNotice');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
@@ -107,16 +113,16 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'), 'utf8')
     ).resolves.toContain('temporary developer and client-research scaffolds');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'style-guide-screen.tsx'), 'utf8')
-    ).resolves.toContain('Style Guide');
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
+    ).resolves.toContain('Stylist');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Expo SQLite');
     await expect(readFile(path.join(projectPath, 'app', 'exposition', 'index.tsx'), 'utf8')).resolves.toContain(
       'exposition-screen'
     );
-    await expect(readFile(path.join(projectPath, 'app', 'exposition', 'style-guide.tsx'), 'utf8')).resolves.toContain(
-      'style-guide-screen'
+    await expect(readFile(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'), 'utf8')).resolves.toContain(
+      'stylist-screen'
     );
     await expect(readFile(path.join(projectPath, 'app', 'exposition', 'data.tsx'), 'utf8')).resolves.toContain(
       'data-screen'
@@ -129,7 +135,10 @@ describe('runOnboardCommand', () => {
       'Phase 0: Orientation And Planning'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'Play with styling in the style-guide page'
+      "Review styling in the 'Stylist' page"
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+      'Next Steps After Onboarding'
     );
     await expect(readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')).resolves.toContain(
       'build from `project/todo.md` in phase order'
@@ -191,6 +200,7 @@ describe('runOnboardCommand', () => {
       appName: 'Memory App',
       audience: 'Bowling league captains',
       coreFlows: 'Create league, invite players, publish brackets',
+      screens: 'Home, league detail, bracket editor',
       dataNeeds: 'Leagues, players, match results',
       deploymentTarget: 'Web first, mobile later',
       rich: false,
@@ -201,6 +211,7 @@ describe('runOnboardCommand', () => {
     expect(info).toContain('## Imported Notes');
     expect(info).toContain('Users are bowling league captains.');
     expect(info).toContain('## Monetization Strategy');
+    expect(info).toContain('## Must-Include Screens Or Flows');
 
     const style = await readFile(path.join(projectPath, 'project', 'style.md'), 'utf8');
     expect(style).toContain('## Brand/References');
@@ -664,6 +675,7 @@ function sampleAnswers(appName: string): OnboardAnswers {
     appName,
     audience: 'Expo app users',
     coreFlows: 'Onboarding, primary app workflow, settings',
+    screens: 'Home, onboarding, settings',
     dataNeeds: 'Local state first',
     deploymentTarget: 'Expo web/native deployment',
     advancedPackageSetup: true,

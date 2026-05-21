@@ -39,7 +39,14 @@ export interface GitSnapshot {
 }
 
 export interface ContinueRecommendation {
-  priority: 'not-onboarded' | 'todo-for-context' | 'doctor-errors' | 'dirty-git' | 'todo' | 'ci-ready';
+  priority:
+    | 'not-onboarded'
+    | 'todo-for-context'
+    | 'doctor-errors'
+    | 'dirty-git'
+    | 'phase-0-user-review'
+    | 'todo'
+    | 'ci-ready';
   title: string;
   plan: string[];
   requiresApproval: boolean;
@@ -206,6 +213,19 @@ export function chooseRecommendation(input: {
     };
   }
 
+  if (input.nextTodo && isPhase0Section(input.nextTodo.section)) {
+    return {
+      priority: 'phase-0-user-review',
+      title: 'Complete Phase 0 orientation before agent implementation work',
+      requiresApproval: true,
+      plan: [
+        "Phase 0 is not agent work but simple review by you before you get started to ensure the agent will help you create exactly the project you're envisioning.",
+        'Review Phase 0 items in project/todo.md and mark each one complete after your review decisions are done.',
+        'Run `mds continue` again once Phase 0 items are complete to move into implementation phases.',
+      ],
+    };
+  }
+
   if (input.nextTodo) {
     return {
       priority: 'todo',
@@ -304,6 +324,10 @@ function renderPlan(recommendation: ContinueRecommendation): string[] {
     '',
     'Plan approval required. Autopilot is intentionally reserved for a future command or flag.',
   ];
+}
+
+function isPhase0Section(section: string): boolean {
+  return /^phase\s*0\b/i.test(section.trim());
 }
 
 async function isOnboardedProject(projectPath: string): Promise<boolean> {

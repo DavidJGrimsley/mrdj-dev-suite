@@ -107,9 +107,21 @@ node packages/create-expo-super-stack/dist/cli.js my-app --expo-router
 node packages/create-expo-super-stack/dist/cli.js my-app --expo-router --mds-guidelines-template
 ```
 
+Defaults and non-interactive runs (optional):
+
+- `create-expo-super-stack` accepts `--mds-defaults=<comma-separated defaults>` to control which MDS defaults are scaffolded.
+- Interactive runs still ask the onboarding questions; there is no `--mds-save-defaults` / `--mds-no-save-defaults` flag.
+- Non-interactive runs (`--mds-yes`) use provided `--mds-*` answers plus built-in onboarding defaults where values are missing.
+
 #### Onboard
 
 `mds onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
+
+Defaults and non-interactive runs (optional):
+
+- `mds onboard` accepts `--defaults=<comma-separated defaults>` to control which MDS defaults are scaffolded.
+- Interactive runs still ask the onboarding questions; there is no `--save-defaults` flag.
+- Non-interactive runs (`--yes`) use provided answers plus built-in onboarding defaults where values are missing.
 
 #### MDS Continue
 

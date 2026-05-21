@@ -22,6 +22,7 @@ export interface OnboardArgv {
   appName?: string;
   audience?: string;
   coreFlows?: string;
+  screens?: string;
   dataNeeds?: string;
   deploymentTarget?: string;
   defaults?: string | string[];
@@ -207,6 +208,12 @@ export async function collectOnboardPlan(
       'If you know it already, what should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. Press Enter to let the agent derive this later.',
       seed.coreFlows
     ));
+  const screens =
+    argv.screens ??
+    (await askOptionalText(
+      'What screens do you know you will need in the app as of now?',
+      seed.screens ?? ''
+    ));
   const dataNeeds =
     argv.dataNeeds ??
     (await askDataNeeds(seed.dataNeeds));
@@ -371,6 +378,7 @@ export async function collectOnboardPlan(
       appName,
       audience,
       coreFlows,
+      screens,
       dataNeeds,
       deploymentTarget,
       advancedPackageSetup,
@@ -520,6 +528,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     appName: argv.appName ?? path.basename(projectPath),
     audience: argv.audience ?? 'Expo app users',
     coreFlows: argv.coreFlows ?? AGENT_DERIVED_CORE_FLOWS,
+    screens: argv.screens?.trim() || undefined,
     dataNeeds: argv.dataNeeds ?? 'Local state first; add backend only when needed',
     deploymentTarget: argv.deploymentTarget ?? 'Expo web/native deployment',
     advancedPackageSetup: argv.advancedSetup ?? true,
@@ -858,6 +867,15 @@ async function askText(message: string, fallback: string): Promise<string> {
   return handleCancel(answer).trim() || fallback;
 }
 
+async function askOptionalText(message: string, fallback = ''): Promise<string> {
+  const answer = await text({
+    message,
+    placeholder: fallback || 'Optional',
+    defaultValue: fallback || undefined,
+  });
+  return handleCancel(answer).trim();
+}
+
 async function askYesNo(message: string, fallback: boolean): Promise<boolean> {
   const answer = await select<boolean>({
     message,
@@ -951,11 +969,13 @@ function handleCancel<T>(value: T | symbol): T {
 }
 
 function printOnboardingNextSteps(): void {
-  console.log('Onboarding next steps:');
-  console.log('1. Play with styling in the style-guide page.');
-  console.log('2. Browse exposition pages to understand included base packages.');
+  console.log('Onboarding Phase 0 checklist:');
+  console.log('1. Browse exposition pages to understand included base packages.');
+  console.log("2. Review styling in the 'Stylist' page.");
   console.log('3. Review project/ files for accuracy and planning adjustments.');
-  console.log('4. Tell the agent to commence development phase by phase.');
+  console.log(
+    '4. Resolve every # TodoForContext(optional): marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+  );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }
 

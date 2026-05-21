@@ -195,6 +195,7 @@ describe('create-expo-super-stack CLI helpers', () => {
       '--mds-platform-layouts=platform-specific',
       '--mds-web-output=server',
       '--mds-deployed-server=standard-expo',
+      '--mds-screens=Home,Profile,Checkout',
       '--mds-no-create-expo-components',
       '--mds-latest-expo-sdk',
       '--mds-no-expo-ui',
@@ -210,6 +211,7 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(parsed.mds.platformLayouts).toBe('platform-specific');
     expect(parsed.mds.webOutput).toBe('server');
     expect(parsed.mds.deployedServer).toBe('standard-expo');
+    expect(parsed.mds.screens).toBe('Home,Profile,Checkout');
     expect(parsed.mds.createExpoComponents).toBe(false);
     expect(parsed.mds.latestExpoSdk).toBe(true);
     expect(parsed.mds.expoUi).toBe(false);

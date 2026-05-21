@@ -198,6 +198,10 @@ async function main(): Promise<void> {
             describe: 'Primary user flows',
             type: 'string',
           })
+          .option('screens', {
+            describe: 'Known screens that must be included in planning/implementation',
+            type: 'string',
+          })
           .option('data-needs', {
             describe: 'Expected data/backend needs',
             type: 'string',
