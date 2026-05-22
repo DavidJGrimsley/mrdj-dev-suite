@@ -324,6 +324,12 @@ function ensureReadableTextColor(
   return target;
 }
 
+function getReadableChipTextColor(background: string): string {
+  return contrastRatio('#ffffff', background) >= contrastRatio('#111827', background)
+    ? '#ffffff'
+    : '#111827';
+}
+
 function generateTailwindLikeScale(primaryHex: string): Record<TailwindShade, string> {
   const white = '#ffffff';
   const black = '#000000';
@@ -1196,8 +1202,7 @@ export default function StylistScreen() {
   }
 
   function applyNotoFonts() {
-    const notoRoles: Record<FontRoleKey, string> = {
-      fontDisplay: 'Noto Sans Display',
+    const notoRoles: Omit<Record<FontRoleKey, string>, 'fontDisplay'> = {
       fontTitle: 'Noto Sans Display',
       fontSubtitle: 'Noto Serif Display',
       fontBody: 'Noto Sans',
@@ -1206,7 +1211,7 @@ export default function StylistScreen() {
     };
 
     setExplicitFontRoles({
-      fontDisplay: true,
+      fontDisplay: false,
       fontTitle: true,
       fontSubtitle: true,
       fontBody: true,
@@ -1218,7 +1223,8 @@ export default function StylistScreen() {
       typography: {
         ...prev.typography,
         ...notoRoles,
-        fontFamily: notoRoles.fontDisplay,
+        fontDisplay: 'System',
+        fontFamily: 'System',
       },
     }));
   }
@@ -1389,7 +1395,9 @@ export default function StylistScreen() {
           <Text style={[styles.helperText, { color: controlTextColor }]}>
             {theme.colorSystem.mode === 'automatic'
               ? 'Automatic mode derives background, surface, and text from the primary color in real time.'
-              : `BG mode lets you set palette colors directly for the active ${activeScheme} scheme.`}
+              : theme.colorSystem.familyMode === 'one'
+                ? 'BG mode lets you set one shared palette for both light and dark previews.'
+                : `BG mode lets you set palette colors directly for the active ${activeScheme} scheme.`}
           </Text>
 
           {theme.colorSystem.mode === 'automatic' && colorInputMode === 'picker' ? (
@@ -1399,32 +1407,40 @@ export default function StylistScreen() {
             </Text>
           ) : null}
 
-          <View style={styles.colorRow}>
-            {paletteColorKeys.map((key) => {
-              const locked =
-                theme.colorSystem.mode === 'automatic' &&
-                colorInputMode === 'picker' &&
-                automaticLockedKeys.includes(key);
-              const isSelected = selectedColor === key;
+          {colorInputMode === 'picker' ? (
+            <View style={styles.colorRow}>
+              {paletteColorKeys.map((key) => {
+                const locked =
+                  theme.colorSystem.mode === 'automatic' &&
+                  colorInputMode === 'picker' &&
+                  automaticLockedKeys.includes(key);
+                const isSelected = selectedColor === key;
 
-              return (
-                <Pressable
-                  key={key}
-                  disabled={locked}
-                  onPress={() => setSelectedColor(key)}
-                  style={[
-                    styles.colorChip,
-                    {
-                      backgroundColor: editablePalette[key],
-                      borderColor: isSelected ? previewColors.text : '#9ca3af',
-                      opacity: locked ? 0.45 : 1,
-                    },
-                  ]}>
-                  <Text style={styles.colorChipLabel}>{key}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                return (
+                  <Pressable
+                    key={key}
+                    disabled={locked}
+                    onPress={() => setSelectedColor(key)}
+                    style={[
+                      styles.colorChip,
+                      {
+                        backgroundColor: editablePalette[key],
+                        borderColor: isSelected ? previewColors.text : '#9ca3af',
+                        opacity: locked ? 0.45 : 1,
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.colorChipLabel,
+                        { color: getReadableChipTextColor(editablePalette[key]) },
+                      ]}>
+                      {key}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
 
           {colorInputMode === 'picker' ? (
             <>
@@ -1469,14 +1485,36 @@ export default function StylistScreen() {
                     theme.colorSystem.mode === 'automatic'
                       ? null
                       : activeBgFamilyShades[key as PaletteColorKey];
+                  const familyChipColor =
+                    theme.colorSystem.mode === 'automatic'
+                      ? previewColors[key as SemanticColorKey]
+                      : editablePalette[key as PaletteColorKey];
 
                   return (
                     <View key={key} style={styles.familyRow}>
-                      <Text
-                        style={[
-                          styles.familyTitle,
-                          { color: previewColors.text },
-                        ]}>{`${key} family (${activeFamilyScheme})`}</Text>
+                      <View style={styles.familyHeader}>
+                        <View
+                          style={[
+                            styles.familyTitleChip,
+                            {
+                              backgroundColor: familyChipColor,
+                              borderColor: previewColors.text,
+                            },
+                          ]}>
+                          <Text
+                            style={[
+                              styles.familyTitleChipText,
+                              { color: getReadableChipTextColor(familyChipColor) },
+                            ]}>
+                            {key}
+                          </Text>
+                        </View>
+                        {theme.colorSystem.familyMode === 'two' ? (
+                          <Text style={[styles.familySchemeHint, { color: previewColors.text }]}>
+                            ({activeFamilyScheme})
+                          </Text>
+                        ) : null}
+                      </View>
                       <View style={styles.familyOptions}>
                         {tailwindFamilies.map((family) => (
                           <Pressable
@@ -2025,6 +2063,16 @@ function FontFamilyCombobox(props: {
     return props.options.filter((option) => option.toLowerCase().includes(q));
   }, [props.options, query]);
 
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== 'web') {
+      return;
+    }
+
+    for (const option of filteredOptions.slice(0, 80)) {
+      ensureWebFontLoaded(option);
+    }
+  }, [filteredOptions, isOpen]);
+
   function commitValue(next: string) {
     const normalized = normalizeFontFamilyName(next);
     if (!normalized) {
@@ -2090,7 +2138,13 @@ function FontFamilyCombobox(props: {
                       commitValue(option);
                     }}
                     style={styles.comboboxOption}>
-                    <Text style={styles.comboboxOptionText}>{option}</Text>
+                    <Text
+                      style={[
+                        styles.comboboxOptionText,
+                        { fontFamily: resolvePreviewFontFamily(option) },
+                      ]}>
+                      {option}
+                    </Text>
                   </Pressable>
                 ))
               )}
@@ -2368,9 +2422,32 @@ const styles = StyleSheet.create({
     height: 18,
     width: 18,
   },
+  familyHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   familyTitle: {
     fontSize: 12,
     fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  familyTitleChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  familyTitleChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+  familySchemeHint: {
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.72,
     textTransform: 'capitalize',
   },
   familyOptions: {
