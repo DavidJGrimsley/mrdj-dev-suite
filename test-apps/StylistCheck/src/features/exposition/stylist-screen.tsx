@@ -15,7 +15,7 @@ import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker
 import tailwindColors from 'tailwindcss/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnimatedPressable, ExpositionNotice } from '../../components/exposition';
+import { AnimatedPressable } from '../../components/exposition';
 import { EMBEDDED_GOOGLE_FONTS } from './embedded-fonts';
 import stylistThemeTokens, {
   type StylistColorMode,
@@ -1519,8 +1519,6 @@ export default function StylistScreen() {
             {fontFetchError ? <Text style={styles.fontError}>{fontFetchError}</Text> : null}
           </View>
         ) : null}
-        <ExpositionNotice />
-
         <View
           style={[
             styles.section,

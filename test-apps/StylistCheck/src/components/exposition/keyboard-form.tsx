@@ -1,7 +1,16 @@
-import { StyleSheet, TextInput } from 'react-native';
+import { Platform, StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView, KeyboardToolbar } from 'react-native-keyboard-controller';
 
 export function KeyboardForm() {
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.scroller, styles.form]}>
+        <TextInput placeholder="Project note" style={styles.input} />
+        <TextInput multiline placeholder="Details" style={[styles.input, styles.multiline]} />
+      </View>
+    );
+  }
+
   return (
     <>
       <KeyboardAwareScrollView bottomOffset={72} contentContainerStyle={styles.form} style={styles.scroller}>

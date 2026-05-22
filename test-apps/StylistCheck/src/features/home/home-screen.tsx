@@ -1,11 +1,11 @@
 import { Link } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { GestureCard, SvgMark } from '../../components/exposition';
+import { SvgMark } from '../../components/exposition';
 import { appSnapshot } from '../../data/mock-app';
 
 const expositionLinks = [
-  { href: '/exposition' as const, title: 'Package exposition', body: 'Review included base packages and decide what stays.' },
+  { href: '/exposition' as const, title: 'Software Mansion exposition', body: 'Review included base packages and decide what stays.' },
   { href: '/exposition/stylist' as const, title: 'Stylist', body: 'Test colors, type, motion, and component density.' },
   { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },
 ];
@@ -25,10 +25,6 @@ export default function HomeScreen() {
           </Pressable>
         </Link>
       </View>
-      <GestureCard
-        title="Rich boilerplate is wired"
-        body="Routes stay thin, feature screens hold UI, and the temporary exposition pages are reachable from this home screen."
-      />
       <View style={styles.grid}>
         <Link href="/onboarding" asChild>
           <Pressable style={styles.primaryCard}>
@@ -43,15 +39,6 @@ export default function HomeScreen() {
               <Text style={styles.linkBody}>{item.body}</Text>
             </Pressable>
           </Link>
-        ))}
-      </View>
-      <View style={styles.taskList}>
-        <Text style={styles.sectionTitle}>Generated next steps</Text>
-        {appSnapshot.tasks.map((task) => (
-          <View key={task.id} style={styles.taskCard}>
-            <Text style={styles.taskTitle}>{task.title}</Text>
-            <Text style={styles.taskStatus}>{task.status}</Text>
-          </View>
         ))}
       </View>
     </ScrollView>
@@ -134,31 +121,5 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     fontSize: 14,
     lineHeight: 20,
-  },
-  taskList: {
-    gap: 10,
-  },
-  sectionTitle: {
-    color: '#111827',
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  taskCard: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e5e7eb',
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 12,
-  },
-  taskTitle: {
-    color: '#111827',
-    fontWeight: "700",
-  },
-  taskStatus: {
-    color: '#6b7280',
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-    textTransform: "uppercase",
   },
 });

@@ -10,7 +10,11 @@ export function ScreensCard() {
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Native Screens</Text>
-      <Text style={styles.body}>react-native-screens is enabled so navigation can use native screen primitives for better memory and lifecycle behavior.</Text>
+      <Text style={styles.body}>
+        Expo Router in this create-expo-stack app uses React Navigation under the hood, including
+        packages like native-stack and bottom-tabs that rely on react-native-screens for native
+        view-controller behavior.
+      </Text>
     </View>
   );
 }
