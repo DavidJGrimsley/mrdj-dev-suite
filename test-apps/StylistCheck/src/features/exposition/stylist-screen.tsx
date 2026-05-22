@@ -1932,6 +1932,13 @@ export default function StylistScreen() {
           </View>
         </View>
 
+        <Pressable
+          onPress={saveTheme}
+          disabled={saving}
+          style={[styles.saveButton, { backgroundColor: previewColors.primary }]}>
+          <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
+        </Pressable>
+
         {saveMessage ? (
           <Text style={[styles.saveMessage, { color: previewColors.text }]}>{saveMessage}</Text>
         ) : null}

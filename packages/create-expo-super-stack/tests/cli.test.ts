@@ -16,6 +16,7 @@ import {
   parseArgs,
   prepareCreateExpoStackArgsForWrapper,
   repairExpoProjectIdentifiers,
+  repairExpoWebOutputForStylistLifecycle,
   repairMovedSrcAppImports,
   renderHelpText,
   resolveMissingWindowsTailwindOxideBinding,
@@ -333,6 +334,97 @@ describe('create-expo-super-stack CLI helpers', () => {
       const repaired = await readFile(tabsLayoutPath, 'utf8');
       expect(repaired).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
       expect(repaired).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('forces expo.web.output to server while stylist sync API route exists', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-stylist-server-'));
+    try {
+      await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+      await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'), 'export {};', 'utf8');
+      await writeFile(
+        path.join(projectPath, 'app.json'),
+        JSON.stringify({
+          expo: {
+            web: {
+              output: 'static',
+            },
+            platforms: ['ios', 'android', 'web'],
+          },
+        }),
+        'utf8',
+      );
+
+      await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'static')).resolves.toEqual([
+        path.join(projectPath, 'app.json'),
+      ]);
+
+      const repaired = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+        expo: { web: { output: string } };
+      };
+      expect(repaired.expo.web.output).toBe('server');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('restores preferred web output when stylist sync API route is absent', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-stylist-static-'));
+    try {
+      await mkdir(projectPath, { recursive: true });
+      await writeFile(
+        path.join(projectPath, 'app.json'),
+        JSON.stringify({
+          expo: {
+            web: {
+              output: 'server',
+            },
+            platforms: ['ios', 'android', 'web'],
+          },
+        }),
+        'utf8',
+      );
+
+      await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'static')).resolves.toEqual([
+        path.join(projectPath, 'app.json'),
+      ]);
+
+      const repaired = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+        expo: { web: { output: string } };
+      };
+      expect(repaired.expo.web.output).toBe('static');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('maps preferred spa output to expo single when stylist sync API route is absent', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-stylist-spa-'));
+    try {
+      await mkdir(projectPath, { recursive: true });
+      await writeFile(
+        path.join(projectPath, 'app.json'),
+        JSON.stringify({
+          expo: {
+            web: {
+              output: 'server',
+            },
+            platforms: ['web'],
+          },
+        }),
+        'utf8',
+      );
+
+      await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'spa')).resolves.toEqual([
+        path.join(projectPath, 'app.json'),
+      ]);
+
+      const repaired = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+        expo: { web: { output: string } };
+      };
+      expect(repaired.expo.web.output).toBe('single');
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

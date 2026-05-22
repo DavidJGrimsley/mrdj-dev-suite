@@ -56,8 +56,11 @@ export interface ParsedArgs {
 }
 
 type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+type OnboardWebOutput = 'static' | 'server' | 'spa' | 'none';
+type ExpoWebOutput = 'single' | 'static' | 'server';
 const DEFAULT_PROJECT_NAME = 'my-expo-app';
 const CURRENT_EXPO_SDK_MAJOR = 55;
+const STYLIST_SYNC_API_ROUTES = ['app/exposition/stylist-sync+api.ts', 'src/app/exposition/stylist-sync+api.ts'] as const;
 
 interface CommandSpec {
   command: string;
@@ -111,6 +114,9 @@ export async function main(): Promise<void> {
     richBoilerplate: plan.richBoilerplate,
   });
   const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName, plan.answers.targetPlatforms);
+  const stylistWebOutputRepairs = plan.answers.targetPlatforms.includes('web')
+    ? await repairExpoWebOutputForStylistLifecycle(projectPath, plan.answers.webOutput)
+    : [];
 
   console.log();
   console.log('MDS onboarding complete.');
@@ -124,6 +130,9 @@ export async function main(): Promise<void> {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   for (const result of identifierRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of stylistWebOutputRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   if (plan.saveDefaults) {
@@ -860,6 +869,78 @@ export async function repairExpoProjectIdentifiers(
 
   await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
   return [appJsonPath];
+}
+
+export async function repairExpoWebOutputForStylistLifecycle(
+  projectPath: string,
+  preferredWebOutput: OnboardWebOutput = 'static'
+): Promise<string[]> {
+  const appJsonPath = path.join(projectPath, 'app.json');
+  const raw = await readOptionalText(appJsonPath);
+  if (!raw) {
+    return [];
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value = JSON.parse(raw) as unknown;
+    parsed = isRecord(value) ? value : {};
+  } catch {
+    return [];
+  }
+
+  const expo = isRecord(parsed.expo) ? parsed.expo : undefined;
+  if (!expo) {
+    return [];
+  }
+
+  const hasWebPlatform =
+    !Array.isArray(expo.platforms) || expo.platforms.some((platform) => readString(platform) === 'web');
+  if (!hasWebPlatform) {
+    return [];
+  }
+
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  const preferred = normalizeExpoWebOutput(preferredWebOutput);
+  const desiredOutput: ExpoWebOutput = hasStylistSyncRoute ? 'server' : preferred;
+
+  const webConfig = isRecord(expo.web) ? expo.web : {};
+  const currentOutput = readString(webConfig.output);
+  if (currentOutput === desiredOutput) {
+    return [];
+  }
+
+  expo.web = {
+    ...webConfig,
+    output: desiredOutput,
+  };
+
+  await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+  return [appJsonPath];
+}
+
+async function hasStylistSyncApiRoute(projectPath: string): Promise<boolean> {
+  for (const relativeRoutePath of STYLIST_SYNC_API_ROUTES) {
+    if (await pathExists(path.join(projectPath, relativeRoutePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function normalizeExpoWebOutput(value: OnboardWebOutput): ExpoWebOutput {
+  switch (value) {
+    case 'server':
+      return 'server';
+    case 'spa':
+      return 'single';
+    case 'none':
+      return 'static';
+    case 'static':
+    default:
+      return 'static';
+  }
 }
 
 async function findProjectFromCesConfig(cwd: string, projectName: string): Promise<string | null> {

@@ -13,7 +13,7 @@ import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
-import { runStylistSyncCommand } from './commands/stylist.js';
+import { runStylistReconcileOutputCommand, runStylistSyncCommand } from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
@@ -25,7 +25,7 @@ import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
-import type { StylistSyncArgv } from './commands/stylist.js';
+import type { StylistReconcileOutputArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -324,6 +324,29 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runStylistSyncCommand(argv as StylistSyncArgv);
+      }
+    )
+    .command(
+      'stylist reconcile-output [path]',
+      'Reconcile expo.web.output for Stylist lifecycle (server while Stylist API route exists, preferred mode after removal)',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('preferred', {
+            describe: 'Override preferred project web output (defaults to project/info.md)',
+            choices: ['static', 'server', 'spa', 'none'] as const,
+          })
+          .option('json', {
+            describe: 'Print reconciliation result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runStylistReconcileOutputCommand(argv as StylistReconcileOutputArgv);
       }
     )
     .command(

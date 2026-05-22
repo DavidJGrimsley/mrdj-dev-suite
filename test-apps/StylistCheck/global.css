@@ -3,14 +3,14 @@
 
 /* MDS_STYLIST_THEME_START */
 :root {
-  --color-background: #62748e;
-  --color-surface: #f3f4f6;
-  --color-typography: #0f172b;
-  --color-primary: #2b7fff;
-  --color-secondary: #2b7fff;
-  --color-success: #00bc7d;
+  --color-background: #f2fbfc;
+  --color-surface: #e0f6f7;
+  --color-typography: #003a3c;
+  --color-primary: #00b6bb;
+  --color-secondary: #fb2c36;
+  --color-success: #737373;
   --color-warning: #fe9a00;
-  --radius-md: 12px;
+  --radius-md: 25px;
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-4: 16px;
@@ -24,12 +24,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #62748e;
-    --color-surface: #f3f4f6;
-    --color-typography: #0f172b;
-    --color-primary: #2b7fff;
-    --color-secondary: #2b7fff;
-    --color-success: #00bc7d;
+    --color-background: #002425;
+    --color-surface: #003a3c;
+    --color-typography: #bdeced;
+    --color-primary: #00b6bb;
+    --color-secondary: #fb2c36;
+    --color-success: #737373;
     --color-warning: #fe9a00;
   }
 }

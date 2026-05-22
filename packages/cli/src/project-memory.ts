@@ -865,6 +865,9 @@ async function ensurePackageJson(
       packageJson.scripts?.['mds:doctor:ci'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
     'mds:stylist:sync':
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
+    'mds:stylist:reconcile-output':
+      packageJson.scripts?.['mds:stylist:reconcile-output'] ??
+      `${MDS_NPX_COMMAND} stylist reconcile-output .`,
     'free-port': packageJson.scripts?.['free-port'] ?? `${MDS_NPX_COMMAND} free-port`,
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? `${MDS_NPX_COMMAND} clear-expo-start`,

@@ -66,28 +66,28 @@ export interface StylistThemeTokens {
 export const stylistThemeTokens: StylistThemeTokens = {
   "version": 1,
   "colorSystem": {
-    "mode": "bg",
-    "previewScheme": "light",
+    "mode": "automatic",
+    "previewScheme": "dark",
     "familyMode": "one"
   },
   "families": {
     "light": {
-      "primary": "neutral",
-      "secondary": "violet",
-      "success": "emerald",
+      "primary": "teal",
+      "secondary": "red",
+      "success": "neutral",
       "warning": "amber"
     },
     "dark": {
-      "primary": "neutral",
-      "secondary": "violet",
-      "success": "emerald",
+      "primary": "teal",
+      "secondary": "red",
+      "success": "neutral",
       "warning": "amber"
     }
   },
   "palettes": {
     "bg": {
       "light": {
-        "background": "#62748e",
+        "background": "#ff6900",
         "surface": "#f3f4f6",
         "text": "#0f172b",
         "primary": "#2b7fff",
@@ -96,7 +96,7 @@ export const stylistThemeTokens: StylistThemeTokens = {
         "warning": "#fe9a00"
       },
       "dark": {
-        "background": "#62748e",
+        "background": "#ff6900",
         "surface": "#f3f4f6",
         "text": "#0f172b",
         "primary": "#2b7fff",
@@ -107,42 +107,42 @@ export const stylistThemeTokens: StylistThemeTokens = {
     },
     "automatic": {
       "light": {
-        "background": "#fafafa",
-        "surface": "#f5f5f5",
-        "text": "#171717",
-        "primary": "#737373",
-        "secondary": "#8e51ff",
-        "success": "#00bc7d",
+        "background": "#f2fbfc",
+        "surface": "#e0f6f7",
+        "text": "#003a3c",
+        "primary": "#00b6bb",
+        "secondary": "#fb2c36",
+        "success": "#737373",
         "warning": "#fe9a00"
       },
       "dark": {
-        "background": "#0a0a0a",
-        "surface": "#171717",
-        "text": "#e5e5e5",
-        "primary": "#737373",
-        "secondary": "#8e51ff",
-        "success": "#00bc7d",
+        "background": "#002425",
+        "surface": "#003a3c",
+        "text": "#bdeced",
+        "primary": "#00b6bb",
+        "secondary": "#fb2c36",
+        "success": "#737373",
         "warning": "#fe9a00"
       }
     }
   },
   "colors": {
     "light": {
-      "background": "#62748e",
-      "surface": "#f3f4f6",
-      "text": "#0f172b",
-      "primary": "#2b7fff",
-      "secondary": "#2b7fff",
-      "success": "#00bc7d",
+      "background": "#f2fbfc",
+      "surface": "#e0f6f7",
+      "text": "#003a3c",
+      "primary": "#00b6bb",
+      "secondary": "#fb2c36",
+      "success": "#737373",
       "warning": "#fe9a00"
     },
     "dark": {
-      "background": "#62748e",
-      "surface": "#f3f4f6",
-      "text": "#0f172b",
-      "primary": "#2b7fff",
-      "secondary": "#2b7fff",
-      "success": "#00bc7d",
+      "background": "#002425",
+      "surface": "#003a3c",
+      "text": "#bdeced",
+      "primary": "#00b6bb",
+      "secondary": "#fb2c36",
+      "success": "#737373",
       "warning": "#fe9a00"
     }
   },
@@ -154,7 +154,7 @@ export const stylistThemeTokens: StylistThemeTokens = {
     "captionSize": 12
   },
   "layout": {
-    "radius": 12,
+    "radius": 25,
     "spacing": {
       "xs": 4,
       "sm": 8,

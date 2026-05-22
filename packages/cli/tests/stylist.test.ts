@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { runStylistSyncCommand } from '../src/commands/stylist.js';
+import { runStylistReconcileOutputCommand, runStylistSyncCommand } from '../src/commands/stylist.js';
 
 const tempDirs: string[] = [];
 
@@ -286,5 +286,65 @@ describe('runStylistSyncCommand', () => {
     await expect(readFile(path.join(projectPath, 'src', 'theme', 'tokens.ts'), 'utf8')).resolves.toContain(
       'StylistThemeTokens'
     );
+  });
+
+  it('forces app.json web.output to server when stylist sync API route exists', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-output-server-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Info\n\n## Platforms\n\n- Web output: static\n',
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'), 'export {};', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          web: {
+            output: 'static',
+          },
+        },
+      }),
+      'utf8'
+    );
+
+    await runStylistReconcileOutputCommand({ path: projectPath });
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: { web: { output: string } };
+    };
+    expect(appJson.expo.web.output).toBe('server');
+  });
+
+  it('restores preferred static output after stylist sync API route is removed', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-output-static-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Info\n\n## Platforms\n\n- Web output: static\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          web: {
+            output: 'server',
+          },
+        },
+      }),
+      'utf8'
+    );
+
+    await runStylistReconcileOutputCommand({ path: projectPath });
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: { web: { output: string } };
+    };
+    expect(appJson.expo.web.output).toBe('static');
   });
 });
