@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -29,6 +30,7 @@ type SemanticColorKey = keyof StylistSemanticFamilies;
 type PaletteColorKey = keyof StylistColorPalette;
 type TailwindShade = 50 | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 950;
 type ColorInputMode = 'picker' | 'families';
+type WritePolicy = 'managed' | 'overwrite';
 type PaletteFamilies = Record<PaletteColorKey, TailwindColorFamily>;
 type PaletteShades = Record<PaletteColorKey, TailwindShade>;
 type LivePickerPreview = {
@@ -728,6 +730,9 @@ export default function StylistScreen() {
   const [saveMessage, setSaveMessage] = useState('');
   const [nativeDraft, setNativeDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [writePolicy, setWritePolicy] = useState<WritePolicy | null>(null);
+  const [showWritePolicyModal, setShowWritePolicyModal] = useState(false);
+  const [writePolicyLoaded, setWritePolicyLoaded] = useState(Platform.OS !== 'web');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [storedApiKey, setStoredApiKey] = useState('');
   const [fontBannerDismissed, setFontBannerDismissed] = useState(false);
@@ -743,6 +748,63 @@ export default function StylistScreen() {
     fontCaption: false,
     fontMono: false,
   });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    let cancelled = false;
+    async function hydrateWritePolicy() {
+      try {
+        const response = await fetch('/exposition/stylist-sync');
+        if (!response.ok) {
+          if (!cancelled) {
+            setWritePolicyLoaded(true);
+          }
+          return;
+        }
+        const payload = (await response.json()) as {
+          hasConfig?: boolean;
+          writePolicy?: WritePolicy;
+          theme?: StylistThemeTokens;
+          mismatchDetected?: boolean;
+          themeSource?: 'theme.json' | 'style.md' | 'default';
+        };
+        if (cancelled) {
+          return;
+        }
+        if (payload.theme) {
+          setTheme(
+            withFontFamilyAlias(
+              normalizeThemeTypography(
+                reconcileTheme(payload.theme, 'picker', defaultBgFamilies, defaultBgFamilyShades)
+              )
+            )
+          );
+        }
+        if (payload.hasConfig && payload.writePolicy) {
+          setWritePolicy(payload.writePolicy);
+        }
+        if (payload.mismatchDetected) {
+          setSaveMessage(
+            'Detected mismatch between project/theme.json and style.md managed block. Using project/theme.json.'
+          );
+        } else if (payload.themeSource === 'style.md') {
+          setSaveMessage('Loaded theme from project/style.md managed block.');
+        }
+      } finally {
+        if (!cancelled) {
+          setWritePolicyLoaded(true);
+        }
+      }
+    }
+
+    void hydrateWritePolicy();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeScheme = theme.colorSystem.previewScheme;
   const basePreviewColors = theme.colors[activeScheme];
@@ -1256,8 +1318,9 @@ export default function StylistScreen() {
     setFontBannerDismissed(true);
   }
 
-  async function saveTheme() {
+  async function saveTheme(policyOverride?: WritePolicy) {
     const payloadTheme = withFontFamilyAlias(theme);
+    const resolvedPolicy = policyOverride ?? writePolicy ?? 'managed';
     setSaving(true);
     setSaveMessage('');
     try {
@@ -1265,16 +1328,23 @@ export default function StylistScreen() {
         const response = await fetch('/exposition/stylist-sync', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(payloadTheme),
+          body: JSON.stringify({
+            theme: payloadTheme,
+            metadata: {
+              writePolicy: resolvedPolicy,
+            },
+          }),
         });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload?.error ?? 'Stylist sync failed.');
         }
+        setWritePolicy(payload.writePolicy ?? resolvedPolicy);
         setSaveMessage(`Synced ${payload.updatedFiles?.length ?? 0} files from Stylist.`);
       } else {
         const draft = JSON.stringify(payloadTheme, null, 2);
         setNativeDraft(draft);
+        setWritePolicy(resolvedPolicy);
         setSaveMessage(
           'Draft saved in Stylist. Run the sync command from your project root terminal.'
         );
@@ -1287,6 +1357,27 @@ export default function StylistScreen() {
       setSaving(false);
     }
   }
+
+  function handleSaveThemePress() {
+    if (saving) {
+      return;
+    }
+
+    if (Platform.OS === 'web' && writePolicyLoaded && !writePolicy) {
+      setShowWritePolicyModal(true);
+      return;
+    }
+
+    void saveTheme();
+  }
+
+  function chooseWritePolicyAndSave(nextPolicy: WritePolicy) {
+    setWritePolicy(nextPolicy);
+    setShowWritePolicyModal(false);
+    void saveTheme(nextPolicy);
+  }
+
+  const nativeSaveCommand = `${NATIVE_SAVE_COMMAND} --write-policy ${writePolicy ?? 'managed'}`;
 
   return (
     <View style={styles.root}>
@@ -1306,7 +1397,7 @@ export default function StylistScreen() {
             {'StylistCheck Stylist'}
           </Text>
           <Pressable
-            onPress={saveTheme}
+            onPress={handleSaveThemePress}
             disabled={saving}
             style={[
               styles.saveButton,
@@ -1933,7 +2024,7 @@ export default function StylistScreen() {
         </View>
 
         <Pressable
-          onPress={saveTheme}
+          onPress={handleSaveThemePress}
           disabled={saving}
           style={[styles.saveButton, { backgroundColor: previewColors.primary }]}>
           <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
@@ -1946,11 +2037,39 @@ export default function StylistScreen() {
           <View style={styles.nativeHelp}>
             <Text style={styles.nativeTitle}>Native fallback</Text>
             <Text style={styles.nativeBody}>Run this command in your app root terminal:</Text>
-            <Text style={styles.command}>{NATIVE_SAVE_COMMAND}</Text>
+            <Text style={styles.command}>{nativeSaveCommand}</Text>
             {nativeDraft ? <Text style={styles.payload}>{nativeDraft}</Text> : null}
           </View>
         ) : null}
       </ScrollView>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showWritePolicyModal}
+        onRequestClose={() => setShowWritePolicyModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Choose Save Behavior</Text>
+            <Text style={styles.modalBody}>
+              Managed updates only Stylist-owned token blocks. Overwrite regenerates the full
+              style-library target file.
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => chooseWritePolicyAndSave('managed')}
+                style={[styles.modalButton, styles.modalButtonPrimary]}>
+                <Text style={styles.modalButtonPrimaryText}>Managed (Recommended)</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => chooseWritePolicyAndSave('overwrite')}
+                style={[styles.modalButton, styles.modalButtonSecondary]}>
+                <Text style={styles.modalButtonSecondaryText}>Overwrite Full File</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View
         style={[
@@ -2676,5 +2795,60 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     lineHeight: 16,
+  },
+  modalBackdrop: {
+    backgroundColor: 'rgba(15, 23, 42, 0.48)',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 10,
+    maxWidth: 420,
+    padding: 16,
+    width: '100%',
+  },
+  modalTitle: {
+    color: '#0f172a',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  modalBody: {
+    color: '#334155',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  modalActions: {
+    gap: 8,
+  },
+  modalButton: {
+    borderRadius: 10,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#0f172a',
+  },
+  modalButtonSecondary: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    borderWidth: 1,
+  },
+  modalButtonPrimaryText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  modalButtonSecondaryText: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -13,7 +13,11 @@ import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
-import { runStylistReconcileOutputCommand, runStylistSyncCommand } from './commands/stylist.js';
+import {
+  runStylistEjectCommand,
+  runStylistReconcileOutputCommand,
+  runStylistSyncCommand,
+} from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
@@ -25,7 +29,11 @@ import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
-import type { StylistReconcileOutputArgv, StylistSyncArgv } from './commands/stylist.js';
+import type {
+  StylistEjectArgv,
+  StylistReconcileOutputArgv,
+  StylistSyncArgv,
+} from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -301,7 +309,7 @@ async function main(): Promise<void> {
     )
     .command(
       'stylist sync [path]',
-      'Sync canonical stylist tokens into project/style.md, global.css, and src/theme/tokens.ts',
+      'Sync canonical stylist tokens and style-library-specific outputs',
       (builder) =>
         builder
           .positional('path', {
@@ -321,9 +329,64 @@ async function main(): Promise<void> {
             describe: 'Print sync result as JSON',
             type: 'boolean',
             default: false,
+          })
+          .option('style-library', {
+            describe: 'Style library adapter (auto-detected by default)',
+            choices: [
+              'auto',
+              'uniwind',
+              'nativewind',
+              'nativewindui',
+              'unistyles',
+              'restyle',
+              'tamagui',
+              'stylesheet',
+            ] as const,
+            default: 'auto' as const,
+          })
+          .option('write-policy', {
+            describe: 'How stylist manages style-library files',
+            choices: ['managed', 'overwrite'] as const,
           }),
       async (argv) => {
         await runStylistSyncCommand(argv as StylistSyncArgv);
+      }
+    )
+    .command(
+      'stylist eject [path]',
+      'Sync theme tokens, remove Stylist UI/API artifacts, and restore project output/platform settings',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('style-library', {
+            describe: 'Style library adapter (auto-detected by default)',
+            choices: [
+              'auto',
+              'uniwind',
+              'nativewind',
+              'nativewindui',
+              'unistyles',
+              'restyle',
+              'tamagui',
+              'stylesheet',
+            ] as const,
+            default: 'auto' as const,
+          })
+          .option('write-policy', {
+            describe: 'How stylist manages style-library files',
+            choices: ['managed', 'overwrite'] as const,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runStylistEjectCommand(argv as StylistEjectArgv);
       }
     )
     .command(
