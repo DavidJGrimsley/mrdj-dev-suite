@@ -52,14 +52,14 @@ The block below mirrors `project/theme.json` and is managed by `mds stylist sync
   },
   "families": {
     "light": {
-      "primary": "teal",
-      "secondary": "red",
+      "primary": "blue",
+      "secondary": "yellow",
       "success": "neutral",
       "warning": "amber"
     },
     "dark": {
-      "primary": "teal",
-      "secondary": "red",
+      "primary": "blue",
+      "secondary": "yellow",
       "success": "neutral",
       "warning": "amber"
     }
@@ -70,7 +70,7 @@ The block below mirrors `project/theme.json` and is managed by `mds stylist sync
         "background": "#ff6900",
         "surface": "#f3f4f6",
         "text": "#0f172b",
-        "primary": "#2b7fff",
+        "primary": "#0000FF",
         "secondary": "#2b7fff",
         "success": "#00bc7d",
         "warning": "#fe9a00"
@@ -79,7 +79,7 @@ The block below mirrors `project/theme.json` and is managed by `mds stylist sync
         "background": "#ff6900",
         "surface": "#f3f4f6",
         "text": "#0f172b",
-        "primary": "#2b7fff",
+        "primary": "#0000ff",
         "secondary": "#2b7fff",
         "success": "#00bc7d",
         "warning": "#fe9a00"
@@ -90,8 +90,8 @@ The block below mirrors `project/theme.json` and is managed by `mds stylist sync
         "background": "#f2fbfc",
         "surface": "#e0f6f7",
         "text": "#003a3c",
-        "primary": "#00b6bb",
-        "secondary": "#fb2c36",
+        "primary": "#0000FF",
+        "secondary": "#ffff00",
         "success": "#737373",
         "warning": "#fe9a00"
       },
@@ -99,8 +99,8 @@ The block below mirrors `project/theme.json` and is managed by `mds stylist sync
         "background": "#002425",
         "surface": "#003a3c",
         "text": "#bdeced",
-        "primary": "#00b6bb",
-        "secondary": "#fb2c36",
+        "primary": "#0000FF",
+        "secondary": "#ffff00",
         "success": "#737373",
         "warning": "#fe9a00"
       }

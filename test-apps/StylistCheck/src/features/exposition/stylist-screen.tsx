@@ -58,6 +58,7 @@ type StylistTypographyRoles = {
 type ExtendedStylistThemeTokens = Omit<StylistThemeTokens, 'typography'> & {
   typography: StylistThemeTokens['typography'] & StylistTypographyRoles;
 };
+type TopToggleHelpKey = 'colorMode' | 'preview' | 'familyStrategy';
 
 type TailwindColorFamily =
   | 'slate'
@@ -214,6 +215,20 @@ const pickerSwatches = [
 const tailwindPalette = tailwindColors as Record<string, Partial<Record<TailwindShade, string>>>;
 const automaticLockedKeys: PaletteColorKey[] = ['background', 'surface', 'text'];
 const shadeOptions: TailwindShade[] = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+const topToggleHelpCopy: Record<TopToggleHelpKey, { title: string; body: string }> = {
+  colorMode: {
+    title: 'Color Mode',
+    body: 'Automatic derives background, surface, and text from primary. BG Color lets you set each palette color directly.',
+  },
+  preview: {
+    title: 'Preview',
+    body: 'Preview switches light/dark editing context. Saved tokens still include both schemes.',
+  },
+  familyStrategy: {
+    title: 'Family Strategy',
+    body: '1 family mirrors semantic color families across light and dark. 2 families lets each scheme use its own family mapping.',
+  },
+};
 
 const defaultBgFamilies: Record<StylistColorScheme, PaletteFamilies> = {
   light: {
@@ -603,6 +618,32 @@ function isLockedAutomaticPickerKey(
   return mode === 'automatic' && inputMode === 'picker' && automaticLockedKeys.includes(key);
 }
 
+function sanitizeHexDraftInput(raw: string): string {
+  const hexOnly = raw.trim().replace(/[^0-9a-fA-F]/g, '').slice(0, 6).toLowerCase();
+  return `#${hexOnly}`;
+}
+
+function isCommitReadyHex(raw: string): boolean {
+  const length = sanitizeHexDraftInput(raw).slice(1).length;
+  return length === 3 || length === 6;
+}
+
+function isImmediateApplyHex(raw: string): boolean {
+  return sanitizeHexDraftInput(raw).slice(1).length === 6;
+}
+
+function normalizeHexForTheme(raw: string): string {
+  const sanitized = sanitizeHexDraftInput(raw);
+  const hexBody = sanitized.slice(1);
+  if (hexBody.length === 3) {
+    return `#${hexBody
+      .split('')
+      .map((char) => `${char}${char}`)
+      .join('')}`;
+  }
+  return sanitized;
+}
+
 function normalizeFontFamilyName(value: string): string {
   return value.replace(/^['"]|['"]$/g, '').trim();
 }
@@ -726,12 +767,14 @@ export default function StylistScreen() {
     )
   );
   const [selectedColor, setSelectedColor] = useState<PaletteColorKey>('primary');
+  const [pickerHexDraft, setPickerHexDraft] = useState('#');
   const [livePickerPreview, setLivePickerPreview] = useState<LivePickerPreview | null>(null);
   const [saveMessage, setSaveMessage] = useState('');
   const [nativeDraft, setNativeDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const [writePolicy, setWritePolicy] = useState<WritePolicy | null>(null);
   const [showWritePolicyModal, setShowWritePolicyModal] = useState(false);
+  const [activeTopToggleHelp, setActiveTopToggleHelp] = useState<TopToggleHelpKey | null>(null);
   const [writePolicyLoaded, setWritePolicyLoaded] = useState(Platform.OS !== 'web');
   const [apiKeyDraft, setApiKeyDraft] = useState('');
   const [storedApiKey, setStoredApiKey] = useState('');
@@ -786,9 +829,9 @@ export default function StylistScreen() {
         if (payload.hasConfig && payload.writePolicy) {
           setWritePolicy(payload.writePolicy);
         }
-        if (payload.mismatchDetected) {
+        if (payload.themeSource === 'style.md' && payload.mismatchDetected) {
           setSaveMessage(
-            'Detected mismatch between project/theme.json and style.md managed block. Using project/theme.json.'
+            'Detected mismatch between project/style.md managed block and project/theme.json. Loaded project/style.md by startup priority.'
           );
         } else if (payload.themeSource === 'style.md') {
           setSaveMessage('Loaded theme from project/style.md managed block.');
@@ -865,6 +908,8 @@ export default function StylistScreen() {
       [livePickerPreview.key]: livePickerPreview.hex,
     };
   }, [baseEditablePalette, livePickerMatchesActiveView, livePickerPreview]);
+  const pickerTargetKey = getPickerTargetKey();
+  const pickerDisplayHex = editablePalette[pickerTargetKey].toLowerCase();
   const activeFamilyScheme: StylistColorScheme =
     theme.colorSystem.familyMode === 'one' ? 'light' : activeScheme;
   const activeFamilies = theme.families[activeFamilyScheme];
@@ -931,6 +976,10 @@ export default function StylistScreen() {
       setSelectedColor('primary');
     }
   }, [colorInputMode, selectedColor, theme.colorSystem.mode]);
+
+  useEffect(() => {
+    setPickerHexDraft(pickerDisplayHex);
+  }, [pickerDisplayHex]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1246,6 +1295,27 @@ export default function StylistScreen() {
     updateManualColor(targetKey, nextHex);
   }
 
+  function handlePickerHexChange(raw: string) {
+    const nextDraft = sanitizeHexDraftInput(raw);
+    setPickerHexDraft(nextDraft);
+    if (!isImmediateApplyHex(nextDraft)) {
+      return;
+    }
+    const nextHex = normalizeHexForTheme(nextDraft);
+    setPickerHexDraft(nextHex);
+    applyPickerColor(nextHex);
+  }
+
+  function commitPickerHexDraft() {
+    if (!isCommitReadyHex(pickerHexDraft)) {
+      setPickerHexDraft(pickerDisplayHex);
+      return;
+    }
+    const nextHex = normalizeHexForTheme(pickerHexDraft);
+    setPickerHexDraft(nextHex);
+    applyPickerColor(nextHex);
+  }
+
   function updateFontRole(role: FontRoleKey, fontFamily: string) {
     const normalized = normalizeFontFamilyName(fontFamily);
     if (!normalized) {
@@ -1536,7 +1606,7 @@ export default function StylistScreen() {
           {colorInputMode === 'picker' ? (
             <>
               <ColorPicker
-                value={baseEditablePalette[selectedColor]}
+                value={baseEditablePalette[pickerTargetKey]}
                 onChangeJS={({ hex }: { hex: string }) => {
                   previewPickerColor(hex);
                 }}
@@ -1548,6 +1618,25 @@ export default function StylistScreen() {
                 <Panel1 />
                 <HueSlider />
               </ColorPicker>
+              <View style={styles.pickerHexRow}>
+                <Text style={styles.pickerHexLabel}>Hex</Text>
+                <TextInput
+                  value={pickerHexDraft}
+                  onChangeText={handlePickerHexChange}
+                  onBlur={commitPickerHexDraft}
+                  onSubmitEditing={commitPickerHexDraft}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  maxLength={7}
+                  style={[
+                    styles.input,
+                    styles.pickerHexInput,
+                    { color: '#111827', borderColor: previewColors.primary },
+                  ]}
+                  placeholder="#rrggbb"
+                  placeholderTextColor="#6b7280"
+                />
+              </View>
               <View style={styles.manualSwatchesRow}>
                 {pickerSwatches.map((swatch) => (
                   <Pressable
@@ -2085,33 +2174,77 @@ export default function StylistScreen() {
           options={colorModeOptions}
           value={theme.colorSystem.mode}
           onChange={(value) => updateColorMode(value as StylistColorMode)}
+          infoText={topToggleHelpCopy.colorMode.body}
+          onPressInfo={() => setActiveTopToggleHelp('colorMode')}
         />
         <ToggleRow
           label="Preview"
           options={schemeKeys.map((scheme) => ({ label: scheme, value: scheme }))}
           value={theme.colorSystem.previewScheme}
           onChange={(value) => updatePreviewScheme(value as StylistColorScheme)}
+          infoText={topToggleHelpCopy.preview.body}
+          onPressInfo={() => setActiveTopToggleHelp('preview')}
         />
         <ToggleRow
           label="Family Strategy"
           options={familyModeOptions}
           value={theme.colorSystem.familyMode}
           onChange={(value) => updateFamilyMode(value as StylistFamilyMode)}
+          infoText={topToggleHelpCopy.familyStrategy.body}
+          onPressInfo={() => setActiveTopToggleHelp('familyStrategy')}
         />
       </View>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={Boolean(activeTopToggleHelp)}
+        onRequestClose={() => setActiveTopToggleHelp(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {activeTopToggleHelp ? topToggleHelpCopy[activeTopToggleHelp].title : 'Toggle Help'}
+            </Text>
+            <Text style={styles.modalBody}>
+              {activeTopToggleHelp
+                ? topToggleHelpCopy[activeTopToggleHelp].body
+                : 'No toggle help selected.'}
+            </Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setActiveTopToggleHelp(null)}
+                style={[styles.modalButton, styles.modalButtonPrimary]}>
+                <Text style={styles.modalButtonPrimaryText}>Close</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 function ToggleRow(props: {
   label: string;
+  infoText: string;
   value: string;
   options: Array<{ label: string; value: string }>;
   onChange: (value: string) => void;
+  onPressInfo: () => void;
 }) {
   return (
     <View style={styles.toggleRow}>
-      <Text style={styles.toggleLabel}>{props.label}</Text>
+      <View style={styles.toggleLabelRow}>
+        <Text style={styles.toggleLabel}>{props.label}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${props.label} explanation`}
+          accessibilityHint={props.infoText}
+          onPress={props.onPressInfo}
+          style={styles.toggleInfoButton}>
+          <Text style={styles.toggleInfoButtonText}>i</Text>
+        </Pressable>
+      </View>
       <View style={styles.toggleOptions}>
         {props.options.map((option) => {
           const isSelected = props.value === option.value;
@@ -2323,6 +2456,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  toggleLabelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  toggleInfoButton: {
+    alignItems: 'center',
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 20,
+    justifyContent: 'center',
+    width: 20,
+  },
+  toggleInfoButtonText: {
+    color: '#111827',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   toggleOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2512,6 +2664,22 @@ const styles = StyleSheet.create({
   picker: {
     gap: 12,
     width: '100%',
+  },
+  pickerHexRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pickerHexLabel: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  pickerHexInput: {
+    flex: 1,
+    fontFamily: 'monospace',
+    minHeight: 38,
   },
   manualSwatchesRow: {
     flexDirection: 'row',

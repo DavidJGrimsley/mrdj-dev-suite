@@ -38,8 +38,8 @@ export async function GET() {
 
   const themeFromJson = await readThemeJson(themePath);
   const themeFromStyle = await readThemeFromStyleMarkdown(stylePath);
-  const resolvedTheme = themeFromJson ?? themeFromStyle ?? stylistThemeTokens;
-  const themeSource = themeFromJson ? 'theme.json' : themeFromStyle ? 'style.md' : 'default';
+  const resolvedTheme = themeFromStyle ?? themeFromJson ?? stylistThemeTokens;
+  const themeSource = themeFromStyle ? 'style.md' : themeFromJson ? 'theme.json' : 'default';
   const mismatchDetected =
     Boolean(themeFromJson) &&
     Boolean(themeFromStyle) &&
