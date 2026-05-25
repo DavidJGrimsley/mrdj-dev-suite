@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+﻿import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock, renderThemeTokensFile } from './stylist-theme.js';
@@ -27,6 +27,7 @@ export interface OnboardAnswers {
   customBackend: boolean;
   customBackendEntry: string;
   usesExpoUi: boolean;
+  usesExpoUiUniversalComponents: boolean;
   usesExpoNativeTabs: boolean;
   easUses: string[];
   projectInfoReady: boolean;
@@ -61,18 +62,25 @@ interface PackageJson {
 interface RichBoilerplateOptions {
   manageUniwind: boolean;
 }
+type NavigationLibrary = 'expo-router' | 'react-navigation';
+type NavigationLayout = 'stack' | 'tabs' | 'drawer + tabs';
+
+interface NavigationShell {
+  library: NavigationLibrary;
+  layout: NavigationLayout;
+}
 
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
   'react-native-gesture-handler': '~2.30.0',
-  'react-native-reanimated': '4.2.1',
-  'react-native-screens': '~4.23.0',
-  'react-native-svg': '15.15.3',
-  'react-native-keyboard-controller': '1.20.7',
-  'react-native-worklets': '0.7.4',
+  'react-native-reanimated': '4.3.1',
+  'react-native-screens': '~4.25.2',
+  'react-native-svg': '15.15.4',
+  'react-native-keyboard-controller': '1.21.6',
+  'react-native-worklets': '0.8.3',
 } as const;
 
 const LOCAL_DATA_DEPENDENCIES = {
-  'expo-sqlite': '~55.0.15',
+  'expo-sqlite': '~56.0.4',
 } as const;
 
 const SUPABASE_DEPENDENCIES = {
@@ -85,11 +93,13 @@ const UNIWIND_DEPENDENCIES = {
 } as const;
 
 const STYLIST_DEPENDENCIES = {
+  '@react-native-async-storage/async-storage': '2.2.0',
   'reanimated-color-picker': '^4.2.0',
 } as const;
 
-const EXPOSITION_NOTICE =
-  'These exposition pages are temporary developer and client-research scaffolds. Use them to evaluate styling, base packages, and data direction, then delete or prune them before production once the app direction is settled.';
+const EXPO_UI_DEPENDENCIES = {
+  '@expo/ui': '~56.0.13',
+} as const;
 
 const UNIWIND_DEV_DEPENDENCIES = {
   tailwindcss: '^4.2.4',
@@ -102,6 +112,13 @@ const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   'templates',
   'project',
   'guidelines.md'
+);
+const STYLIST_SCREEN_TEMPLATE_PATH = path.join(PACKAGE_ROOT, 'templates', 'stylist-screen.template.tsx');
+const EMBEDDED_FONTS_TEMPLATE_PATH = path.join(PACKAGE_ROOT, 'templates', 'embedded-fonts.template.ts');
+const EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH = path.join(
+  PACKAGE_ROOT,
+  'templates',
+  'expo-sdk-56-screen-universal.template.tsx'
 );
 
 const INFO_HEADINGS = [
@@ -183,9 +200,28 @@ export async function scaffoldRichBoilerplate(
   options: RichBoilerplateOptions = { manageUniwind: true }
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
+  const navigationShell = await detectNavigationShell(projectPath);
+  const includeNativeWindUiExposition = false;
+  const stylistScreenTemplate = (
+    await loadTemplateWithFallback(
+      STYLIST_SCREEN_TEMPLATE_PATH,
+      renderStylistScreen(answers)
+    )
+  ).split('__MDS_APP_NAME__').join(answers.appName);
+  const embeddedFontsTemplate = await loadTemplateWithFallback(
+    EMBEDDED_FONTS_TEMPLATE_PATH,
+    renderEmbeddedFonts()
+  );
+  const expoSdk56ScreenTemplate = answers.usesExpoUiUniversalComponents
+    ? await loadTemplateWithFallback(
+        EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH,
+        renderExpoSdk56Screen(answers)
+      )
+    : renderExpoSdk56Screen(answers);
 
   await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding', 'components'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'features', 'settings'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'components', 'exposition'), { recursive: true });
@@ -202,6 +238,11 @@ export async function scaffoldRichBoilerplate(
     await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'tokens.ts'),
       renderThemeTokensFile(DEFAULT_STYLIST_THEME),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'theme', 'provider.tsx'),
+      renderThemeProvider(),
       force
     ),
     await writeIfAllowed(
@@ -235,6 +276,11 @@ export async function scaffoldRichBoilerplate(
       force
     ),
     await writeIfAllowed(
+      path.join(projectPath, 'src', 'components', 'exposition', 'software-mansion-logo.tsx'),
+      renderSoftwareMansionLogo(),
+      force
+    ),
+    await writeIfAllowed(
       path.join(projectPath, 'src', 'components', 'exposition', 'screens-card.tsx'),
       renderScreensCard(),
       force
@@ -256,12 +302,37 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
-      renderHomeScreen(answers),
+      renderHomeScreen(answers, navigationShell),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
       renderOnboardingScreen(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
+      renderAgreementScreen(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'),
+      renderTermsScreen(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
+      renderAccountSetupScreen(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'legal-documents.ts'),
+      renderLegalDocuments(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'components', 'legal-document-view.tsx'),
+      renderLegalDocumentView(),
       force
     ),
     await writeIfAllowed(
@@ -271,20 +342,42 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
-      renderExpositionScreen(answers),
+      renderExpositionScreen(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'exposition', 'embedded-fonts.ts'),
+      embeddedFontsTemplate,
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
-      renderStylistScreen(answers),
+      stylistScreenTemplate,
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'),
       renderDataScreen(answers),
       force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+      expoSdk56ScreenTemplate,
+      force
     )
   );
+
+  if (includeNativeWindUiExposition) {
+    results.push(
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
+        renderNativeWindUiScreen(),
+        force
+      )
+    );
+  } else {
+    await removeOptionalFile(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'));
+  }
 
   if (answers.dataStart === 'local') {
     results.push(
@@ -302,49 +395,13 @@ export async function scaffoldRichBoilerplate(
   if (await pathExists(appDir)) {
     const routeForce = force || !answers.includeCreateExpoComponents;
     const shouldWriteRootLayout = routeForce && (await canWriteRichRootLayout(path.join(appDir, '_layout.tsx')));
-    results.push(
-      await writeIfAllowed(
-        path.join(appDir, 'index.tsx'),
-        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'home', 'home-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(appDir, 'onboarding.tsx'),
-        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(appDir, 'settings.tsx'),
-        renderRouteExport(appDir, path.join(projectPath, 'src', 'features', 'settings', 'settings-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(expositionRouteDir, 'index.tsx'),
-        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(expositionRouteDir, 'stylist.tsx'),
-        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(expositionRouteDir, 'data.tsx'),
-        renderRouteExport(expositionRouteDir, path.join(projectPath, 'src', 'features', 'exposition', 'data-screen')),
-        routeForce
-      ),
-      await writeIfAllowed(
-        path.join(expositionRouteDir, 'stylist-sync+api.ts'),
-        renderStylistSyncApiRoute(),
-        routeForce
-      )
-    );
+    results.push(...(await scaffoldNavigationRoutes(projectPath, appDir, navigationShell, answers, routeForce)));
 
     if (shouldWriteRootLayout) {
       results.push(
         await writeIfAllowed(
           path.join(appDir, '_layout.tsx'),
-          renderRichRootLayout(projectPath, appDir),
+          renderRichRootLayout(projectPath, appDir, navigationShell, answers),
           routeForce
         )
       );
@@ -384,6 +441,7 @@ export async function scaffoldRichBoilerplate(
     await removeNativeWindArtifacts(projectPath);
   }
   await ensureGlobalCssImport(projectPath, answers.appDirectory);
+  results.push(...(await ensureExpoRouterGroupLayouts(appDir, navigationShell, answers)));
 
   return results;
 }
@@ -439,6 +497,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- Web output: ${answers.webOutput}`,
     `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
+    `- Expo UI Universal components: ${formatBoolean(answers.usesExpoUiUniversalComponents)}`,
     `- Expo Native Tabs: ${formatBoolean(answers.usesExpoNativeTabs)}`,
     '',
     '## Package Choices',
@@ -482,7 +541,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     '',
     '> Quick-reference stack summary for agents and collaborators. Fill in or correct any items marked below.',
     '',
-    `- **App:** ${answers.appName} — ${answers.audience}`,
+    `- **App:** ${answers.appName} â€” ${answers.audience}`,
     '- **Language:** TypeScript',
     '- **Package manager:** # TodoForContext(optional): pnpm / npm / yarn / bun',
     `- **Routing:** Expo Router (${formatAppDirectory(answers.appDirectory)})`,
@@ -503,6 +562,7 @@ export function renderInfo(projectPath: string, answers: OnboardAnswers, existin
     `- Latest Expo SDK preference: ${formatBoolean(answers.useLatestExpoSdk)}`,
     `- MDS guidelines template: yes`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
+    `- Expo UI Universal components: ${formatBoolean(answers.usesExpoUiUniversalComponents)}`,
     `- Expo Native Tabs: ${formatBoolean(answers.usesExpoNativeTabs)}`,
     `- Test-to-main safeguards: ${formatBoolean(answers.testToMainSafeguards)}`,
     `- Data start: ${formatDataStart(answers.dataStart)}`,
@@ -561,6 +621,9 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Verify each selected platform after the MVP flow works.',
     ...answers.targetPlatforms.map((platform) => `- [ ] Verify ${platform} behavior.`),
     ...(answers.usesExpoUi ? ['- [ ] Add Expo UI examples where they improve native feel.'] : []),
+    ...(answers.usesExpoUiUniversalComponents
+      ? ['- [ ] Review the Expo UI Universal examples before replacing generated exposition code.']
+      : []),
     ...(answers.usesExpoNativeTabs ? ['- [ ] Prototype Expo Native Tabs for mobile navigation.'] : []),
     ...(answers.easUses.length > 0 ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`) : []),
     '',
@@ -640,6 +703,57 @@ export function renderStyle(answers: OnboardAnswers, existingStyle?: string | nu
   ].join('\n');
 }
 
+function renderThemeProvider(): string {
+  return [
+    "import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';",
+    '',
+    "import stylistThemeTokens, { type StylistColorPalette, type StylistColorScheme, type StylistThemeTokens } from './tokens';",
+    '',
+    'export type AppThemeValue = StylistThemeTokens & {',
+    '  activeScheme: StylistColorScheme;',
+    '  activeColors: StylistColorPalette;',
+    '};',
+    '',
+    'const AppThemeContext = createContext<AppThemeValue>({',
+    '  ...stylistThemeTokens,',
+    '  activeScheme: stylistThemeTokens.colorSystem.previewScheme,',
+    '  activeColors: stylistThemeTokens.colors[stylistThemeTokens.colorSystem.previewScheme],',
+    '});',
+    'const AppThemeSetterContext = createContext<Dispatch<SetStateAction<StylistThemeTokens>> | null>(null);',
+    '',
+    'export function AppThemeProvider({ children }: { children: ReactNode }) {',
+    '  const [theme, setTheme] = useState<StylistThemeTokens>(stylistThemeTokens);',
+    '  const value = useMemo<AppThemeValue>(() => {',
+    '    const activeScheme = theme.colorSystem.previewScheme;',
+    '    return {',
+    '      ...theme,',
+    '      activeScheme,',
+    '      activeColors: theme.colors[activeScheme],',
+    '    };',
+    '  }, [theme]);',
+    '',
+    '  return (',
+    '    <AppThemeSetterContext.Provider value={setTheme}>',
+    '      <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>',
+    '    </AppThemeSetterContext.Provider>',
+    '  );',
+    '}',
+    '',
+    'export function useAppTheme() {',
+    '  return useContext(AppThemeContext);',
+    '}',
+    '',
+    'export function useSetAppTheme() {',
+    '  const setTheme = useContext(AppThemeSetterContext);',
+    '  if (!setTheme) {',
+    "    throw new Error('useSetAppTheme must be used inside AppThemeProvider.');",
+    '  }',
+    '  return setTheme;',
+    '}',
+    '',
+  ].join('\n');
+}
+
 export function renderGuidelines(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} Guidelines`,
@@ -682,6 +796,14 @@ export function renderGuidelines(answers: OnboardAnswers): string {
           '- Never expose Supabase service-role or secret keys in client code.',
         ]
       : ['- Keep local dummy data behind an adapter so Supabase can replace it later.']),
+    ...(answers.usesExpoUi
+      ? [
+          '- Expo UI is stable in SDK 56 for native SwiftUI and Jetpack Compose surfaces.',
+          answers.usesExpoUiUniversalComponents
+            ? '- Prefer Expo UI Universal components when one shared Android, iOS, and web component tree fits.'
+            : '- Use platform-specific Expo UI APIs only when they clearly improve native feel.',
+        ]
+      : []),
     '',
     '## Workflow',
     '',
@@ -692,6 +814,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
       ? ['- Develop through feature branches into `test`, then promote validated work from `test` to `main`.']
       : []),
     `- Latest Expo SDK preference captured during onboarding: ${formatBoolean(answers.useLatestExpoSdk)}.`,
+    `- Expo UI Universal components preference captured during onboarding: ${formatBoolean(answers.usesExpoUiUniversalComponents)}.`,
     '- Treat monorepo scaffolding as future work until the single-app MVP is stable.',
     '',
   ].join('\n');
@@ -734,7 +857,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
     `Run \`npm run clear-expo-start\` (or \`${MDS_NPX_COMMAND} clear-expo-start .\`) instead of bare \`expo start\` or \`npx expo start\`.`,
     'Kills port 8081, clears all Metro and Expo caches (including the Windows system cache), and starts `expo start --clear`.',
     'Expo Router API routes work automatically in this mode.',
-    'Never fall back to a non-default port — always free the default port first.',
+    'Never fall back to a non-default port â€” always free the default port first.',
     '',
   ];
 
@@ -743,7 +866,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
         '## Also start the backend API server',
         '',
         `Run \`node ${answers.customBackendEntry}\` from the project root in a background process alongside Expo.`,
-        'Both must be running for full local functionality — Expo on port 8081, backend on its own port.',
+        'Both must be running for full local functionality â€” Expo on port 8081, backend on its own port.',
         '',
       ]
     : [];
@@ -751,7 +874,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
   const spinUpProd = buildSpinUpProdSection(answers);
 
   return [
-    `# ${answers.appName} — Agent Guidelines`,
+    `# ${answers.appName} â€” Agent Guidelines`,
     '',
     '## Before every git commit',
     '',
@@ -786,7 +909,7 @@ function buildSpinUpProdSection(answers: OnboardAnswers): string[] {
     return [
       '## Spin up prod',
       '',
-      'Run `npm run serve:prod:fresh` — kills port 3000, builds web dist, starts the Node server.',
+      'Run `npm run serve:prod:fresh` â€” kills port 3000, builds web dist, starts the Node server.',
       'Run `npm run serve:prod` to restart without rebuilding.',
       'Server runs on http://localhost:3000. Mirrors your self-hosted (Plesk/VPS) environment.',
       '',
@@ -797,7 +920,7 @@ function buildSpinUpProdSection(answers: OnboardAnswers): string[] {
     return [
       '## Spin up prod',
       '',
-      'Run `npm run serve:prod:fresh` — builds web dist and starts `npx expo serve`.',
+      'Run `npm run serve:prod:fresh` â€” builds web dist and starts `npx expo serve`.',
       'The terminal will show the local URL when ready. Mirrors EAS hosting.',
       '',
     ];
@@ -920,6 +1043,13 @@ async function ensurePackageJson(
     };
   }
 
+  if (answers.usesExpoUi) {
+    packageJson.dependencies = {
+      ...EXPO_UI_DEPENDENCIES,
+      ...packageJson.dependencies,
+    };
+  }
+
   if (manageUniwind) {
     packageJson.dependencies = {
       ...UNIWIND_DEPENDENCIES,
@@ -969,6 +1099,7 @@ function applyGuidelinesTemplate(template: string, answers: OnboardAnswers): str
     webOutput: answers.webOutput,
     deployedServer: formatServerChoice(answers.deployedServer),
     usesExpoUi: formatBoolean(answers.usesExpoUi),
+    usesExpoUiUniversalComponents: formatBoolean(answers.usesExpoUiUniversalComponents),
     usesExpoNativeTabs: formatBoolean(answers.usesExpoNativeTabs),
     easUses: answers.easUses.map((item) => `- ${item}`).join('\n') || '- not planned yet',
     dataStart: formatDataStart(answers.dataStart),
@@ -1225,10 +1356,196 @@ function renderRouteExport(routeDir: string, targetModulePath: string): string {
   return `export { default } from '${toRelativeImportPath(routeDir, targetModulePath)}';\n`;
 }
 
+async function scaffoldNavigationRoutes(
+  projectPath: string,
+  appDir: string,
+  navigationShell: NavigationShell,
+  answers: OnboardAnswers,
+  routeForce: boolean
+): Promise<WriteResult[]> {
+  const results: WriteResult[] = [];
+  const homeScreen = path.join(projectPath, 'src', 'features', 'home', 'home-screen');
+  const onboardingScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen');
+  const agreementScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen');
+  const termsScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen');
+  const accountSetupScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen');
+  const settingsScreen = path.join(projectPath, 'src', 'features', 'settings', 'settings-screen');
+  const expositionScreen = path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen');
+  const stylistScreen = path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen');
+  const dataScreen = path.join(projectPath, 'src', 'features', 'exposition', 'data-screen');
+  const expoSdk56Screen = path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen');
+  const nativeWindUiScreen = path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen');
+  const includeNativeWindUiExposition = false;
+  const shouldWriteExpositionRouteWrappers =
+    navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
+
+  const rootExpositionDir = path.join(appDir, 'exposition');
+  const onboardingDir = path.join(appDir, 'onboarding');
+  await mkdir(rootExpositionDir, { recursive: true });
+  await mkdir(onboardingDir, { recursive: true });
+
+  results.push(
+    await writeIfAllowed(path.join(appDir, 'onboarding.tsx'), renderRouteExport(appDir, onboardingScreen), routeForce),
+    await writeIfAllowed(path.join(onboardingDir, 'agreement.tsx'), renderRouteExport(onboardingDir, agreementScreen), routeForce),
+    await writeIfAllowed(path.join(onboardingDir, 'terms.tsx'), renderRouteExport(onboardingDir, termsScreen), routeForce),
+    await writeIfAllowed(
+      path.join(onboardingDir, 'account-setup.tsx'),
+      renderRouteExport(onboardingDir, accountSetupScreen),
+      routeForce
+    ),
+    await writeIfAllowed(path.join(appDir, 'settings.tsx'), renderRouteExport(appDir, settingsScreen), routeForce),
+    await writeIfAllowed(path.join(rootExpositionDir, 'stylist-sync+api.ts'), renderStylistSyncApiRoute(), routeForce)
+  );
+  if (shouldWriteExpositionRouteWrappers) {
+    results.push(
+      await writeIfAllowed(path.join(rootExpositionDir, 'index.tsx'), renderRouteExport(rootExpositionDir, expositionScreen), routeForce),
+      await writeIfAllowed(path.join(rootExpositionDir, 'stylist.tsx'), renderRouteExport(rootExpositionDir, stylistScreen), routeForce),
+      await writeIfAllowed(path.join(rootExpositionDir, 'data.tsx'), renderRouteExport(rootExpositionDir, dataScreen), routeForce),
+      await writeIfAllowed(path.join(rootExpositionDir, 'sdk-56.tsx'), renderRouteExport(rootExpositionDir, expoSdk56Screen), routeForce)
+    );
+  } else {
+    await removeOptionalFile(path.join(rootExpositionDir, 'index.tsx'));
+    await removeOptionalFile(path.join(rootExpositionDir, 'stylist.tsx'));
+    await removeOptionalFile(path.join(rootExpositionDir, 'data.tsx'));
+    await removeOptionalFile(path.join(rootExpositionDir, 'sdk-56.tsx'));
+  }
+  if (includeNativeWindUiExposition && shouldWriteExpositionRouteWrappers) {
+    results.push(
+      await writeIfAllowed(
+        path.join(rootExpositionDir, 'nativewindui.tsx'),
+        renderRouteExport(rootExpositionDir, nativeWindUiScreen),
+        routeForce
+      )
+    );
+  } else {
+    await removeOptionalFile(path.join(rootExpositionDir, 'nativewindui.tsx'));
+  }
+
+  if (navigationShell.library !== 'expo-router') {
+    results.push(await writeIfAllowed(path.join(appDir, 'index.tsx'), renderRouteExport(appDir, homeScreen), routeForce));
+    return results;
+  }
+
+  if (navigationShell.layout === 'stack') {
+    results.push(await writeIfAllowed(path.join(appDir, 'index.tsx'), renderRouteExport(appDir, homeScreen), routeForce));
+    return results;
+  }
+
+  if (navigationShell.layout === 'tabs') {
+    const tabsDir = path.join(appDir, '(tabs)');
+    await mkdir(tabsDir, { recursive: true });
+    results.push(
+      await writeIfAllowed(path.join(tabsDir, 'index.tsx'), renderRouteExport(tabsDir, homeScreen), routeForce),
+      await writeIfAllowed(path.join(tabsDir, 'software-mansion.tsx'), renderRouteExport(tabsDir, expositionScreen), routeForce),
+      await writeIfAllowed(path.join(tabsDir, 'stylist.tsx'), renderRouteExport(tabsDir, stylistScreen), routeForce),
+      await writeIfAllowed(path.join(tabsDir, 'data.tsx'), renderRouteExport(tabsDir, dataScreen), routeForce),
+      await writeIfAllowed(path.join(tabsDir, 'sdk-56.tsx'), renderRouteExport(tabsDir, expoSdk56Screen), routeForce)
+    );
+    await removeOptionalFile(path.join(tabsDir, 'two.tsx'));
+    if (includeNativeWindUiExposition) {
+      results.push(
+        await writeIfAllowed(
+          path.join(tabsDir, 'nativewindui.tsx'),
+          renderRouteExport(tabsDir, nativeWindUiScreen),
+          routeForce
+        )
+      );
+    } else {
+      await removeOptionalFile(path.join(tabsDir, 'nativewindui.tsx'));
+    }
+    await removeOptionalFile(path.join(appDir, 'index.tsx'));
+    return results;
+  }
+
+  const drawerDir = path.join(appDir, '(drawer)');
+  const drawerTabsDir = path.join(drawerDir, '(tabs)');
+  await mkdir(drawerTabsDir, { recursive: true });
+  results.push(
+    await writeIfAllowed(path.join(drawerDir, 'index.tsx'), renderRouteExport(drawerDir, homeScreen), routeForce),
+    await writeIfAllowed(path.join(drawerTabsDir, 'index.tsx'), renderRouteExport(drawerTabsDir, expositionScreen), routeForce),
+    await writeIfAllowed(path.join(drawerTabsDir, 'stylist.tsx'), renderRouteExport(drawerTabsDir, stylistScreen), routeForce),
+    await writeIfAllowed(path.join(drawerTabsDir, 'data.tsx'), renderRouteExport(drawerTabsDir, dataScreen), routeForce),
+    await writeIfAllowed(path.join(drawerTabsDir, 'sdk-56.tsx'), renderRouteExport(drawerTabsDir, expoSdk56Screen), routeForce)
+  );
+  await removeOptionalFile(path.join(drawerTabsDir, 'two.tsx'));
+  if (includeNativeWindUiExposition) {
+    results.push(
+      await writeIfAllowed(
+        path.join(drawerTabsDir, 'nativewindui.tsx'),
+        renderRouteExport(drawerTabsDir, nativeWindUiScreen),
+        routeForce
+      )
+    );
+  } else {
+    await removeOptionalFile(path.join(drawerTabsDir, 'nativewindui.tsx'));
+  }
+  await removeOptionalFile(path.join(appDir, 'index.tsx'));
+  return results;
+}
+
+async function detectNavigationShell(projectPath: string): Promise<NavigationShell> {
+  const cesRaw = await readOptionalText(path.join(projectPath, 'cesconfig.jsonc'));
+  const fromCes = detectNavigationFromCesConfig(cesRaw);
+  if (fromCes) {
+    return fromCes;
+  }
+
+  const appLayout = await readOptionalText(path.join(projectPath, 'app', '_layout.tsx'));
+  const srcLayout = await readOptionalText(path.join(projectPath, 'src', 'app', '_layout.tsx'));
+  const layoutText = appLayout ?? srcLayout ?? '';
+  if (layoutText.includes('Drawer')) {
+    return { library: 'expo-router', layout: 'drawer + tabs' };
+  }
+  if (layoutText.includes('Tabs')) {
+    return { library: 'expo-router', layout: 'tabs' };
+  }
+
+  const appTsx = await readOptionalText(path.join(projectPath, 'App.tsx'));
+  if (appTsx?.includes('react-navigation')) {
+    return { library: 'react-navigation', layout: 'stack' };
+  }
+
+  return { library: 'expo-router', layout: 'stack' };
+}
+
+function detectNavigationFromCesConfig(raw: string | null): NavigationShell | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const sanitized = raw.replace(/^\s*\/\/.*$/gmu, '');
+    const parsed = JSON.parse(sanitized) as { packages?: Array<{ name?: string; type?: string; options?: { type?: string } }> };
+    if (!Array.isArray(parsed.packages)) {
+      return null;
+    }
+    const nav = parsed.packages.find((pkg) => pkg?.type === 'navigation');
+    if (!nav?.name) {
+      return null;
+    }
+    const layoutRaw = nav.options?.type;
+    const layout: NavigationLayout =
+      layoutRaw === 'tabs' || layoutRaw === 'drawer + tabs' || layoutRaw === 'stack' ? layoutRaw : 'stack';
+    if (nav.name === 'react-navigation') {
+      return { library: 'react-navigation', layout };
+    }
+    if (nav.name === 'expo-router') {
+      return { library: 'expo-router', layout };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadTemplateWithFallback(templatePath: string, fallback: string): Promise<string> {
+  const template = await readOptionalText(templatePath);
+  return template ?? fallback;
+}
+
 function renderStylistSyncApiRoute(): string {
   return [
     "import { spawn } from 'node:child_process';",
-    "import { readFile } from 'node:fs/promises';",
+    "import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';",
     "import path from 'node:path';",
     '',
     "import stylistThemeTokens from '../../theme/tokens';",
@@ -1267,8 +1584,8 @@ function renderStylistSyncApiRoute(): string {
     '',
     '  const themeFromJson = await readThemeJson(themePath);',
     '  const themeFromStyle = await readThemeFromStyleMarkdown(stylePath);',
-    '  const resolvedTheme = themeFromJson ?? themeFromStyle ?? stylistThemeTokens;',
-    "  const themeSource = themeFromJson ? 'theme.json' : themeFromStyle ? 'style.md' : 'default';",
+    '  const resolvedTheme = themeFromStyle ?? themeFromJson ?? stylistThemeTokens;',
+    "  const themeSource = themeFromStyle ? 'style.md' : themeFromJson ? 'theme.json' : 'default';",
     '  const mismatchDetected =',
     '    Boolean(themeFromJson) &&',
     '    Boolean(themeFromStyle) &&',
@@ -1320,7 +1637,26 @@ function renderStylistSyncApiRoute(): string {
     "  metadata?: StylistSyncRequestBody['metadata']",
     '): Promise<SyncResponse> {',
     "  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
-    "  const args = ['-y', '-p', '@mr.dj2u/cli@latest', 'mds', 'stylist', 'sync', '.', '--input-json', inputJson, '--json'];",
+    "  const tempDir = path.resolve(process.cwd(), '.expo', 'stylist-sync');",
+    '  await mkdir(tempDir, { recursive: true });',
+    '  const tempInputPath = path.join(',
+    '    tempDir,',
+    "    `theme-${Date.now()}-${Math.random().toString(36).slice(2)}.json`",
+    '  );',
+    "  await writeFile(tempInputPath, inputJson, 'utf8');",
+    '',
+    '  const args = [',
+    "    '-y',",
+    "    '-p',",
+    "    '@mr.dj2u/cli@latest',",
+    "    'mds',",
+    "    'stylist',",
+    "    'sync',",
+    "    '.',",
+    "    '--input-file',",
+    '    tempInputPath,',
+    "    '--json',",
+    '  ];',
     "  if (metadata?.writePolicy) args.push('--write-policy', metadata.writePolicy);",
     "  if (metadata?.styleLibrary) args.push('--style-library', metadata.styleLibrary);",
     '',
@@ -1340,11 +1676,32 @@ function renderStylistSyncApiRoute(): string {
     "      stderr += String(chunk);",
     '    });',
     '',
-    "    child.on('error', (error) => {",
+    "    child.on('error', async (error) => {",
+    '      try {',
+    '        await unlink(tempInputPath);',
+    '      } catch {',
+    '        // no-op',
+    '      }',
+    '',
+    "      const code = 'code' in error ? String(error.code ?? '') : '';",
+    "      if (code === 'EINVAL') {",
+    '        reject(',
+    '          new Error(',
+    "            'Stylist sync could not start on this machine (spawn EINVAL). The request is now written to a temp file first, but your local shell still rejected the command. Re-run from the project terminal and verify your Node/npm install.'",
+    '          )',
+    '        );',
+    '        return;',
+    '      }',
     '      reject(error);',
     '    });',
     '',
-    "    child.on('close', (code) => {",
+    "    child.on('close', async (code) => {",
+    '      try {',
+    '        await unlink(tempInputPath);',
+    '      } catch {',
+    '        // no-op',
+    '      }',
+    '',
     '      if (code !== 0) {',
     "        reject(new Error(stderr.trim() || `Stylist sync failed with exit code ${code ?? 'unknown'}.`));",
     '        return;',
@@ -1703,23 +2060,64 @@ function renderNativeLocalDataService(): string {
   ].join('\n');
 }
 
-function renderRichRootLayout(projectPath: string, appDir: string): string {
+function renderRichRootLayout(
+  projectPath: string,
+  appDir: string,
+  navigationShell: NavigationShell,
+  answers: OnboardAnswers
+): string {
+  const themeProviderImport = toRelativeImportPath(appDir, path.join(projectPath, 'src', 'theme', 'provider'));
+  const shouldRegisterExpositionRoutes =
+    navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
+  const expositionScreens = shouldRegisterExpositionRoutes
+    ? [
+        "        <Stack.Screen name=\"exposition/index\" options={{ title: 'Package Exposition' }} />",
+        "        <Stack.Screen name=\"exposition/stylist\" options={{ title: 'Stylist' }} />",
+        "        <Stack.Screen name=\"exposition/data\" options={{ title: 'Data' }} />",
+        "        <Stack.Screen name=\"exposition/sdk-56\" options={{ title: 'Expo SDK 56' }} />",
+      ]
+    : [];
+  const nativeWindUiScreen: string[] = [];
+  const shellScreen =
+    navigationShell.layout === 'tabs'
+      ? "        <Stack.Screen name=\"(tabs)\" options={{ title: 'Home' }} />"
+      : navigationShell.layout === 'drawer + tabs'
+        ? "        <Stack.Screen name=\"(drawer)\" options={{ title: 'Home' }} />"
+        : "        <Stack.Screen name=\"index\" options={{ title: 'Home' }} />";
+
   return [
     renderGlobalCssImport(path.join(appDir, '_layout.tsx'), projectPath),
-    "import { Stack } from 'expo-router';",
+    "import { Link, Stack } from 'expo-router';",
+    "import { Platform, Pressable, Text } from 'react-native';",
     "import { SafeAreaProvider } from 'react-native-safe-area-context';",
+    `import { AppThemeProvider } from '${themeProviderImport}';`,
     '',
     'export default function Layout() {',
     '  return (',
     '    <SafeAreaProvider>',
-    '      <Stack>',
-    "        <Stack.Screen name=\"index\" options={{ title: 'Home' }} />",
+    '      <AppThemeProvider>',
+    '        <Stack',
+    '          screenOptions={{',
+    "            headerShown: Platform.OS !== 'web',",
+    '            headerRight: () => (',
+    "              <Link href=\"/settings\" asChild>",
+    "                <Pressable accessibilityRole=\"button\" style={{ alignItems: 'center', backgroundColor: '#111827', borderRadius: 14, height: 28, justifyContent: 'center', width: 28 }}>",
+    "                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>i</Text>",
+    '                </Pressable>',
+    '              </Link>',
+    '            ),',
+    '          }}',
+    '        >',
+    shellScreen,
     "        <Stack.Screen name=\"onboarding\" options={{ title: 'Onboarding' }} />",
-    "        <Stack.Screen name=\"exposition/index\" options={{ title: 'Exposition' }} />",
-    "        <Stack.Screen name=\"exposition/stylist\" options={{ title: 'Stylist' }} />",
-    "        <Stack.Screen name=\"exposition/data\" options={{ title: 'Data' }} />",
+    "        <Stack.Screen name=\"onboarding/agreement\" options={{ title: 'Agreement' }} />",
+    "        <Stack.Screen name=\"onboarding/terms\" options={{ title: 'Terms Of Service' }} />",
+    "        <Stack.Screen name=\"onboarding/account-setup\" options={{ title: 'Account Setup' }} />",
+    ...expositionScreens,
+    ...nativeWindUiScreen,
     "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
-    '      </Stack>',
+    '        </Stack>',
+    '      </AppThemeProvider>',
     '    </SafeAreaProvider>',
     '  );',
     '}',
@@ -1826,12 +2224,20 @@ function renderAnimatedPressable(): string {
     'const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);',
     '',
     'interface AnimatedPressableProps {',
+    '  backgroundColor?: string;',
     '  children?: ReactNode;',
     '  label?: string;',
     '  onPress?: () => void;',
+    '  textColor?: string;',
     '}',
     '',
-    "export function AnimatedPressable({ children, label = 'Reanimated press demo', onPress }: AnimatedPressableProps) {",
+    'export function AnimatedPressable({',
+    "  backgroundColor = '#111827',",
+    '  children,',
+    "  label = 'Reanimated press demo',",
+    '  onPress,',
+    "  textColor = '#ffffff',",
+    '}: AnimatedPressableProps) {',
     '  const pressed = useSharedValue(0);',
     '  const animatedStyle = useAnimatedStyle(() => ({',
     '    transform: [{ scale: withTiming(pressed.value ? 0.97 : 1, { duration: 120 }) }],',
@@ -1846,9 +2252,9 @@ function renderAnimatedPressable(): string {
     '      onPressOut={() => {',
     '        pressed.value = 0;',
     '      }}',
-    '      style={[styles.button, animatedStyle]}',
+    '      style={[styles.button, { backgroundColor }, animatedStyle]}',
     '    >',
-    '      {children ?? <Text style={styles.label}>{label}</Text>}',
+    '      {children ?? <Text style={[styles.label, { color: textColor }]}>{label}</Text>}',
     '    </AnimatedPressableBase>',
     '  );',
     '}',
@@ -1861,7 +2267,6 @@ function renderAnimatedPressable(): string {
     '    paddingVertical: 12,',
     '  },',
     '  label: {',
-    "    color: '#ffffff',",
     '    fontSize: 15,',
     '    fontWeight: "700",',
     '    textAlign: "center",',
@@ -1913,9 +2318,7 @@ function renderGestureCard(): string {
     '    borderRadius: 12,',
     '    borderWidth: 1,',
     '    padding: 16,',
-    '    shadowColor: "#000000",',
-    '    shadowOpacity: 0.08,',
-    '    shadowRadius: 10,',
+    "    boxShadow: '0 6px 10px rgba(0, 0, 0, 0.08)',",
     '  },',
     '  title: {',
     "    color: '#111827',",
@@ -1935,10 +2338,25 @@ function renderGestureCard(): string {
 
 function renderKeyboardForm(): string {
   return [
-    "import { StyleSheet, TextInput } from 'react-native';",
-    "import { KeyboardAwareScrollView, KeyboardToolbar } from 'react-native-keyboard-controller';",
+    "import { Platform, ScrollView, StyleSheet, TextInput } from 'react-native';",
     '',
     'export function KeyboardForm() {',
+    '  if (Platform.OS === "web") {',
+    '    return (',
+    '      <ScrollView contentContainerStyle={styles.form} style={styles.scroller}>',
+    '        <TextInput placeholder="Project note" style={styles.input} />',
+    '        <TextInput multiline placeholder="Details" style={[styles.input, styles.multiline]} />',
+    '      </ScrollView>',
+    '    );',
+    '  }',
+    '',
+    "  const keyboardController = require('react-native-keyboard-controller') as {",
+    "    KeyboardAwareScrollView: any;",
+    "    KeyboardToolbar: any;",
+    '  };',
+    '  const KeyboardAwareScrollView = keyboardController.KeyboardAwareScrollView;',
+    '  const KeyboardToolbar = keyboardController.KeyboardToolbar;',
+    '',
     '  return (',
     '    <>',
     '      <KeyboardAwareScrollView bottomOffset={72} contentContainerStyle={styles.form} style={styles.scroller}>',
@@ -1977,13 +2395,13 @@ function renderKeyboardForm(): string {
 
 function renderSvgMark(): string {
   return [
-    "import Svg, { Circle, Path } from 'react-native-svg';",
+    "import Svg, { Path } from 'react-native-svg';",
     '',
-    'export function SvgMark() {',
+    'export function SvgMark({ size = 44 }: { size?: number }) {',
     '  return (',
-    '    <Svg width={44} height={44} viewBox="0 0 44 44" accessibilityRole="image">',
-    '      <Circle cx={22} cy={22} r={20} fill="#111827" />',
-    '      <Path d="M14 23.5 19.5 29 31 15" stroke="#ffffff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />',
+    '    <Svg width={size} height={size} viewBox="0 0 2048 2048" accessibilityRole="image">',
+    '      <Path fill="#5666ff" d="m146.9 1305.8l-14.4 30q0 32.2 89.9 62.1 91 28.9 198.6 28.9 108.8 0 238.6-32.2 129.8-32.2 225.2-78.8 96.6-46.6 158.7-97.6 63.3-51.1 63.3-88.8 0-47.7-111-88.8-111-41-322.9-89.8-210.8-50-309.6-125.4-97.6-75.5-97.6-183.1 0-108.8 77.6-207.5 77.7-98.8 202-175.3 125.4-76.6 273-136.5 305.1-123.2 565.9-123.2 99.9 0 176.4 17.8 146.5 34.4 146.5 90.9 0 56.6-10 77.7-10 20-16.6 26.7-5.6 6.6-15.6 13.3-8.9 6.6-13.3 10-48.8 41-267.4 51-75.5 3.3-82.1 7.8-6.7 4.4-12.2 4.4-4.5 0-11.1-8.9-6.7-8.9-6.7-28.8 0-20 43.3-73.3-135.4 7.8-289.6 62.2-153.2 54.4-266.3 123.1-113.2 67.7-188.7 134.3-75.4 65.5-75.4 93.2 0 26.7 16.6 44.4 46.6 49.9 258.6 104.3 219.7 56.6 292.9 91 73.2 34.4 120.9 65.5 48.9 31 77.7 63.2 67.7 77.7 67.7 157.6 0 79.9-43.3 149.8-42.1 69.9-128.7 135.4-85.4 65.4-201.9 116.5-255.3 114.3-608.1 114.3-257.5 0-328.5-136.5-18.8-34.4-18.8-71 0-37.8 16.6-67.7 17.8-30 42.2-45.5 47.7-30 67.7-30 19.9 0 19.9 13.3z" />',
+    '      <Path fill="#f66d22" d="m486.9 1709.8l-14.4 30q0 32.2 89.9 62.1 91 28.9 198.6 28.9 108.8 0 238.6-32.2 129.8-32.2 225.2-78.8 96.6-46.6 158.7-97.6 63.3-51.1 63.3-88.8 0-47.7-111-88.8-111-41-322.9-89.8-210.8-50-309.6-125.4-97.6-75.5-97.6-183.1 0-108.8 77.6-207.5 77.7-98.8 202-175.3 125.4-76.6 273-136.5 305.1-123.2 565.9-123.2 99.9 0 176.4 17.8 146.5 34.4 146.5 90.9 0 56.6-10 77.7-10 20-16.6 26.7-5.6 6.6-15.6 13.3-8.9 6.6-13.3 10-48.8 41-267.4 51-75.5 3.3-82.1 7.8-6.7 4.4-12.2 4.4-4.5 0-11.1-8.9-6.7-8.9-6.7-28.8 0-20 43.3-73.3-135.4 7.8-289.6 62.2-153.2 54.4-266.3 123.1-113.2 67.7-188.7 134.3-75.4 65.5-75.4 93.2 0 26.7 16.6 44.4 46.6 49.9 258.6 104.3 219.7 56.6 292.9 91 73.2 34.4 120.9 65.5 48.9 31 77.7 63.2 67.7 77.7 67.7 157.6 0 79.9-43.3 149.8-42.1 69.9-128.7 135.4-85.4 65.4-201.9 116.5-255.3 114.3-608.1 114.3-257.5 0-328.5-136.5-18.8-34.4-18.8-71 0-37.8 16.6-67.7 17.8-30 42.2-45.5 47.7-30 67.7-30 19.9 0 19.9 13.3z" />',
     '    </Svg>',
     '  );',
     '}',
@@ -2036,39 +2454,22 @@ function renderScreensCard(): string {
 
 function renderExpositionNotice(): string {
   return [
-    "import { StyleSheet, Text, View } from 'react-native';",
-    '',
     'export function ExpositionNotice() {',
-    '  return (',
-    '    <View style={styles.notice}>',
-    '      <Text style={styles.eyebrow}>Temporary exposition scaffold</Text>',
-    `      <Text style={styles.body}>${EXPOSITION_NOTICE}</Text>`,
-    '    </View>',
-    '  );',
+    '  return null;',
     '}',
     '',
-    'const styles = StyleSheet.create({',
-    '  notice: {',
-    "    backgroundColor: '#fff7ed',",
-    "    borderColor: '#fed7aa',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    gap: 6,',
-    '    padding: 14,',
-    '  },',
-    '  eyebrow: {',
-    "    color: '#9a3412',",
-    '    fontSize: 12,',
-    '    fontWeight: "800",',
-    '    letterSpacing: 0.4,',
-    '    textTransform: "uppercase",',
-    '  },',
-    '  body: {',
-    "    color: '#7c2d12',",
-    '    fontSize: 14,',
-    '    lineHeight: 20,',
-    '  },',
-    '});',
+  ].join('\n');
+}
+
+function renderSoftwareMansionLogo(): string {
+  return [
+    "import { SvgXml } from 'react-native-svg';",
+    '',
+    'const softwareMansionLogoXml = `<svg fill="currentColor" viewBox="0 0 149.79 80" xmlns="http://www.w3.org/2000/svg" width="150" height="80" preserveAspectRatio="xMidYMid meet"><path d="M24.281 79.063h124.58V24.356L125.513.937H.933v54.707z" fill="#fff"></path><path d="M0 .001h125.9l23.894 23.967V80h-125.9L.002 56.033V0zm1.867 3.198v52.057l21.48 21.545V24.744zm1.321-1.324 21.48 21.545h121.94l-21.48-21.545zm144.74 23.418H25.218v52.833h122.71z"></path><path d="M47.255 46.215c0 1.873-1.246 3.496-4.234 3.496-1.308 0-2.367-.312-3.3-.686v-2.623c.996.5 2.179.812 3.237.812.997 0 1.494-.312 1.494-.875 0-1.748-4.731-1.187-4.731-4.746 0-2.185 1.744-3.498 4.172-3.498.995 0 1.929.251 2.926.813v2.685c-1.308-.812-2.242-1.062-2.989-1.062-.872 0-1.37.313-1.37.874-.062 1.625 4.794 1 4.794 4.81z"></path><path d="M49.62 43.903c0-3.184 2.614-5.807 5.79-5.807 3.175 0 5.79 2.623 5.79 5.808 0 3.185-2.615 5.807-5.79 5.807-3.176-.062-5.79-2.622-5.79-5.807zm8.716 0c0-1.748-1.307-3.06-2.927-3.06-1.618 0-2.925 1.312-2.925 3.061 0 1.748 1.307 3.06 2.925 3.06 1.62 0 2.927-1.312 2.927-3.061z"></path><path d="M67.675 37.408v.937h3.674l-1.246 2.623h-2.366v8.493H65.06v-8.556h-1.867v-2.622h1.867v-1.061c0-3.373 1.744-5.059 4.483-5.059.685 0 1.307.125 1.868.25v2.623c-.498-.187-1.058-.25-1.62-.25-1.494 0-2.116 1-2.116 2.623z"></path><path d="M76.952 40.906v4.434c0 1.187.685 1.687 1.743 1.687.685 0 1.37-.188 1.93-.562v2.747c-.747.312-1.431.5-2.427.5-2.43 0-3.923-1.312-3.923-3.998v-4.746h-1.619v-2.622h1.62v-2.873l2.676-.687v3.56h3.674v2.622h-3.674z"></path><path d="m99.988 38.346-3.549 11.115h-2.677l-2.428-7.619-2.49 7.619h-2.678l-3.549-11.115h3.051l1.992 7.432 2.367-7.432h2.676l2.367 7.432 1.992-7.432z"></path><path d="M101.36 43.903c0-3.184 2.303-5.807 5.48-5.807 1.244 0 2.24.375 2.987 1v-.75h2.678v11.115h-2.616v-.874c-.747.687-1.805 1.124-3.112 1.124-3.052-.062-5.417-2.622-5.417-5.807zm8.717 0c0-1.748-1.308-3.06-2.927-3.06s-2.926 1.312-2.926 3.061c0 1.748 1.307 3.06 2.926 3.06 1.619 0 2.927-1.312 2.927-3.061z"></path><path d="M116.3 38.346h2.615v1.498c.81-1.498 2.303-1.748 3.611-1.748v3.184c-1.868-.5-3.548.562-3.548 2.936v5.183H116.3z"></path><path d="M130.99 47.089a9.627 9.627 0 0 0 3.549-.687l-1.37 2.81a7.296 7.296 0 0 1-2.677.5c-3.923 0-6.288-2.436-6.288-5.808 0-3.185 2.365-5.808 5.79-5.808 2.303 0 4.171 1.187 4.918 2.685v4.06h-7.844c.373 1.31 1.68 2.248 3.922 2.248zm-3.985-4.371h5.79c-.373-1.313-1.494-2.124-2.926-2.124-1.37 0-2.428.874-2.864 2.124z"></path><path d="M55.223 58.83v7.306h-2.677v-6.869c0-1.187-.872-1.873-1.743-1.873-.934 0-1.744.686-1.744 1.873v6.869h-2.676v-6.869c0-1.187-.872-1.873-1.744-1.873-.934 0-1.743.686-1.743 1.873v6.869H40.22V55.02h2.615v.812c.622-.75 1.432-1 2.49-1 1.183 0 2.18.5 2.864 1.437.871-1 1.992-1.436 3.362-1.436 2.054 0 3.673 1.623 3.673 3.996z"></path><path d="M58.025 60.579c0-3.186 2.304-5.808 5.478-5.808 1.246 0 2.243.374 2.989.999v-.75h2.677v11.115h-2.615v-.874c-.747.687-1.805 1.124-3.112 1.124-3.052 0-5.417-2.622-5.417-5.807zm8.717 0c0-1.75-1.308-3.061-2.927-3.061s-2.926 1.312-2.926 3.061c0 1.748 1.308 3.06 2.926 3.06s2.927-1.312 2.927-3.061z"></path><path d="M72.843 55.02h2.614v.812c.81-.812 1.868-1.062 2.927-1.062 2.304 0 4.17 1.748 4.17 4.122v7.18h-2.676v-6.556a2.103 2.103 0 0 0-2.117-2.123 2.102 2.102 0 0 0-2.116 2.123v6.62h-2.678V55.02h-.124z"></path><path d="M93.326 62.889c0 1.873-1.245 3.496-4.234 3.496-1.307 0-2.366-.312-3.299-.686v-2.623c.996.5 2.179.812 3.238.812.996 0 1.493-.312 1.493-.874 0-1.75-4.73-1.188-4.73-4.747 0-2.186 1.742-3.497 4.17-3.497.996 0 1.93.25 2.927.812v2.685c-1.308-.812-2.242-1.062-2.989-1.062-.872 0-1.37.312-1.37.874-.062 1.687 4.794 1.063 4.794 4.81z"></path><path d="M99.116 55.02v11.115h-2.677V55.02z"></path><path d="M101.92 60.579c0-3.186 2.615-5.808 5.79-5.808s5.79 2.622 5.79 5.807-2.615 5.807-5.79 5.807-5.79-2.622-5.79-5.807zm8.717 0c0-1.75-1.307-3.061-2.927-3.061-1.618 0-2.926 1.312-2.926 3.061 0 1.748 1.308 3.06 2.926 3.06 1.62 0 2.927-1.312 2.927-3.061z"></path><path d="M116.24 55.02h2.615v.812c.81-.812 1.868-1.062 2.927-1.062 2.303 0 4.17 1.748 4.17 4.122v7.18h-2.676v-6.556a2.103 2.103 0 0 0-2.118-2.123 2.103 2.103 0 0 0-2.116 2.123v6.62h-2.677V55.02h-.125z"></path><path d="M131.24 63.076v.437h-.933v2.623h-.499v-2.623h-.933v-.437z"></path><path d="m132.3 63.076.997 2.435.933-2.435h.623v3.06h-.498v-2.248l-.934 2.248h-.436l-.934-2.248v2.248h-.498v-3.061h.747z"></path></svg>`;',
+    '',
+    'export function SoftwareMansionLogo({ width = 150, height = 80 }: { width?: number; height?: number }) {',
+    '  return <SvgXml xml={softwareMansionLogoXml} width={width} height={height} accessibilityRole="image" />;',
+    '}',
     '',
   ].join('\n');
 }
@@ -2078,6 +2479,8 @@ function renderPackageCard(): string {
     "import type { ReactNode } from 'react';",
     "import { StyleSheet, Text, View } from 'react-native';",
     '',
+    "import { useAppTheme } from '../../theme/provider';",
+    '',
     'interface PackageCardProps {',
     '  title: string;',
     '  packageName: string;',
@@ -2086,11 +2489,14 @@ function renderPackageCard(): string {
     '}',
     '',
     'export function PackageCard({ title, packageName, body, children }: PackageCardProps) {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '',
     '  return (',
-    '    <View style={styles.card}>',
-    '      <Text style={styles.packageName}>{packageName}</Text>',
-    '      <Text style={styles.title}>{title}</Text>',
-    '      <Text style={styles.body}>{body}</Text>',
+    '    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '      <Text style={[styles.packageName, { color: colors.text }]}>{packageName}</Text>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>{title}</Text>',
+    '      <Text style={[styles.body, { color: colors.text }]}>{body}</Text>',
     '      {children ? <View style={styles.demo}>{children}</View> : null}',
     '    </View>',
     '  );',
@@ -2136,67 +2542,178 @@ function renderExpositionComponentIndex(): string {
     "export { KeyboardForm } from './keyboard-form';",
     "export { PackageCard } from './package-card';",
     "export { ScreensCard } from './screens-card';",
+    "export { SoftwareMansionLogo } from './software-mansion-logo';",
     "export { SvgMark } from './svg-mark';",
     '',
   ].join('\n');
 }
 
-function renderHomeScreen(answers: OnboardAnswers): string {
+function renderNativeWindUiScreen(): string {
   return [
-    "import { Link } from 'expo-router';",
-    "import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';",
+    "import { useMemo, useState } from 'react';",
+    "import { Linking, ScrollView, StyleSheet, View } from 'react-native';",
     '',
-    "import { GestureCard, SvgMark } from '../../components/exposition';",
+    "import { ActivityIndicator } from '../../../components/nativewindui/ActivityIndicator';",
+    "import { Button } from '../../../components/nativewindui/Button';",
+    "import { Picker, PickerItem } from '../../../components/nativewindui/Picker';",
+    "import { ProgressIndicator } from '../../../components/nativewindui/ProgressIndicator';",
+    "import { Slider } from '../../../components/nativewindui/Slider';",
+    "import { Text } from '../../../components/nativewindui/Text';",
+    "import { Toggle } from '../../../components/nativewindui/Toggle';",
+    "import { ExpositionNotice } from '../../components/exposition';",
+    "import { useAppTheme } from '../../theme/provider';",
+    '',
+    'export default function NativeWindUiScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '  const [enabled, setEnabled] = useState(true);',
+    '  const [intensity, setIntensity] = useState(0.64);',
+    "  const [density, setDensity] = useState('balanced');",
+    '  const progress = useMemo(() => Math.round(intensity * 100), [intensity]);',
+    '',
+    '  return (',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
+    '      <View style={styles.header}>',
+    '        <Text variant="largeTitle" className="font-black text-slate-950 dark:text-white">NativeWindUI Exposition</Text>',
+    '        <Text variant="body" color="secondary">Generated when NativeWindUI is selected; this page exercises the local NativeWindUI primitives that create-expo-stack installs.</Text>',
+    '      </View>',
+    '      <ExpositionNotice />',
+    '      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '        <Text variant="heading">Interactive primitives</Text>',
+    '        <View style={styles.row}>',
+    "          <Button onPress={() => Linking.openURL('https://nativewindui.com')} variant=\"primary\">",
+    '            <Text>Open NativeWindUI docs</Text>',
+    '          </Button>',
+    '          <Button variant="tonal">',
+    '            <Text>{density}</Text>',
+    '          </Button>',
+    '        </View>',
+    '        <View style={styles.controlRow}>',
+    '          <Text variant="callout">Enable generated theme bridge</Text>',
+    '          <Toggle value={enabled} onValueChange={setEnabled} />',
+    '        </View>',
+    '        <Slider value={intensity} onValueChange={setIntensity} />',
+    '        <ProgressIndicator value={progress} />',
+    "        <Text variant=\"footnote\" color=\"secondary\">Progress {progress}% · Toggle {enabled ? 'on' : 'off'}</Text>",
+    '      </View>',
+    '      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '        <Text variant="heading">Picker and feedback</Text>',
+    '        <Picker selectedValue={density} onValueChange={(value) => setDensity(String(value))}>',
+    '          <PickerItem label="Compact density" value="compact" />',
+    '          <PickerItem label="Balanced density" value="balanced" />',
+    '          <PickerItem label="Spacious density" value="spacious" />',
+    '        </Picker>',
+    '        <View style={styles.feedbackRow}>',
+    '          <ActivityIndicator />',
+    '          <Text variant="subhead" color="secondary">NativeWind class tokens, generated theme colors, and Expo web are rendering together.</Text>',
+    '        </View>',
+    '      </View>',
+    '    </ScrollView>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  screen: {',
+    "    backgroundColor: '#f8fafc',",
+    '    flex: 1,',
+    '  },',
+    '  content: {',
+    '    gap: 16,',
+    '    padding: 20,',
+    '    paddingTop: 84,',
+    '  },',
+    '  header: {',
+    '    gap: 8,',
+    '  },',
+    '  card: {',
+    '    borderWidth: 1,',
+    '    gap: 16,',
+    '    padding: 16,',
+    '  },',
+    '  row: {',
+    "    flexDirection: 'row',",
+    "    flexWrap: 'wrap',",
+    '    gap: 10,',
+    '  },',
+    '  controlRow: {',
+    "    alignItems: 'center',",
+    "    flexDirection: 'row',",
+    '    gap: 12,',
+    "    justifyContent: 'space-between',",
+    '  },',
+    '  feedbackRow: {',
+    "    alignItems: 'center',",
+    "    flexDirection: 'row',",
+    '    gap: 12,',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationShell): string {
+  const expositionLinks =
+    navigationShell.library === 'expo-router' && navigationShell.layout !== 'stack'
+      ? []
+      : [
+          "  { href: '/exposition' as const, title: 'Software Mansion exposition', body: 'Review included Software Mansion packages and decide what stays.' },",
+          "  { href: '/exposition/stylist' as const, title: 'Stylist', body: 'Test colors, type, motion, and component density.' },",
+          "  { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },",
+          "  { href: '/exposition/sdk-56' as const, title: 'Expo SDK 56', body: 'Review the new Expo UI, Router, module, and performance changes.' },",
+        ];
+
+  return [
+    "import { Link, type Href } from 'expo-router';",
+    "import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';",
+    '',
+    "import { SvgMark } from '../../components/exposition';",
     "import { appSnapshot } from '../../data/mock-app';",
+    "import { useAppTheme } from '../../theme/provider';",
     '',
-    'const expositionLinks = [',
-    "  { href: '/exposition' as const, title: 'Package exposition', body: 'Review included base packages and decide what stays.' },",
-    "  { href: '/exposition/stylist' as const, title: 'Stylist', body: 'Test colors, type, motion, and component density.' },",
-    "  { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },",
+    'const expositionLinks: Array<{ href: Href; title: string; body: string }> = [',
+    ...expositionLinks,
     '];',
     '',
     'export default function HomeScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '',
     '  return (',
-    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
     '      <View style={styles.header}>',
-    '        <SvgMark />',
-    '        <View style={styles.headerText}>',
-    `          <Text style={styles.title}>${answers.appName}</Text>`,
-    '          <Text style={styles.subtitle}>{appSnapshot.audience}</Text>',
+    '        <View style={styles.brandLockup}>',
+    '          <SvgMark size={64} />',
+    '          <View style={styles.brandText}>',
+    '            <Text style={[styles.brandLine, { color: colors.text }]}>Super</Text>',
+    '            <Text style={[styles.brandLine, { color: colors.text }]}>Stack</Text>',
+    '          </View>',
     '        </View>',
-    '        <Link href="/settings" asChild>',
-    '          <Pressable accessibilityRole="button" style={styles.infoButton}>',
-    '            <Text style={styles.infoButtonText}>i</Text>',
-    '          </Pressable>',
-    '        </Link>',
+    '        <View style={styles.headerText}>',
+    `          <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>${answers.appName}</Text>`,
+    '          <Text style={[styles.subtitle, { color: colors.text }]}>{appSnapshot.audience}</Text>',
+    '        </View>',
+    '        {Platform.OS === "web" ? (',
+    '          <Link href="/settings" asChild>',
+    '            <Pressable accessibilityRole="button" style={StyleSheet.flatten([styles.infoButton, { backgroundColor: colors.primary }])}>',
+    '              <Text style={styles.infoButtonText}>i</Text>',
+    '            </Pressable>',
+    '          </Link>',
+    '        ) : null}',
     '      </View>',
-    '      <GestureCard',
-    '        title="Rich boilerplate is wired"',
-    '        body="Routes stay thin, feature screens hold UI, and the temporary exposition pages are reachable from this home screen."',
-    '      />',
     '      <View style={styles.grid}>',
     '        <Link href="/onboarding" asChild>',
-    '          <Pressable style={styles.primaryCard}>',
+    '          <Pressable style={StyleSheet.flatten([styles.primaryCard, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }])}>',
     '            <Text style={styles.primaryTitle}>Onboarding preview</Text>',
     '            <Text style={styles.primaryBody}>Open the generated onboarding screen before the main product flow replaces it.</Text>',
     '          </Pressable>',
     '        </Link>',
     '        {expositionLinks.map((item) => (',
-    '          <Link key={item.href} href={item.href} asChild>',
-    '            <Pressable style={styles.linkCard}>',
-    '              <Text style={styles.linkTitle}>{item.title}</Text>',
-    '              <Text style={styles.linkBody}>{item.body}</Text>',
+    '          <Link key={String(item.href)} href={item.href} asChild>',
+    '            <Pressable style={StyleSheet.flatten([styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }])}>',
+    '              <Text style={[styles.linkTitle, { color: colors.text }]}>{item.title}</Text>',
+    '              <Text style={[styles.linkBody, { color: colors.text }]}>{item.body}</Text>',
     '            </Pressable>',
     '          </Link>',
-    '        ))}',
-    '      </View>',
-    '      <View style={styles.taskList}>',
-    '        <Text style={styles.sectionTitle}>Generated next steps</Text>',
-    '        {appSnapshot.tasks.map((task) => (',
-    '          <View key={task.id} style={styles.taskCard}>',
-    '            <Text style={styles.taskTitle}>{task.title}</Text>',
-    '            <Text style={styles.taskStatus}>{task.status}</Text>',
-    '          </View>',
     '        ))}',
     '      </View>',
     '    </ScrollView>',
@@ -2209,23 +2726,45 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     '    flex: 1,',
     '  },',
     '  content: {',
+    '    flexGrow: 1,',
     '    gap: 16,',
+    '    justifyContent: "center",',
     '    padding: 20,',
+    '    paddingTop: Platform.OS === "web" ? 84 : 20,',
     '  },',
     '  header: {',
     '    alignItems: "center",',
+    '    gap: 10,',
+    '    position: "relative",',
+    '  },',
+    '  brandLockup: {',
+    '    alignItems: "center",',
     '    flexDirection: "row",',
-    '    gap: 12,',
+    '    gap: 14,',
+    '    justifyContent: "center",',
     '  },',
     '  headerText: {',
-    '    flex: 1,',
+    '    alignItems: "center",',
+    '    width: "100%",',
     '  },',
+  '  brandText: {',
+    '    gap: 0,',
+  '  },',
+    '  brandLine: {',
+    '    fontSize: 16,',
+    '    fontWeight: "900",',
+    '    lineHeight: 17,',
+    '    textTransform: "uppercase",',
+  '  },',
     '  infoButton: {',
     '    alignItems: "center",',
     "    backgroundColor: '#111827',",
     '    borderRadius: 18,',
     '    height: 36,',
     '    justifyContent: "center",',
+    '    position: "absolute",',
+    '    right: 0,',
+    '    top: 0,',
     '    width: 36,',
     '  },',
     '  infoButtonText: {',
@@ -2237,11 +2776,13 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     "    color: '#111827',",
     '    fontSize: 22,',
     '    fontWeight: "800",',
+    '    textAlign: "center",',
     '  },',
     '  subtitle: {',
     "    color: '#4b5563',",
     '    fontSize: 14,',
     '    marginTop: 3,',
+    '    textAlign: "center",',
     '  },',
     '  grid: {',
     '    gap: 12,',
@@ -2280,32 +2821,6 @@ function renderHomeScreen(answers: OnboardAnswers): string {
     '    fontSize: 14,',
     '    lineHeight: 20,',
     '  },',
-    '  taskList: {',
-    '    gap: 10,',
-    '  },',
-    '  sectionTitle: {',
-    "    color: '#111827',",
-    '    fontSize: 18,',
-    '    fontWeight: "800",',
-    '  },',
-    '  taskCard: {',
-    "    backgroundColor: '#ffffff',",
-    "    borderColor: '#e5e7eb',",
-    '    borderRadius: 10,',
-    '    borderWidth: 1,',
-    '    padding: 12,',
-    '  },',
-    '  taskTitle: {',
-    "    color: '#111827',",
-    '    fontWeight: "700",',
-    '  },',
-    '  taskStatus: {',
-    "    color: '#6b7280',",
-    '    fontSize: 12,',
-    '    fontWeight: "800",',
-    '    marginTop: 4,',
-    '    textTransform: "uppercase",',
-    '  },',
     '});',
     '',
   ].join('\n');
@@ -2313,21 +2828,70 @@ function renderHomeScreen(answers: OnboardAnswers): string {
 
 function renderOnboardingScreen(): string {
   return [
-    "import { Link } from 'expo-router';",
-    "import { StyleSheet, Text, View } from 'react-native';",
+    "import { Link, useRouter } from 'expo-router';",
+    "import { useMemo, useState } from 'react';",
+    "import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';",
     '',
-    "import { AnimatedPressable } from '../../components/exposition';",
+    "import { onboardingLegalDocuments } from './legal-documents';",
     '',
     'export default function OnboardingScreen() {',
+    '  const [acceptedAgreement, setAcceptedAgreement] = useState(false);',
+    '  const [acceptedTerms, setAcceptedTerms] = useState(false);',
+    '  const router = useRouter();',
+    '  const canContinue = acceptedAgreement && acceptedTerms;',
+    '  const agreementUpdated = useMemo(() => new Date(onboardingLegalDocuments.agreement.lastUpdated).toLocaleDateString(), []);',
+    '  const termsUpdated = useMemo(() => new Date(onboardingLegalDocuments.terms.lastUpdated).toLocaleDateString(), []);',
+    '',
     '  return (',
     '    <View style={styles.screen}>',
-    '      <Text style={styles.title}>Start with intent</Text>',
-    '      <Text style={styles.body}>',
-    '        Replace this screen with the first real onboarding step once the product flow is settled.',
-    '      </Text>',
-    '      <Link href="/" asChild>',
-    '        <AnimatedPressable label="Continue to home" />',
-    '      </Link>',
+    '      <Text style={styles.title}>Legal onboarding</Text>',
+    '      <Text style={styles.body}>Review and approve the Agreement and Terms before continuing in your real auth or profile flow.</Text>',
+    '      <View style={styles.card}>',
+    '        <View style={styles.rowTop}>',
+    '          <Text style={styles.cardTitle}>Agreement</Text>',
+    '          <Text style={styles.meta}>{agreementUpdated}</Text>',
+    '        </View>',
+    '        <Text style={styles.cardBody}>A compact starter agreement with fill-in fields your team can finalize.</Text>',
+    '        <View style={styles.rowBottom}>',
+    '          <Link href="/onboarding/agreement" asChild>',
+    '            <Pressable accessibilityRole="button" style={styles.linkButton}>',
+    '              <Text style={styles.linkButtonText}>View agreement</Text>',
+    '            </Pressable>',
+    '          </Link>',
+    '          <View style={styles.acceptWrap}>',
+    '            <Text style={styles.acceptText}>Accepted</Text>',
+    '            <Switch value={acceptedAgreement} onValueChange={setAcceptedAgreement} />',
+    '          </View>',
+    '        </View>',
+    '      </View>',
+    '      <View style={styles.card}>',
+    '        <View style={styles.rowTop}>',
+    '          <Text style={styles.cardTitle}>Terms of service</Text>',
+    '          <Text style={styles.meta}>{termsUpdated}</Text>',
+    '        </View>',
+    '        <Text style={styles.cardBody}>Production-safe baseline terms with placeholders for business specifics.</Text>',
+    '        <View style={styles.rowBottom}>',
+    '          <Link href="/onboarding/terms" asChild>',
+    '            <Pressable accessibilityRole="button" style={styles.linkButton}>',
+    '              <Text style={styles.linkButtonText}>View terms</Text>',
+    '            </Pressable>',
+    '          </Link>',
+    '          <View style={styles.acceptWrap}>',
+    '            <Text style={styles.acceptText}>Accepted</Text>',
+    '            <Switch value={acceptedTerms} onValueChange={setAcceptedTerms} />',
+    '          </View>',
+    '        </View>',
+    '      </View>',
+    '      <Pressable',
+    '        accessibilityRole="button"',
+    '        disabled={!canContinue}',
+    '        onPress={() => {',
+    '          if (canContinue) router.push("/onboarding/account-setup");',
+    '        }}',
+    '        style={[styles.ctaButton, !canContinue && styles.ctaButtonDisabled]}',
+    '      >',
+    '        <Text style={styles.ctaButtonText}>Continue to account setup</Text>',
+    '      </Pressable>',
     '    </View>',
     '  );',
     '}',
@@ -2336,8 +2900,120 @@ function renderOnboardingScreen(): string {
     '  screen: {',
     "    backgroundColor: '#ffffff',",
     '    flex: 1,',
-    '    gap: 16,',
-    '    justifyContent: "center",',
+    '    gap: 14,',
+    '    padding: 20,',
+  '  },',
+  '  title: {',
+    "    color: '#111827',",
+    '    fontSize: 26,',
+    '    fontWeight: "800",',
+  '  },',
+  '  body: {',
+    "    color: '#4b5563',",
+    '    fontSize: 15,',
+    '    lineHeight: 22,',
+  '  },',
+  '  card: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#d1d5db',",
+    '    borderRadius: 12,',
+    '    borderWidth: 1,',
+    '    gap: 8,',
+    '    padding: 14,',
+  '  },',
+  '  rowTop: {',
+    '    alignItems: "center",',
+    '    flexDirection: "row",',
+    '    justifyContent: "space-between",',
+  '  },',
+  '  rowBottom: {',
+    '    alignItems: "center",',
+    '    flexDirection: "row",',
+    '    justifyContent: "space-between",',
+  '  },',
+  '  cardTitle: {',
+    "    color: '#111827',",
+    '    fontSize: 18,',
+    '    fontWeight: "800",',
+  '  },',
+  '  cardBody: {',
+    "    color: '#4b5563',",
+    '    fontSize: 14,',
+    '    lineHeight: 20,',
+  '  },',
+  '  meta: {',
+    "    color: '#6b7280',",
+    '    fontSize: 12,',
+    '    fontWeight: "700",',
+  '  },',
+  '  linkButton: {',
+    "    backgroundColor: '#111827',",
+    '    borderRadius: 9,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 8,',
+  '  },',
+  '  linkButtonText: {',
+    "    color: '#ffffff',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+  '  },',
+  '  acceptWrap: {',
+    '    alignItems: "center",',
+    '    flexDirection: "row",',
+    '    gap: 8,',
+  '  },',
+  '  acceptText: {',
+    "    color: '#111827',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+  '  },',
+  '  ctaButton: {',
+    '    alignItems: "center",',
+    "    backgroundColor: '#0f172a',",
+    '    borderRadius: 12,',
+    '    marginTop: "auto",',
+    '    paddingVertical: 14,',
+  '  },',
+  '  ctaButtonDisabled: {',
+    "    backgroundColor: '#9ca3af',",
+  '  },',
+  '  ctaButtonText: {',
+    "    color: '#ffffff',",
+    '    fontSize: 15,',
+    '    fontWeight: "800",',
+  '  },',
+  '});',
+  '',
+  ].join('\n');
+}
+
+function renderAccountSetupScreen(): string {
+  return [
+    "import { useRouter } from 'expo-router';",
+    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
+    '',
+    'export default function AccountSetupScreen() {',
+    '  const router = useRouter();',
+    '',
+    '  return (',
+    '    <View style={styles.screen}>',
+    '      <Text style={styles.title}>Account setup</Text>',
+    '      <Text style={styles.body}>This is the production-ready handoff point after legal acceptance. Replace this with your real auth and profile onboarding flow.</Text>',
+    '      <Pressable',
+    '        accessibilityRole="button"',
+    "        onPress={() => router.replace('/')}",
+    '        style={styles.homeButton}>',
+    '        <Text style={styles.homeButtonText}>Continue to home</Text>',
+    '      </Pressable>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  screen: {',
+    "    backgroundColor: '#ffffff',",
+    '    flex: 1,',
+    '    gap: 12,',
     '    padding: 20,',
     '  },',
     '  title: {',
@@ -2347,26 +3023,411 @@ function renderOnboardingScreen(): string {
     '  },',
     '  body: {',
     "    color: '#4b5563',",
+    '    fontSize: 15,',
+    '    lineHeight: 22,',
+    '  },',
+    '  homeButton: {',
+    "    alignItems: 'center',",
+    "    backgroundColor: '#2563eb',",
+    '    borderRadius: 12,',
+    '    marginTop: 12,',
+    '    paddingHorizontal: 18,',
+    '    paddingVertical: 14,',
+    '  },',
+    '  homeButtonText: {',
+    "    color: '#ffffff',",
     '    fontSize: 16,',
-    '    lineHeight: 24,',
+    '    fontWeight: "800",',
     '  },',
     '});',
     '',
   ].join('\n');
 }
 
+function renderLegalDocuments(): string {
+  return [
+    'export interface LegalDocumentSection {',
+    '  id: string;',
+    '  title: string;',
+    '  body: string;',
+    '}',
+    '',
+    'export interface LegalDocument {',
+    '  id: "agreement" | "terms";',
+    '  title: string;',
+    '  summary: string;',
+    '  effectiveDate: string;',
+    '  lastUpdated: string;',
+    '  sections: LegalDocumentSection[];',
+    '}',
+    '',
+    'export const onboardingLegalDocuments: Record<"agreement" | "terms", LegalDocument> = {',
+    '  agreement: {',
+    '    id: "agreement",',
+    '    title: "User Agreement",',
+    '    summary: "Agreement template for onboarding consent and account usage.",',
+    '    effectiveDate: "2026-05-24",',
+    '    lastUpdated: "2026-05-24",',
+    '    sections: [',
+    '      { id: "scope", title: "Scope", body: "This agreement covers access to [APP NAME], account conduct, and baseline obligations between [COMPANY NAME] and each user." },',
+    '      { id: "usage", title: "Acceptable Use", body: "Users agree not to misuse the service, attempt unauthorized access, or submit harmful content." },',
+    '      { id: "privacy", title: "Privacy and Data", body: "User data is handled according to the published privacy notice. Replace this section with your final privacy commitments and retention policy." },',
+    '      { id: "termination", title: "Termination", body: "Either party may terminate usage under the conditions described in this section. Add jurisdiction-specific language before production launch." },',
+    '    ],',
+    '  },',
+    '  terms: {',
+    '    id: "terms",',
+    '    title: "Terms of Service",',
+    '    summary: "Near-blank, production-oriented terms starter for legal review.",',
+    '    effectiveDate: "2026-05-24",',
+    '    lastUpdated: "2026-05-24",',
+    '    sections: [',
+    '      { id: "eligibility", title: "Eligibility", body: "Users must meet age and legal capacity requirements for their jurisdiction." },',
+    '      { id: "accounts", title: "Accounts", body: "Users are responsible for account credentials and activity performed through their account." },',
+    '      { id: "payments", title: "Payments and Billing", body: "If applicable, describe pricing, billing intervals, refunds, and failed payment handling." },',
+    '      { id: "liability", title: "Disclaimers and Liability", body: "Define limitations of liability and service disclaimers with legal counsel." },',
+    '      { id: "governing-law", title: "Governing Law", body: "Specify governing law, venue, and dispute resolution expectations." },',
+    '    ],',
+    '  },',
+    '};',
+    '',
+  ].join('\n');
+}
+
+function renderLegalDocumentView(): string {
+  return [
+    "import { ScrollView, StyleSheet, Text, View } from 'react-native';",
+    '',
+    "import type { LegalDocument } from '../legal-documents';",
+    '',
+    'interface LegalDocumentViewProps {',
+    '  document: LegalDocument;',
+    '}',
+    '',
+    'function LegalDocumentMeta({ label, value }: { label: string; value: string }) {',
+    '  return (',
+    '    <View style={styles.metaItem}>',
+    '      <Text style={styles.metaLabel}>{label}</Text>',
+    '      <Text style={styles.metaValue}>{value}</Text>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'function LegalSectionItem({ title, body }: { title: string; body: string }) {',
+    '  return (',
+    '    <View style={styles.section}>',
+    '      <Text style={styles.sectionTitle}>{title}</Text>',
+    '      <Text style={styles.sectionBody}>{body}</Text>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'export function LegalDocumentView({ document }: LegalDocumentViewProps) {',
+    '  return (',
+    '    <ScrollView contentContainerStyle={styles.content} style={styles.screen}>',
+    '      <Text style={styles.title}>{document.title}</Text>',
+    '      <Text style={styles.summary}>{document.summary}</Text>',
+    '      <View style={styles.metaRow}>',
+    '        <LegalDocumentMeta label="Effective" value={document.effectiveDate} />',
+    '        <LegalDocumentMeta label="Last updated" value={document.lastUpdated} />',
+    '      </View>',
+    '      {document.sections.map((section) => (',
+    '        <LegalSectionItem key={section.id} title={section.title} body={section.body} />',
+    '      ))}',
+    '    </ScrollView>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  screen: {',
+    "    backgroundColor: '#f8fafc',",
+    '    flex: 1,',
+    '  },',
+    '  content: {',
+    '    gap: 14,',
+    '    padding: 20,',
+    '    paddingTop: 84,',
+    '  },',
+    '  title: {',
+    "    color: '#0f172a',",
+    '    fontSize: 28,',
+    '    fontWeight: "800",',
+    '  },',
+    '  summary: {',
+    "    color: '#334155',",
+    '    fontSize: 15,',
+    '    lineHeight: 22,',
+    '  },',
+    '  metaRow: {',
+    '    flexDirection: "row",',
+    '    gap: 10,',
+    '  },',
+    '  metaItem: {',
+    "    backgroundColor: '#e2e8f0',",
+    '    borderRadius: 10,',
+    '    gap: 2,',
+    '    paddingHorizontal: 10,',
+    '    paddingVertical: 8,',
+    '  },',
+    '  metaLabel: {',
+    "    color: '#475569',",
+    '    fontSize: 11,',
+    '    fontWeight: "700",',
+    '    textTransform: "uppercase",',
+    '  },',
+    '  metaValue: {',
+    "    color: '#0f172a',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+    '  },',
+    '  section: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#e2e8f0',",
+    '    borderRadius: 12,',
+    '    borderWidth: 1,',
+    '    gap: 7,',
+    '    padding: 14,',
+    '  },',
+    '  sectionTitle: {',
+    "    color: '#0f172a',",
+    '    fontSize: 17,',
+    '    fontWeight: "800",',
+    '  },',
+    '  sectionBody: {',
+    "    color: '#334155',",
+    '    fontSize: 14,',
+    '    lineHeight: 21,',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderAgreementScreen(): string {
+  return [
+    "import { LegalDocumentView } from './components/legal-document-view';",
+    "import { onboardingLegalDocuments } from './legal-documents';",
+    '',
+    'export default function AgreementScreen() {',
+    '  return <LegalDocumentView document={onboardingLegalDocuments.agreement} />;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderTermsScreen(): string {
+  return [
+    "import { LegalDocumentView } from './components/legal-document-view';",
+    "import { onboardingLegalDocuments } from './legal-documents';",
+    '',
+    'export default function TermsScreen() {',
+    '  return <LegalDocumentView document={onboardingLegalDocuments.terms} />;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+async function ensureExpoRouterGroupLayouts(
+  appDir: string,
+  navigationShell: NavigationShell,
+  answers: OnboardAnswers
+): Promise<WriteResult[]> {
+  if (navigationShell.library !== 'expo-router') {
+    return [];
+  }
+  const results: WriteResult[] = [];
+  if (navigationShell.layout === 'tabs') {
+    const tabsDir = path.join(appDir, '(tabs)');
+    await mkdir(tabsDir, { recursive: true });
+    const layoutPath = path.join(tabsDir, '_layout.tsx');
+    await writeFile(
+      layoutPath,
+      renderTabsGroupLayout(answers.usesExpoNativeTabs, false),
+      'utf8'
+    );
+    results.push({ filePath: layoutPath, wrote: true });
+    return results;
+  }
+  if (navigationShell.layout === 'drawer + tabs') {
+    const drawerDir = path.join(appDir, '(drawer)');
+    const drawerTabsDir = path.join(drawerDir, '(tabs)');
+    await mkdir(drawerTabsDir, { recursive: true });
+    const drawerLayoutPath = path.join(drawerDir, '_layout.tsx');
+    const drawerTabsLayoutPath = path.join(drawerTabsDir, '_layout.tsx');
+    await writeFile(drawerLayoutPath, renderDrawerGroupLayout(), 'utf8');
+    await writeFile(
+      drawerTabsLayoutPath,
+      renderDrawerTabsGroupLayout(answers.usesExpoNativeTabs, false),
+      'utf8'
+    );
+    results.push(
+      { filePath: drawerLayoutPath, wrote: true },
+      { filePath: drawerTabsLayoutPath, wrote: true }
+    );
+  }
+  return results;
+}
+function renderTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeWindUiExposition: boolean): string {
+  const nativeTabsNativeWindUiTrigger = includeNativeWindUiExposition
+    ? [
+        '      <NativeTabs.Trigger name="nativewindui">',
+        '        <NativeTabs.Trigger.Icon sf={"wind" as any} md={"air" as any} />',
+        '        <NativeTabs.Trigger.Label>NativeWindUI</NativeTabs.Trigger.Label>',
+        '      </NativeTabs.Trigger>',
+      ]
+    : [];
+  const jsTabsNativeWindUiScreen = includeNativeWindUiExposition
+    ? [
+        "      <Tabs.Screen name=\"nativewindui\" options={{ title: 'NativeWindUI', tabBarIcon: () => <Text>NW</Text> }} />",
+      ]
+    : [];
+  if (usesExpoNativeTabs) {
+    return [
+      "import { NativeTabs } from 'expo-router/unstable-native-tabs';",
+      '',
+      'export default function TabsLayout() {',
+      '  return (',
+      '    <NativeTabs minimizeBehavior="onScrollDown">',
+      '      <NativeTabs.Trigger name="index">',
+      '        <NativeTabs.Trigger.Icon sf={"house.fill" as any} md={"home" as any} />',
+      '        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="software-mansion">',
+      '        <NativeTabs.Trigger.Icon sf={"shippingbox.fill" as any} md={"deployed_code" as any} />',
+      '        <NativeTabs.Trigger.Label>Software Mansion</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="stylist">',
+      '        <NativeTabs.Trigger.Icon sf={"paintpalette.fill" as any} md={"palette" as any} />',
+      '        <NativeTabs.Trigger.Label>Stylist</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="data">',
+      '        <NativeTabs.Trigger.Icon sf={"externaldrive.fill" as any} md={"database" as any} />',
+      '        <NativeTabs.Trigger.Label>Data</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="sdk-56">',
+      '        <NativeTabs.Trigger.Icon sf={"sparkles.rectangle.stack.fill" as any} md={"rocket_launch" as any} />',
+      '        <NativeTabs.Trigger.Label>SDK 56</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      ...nativeTabsNativeWindUiTrigger,
+      '    </NativeTabs>',
+      '  );',
+      '}',
+      '',
+    ].join('\n');
+  }
+  return [
+    "import { Tabs } from 'expo-router';",
+    "import { Text } from 'react-native';",
+    '',
+    'export default function TabsLayout() {',
+    '  return (',
+    '    <Tabs>',
+    "      <Tabs.Screen name=\"index\" options={{ title: 'Home', tabBarIcon: () => <Text>H</Text> }} />",
+    "      <Tabs.Screen name=\"software-mansion\" options={{ title: 'Software Mansion', tabBarIcon: () => <Text>SM</Text> }} />",
+    "      <Tabs.Screen name=\"stylist\" options={{ title: 'Stylist', tabBarIcon: () => <Text>SS</Text> }} />",
+    "      <Tabs.Screen name=\"data\" options={{ title: 'Data', tabBarIcon: () => <Text>DB</Text> }} />",
+    "      <Tabs.Screen name=\"sdk-56\" options={{ title: 'SDK 56', tabBarIcon: () => <Text>56</Text> }} />",
+    ...jsTabsNativeWindUiScreen,
+    '    </Tabs>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+}
+function renderDrawerGroupLayout(): string {
+  return [
+    "import { Drawer } from 'expo-router/drawer';",
+    '',
+    'export default function DrawerLayout() {',
+    '  return (',
+    '    <Drawer>',
+    "      <Drawer.Screen name=\"index\" options={{ title: 'Home', drawerLabel: 'Home' }} />",
+    "      <Drawer.Screen name=\"(tabs)\" options={{ title: 'Software Mansion', drawerLabel: 'Software Mansion' }} />",
+    '    </Drawer>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderDrawerTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeWindUiExposition: boolean): string {
+  const nativeTabsNativeWindUiTrigger = includeNativeWindUiExposition
+    ? [
+        '      <NativeTabs.Trigger name="nativewindui">',
+        '        <NativeTabs.Trigger.Icon sf={"wind" as any} md={"air" as any} />',
+        '        <NativeTabs.Trigger.Label>NativeWindUI</NativeTabs.Trigger.Label>',
+        '      </NativeTabs.Trigger>',
+      ]
+    : [];
+  const jsTabsNativeWindUiScreen = includeNativeWindUiExposition
+    ? [
+        "      <Tabs.Screen name=\"nativewindui\" options={{ title: 'NativeWindUI', tabBarIcon: () => <Text>NW</Text> }} />",
+      ]
+    : [];
+  if (usesExpoNativeTabs) {
+    return [
+      "import { NativeTabs } from 'expo-router/unstable-native-tabs';",
+      '',
+      'export default function DrawerTabsLayout() {',
+      '  return (',
+      '    <NativeTabs minimizeBehavior="onScrollDown">',
+      '      <NativeTabs.Trigger name="index">',
+      '        <NativeTabs.Trigger.Icon sf={"shippingbox.fill" as any} md={"deployed_code" as any} />',
+      '        <NativeTabs.Trigger.Label>Software Mansion</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="stylist">',
+      '        <NativeTabs.Trigger.Icon sf={"paintpalette.fill" as any} md={"palette" as any} />',
+      '        <NativeTabs.Trigger.Label>Stylist</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="data">',
+      '        <NativeTabs.Trigger.Icon sf={"externaldrive.fill" as any} md={"database" as any} />',
+      '        <NativeTabs.Trigger.Label>Data</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      '      <NativeTabs.Trigger name="sdk-56">',
+      '        <NativeTabs.Trigger.Icon sf={"sparkles.rectangle.stack.fill" as any} md={"rocket_launch" as any} />',
+      '        <NativeTabs.Trigger.Label>SDK 56</NativeTabs.Trigger.Label>',
+      '      </NativeTabs.Trigger>',
+      ...nativeTabsNativeWindUiTrigger,
+      '    </NativeTabs>',
+      '  );',
+      '}',
+      '',
+    ].join('\n');
+  }
+  return [
+    "import { Tabs } from 'expo-router';",
+    "import { Text } from 'react-native';",
+    '',
+    'export default function DrawerTabsLayout() {',
+    '  return (',
+    '    <Tabs>',
+    "      <Tabs.Screen name=\"index\" options={{ title: 'Software Mansion', tabBarIcon: () => <Text>SM</Text> }} />",
+    "      <Tabs.Screen name=\"stylist\" options={{ title: 'Stylist', tabBarIcon: () => <Text>SS</Text> }} />",
+    "      <Tabs.Screen name=\"data\" options={{ title: 'Data', tabBarIcon: () => <Text>DB</Text> }} />",
+    "      <Tabs.Screen name=\"sdk-56\" options={{ title: 'SDK 56', tabBarIcon: () => <Text>56</Text> }} />",
+    ...jsTabsNativeWindUiScreen,
+    '    </Tabs>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+}
 function renderSettingsScreen(): string {
   return [
     "import { StyleSheet, Text, View } from 'react-native';",
     '',
     "import { KeyboardForm } from '../../components/exposition';",
+    "import { useAppTheme } from '../../theme/provider';",
     '',
     'export default function SettingsScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '',
     '  return (',
-    '    <View style={styles.screen}>',
+    '    <View style={[styles.screen, { backgroundColor: colors.background }]}>',
     '      <View style={styles.header}>',
-    '        <Text style={styles.title}>Settings</Text>',
-    '        <Text style={styles.body}>Keyboard Controller is ready for form-heavy screens.</Text>',
+    '        <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Settings</Text>',
+    '        <Text style={[styles.body, { color: colors.text }]}>Keyboard Controller is ready for form-heavy screens.</Text>',
     '      </View>',
     '      <KeyboardForm />',
     '    </View>',
@@ -2398,17 +3459,36 @@ function renderSettingsScreen(): string {
   ].join('\n');
 }
 
-function renderExpositionScreen(answers: OnboardAnswers): string {
+function renderExpositionScreen(): string {
   return [
-    "import { ScrollView, StyleSheet, Text, View } from 'react-native';",
+    "import { Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';",
     '',
-    "import { AnimatedPressable, ExpositionNotice, GestureCard, KeyboardForm, PackageCard, ScreensCard, SvgMark } from '../../components/exposition';",
+    "import { AnimatedPressable, ExpositionNotice, GestureCard, KeyboardForm, PackageCard, ScreensCard, SoftwareMansionLogo } from '../../components/exposition';",
+    "import { useAppTheme } from '../../theme/provider';",
+    '',
+    'const packageLinks = [',
+    "  { label: 'Software Mansion - Reanimated', href: 'https://docs.swmansion.com/react-native-reanimated' },",
+    "  { label: 'Software Mansion - Gesture Handler', href: 'https://docs.swmansion.com/react-native-gesture-handler' },",
+    "  { label: 'Software Mansion - Screens', href: 'https://docs.swmansion.com/react-native-screens' },",
+    "  { label: 'Software Mansion - SVG', href: 'https://docs.expo.dev/versions/latest/sdk/svg' },",
+    "  { label: 'Software Mansion - Keyboard Controller', href: 'https://kirillzyusko.github.io/react-native-keyboard-controller/' },",
+    '];',
     '',
     'export default function ExpositionScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '',
     '  return (',
-    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
-    `      <Text style={styles.title}>${answers.appName} Exposition</Text>`,
-    '      <Text style={styles.intro}>Browse the included base packages, then delete what the app does not need.</Text>',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Package Exposition</Text>',
+    '      <Text style={[styles.intro, { color: colors.text }]}>Browse the included Software Mansion packages, then keep only what your app needs.</Text>',
+    '      <View style={styles.linksWrap}>',
+    '        {packageLinks.map((item) => (',
+    '          <Text key={item.href} style={styles.link} onPress={() => Linking.openURL(item.href)}>',
+    '            {item.label}',
+    '          </Text>',
+    '        ))}',
+    '      </View>',
     '      <ExpositionNotice />',
     '      <PackageCard',
     '        packageName="react-native-reanimated + react-native-worklets"',
@@ -2436,7 +3516,7 @@ function renderExpositionScreen(answers: OnboardAnswers): string {
     '        title="Portable vector UI"',
     '        body="Use SVG for marks, badges, charts, and vector states that need to scale cleanly."',
     '      >',
-    '        <View style={styles.svgDemo}><SvgMark /></View>',
+    '        <View style={styles.svgDemo}><SoftwareMansionLogo width={150} height={80} /></View>',
     '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-keyboard-controller"',
@@ -2457,6 +3537,7 @@ function renderExpositionScreen(answers: OnboardAnswers): string {
     '  content: {',
     '    gap: 16,',
     '    padding: 20,',
+    "    paddingTop: Platform.OS === 'web' ? 92 : 20,",
     '  },',
     '  title: {',
     "    color: '#111827',",
@@ -2468,9 +3549,401 @@ function renderExpositionScreen(answers: OnboardAnswers): string {
     '    fontSize: 16,',
     '    lineHeight: 24,',
     '  },',
+    '  linksWrap: {',
+    '    gap: 8,',
+    '  },',
+    '  link: {',
+    "    color: '#1d4ed8',",
+    '    fontSize: 14,',
+    "    fontWeight: '800',",
+    '    lineHeight: 20,',
+    '  },',
     '  svgDemo: {',
     '    alignItems: "center",',
     '    paddingVertical: 8,',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderExpoSdk56Screen(answers: OnboardAnswers): string {
+  const expoUiDemo = answers.usesExpoUiUniversalComponents
+    ? [
+        'function UniversalPreview() {',
+        '  const [enabled, setEnabled] = useState(true);',
+        '  const [count, setCount] = useState(0);',
+        '  return (',
+        '    <View style={styles.exampleBox}>',
+        '      <View style={styles.componentLabelGrid}>',
+        '        <Text style={styles.componentLabel}>Host</Text>',
+        '        <Text style={styles.componentLabel}>Column</Text>',
+        '        <Text style={styles.componentLabel}>Text</Text>',
+        '        <Text style={styles.componentLabel}>Button</Text>',
+        '        <Text style={styles.componentLabel}>Switch</Text>',
+        '      </View>',
+        '      <Host matchContents>',
+        '        <Column spacing={10}>',
+        '          <ExpoUIText>{enabled ? "Feature enabled" : "Feature disabled"}</ExpoUIText>',
+        '          <ExpoUIButton variant="filled" label={`Universal button (${count})`} onPress={() => setCount((value) => value + 1)} />',
+        '          <ExpoUISwitch label="Universal switch" value={enabled} onValueChange={setEnabled} />',
+        '        </Column>',
+        '      </Host>',
+        '    </View>',
+        '  );',
+        '}',
+        '',
+      ]
+    : [
+        'function UniversalPreview() {',
+        '  return (',
+        '    <View style={styles.exampleBox}>',
+        '      <Text style={styles.exampleTitle}>Universal components are not enabled.</Text>',
+        '      <Text style={styles.exampleBody}>Turn on Expo UI Universal in onboarding to generate a Host, Column, Text, Button, and Switch demo here.</Text>',
+        '    </View>',
+        '  );',
+        '}',
+        '',
+      ];
+
+  return [
+    "import { useState } from 'react';",
+    "import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';",
+    ...(answers.usesExpoUiUniversalComponents
+      ? ["import { Host, Column, Button as ExpoUIButton, Switch as ExpoUISwitch, Text as ExpoUIText } from '@expo/ui';"]
+      : []),
+    '',
+    "import { ExpositionNotice, PackageCard } from '../../components/exposition';",
+    '',
+    'const highlights = [',
+    "  { kind: 'expo-ui', title: 'Expo UI is production-ready', packageName: '@expo/ui', body: 'SwiftUI and Jetpack Compose APIs are stable in SDK 56 with deeper native parity.', links: [{ label: 'Expo UI docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/' }] },",
+    "  { kind: 'universal', title: 'Universal components', packageName: '@expo/ui', body: 'Host, Button, Switch, Text, layout primitives, lists, and controls can live in one source tree.', experimental: true, links: [{ label: 'Universal components docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/universal/' }] },",
+    "  { kind: 'native-state', title: 'useNativeState', packageName: '@expo/ui/swift-ui', body: 'Native state can drive form controls and text entry without JS-thread controlled-input jitter.', links: [{ label: 'useNativeState docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/usenativestate/' }] },",
+    "  { kind: 'drop-in', title: 'Drop-in replacements', packageName: '@expo/ui', body: 'Expo UI maps common community UI primitives to native-backed replacements.', links: [{ label: 'Drop-in replacements docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/drop-in-replacements/' }] },",
+    "  { kind: 'inline-modules', title: 'Inline modules', packageName: 'expo-modules-core', body: 'Swift/Kotlin modules can be authored directly beside app code for project-local native features.', experimental: true, links: [{ label: 'Inline modules tutorial', href: 'https://docs.expo.dev/modules/inline-modules-tutorial/' }] },",
+    "  { kind: 'native-tabs', title: 'Router and native tabs', packageName: 'expo-router', body: 'Expo Router absorbs more of its stack internals and ships stronger native tabs support.', links: [{ label: 'Native tabs docs', href: 'https://docs.expo.dev/versions/latest/sdk/router/native-tabs/' }] },",
+    "  { kind: 'runtime', title: 'Runtime baseline', packageName: 'react-native + react', body: 'SDK 56 aligns to React Native 0.85, React 19.2, Hermes V1 defaults, and faster builds.', links: [] },",
+    "  { kind: 'widgets', title: 'Widgets', packageName: 'expo-widgets', body: 'Expo widgets are stable, with strong iOS support for lock-screen and home-screen experiences.', links: [{ label: 'Widgets docs', href: 'https://docs.expo.dev/versions/latest/sdk/widgets/' }] },",
+    "  { kind: 'audio', title: 'Audio and haptics updates', packageName: 'expo-audio + expo-haptics', body: 'Audio streaming primitives improved and haptics coverage keeps expanding.', links: [{ label: 'Expo Audio docs', href: 'https://docs.expo.dev/versions/latest/sdk/audio/' }] },",
+    '];',
+    '',
+    ...expoUiDemo,
+    'function TopicExample({ kind }: { kind: string }) {',
+    '  if (kind === "universal") return <UniversalPreview />;',
+    '  if (kind === "expo-ui") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <Text style={styles.exampleTitle}>Native controls from one React surface</Text>',
+    '        <View style={styles.exampleRow}><Text style={styles.examplePill}>SwiftUI</Text><Text style={styles.exampleBody}>iOS controls render with native behavior.</Text></View>',
+    '        <View style={styles.exampleRow}><Text style={styles.examplePill}>Compose</Text><Text style={styles.exampleBody}>Android controls stay platform-native.</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "native-state") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <Text style={styles.exampleTitle}>Text input owned by native state</Text>',
+    '        <View style={styles.fakeInput}><Text style={styles.fakeInputText}>Display name</Text><Text style={styles.fakeInputValue}>Ada Lovelace</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "drop-in") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <Text style={styles.exampleTitle}>Replacement candidates</Text>',
+    '        <View style={styles.exampleRow}><Text style={styles.examplePill}>Slider</Text><Text style={styles.exampleBody}>Use the Expo UI version where native fidelity matters.</Text></View>',
+    '        <View style={styles.exampleRow}><Text style={styles.examplePill}>Picker</Text><Text style={styles.exampleBody}>Swap community picker screens one at a time.</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "inline-modules") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <Text style={styles.exampleTitle}>Project-local native module</Text>',
+    '        <Text style={styles.codeLine}>modules/LocalGreeting/index.ts</Text>',
+    '        <Text style={styles.codeLine}>modules/LocalGreeting/ios/LocalGreeting.swift</Text>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "native-tabs") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <View style={styles.tabStrip}><Text style={styles.tabActive}>Home</Text><Text style={styles.tabItem}>Search</Text><Text style={styles.tabItem}>Settings</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "runtime") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <Text style={styles.exampleTitle}>Runtime versions to verify</Text>',
+    '        <View style={styles.componentLabelGrid}><Text style={styles.componentLabel}>RN 0.85</Text><Text style={styles.componentLabel}>React 19.2</Text><Text style={styles.componentLabel}>Hermes V1</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  if (kind === "widgets") {',
+    '    return (',
+    '      <View style={styles.exampleBox}>',
+    '        <View style={styles.widgetTile}><Text style={styles.widgetTitle}>Today</Text><Text style={styles.widgetBody}>3 tasks ready</Text></View>',
+    '      </View>',
+    '    );',
+    '  }',
+    '  return (',
+    '    <View style={styles.exampleBox}>',
+    '      <Text style={styles.exampleTitle}>Audio control surface</Text>',
+    '      <View style={styles.transportRow}><Text style={styles.transportButton}>Play</Text><Text style={styles.transportButton}>Pause</Text><Text style={styles.transportButton}>Haptic tap</Text></View>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'export default function ExpoSdk56Screen() {',
+    '  return (',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
+    '      <Text style={styles.title}>Expo SDK 56 Exposition</Text>',
+    '      <Text style={styles.intro}>Review the SDK 56 changes before deciding what belongs in the real app.</Text>',
+    '      <ExpositionNotice />',
+    '      {highlights.map((item) => (',
+    '        <PackageCard key={item.title} packageName={item.packageName} title={item.title} body={item.body}>',
+    '          <View style={styles.cardChildren}>',
+    '            {item.experimental ? <Text style={styles.experimentalChip}>Experimental</Text> : null}',
+    '            <TopicExample kind={item.kind} />',
+    '            {item.links.length ? (',
+    '              <View style={styles.linkList}>',
+    '                {item.links.map((link) => (',
+    '                  <Text key={link.href} accessibilityRole="link" onPress={() => Linking.openURL(link.href)} style={styles.link}>',
+    '                    {link.label}',
+    '                  </Text>',
+    '                ))}',
+    '              </View>',
+    '            ) : null}',
+    '          </View>',
+    '        </PackageCard>',
+    '      ))}',
+    '      <View style={styles.linksCard}>',
+    '        <Text style={styles.linksTitle}>Video sources</Text>',
+    "        <Text accessibilityRole=\"link\" onPress={() => Linking.openURL(\"https://www.youtube.com/watch?v=MKqGbv-Tssg&t\")} style={styles.link}>What's New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo</Text>",
+    '        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=ywvywq0AGPM")} style={styles.link}>Everything new in Expo SDK 56 by Code with Beto</Text>',
+    '      </View>',
+    '    </ScrollView>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  screen: {',
+    "    backgroundColor: '#f9fafb',",
+    '    flex: 1,',
+    '  },',
+    '  content: {',
+    '    gap: 16,',
+    '    padding: 20,',
+    "    paddingTop: Platform.OS === 'web' ? 92 : 20,",
+    '  },',
+    '  title: {',
+    "    color: '#111827',",
+    '    fontSize: 30,',
+    '    fontWeight: "900",',
+    '    textAlign: "center",',
+    '  },',
+    '  intro: {',
+    "    color: '#4b5563',",
+    '    fontSize: 16,',
+    '    lineHeight: 24,',
+    '  },',
+    '  linksWrap: {',
+    '    gap: 8,',
+    '  },',
+    '  link: {',
+    "    color: '#1d4ed8',",
+    '    fontSize: 14,',
+    "    fontWeight: '800',",
+    '    lineHeight: 20,',
+    '  },',
+    '  body: {',
+    "    color: '#4b5563',",
+    '    fontSize: 14,',
+    '    lineHeight: 20,',
+    '  },',
+    '  cardChildren: {',
+    '    gap: 12,',
+    '    marginTop: 4,',
+    '  },',
+    '  exampleBox: {',
+    "    backgroundColor: '#eff6ff',",
+    "    borderColor: '#bfdbfe',",
+    '    borderRadius: 10,',
+    '    borderWidth: 1,',
+    '    gap: 10,',
+    '    padding: 10,',
+    '  },',
+    '  exampleTitle: {',
+    "    color: '#1e3a8a',",
+    '    fontSize: 13,',
+    '    fontWeight: "800",',
+    '  },',
+    '  exampleBody: {',
+    "    color: '#1e3a8a',",
+    '    fontSize: 13,',
+    '    fontWeight: "600",',
+    '    lineHeight: 18,',
+    '  },',
+    '  exampleRow: {',
+    '    alignItems: "center",',
+    '    flexDirection: "row",',
+    '    flexWrap: "wrap",',
+    '    gap: 8,',
+    '  },',
+    '  examplePill: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#bfdbfe',",
+    '    borderRadius: 999,',
+    '    borderWidth: 1,',
+    "    color: '#1e3a8a',",
+    '    fontSize: 12,',
+    '    fontWeight: "800",',
+    '    overflow: "hidden",',
+    '    paddingHorizontal: 9,',
+    '    paddingVertical: 4,',
+    '  },',
+    '  componentLabelGrid: {',
+    '    flexDirection: "row",',
+    '    flexWrap: "wrap",',
+    '    gap: 8,',
+    '  },',
+    '  componentLabel: {',
+    "    backgroundColor: '#dbeafe',",
+    '    borderRadius: 999,',
+    "    color: '#1e3a8a',",
+    '    fontSize: 12,',
+    '    fontWeight: "800",',
+    '    overflow: "hidden",',
+    '    paddingHorizontal: 9,',
+    '    paddingVertical: 4,',
+    '  },',
+    '  fakeInput: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#bfdbfe',",
+    '    borderRadius: 8,',
+    '    borderWidth: 1,',
+    '    gap: 3,',
+    '    padding: 10,',
+    '  },',
+    '  fakeInputText: {',
+    "    color: '#64748b',",
+    '    fontSize: 11,',
+    '    fontWeight: "700",',
+    '    textTransform: "uppercase",',
+    '  },',
+    '  fakeInputValue: {',
+    "    color: '#111827',",
+    '    fontSize: 15,',
+    '    fontWeight: "800",',
+    '  },',
+    '  codeLine: {',
+    "    backgroundColor: '#0f172a',",
+    '    borderRadius: 6,',
+    "    color: '#e5e7eb',",
+    '    fontSize: 12,',
+    '    fontWeight: "700",',
+    '    paddingHorizontal: 10,',
+    '    paddingVertical: 7,',
+    '  },',
+    '  tabStrip: {',
+    "    backgroundColor: '#ffffff',",
+    '    borderRadius: 8,',
+    '    flexDirection: "row",',
+    '    gap: 6,',
+    '    padding: 6,',
+    '  },',
+    '  tabActive: {',
+    "    backgroundColor: '#111827',",
+    '    borderRadius: 7,',
+    "    color: '#ffffff',",
+    '    flex: 1,',
+    '    fontSize: 13,',
+    '    fontWeight: "800",',
+    '    overflow: "hidden",',
+    '    padding: 8,',
+    '    textAlign: "center",',
+    '  },',
+    '  tabItem: {',
+    "    backgroundColor: '#f1f5f9',",
+    '    borderRadius: 7,',
+    "    color: '#334155',",
+    '    flex: 1,',
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+    '    overflow: "hidden",',
+    '    padding: 8,',
+    '    textAlign: "center",',
+    '  },',
+    '  widgetTile: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#bfdbfe',",
+    '    borderRadius: 10,',
+    '    borderWidth: 1,',
+    '    padding: 12,',
+    '  },',
+    '  widgetTitle: {',
+    "    color: '#111827',",
+    '    fontSize: 18,',
+    '    fontWeight: "900",',
+    '  },',
+    '  widgetBody: {',
+    "    color: '#475569',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+    '    marginTop: 4,',
+    '  },',
+    '  transportRow: {',
+    '    flexDirection: "row",',
+    '    flexWrap: "wrap",',
+    '    gap: 8,',
+    '  },',
+    '  transportButton: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#bfdbfe',",
+    '    borderRadius: 8,',
+    '    borderWidth: 1,',
+    "    color: '#1e3a8a',",
+    '    fontSize: 13,',
+    '    fontWeight: "800",',
+    '    overflow: "hidden",',
+    '    paddingHorizontal: 10,',
+    '    paddingVertical: 8,',
+    '  },',
+    '  linkList: {',
+    '    gap: 8,',
+    '    paddingTop: 2,',
+    '  },',
+    '  experimentalChip: {',
+    '    alignSelf: "flex-start",',
+    "    backgroundColor: '#7c3aed',",
+    '    borderRadius: 999,',
+    "    color: '#ffffff',",
+    '    fontSize: 11,',
+    '    fontWeight: "800",',
+    '    overflow: "hidden",',
+    '    paddingHorizontal: 10,',
+    '    paddingVertical: 4,',
+    '    textTransform: "uppercase",',
+    '  },',
+    '  linksCard: {',
+    "    backgroundColor: '#eef2ff',",
+    "    borderColor: '#c7d2fe',",
+    '    borderRadius: 12,',
+    '    borderWidth: 1,',
+    '    gap: 8,',
+    '    padding: 16,',
+    '  },',
+    '  linksTitle: {',
+    "    color: '#111827',",
+    '    fontSize: 17,',
+    '    fontWeight: "800",',
+    '  },',
+    '  link: {',
+    "    color: '#1d4ed8',",
+    '    fontSize: 14,',
+    '    fontWeight: "700",',
+    '    lineHeight: 21,',
     '  },',
     '});',
     '',
@@ -2806,6 +4279,28 @@ function renderStylistScreen(answers: OnboardAnswers): string {
   ].join('\n');
 }
 
+function renderEmbeddedFonts(): string {
+  return [
+    'export const EMBEDDED_GOOGLE_FONTS: string[] = [',
+    "  'Inter',",
+    "  'DM Sans',",
+    "  'DM Serif Display',",
+    "  'Noto Sans',",
+    "  'Noto Sans Display',",
+    "  'Noto Sans Mono',",
+    "  'Noto Serif',",
+    "  'Noto Serif Display',",
+    "  'Playfair Display',",
+    "  'Roboto',",
+    "  'Roboto Mono',",
+    "  'Source Sans 3',",
+    "  'Space Grotesk',",
+    "  'Work Sans',",
+    '];',
+    '',
+  ].join('\n');
+}
+
 function renderDataScreen(answers: OnboardAnswers): string {
   if (answers.dataStart === 'supabase') {
     return renderSupabaseDataScreen(answers);
@@ -2817,12 +4312,15 @@ function renderDataScreen(answers: OnboardAnswers): string {
     '',
     "import { ExpositionNotice } from '../../components/exposition';",
     "import { addLocalTask, getLocalAppSnapshot } from '../../services/local-data';",
+    "import { useAppTheme } from '../../theme/provider';",
     '',
     "import type { appSnapshot } from '../../data/mock-app';",
     '',
     'type Snapshot = typeof appSnapshot;',
     '',
     'export default function DataScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
     '  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);',
     '',
     '  useEffect(() => {',
@@ -2834,17 +4332,17 @@ function renderDataScreen(answers: OnboardAnswers): string {
     '  }',
     '',
     '  return (',
-    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
-    '      <Text style={styles.title}>Data Exposition</Text>',
-    '      <Text style={styles.intro}>This app starts with a web-safe local adapter and a native Expo SQLite adapter. Keep the boundary, then swap implementation details when Supabase is ready.</Text>',
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Data Exposition</Text>',
+    '      <Text style={[styles.intro, { color: colors.text }]}>This app starts with a web-safe local adapter and a native Expo SQLite adapter. Keep the boundary, then swap implementation details when Supabase is ready.</Text>',
     '      <ExpositionNotice />',
-    '      <Pressable onPress={addTask} style={styles.button}>',
+    '      <Pressable onPress={addTask} style={[styles.button, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }]}>',
     '        <Text style={styles.buttonText}>Insert a local task</Text>',
     '      </Pressable>',
     '      {snapshot?.tasks.map((task) => (',
-    '        <View key={task.id} style={styles.taskCard}>',
-    '          <Text style={styles.taskTitle}>{task.title}</Text>',
-    '          <Text style={styles.taskStatus}>{task.status}</Text>',
+    '        <View key={task.id} style={[styles.taskCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '          <Text style={[styles.taskTitle, { color: colors.text }]}>{task.title}</Text>',
+    '          <Text style={[styles.taskStatus, { color: colors.text }]}>{task.status}</Text>',
     '        </View>',
     '      ))}',
     '      <View style={styles.guidance}>',
@@ -2864,12 +4362,16 @@ function renderSupabaseDataScreen(answers: OnboardAnswers): string {
     "import { ScrollView, StyleSheet, Text, View } from 'react-native';",
     '',
     "import { ExpositionNotice } from '../../components/exposition';",
+    "import { useAppTheme } from '../../theme/provider';",
     '',
     'export default function DataScreen() {',
+    '  const theme = useAppTheme();',
+    '  const colors = theme.activeColors;',
+    '',
     '  return (',
-    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={styles.screen}>',
-    '      <Text style={styles.title}>Data Exposition</Text>',
-    `      <Text style={styles.intro}>${answers.appName} is set to start with Supabase. Keep the adapter boundary in src/services so screens stay independent from backend details.</Text>`,
+    '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Data Exposition</Text>',
+    `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. Keep the adapter boundary in src/services so screens stay independent from backend details.</Text>`,
     '      <ExpositionNotice />',
     '      <View style={styles.guidance}>',
     '        <Text style={styles.sectionTitle}>Two Supabase projects</Text>',
@@ -2964,3 +4466,4 @@ function renderDataScreenStyles(): string[] {
     '',
   ];
 }
+

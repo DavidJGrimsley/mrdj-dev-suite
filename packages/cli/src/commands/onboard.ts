@@ -40,6 +40,7 @@ export interface OnboardArgv {
   customBackend?: boolean;
   customBackendEntry?: string;
   expoUi?: boolean;
+  expoUiUniversal?: boolean;
   expoNativeTabs?: boolean;
   easSelected?: boolean;
   easUses?: string | string[];
@@ -141,6 +142,7 @@ interface PersonalOnboardDefaults {
   customBackend?: boolean;
   customBackendEntry?: string;
   usesExpoUi?: boolean;
+  usesExpoUiUniversalComponents?: boolean;
   usesExpoNativeTabs?: boolean;
   includeCreateExpoComponents?: boolean;
   useLatestExpoSdk?: boolean;
@@ -326,6 +328,10 @@ export async function collectOnboardPlan(
   const usesExpoUi =
     hasMobileTarget &&
     (argv.expoUi ?? (await askYesNo('Will you use Expo UI for native-feeling screens?', seed.usesExpoUi)));
+  const usesExpoUiUniversalComponents =
+    usesExpoUi &&
+    (argv.expoUiUniversal ??
+      (await askYesNo('Do you want to use ExpoUI Universal components?', seed.usesExpoUiUniversalComponents)));
   const usesExpoNativeTabs =
     hasMobileTarget &&
     (argv.expoNativeTabs ??
@@ -393,6 +399,7 @@ export async function collectOnboardPlan(
       customBackend,
       customBackendEntry,
       usesExpoUi,
+      usesExpoUiUniversalComponents,
       usesExpoNativeTabs,
       easUses,
       projectInfoReady,
@@ -544,6 +551,8 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     customBackend,
     customBackendEntry,
     usesExpoUi: argv.expoUi ?? savedDefaults.usesExpoUi ?? true,
+    usesExpoUiUniversalComponents:
+      argv.expoUiUniversal ?? savedDefaults.usesExpoUiUniversalComponents ?? (argv.expoUi ?? savedDefaults.usesExpoUi ?? true),
     usesExpoNativeTabs: argv.expoNativeTabs ?? savedDefaults.usesExpoNativeTabs ?? true,
     easUses,
     projectInfoReady: false,
@@ -619,6 +628,7 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     customBackend: answers.customBackend,
     customBackendEntry: answers.customBackendEntry,
     usesExpoUi: answers.usesExpoUi,
+    usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
     useLatestExpoSdk: answers.useLatestExpoSdk,
@@ -677,6 +687,9 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   if (typeof raw.customBackend === 'boolean') normalized.customBackend = raw.customBackend;
   if (customBackendEntry) normalized.customBackendEntry = customBackendEntry;
   if (typeof raw.usesExpoUi === 'boolean') normalized.usesExpoUi = raw.usesExpoUi;
+  if (typeof raw.usesExpoUiUniversalComponents === 'boolean') {
+    normalized.usesExpoUiUniversalComponents = raw.usesExpoUiUniversalComponents;
+  }
   if (typeof raw.usesExpoNativeTabs === 'boolean') normalized.usesExpoNativeTabs = raw.usesExpoNativeTabs;
   if (typeof raw.includeCreateExpoComponents === 'boolean') {
     normalized.includeCreateExpoComponents = raw.includeCreateExpoComponents;

@@ -15,8 +15,10 @@ import {
   isCliEntryPoint,
   parseArgs,
   prepareCreateExpoStackArgsForWrapper,
+  repairGeneratedNativeWindUiPicker,
   repairExpoProjectIdentifiers,
   repairExpoWebOutputForStylistLifecycle,
+  repairGeneratedTypeSupport,
   repairMovedSrcAppImports,
   renderHelpText,
   resolveMissingWindowsTailwindOxideBinding,
@@ -112,15 +114,15 @@ describe('create-expo-super-stack CLI helpers', () => {
     ).toBe(false);
   });
 
-  it('skips redundant expo@latest repair when the project already targets SDK 55', () => {
+  it('skips redundant expo@latest repair when the project already targets SDK 56', () => {
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
-        dependencies: { expo: '~55.0.23' },
+        dependencies: { expo: '~56.0.4' },
       }),
     ).toBe(false);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
-        dependencies: { expo: '~54.0.0' },
+        dependencies: { expo: '~55.0.0' },
       }),
     ).toBe(true);
     expect(
@@ -212,6 +214,7 @@ describe('create-expo-super-stack CLI helpers', () => {
       '--mds-no-create-expo-components',
       '--mds-latest-expo-sdk',
       '--mds-no-expo-ui',
+      '--mds-expo-ui-universal',
       '--mds-expo-native-tabs',
       '--mds-eas-uses=building mobile applications,publishing mobile applications',
       '--mds-save-defaults',
@@ -228,6 +231,7 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(parsed.mds.createExpoComponents).toBe(false);
     expect(parsed.mds.latestExpoSdk).toBe(true);
     expect(parsed.mds.expoUi).toBe(false);
+    expect(parsed.mds.expoUiUniversal).toBe(true);
     expect(parsed.mds.expoNativeTabs).toBe(true);
     expect(parsed.mds.easUses).toEqual([
       'building mobile applications',
@@ -243,11 +247,10 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(parsed.mds.saveDefaults).toBe(false);
   });
 
-  it('adds --no-install to create-expo-stack delegation when super-stack owns dependency repair', () => {
+  it('preserves create-expo-stack install behavior unless user explicitly passes --no-install', () => {
     expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router'])).toEqual([
       'demo-app',
       '--expo-router',
-      '--no-install',
     ]);
     expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router', '--no-install'])).toEqual([
       'demo-app',
@@ -334,6 +337,130 @@ describe('create-expo-super-stack CLI helpers', () => {
       const repaired = await readFile(tabsLayoutPath, 'utf8');
       expect(repaired).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
       expect(repaired).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs moved src/app drawer layout imports after app directory migration', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-src-app-drawer-imports-'));
+    try {
+      const drawerDir = path.join(projectPath, 'src', 'app', '(drawer)');
+      const drawerTabsDir = path.join(drawerDir, '(tabs)');
+      await mkdir(drawerTabsDir, { recursive: true });
+      const drawerLayoutPath = path.join(drawerDir, '_layout.tsx');
+      const drawerTabsLayoutPath = path.join(drawerTabsDir, '_layout.tsx');
+
+      await writeFile(
+        drawerLayoutPath,
+        ['import { HeaderButton } from "../components/HeaderButton";', ''].join('\n'),
+        'utf8',
+      );
+      await writeFile(
+        drawerTabsLayoutPath,
+        [
+          'import { HeaderButton } from "../../components/HeaderButton";',
+          'import { TabBarIcon } from "../../components/TabBarIcon";',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([drawerLayoutPath, drawerTabsLayoutPath]);
+
+      const drawerLayout = await readFile(drawerLayoutPath, 'utf8');
+      const drawerTabsLayout = await readFile(drawerTabsLayoutPath, 'utf8');
+      expect(drawerLayout).toContain('import { HeaderButton } from "../../components/HeaderButton";');
+      expect(drawerTabsLayout).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
+      expect(drawerTabsLayout).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('adds generated app type support for Uniwind, Node API routes, and ColorValue tab icons', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-type-support-'));
+    try {
+      await mkdir(path.join(projectPath, 'components'), { recursive: true });
+      await writeFile(path.join(projectPath, 'css-env.d.ts'), "declare module '*.css';\n", 'utf8');
+      await writeFile(
+        path.join(projectPath, 'tsconfig.json'),
+        JSON.stringify({ extends: 'expo/tsconfig.base', compilerOptions: { strict: true } }),
+        'utf8',
+      );
+      await writeFile(
+        path.join(projectPath, 'package.json'),
+        JSON.stringify({ name: 'type-support', devDependencies: {} }),
+        'utf8',
+      );
+      await writeFile(
+        path.join(projectPath, 'components', 'TabBarIcon.tsx'),
+        [
+          "import FontAwesome from '@expo/vector-icons/FontAwesome';",
+          "import { StyleSheet } from 'react-native';",
+          "export const TabBarIcon = (props: { name: React.ComponentProps<typeof FontAwesome>['name']; color: string; }) => null;",
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(
+        repairGeneratedTypeSupport(projectPath, { needsNodeTypes: true, needsUniwindTypes: true }),
+      ).resolves.toEqual([
+        path.join(projectPath, 'css-env.d.ts'),
+        path.join(projectPath, 'tsconfig.json'),
+        path.join(projectPath, 'package.json'),
+        path.join(projectPath, 'components', 'TabBarIcon.tsx'),
+      ]);
+
+      const cssEnv = await readFile(path.join(projectPath, 'css-env.d.ts'), 'utf8');
+      const tsconfig = JSON.parse(await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8')) as {
+        compilerOptions: { types: string[] };
+      };
+      const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+        devDependencies: Record<string, string>;
+      };
+      const tabBarIcon = await readFile(path.join(projectPath, 'components', 'TabBarIcon.tsx'), 'utf8');
+      expect(cssEnv).toContain('/// <reference types="uniwind/types" />');
+      expect(tsconfig.compilerOptions.types).toEqual(['node', 'uniwind/types']);
+      expect(packageJson.devDependencies['@types/node']).toBe('^25.9.1');
+      expect(tabBarIcon).toContain("import type { ColorValue } from 'react-native';");
+      expect(tabBarIcon).toContain('color: ColorValue;');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs NativeWindUI Picker web-only unknown prop warnings', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-picker-repair-'));
+    try {
+      await mkdir(path.join(projectPath, 'components', 'nativewindui'), { recursive: true });
+      const pickerPath = path.join(projectPath, 'components', 'nativewindui', 'Picker.tsx');
+      await writeFile(
+        pickerPath,
+        [
+          "import { Picker as RNPicker } from '@react-native-picker/picker';",
+          "import { View } from 'react-native';",
+          '',
+          'export function Picker<T>({ dropdownIconRippleColor, ...props }: React.ComponentProps<typeof RNPicker<T>>) {',
+          '  return (',
+          '    <View>',
+          '      <RNPicker',
+          '        dropdownIconRippleColor={dropdownIconRippleColor ?? colors.foreground}',
+          '        {...props}',
+          '      />',
+          '    </View>',
+          '  );',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(repairGeneratedNativeWindUiPicker(projectPath)).resolves.toEqual([pickerPath]);
+      const repaired = await readFile(pickerPath, 'utf8');
+      expect(repaired).toContain("import { Platform, View } from 'react-native';");
+      expect(repaired).toContain("Platform.OS === 'web' ? {}");
+      expect(repaired).not.toContain('        dropdownIconRippleColor=');
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

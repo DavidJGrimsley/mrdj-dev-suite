@@ -23,3 +23,5 @@ plugins/claude-code/skills/
 
 # Local nested-repo backup folders used when flattening embedded git repos
 **/.git.backup-*/
+
+test-apps/

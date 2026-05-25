@@ -45,6 +45,7 @@ it for the app before treating it as final.
 - Advanced package setup: {{advancedPackageSetup}}
 - Create Expo starter components: {{includeCreateExpoComponents}}
 - Expo UI: {{usesExpoUi}}
+- Expo UI Universal components: {{usesExpoUiUniversalComponents}}
 - Expo Native Tabs: {{usesExpoNativeTabs}}
 - Data start: {{dataStart}}
 - Test-to-main safeguards: {{testToMainSafeguards}}

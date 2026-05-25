@@ -176,6 +176,10 @@ async function main(): Promise<void> {
             describe: 'Track Expo UI usage for mobile targets',
             type: 'boolean',
           })
+          .option('expo-ui-universal', {
+            describe: 'Track Expo UI Universal component usage when Expo UI is selected',
+            type: 'boolean',
+          })
           .option('expo-native-tabs', {
             describe: 'Track Expo Native Tabs usage for mobile targets',
             type: 'boolean',
