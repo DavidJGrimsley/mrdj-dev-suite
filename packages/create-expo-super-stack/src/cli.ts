@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -39,9 +39,9 @@ export interface ParsedArgs {
     projectParentDir?: string;
     yes: boolean;
     skipCreate: boolean;
-    platforms?: string[];
-    firstPlatform?: string;
-    platformStrategy?: 'folders' | 'files-only';
+  platforms?: string[];
+  firstPlatform?: string;
+  platformStrategy?: 'folders' | 'files-only';
     appDirectory?: 'src' | 'root';
     platformLayouts?: 'shared' | 'platform-specific';
     webOutput?: 'static' | 'server' | 'spa' | 'none';
@@ -61,7 +61,11 @@ type OnboardWebOutput = 'static' | 'server' | 'spa' | 'none';
 type ExpoWebOutput = 'single' | 'static' | 'server';
 const DEFAULT_PROJECT_NAME = 'my-expo-app';
 const CURRENT_EXPO_SDK_MAJOR = 56;
-const STYLIST_SYNC_API_ROUTES = ['app/exposition/stylist-sync+api.ts', 'src/app/exposition/stylist-sync+api.ts'] as const;
+const CURRENT_EXPO_SDK_VERSION = '~56.0.6';
+const STYLIST_SYNC_API_ROUTES = [
+  'app/exposition/stylist-sync+api.ts',
+  'src/app/exposition/stylist-sync+api.ts',
+] as const;
 
 interface CommandSpec {
   command: string;
@@ -81,11 +85,17 @@ export async function main(): Promise<void> {
     console.log(renderHelpText());
     return;
   }
-  const parsed = withResolvedProjectName(initialParsed, await promptForMissingProjectName(initialParsed));
+  const parsed = withResolvedProjectName(
+    initialParsed,
+    await promptForMissingProjectName(initialParsed)
+  );
   validateCreateExpoStackArgs(parsed.createExpoStackArgs);
   const projectName = parsed.projectName ?? DEFAULT_PROJECT_NAME;
   const projectParentDir = parsed.mds.projectParentDir ?? process.cwd();
-  const createExpoStackArgs = prepareCreateExpoStackArgsForWrapper(parsed.createExpoStackArgs, parsed.mds.skipExpoFix);
+  const createExpoStackArgs = prepareCreateExpoStackArgsForWrapper(
+    parsed.createExpoStackArgs,
+    parsed.mds.skipExpoFix
+  );
 
   printIntro(projectName, createExpoStackArgs, projectParentDir);
 
@@ -101,12 +111,15 @@ export async function main(): Promise<void> {
   const plan = parsed.mds.yes
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
-  const movedAppDir = !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
-    ? await moveRootAppIntoSrc(projectPath)
-    : null;
-  const movedImportRepairs = movedAppDir
-    ? await repairMovedSrcAppImports(projectPath)
-    : [];
+  const movedAppDir =
+    !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
+      ? await moveRootAppIntoSrc(projectPath)
+      : null;
+  const consolidatedSourceRepairs =
+    !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
+      ? await consolidateRootSourceFolders(projectPath)
+      : [];
+  const movedImportRepairs = movedAppDir ? await repairMovedSrcAppImports(projectPath) : [];
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
     force: parsed.mds.force,
     guidelinesTemplate: plan.guidelinesTemplate,
@@ -114,10 +127,12 @@ export async function main(): Promise<void> {
     manageUniwind: parsed.mds.skipCreate,
     richBoilerplate: plan.richBoilerplate,
   });
-  const postScaffoldImportRepairs = movedAppDir
-    ? await repairMovedSrcAppImports(projectPath)
-    : [];
-  const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName, plan.answers.targetPlatforms);
+  const postScaffoldImportRepairs = movedAppDir ? await repairMovedSrcAppImports(projectPath) : [];
+  const identifierRepairs = await repairExpoProjectIdentifiers(
+    projectPath,
+    projectName,
+    plan.answers.targetPlatforms
+  );
   const stylistWebOutputRepairs = plan.answers.targetPlatforms.includes('web')
     ? await repairExpoWebOutputForStylistLifecycle(projectPath, plan.answers.webOutput)
     : [];
@@ -131,10 +146,17 @@ export async function main(): Promise<void> {
   console.log();
   console.log('MDS onboarding complete.');
   for (const result of written) {
-    console.log(`${result.wrote ? 'CREATED' : 'KEPT'} ${path.relative(process.cwd(), result.filePath)}`);
+    console.log(
+      `${result.wrote ? 'CREATED' : 'KEPT'} ${path.relative(process.cwd(), result.filePath)}`
+    );
   }
   if (movedAppDir) {
-    console.log(`MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`);
+    console.log(
+      `MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`
+    );
+  }
+  for (const result of consolidatedSourceRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   for (const result of movedImportRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
@@ -169,7 +191,9 @@ export async function main(): Promise<void> {
     });
   } else if (noInstallRequested) {
     console.log();
-    console.log('Skipped install and Expo dependency repair because create-expo-stack was run with --no-install.');
+    console.log(
+      'Skipped install and Expo dependency repair because create-expo-stack was run with --no-install.'
+    );
   }
 
   console.log();
@@ -190,10 +214,15 @@ export async function main(): Promise<void> {
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
-  console.log('For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.');
+  console.log(
+    'For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.'
+  );
 }
 
-export function prepareCreateExpoStackArgsForWrapper(args: string[], skipExpoFix = false): string[] {
+export function prepareCreateExpoStackArgsForWrapper(
+  args: string[],
+  _skipExpoFix = false
+): string[] {
   return args;
 }
 
@@ -553,7 +582,11 @@ async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> 
   return projectName;
 }
 
-function printIntro(projectName: string, createExpoStackArgs: string[], projectParentDir = process.cwd()): void {
+function printIntro(
+  projectName: string,
+  createExpoStackArgs: string[],
+  projectParentDir = process.cwd()
+): void {
   console.log('create-expo-super-stack');
   console.log();
   console.log('This uses create-expo-stack under the hood, then applies MDS onboarding.');
@@ -565,7 +598,11 @@ function printIntro(projectName: string, createExpoStackArgs: string[], projectP
   console.log();
 }
 
-async function runCreateExpoStack(args: string[], overrideBin?: string, cwd = process.cwd()): Promise<void> {
+async function runCreateExpoStack(
+  args: string[],
+  overrideBin?: string,
+  cwd = process.cwd()
+): Promise<void> {
   const command = await resolveCreateExpoStackCommand(overrideBin);
   console.log(`Using create-expo-stack command: ${command.display}`);
   await new Promise<void>((resolve, reject) => {
@@ -586,10 +623,14 @@ async function runCreateExpoStack(args: string[], overrideBin?: string, cwd = pr
   });
 }
 
-export function resolveProjectTarget(rawProjectName: string, cwd = process.cwd()): { projectName: string; parentDir: string } {
+export function resolveProjectTarget(
+  rawProjectName: string,
+  cwd = process.cwd()
+): { projectName: string; parentDir: string } {
   const trimmed = rawProjectName.trim();
   const normalized = trimmed.replace(/[\\/]+$/u, '') || DEFAULT_PROJECT_NAME;
-  const hasPathSyntax = path.isAbsolute(normalized) || normalized.includes('/') || normalized.includes('\\');
+  const hasPathSyntax =
+    path.isAbsolute(normalized) || normalized.includes('/') || normalized.includes('\\');
 
   if (!hasPathSyntax) {
     return {
@@ -620,14 +661,14 @@ function replaceProjectArg(args: string[], projectName: string): string[] {
 
 export function validateCreateExpoStackArgs(args: string[]): void {
   const authFlags = ['--supabase', '--firebase'].filter((flag) =>
-    args.some((arg) => arg === flag || arg.startsWith(`${flag}=`)),
+    args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
   );
 
   if (authFlags.length > 1) {
     throw new Error(
       `Choose one create-expo-stack auth provider, not ${authFlags.join(
-        ' and ',
-      )}. create-expo-stack scaffolds a single auth slice; Super Stack can still document future data/backend plans in project/.`,
+        ' and '
+      )}. create-expo-stack scaffolds a single auth slice; Super Stack can still document future data/backend plans in project/.`
     );
   }
 }
@@ -642,17 +683,24 @@ export async function runExpoProjectChecks(
   await runProjectCommand(projectPath, buildInstallCommand(packageManager));
   const missingWindowsOxideBinding = await resolveMissingWindowsTailwindOxideBinding(projectPath);
   if (missingWindowsOxideBinding) {
-    await runProjectCommand(projectPath, buildAddDevDependencyCommand(packageManager, missingWindowsOxideBinding));
+    await runProjectCommand(
+      projectPath,
+      buildAddDevDependencyCommand(packageManager, missingWindowsOxideBinding)
+    );
   }
   if (options.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
     await runProjectCommand(projectPath, buildExpoLatestSdkCommand(packageManager));
   } else if (options.useLatestExpoSdk) {
     console.log(`  Expo SDK already targets SDK ${CURRENT_EXPO_SDK_MAJOR}; skipping expo@latest.`);
   }
+  if (await shouldRunExpoPinnedSdkCommand(projectPath)) {
+    await runProjectCommand(projectPath, buildExpoPinnedSdkCommand(packageManager));
+  }
   await runProjectCommand(projectPath, buildExpoInstallFixCommand(packageManager));
   if (await shouldInstallExpoFontPeer(projectPath)) {
     await runProjectCommand(projectPath, buildExpoFontInstallCommand(packageManager));
   }
+  await runProjectCommand(projectPath, buildPrettierWriteCommand(packageManager));
   await runProjectCommand(projectPath, buildExpoDoctorCommand(packageManager));
 }
 
@@ -680,7 +728,8 @@ async function runProjectCommand(projectPath: string, spec: CommandSpec): Promis
 async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<CommandSpec> {
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const executable = process.platform === 'win32' ? 'create-expo-stack.cmd' : 'create-expo-stack';
-  const override = overrideBin ?? process.env.MRDJ_CREATE_EXPO_STACK_BIN ?? process.env.CREATE_EXPO_STACK_BIN;
+  const override =
+    overrideBin ?? process.env.MRDJ_CREATE_EXPO_STACK_BIN ?? process.env.CREATE_EXPO_STACK_BIN;
   if (override) {
     const overridePath = path.resolve(override);
     return {
@@ -704,8 +753,24 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
   }
 
   const scopedForkCandidates = [
-    path.join(packageRoot, 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
-    path.join(packageRoot, '..', '..', 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
+    path.join(
+      packageRoot,
+      'node_modules',
+      '@mr.dj2u',
+      'create-expo-stack',
+      'bin',
+      'create-expo-stack.js'
+    ),
+    path.join(
+      packageRoot,
+      '..',
+      '..',
+      'node_modules',
+      '@mr.dj2u',
+      'create-expo-stack',
+      'bin',
+      'create-expo-stack.js'
+    ),
   ];
 
   for (const candidate of scopedForkCandidates) {
@@ -803,7 +868,9 @@ async function resolveGeneratedProjectPath(cwd: string, projectName: string): Pr
   return directPath;
 }
 
-async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; to: string } | null> {
+async function moveRootAppIntoSrc(
+  projectPath: string
+): Promise<{ from: string; to: string } | null> {
   const rootAppDir = path.join(projectPath, 'app');
   const srcAppDir = path.join(projectPath, 'src', 'app');
   if (!(await pathExists(rootAppDir)) || (await pathExists(srcAppDir))) {
@@ -815,36 +882,100 @@ async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; 
   return { from: rootAppDir, to: srcAppDir };
 }
 
+async function consolidateRootSourceFolders(projectPath: string): Promise<string[]> {
+  const folderNames = ['components', 'theme', 'lib'];
+  const updatedPaths: string[] = [];
+  for (const folderName of folderNames) {
+    const rootDir = path.join(projectPath, folderName);
+    if (!(await pathExists(rootDir))) {
+      continue;
+    }
+    const srcDir = path.join(projectPath, 'src', folderName);
+    if (!(await pathExists(srcDir))) {
+      await mkdir(path.dirname(srcDir), { recursive: true });
+      await rename(rootDir, srcDir);
+      updatedPaths.push(srcDir);
+      continue;
+    }
+    await mergeDirectoryInto(rootDir, srcDir);
+    await rm(rootDir, { recursive: true, force: true });
+    updatedPaths.push(srcDir);
+  }
+
+  return updatedPaths;
+}
+
+async function mergeDirectoryInto(sourceDir: string, targetDir: string): Promise<void> {
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      await mergeDirectoryInto(sourcePath, targetPath);
+      continue;
+    }
+    if (await pathExists(targetPath)) {
+      await rm(sourcePath, { force: true });
+      continue;
+    }
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await rename(sourcePath, targetPath);
+  }
+}
+
 export async function repairMovedSrcAppImports(projectPath: string): Promise<string[]> {
-  const layoutPaths = [
-    path.join(projectPath, 'src', 'app', '(tabs)', '_layout.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '_layout.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', '_layout.tsx'),
+  const layoutPaths: Array<{
+    filePath: string;
+    replacements: Array<[from: string, to: string]>;
+  }> = [
+    {
+      filePath: path.join(projectPath, 'src', 'app', '(tabs)', '_layout.tsx'),
+      replacements: [
+        ['"../components/HeaderButton"', '"../../components/HeaderButton"'],
+        ['"../components/TabBarIcon"', '"../../components/TabBarIcon"'],
+        ["'../components/HeaderButton'", "'../../components/HeaderButton'"],
+        ["'../components/TabBarIcon'", "'../../components/TabBarIcon'"],
+      ],
+    },
+    {
+      filePath: path.join(projectPath, 'src', 'app', '(drawer)', '_layout.tsx'),
+      replacements: [
+        ['"../components/HeaderButton"', '"../../components/HeaderButton"'],
+        ['"../components/TabBarIcon"', '"../../components/TabBarIcon"'],
+        ["'../components/HeaderButton'", "'../../components/HeaderButton'"],
+        ["'../components/TabBarIcon'", "'../../components/TabBarIcon'"],
+      ],
+    },
+    {
+      filePath: path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', '_layout.tsx'),
+      replacements: [
+        ['"../../components/HeaderButton"', '"../../../components/HeaderButton"'],
+        ['"../../components/TabBarIcon"', '"../../../components/TabBarIcon"'],
+        ["'../../components/HeaderButton'", "'../../../components/HeaderButton'"],
+        ["'../../components/TabBarIcon'", "'../../../components/TabBarIcon'"],
+      ],
+    },
   ];
   const updatedPaths: string[] = [];
 
-  for (const layoutPath of layoutPaths) {
-    const raw = await readOptionalText(layoutPath);
+  for (const layout of layoutPaths) {
+    const raw = await readOptionalText(layout.filePath);
     if (!raw) {
       continue;
     }
 
-    const updated = raw
-      .replace('"../../components/HeaderButton"', '"../../../components/HeaderButton"')
-      .replace('"../../components/TabBarIcon"', '"../../../components/TabBarIcon"')
-      .replace('"../components/HeaderButton"', '"../../components/HeaderButton"')
-      .replace('"../components/TabBarIcon"', '"../../components/TabBarIcon"')
-      .replace("'../../components/HeaderButton'", "'../../../components/HeaderButton'")
-      .replace("'../../components/TabBarIcon'", "'../../../components/TabBarIcon'")
-      .replace("'../components/HeaderButton'", "'../../components/HeaderButton'")
-      .replace("'../components/TabBarIcon'", "'../../components/TabBarIcon'");
+    let updated = raw;
+    for (const [from, to] of layout.replacements) {
+      updated = updated.split(from).join(to);
+    }
 
     if (updated === raw) {
       continue;
     }
 
-    await writeFile(layoutPath, updated, 'utf8');
-    updatedPaths.push(layoutPath);
+    await writeFile(layout.filePath, updated, 'utf8');
+    updatedPaths.push(layout.filePath);
   }
 
   return updatedPaths;
@@ -855,12 +986,36 @@ export async function repairGeneratedTypeSupport(
   options: { needsNodeTypes?: boolean; needsUniwindTypes?: boolean } = {}
 ): Promise<string[]> {
   const updatedPaths = new Set<string>();
+  let shouldIncludeUniwindTypes = false;
+
+  if (options.needsUniwindTypes) {
+    const packageJson = await readJson(path.join(projectPath, 'package.json'));
+    const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
+    const devDependencies = isRecord(packageJson.devDependencies)
+      ? packageJson.devDependencies
+      : {};
+    const optionalDependencies = isRecord(packageJson.optionalDependencies)
+      ? packageJson.optionalDependencies
+      : {};
+    shouldIncludeUniwindTypes =
+      typeof dependencies.uniwind === 'string' ||
+      typeof devDependencies.uniwind === 'string' ||
+      typeof optionalDependencies.uniwind === 'string' ||
+      (await pathExists(path.join(projectPath, 'node_modules', 'uniwind', 'types.d.ts'))) ||
+      (await pathExists(path.join(projectPath, 'node_modules', 'uniwind', 'types', 'index.d.ts')));
+  }
 
   if (options.needsUniwindTypes) {
     const cssEnvPath = path.join(projectPath, 'css-env.d.ts');
     const raw = (await readOptionalText(cssEnvPath)) ?? '';
-    if (!raw.includes('uniwind/types')) {
+    if (shouldIncludeUniwindTypes && !raw.includes('uniwind/types')) {
       await writeFile(cssEnvPath, `/// <reference types="uniwind/types" />\n\n${raw}`, 'utf8');
+      updatedPaths.add(cssEnvPath);
+    } else if (!shouldIncludeUniwindTypes && raw.includes('uniwind/types')) {
+      const updated = raw
+        .replace(/^\/\/\/ <reference types="uniwind\/types" \/>\r?\n\r?\n?/m, '')
+        .trimStart();
+      await writeFile(cssEnvPath, updated, 'utf8');
       updatedPaths.add(cssEnvPath);
     }
   }
@@ -869,19 +1024,37 @@ export async function repairGeneratedTypeSupport(
     const tsconfigPath = path.join(projectPath, 'tsconfig.json');
     const tsconfig = await readJson(tsconfigPath);
     const compilerOptions = isRecord(tsconfig.compilerOptions) ? tsconfig.compilerOptions : {};
-    const currentTypes = Array.isArray(compilerOptions.types)
+    const pathsConfig = isRecord(compilerOptions.paths) ? compilerOptions.paths : {};
+    const usingSrcApp = await pathExists(path.join(projectPath, 'src', 'app'));
+    const normalizedPathsConfig = usingSrcApp
+      ? await normalizeTsconfigPathsForSrcDirectory(projectPath, pathsConfig)
+      : pathsConfig;
+    const hasAliasPaths = Object.keys(pathsConfig).some((key) => key.includes('@'));
+    const existingTypes = Array.isArray(compilerOptions.types)
       ? compilerOptions.types.filter((item): item is string => typeof item === 'string')
+      : [];
+    const currentTypes = existingTypes
+      ? existingTypes.filter((item) => shouldIncludeUniwindTypes || item !== 'uniwind/types')
       : [];
     const desiredTypes = [
       ...currentTypes,
       ...(options.needsNodeTypes ? ['node'] : []),
-      ...(options.needsUniwindTypes ? ['uniwind/types'] : []),
+      ...(shouldIncludeUniwindTypes ? ['uniwind/types'] : []),
     ];
     const nextTypes = Array.from(new Set(desiredTypes));
-    if (nextTypes.length > 0 && JSON.stringify(currentTypes) !== JSON.stringify(nextTypes)) {
+    const shouldSetBaseUrl = hasAliasPaths && typeof compilerOptions.baseUrl !== 'string';
+    const shouldSetIgnoreDeprecations =
+      (shouldSetBaseUrl || typeof compilerOptions.baseUrl === 'string') &&
+      compilerOptions.ignoreDeprecations !== '6.0';
+    const shouldUpdatePaths = JSON.stringify(pathsConfig) !== JSON.stringify(normalizedPathsConfig);
+    const shouldUpdateTypes = JSON.stringify(existingTypes) !== JSON.stringify(nextTypes);
+    if (shouldUpdateTypes || shouldSetBaseUrl || shouldSetIgnoreDeprecations || shouldUpdatePaths) {
       tsconfig.compilerOptions = {
         ...compilerOptions,
-        types: nextTypes,
+        ...(shouldUpdatePaths ? { paths: normalizedPathsConfig } : {}),
+        types: shouldUpdateTypes ? nextTypes : currentTypes,
+        ...(shouldSetBaseUrl ? { baseUrl: '.' } : {}),
+        ...(shouldSetIgnoreDeprecations ? { ignoreDeprecations: '6.0' } : {}),
       };
       await writeFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`, 'utf8');
       updatedPaths.add(tsconfigPath);
@@ -891,7 +1064,9 @@ export async function repairGeneratedTypeSupport(
   if (options.needsNodeTypes) {
     const packageJsonPath = path.join(projectPath, 'package.json');
     const packageJson = await readJson(packageJsonPath);
-    const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
+    const devDependencies = isRecord(packageJson.devDependencies)
+      ? packageJson.devDependencies
+      : {};
     if (devDependencies['@types/node'] !== '^25.9.1') {
       packageJson.devDependencies = {
         ...devDependencies,
@@ -902,11 +1077,20 @@ export async function repairGeneratedTypeSupport(
     }
   }
 
-  const tabBarIconPath = path.join(projectPath, 'components', 'TabBarIcon.tsx');
-  const tabBarIconRaw = await readOptionalText(tabBarIconPath);
-  if (tabBarIconRaw && tabBarIconRaw.includes('color: string')) {
+  const tabBarIconPaths = [
+    path.join(projectPath, 'components', 'TabBarIcon.tsx'),
+    path.join(projectPath, 'src', 'components', 'TabBarIcon.tsx'),
+  ];
+  for (const tabBarIconPath of tabBarIconPaths) {
+    const tabBarIconRaw = await readOptionalText(tabBarIconPath);
+    if (!tabBarIconRaw || !tabBarIconRaw.includes('color: string')) {
+      continue;
+    }
     const updated = tabBarIconRaw
-      .replace("import { StyleSheet } from 'react-native';", "import type { ColorValue } from 'react-native';\nimport { StyleSheet } from 'react-native';")
+      .replace(
+        "import { StyleSheet } from 'react-native';",
+        "import type { ColorValue } from 'react-native';\nimport { StyleSheet } from 'react-native';"
+      )
       .replace('color: string;', 'color: ColorValue;');
     if (updated !== tabBarIconRaw) {
       await writeFile(tabBarIconPath, updated, 'utf8');
@@ -917,26 +1101,99 @@ export async function repairGeneratedTypeSupport(
   return Array.from(updatedPaths);
 }
 
+async function normalizeTsconfigPathsForSrcDirectory(
+  projectPath: string,
+  pathsConfig: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const nextPaths: Record<string, unknown> = {};
+
+  for (const [alias, targets] of Object.entries(pathsConfig)) {
+    if (!Array.isArray(targets)) {
+      nextPaths[alias] = targets;
+      continue;
+    }
+
+    const nextTargets: unknown[] = [];
+    for (const target of targets) {
+      if (typeof target !== 'string') {
+        nextTargets.push(target);
+        continue;
+      }
+
+      const normalized = await normalizeAliasTargetForSrcDirectory(projectPath, alias, target);
+      nextTargets.push(normalized);
+    }
+    nextPaths[alias] = nextTargets;
+  }
+
+  return nextPaths;
+}
+
+async function normalizeAliasTargetForSrcDirectory(
+  projectPath: string,
+  alias: string,
+  target: string
+): Promise<string> {
+  const normalizedTarget = target.replace(/\\/g, '/').trim();
+  if (normalizedTarget.startsWith('./src/') || normalizedTarget.startsWith('src/')) {
+    return target;
+  }
+
+  if (alias === '@/*' && (normalizedTarget === './*' || normalizedTarget === '*')) {
+    return './src/*';
+  }
+
+  const relativeTarget = normalizedTarget.startsWith('./')
+    ? normalizedTarget.slice(2)
+    : normalizedTarget;
+  const wildcardSuffix = relativeTarget.endsWith('/*') ? '/*' : '';
+  const relativeBase = wildcardSuffix ? relativeTarget.slice(0, -2) : relativeTarget;
+  if (!relativeBase || relativeBase === '*') {
+    return target;
+  }
+
+  const rootCandidate = path.join(projectPath, relativeBase);
+  const srcCandidate = path.join(projectPath, 'src', relativeBase);
+  const rootExists = await pathExists(rootCandidate);
+  const srcExists = await pathExists(srcCandidate);
+  if (!rootExists && srcExists) {
+    return `./src/${relativeBase}${wildcardSuffix}`;
+  }
+
+  return target;
+}
+
 export async function repairGeneratedNativeWindUiPicker(projectPath: string): Promise<string[]> {
-  const pickerPath = path.join(projectPath, 'components', 'nativewindui', 'Picker.tsx');
-  const raw = await readOptionalText(pickerPath);
-  if (!raw || !raw.includes('dropdownIconRippleColor=')) {
-    return [];
+  const pickerPaths = [
+    path.join(projectPath, 'components', 'nativewindui', 'Picker.tsx'),
+    path.join(projectPath, 'src', 'components', 'nativewindui', 'Picker.tsx'),
+  ];
+  const updatedPaths: string[] = [];
+  for (const pickerPath of pickerPaths) {
+    const raw = await readOptionalText(pickerPath);
+    if (!raw || !raw.includes('dropdownIconRippleColor=')) {
+      continue;
+    }
+
+    let updated = raw;
+    updated = updated.replace(
+      "import { View } from 'react-native';",
+      "import { Platform, View } from 'react-native';"
+    );
+    updated = updated.replace(
+      '        dropdownIconRippleColor={dropdownIconRippleColor ?? colors.foreground}',
+      "        {...(Platform.OS === 'web' ? {} : { dropdownIconRippleColor: dropdownIconRippleColor ?? colors.foreground })}"
+    );
+
+    if (updated === raw) {
+      continue;
+    }
+
+    await writeFile(pickerPath, updated, 'utf8');
+    updatedPaths.push(pickerPath);
   }
 
-  let updated = raw;
-  updated = updated.replace("import { View } from 'react-native';", "import { Platform, View } from 'react-native';");
-  updated = updated.replace(
-    '        dropdownIconRippleColor={dropdownIconRippleColor ?? colors.foreground}',
-    "        {...(Platform.OS === 'web' ? {} : { dropdownIconRippleColor: dropdownIconRippleColor ?? colors.foreground })}"
-  );
-
-  if (updated === raw) {
-    return [];
-  }
-
-  await writeFile(pickerPath, updated, 'utf8');
-  return [pickerPath];
+  return updatedPaths;
 }
 
 export async function repairExpoProjectIdentifiers(
@@ -987,6 +1244,96 @@ export async function repairExpoProjectIdentifiers(
     expo.platforms = [...currentPlatforms, 'web'];
     changed = true;
   }
+  const shouldIncludeAndroid = targetPlatforms.includes('android');
+  if (shouldIncludeAndroid) {
+    if (readString(expo.backgroundColor) !== '#f1f0f8') {
+      expo.backgroundColor = '#f1f0f8';
+      changed = true;
+    }
+
+    const androidConfig = isRecord(expo.android) ? { ...expo.android } : {};
+    if (readString(androidConfig.backgroundColor) !== '#f1f0f8') {
+      androidConfig.backgroundColor = '#f1f0f8';
+      expo.android = androidConfig;
+      changed = true;
+    }
+
+    const desiredAndroidStatusBar = {
+      backgroundColor: '#f1f0f8',
+      barStyle: 'dark-content',
+      translucent: false,
+    };
+    if (JSON.stringify(expo.androidStatusBar) !== JSON.stringify(desiredAndroidStatusBar)) {
+      expo.androidStatusBar = desiredAndroidStatusBar;
+      changed = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expo, 'androidNavigationBar')) {
+      delete expo.androidNavigationBar;
+      changed = true;
+    }
+    const desiredNavigationBarPlugin = [
+      'expo-navigation-bar',
+      {
+        style: 'dark',
+        enforceContrast: false,
+      },
+    ];
+    const plugins = Array.isArray(expo.plugins) ? [...expo.plugins] : [];
+    const existingNavigationBarPluginIndex = plugins.findIndex((plugin) => {
+      if (readString(plugin) === 'expo-navigation-bar') {
+        return true;
+      }
+      return Array.isArray(plugin) && readString(plugin[0]) === 'expo-navigation-bar';
+    });
+    if (
+      existingNavigationBarPluginIndex === -1 ||
+      JSON.stringify(plugins[existingNavigationBarPluginIndex]) !==
+        JSON.stringify(desiredNavigationBarPlugin)
+    ) {
+      if (existingNavigationBarPluginIndex === -1) {
+        plugins.push(desiredNavigationBarPlugin);
+      } else {
+        plugins[existingNavigationBarPluginIndex] = desiredNavigationBarPlugin;
+      }
+      changed = true;
+    }
+    const hasSystemUiPlugin = plugins.some((plugin) => {
+      if (readString(plugin) === 'expo-system-ui') {
+        return true;
+      }
+      return Array.isArray(plugin) && readString(plugin[0]) === 'expo-system-ui';
+    });
+    if (!hasSystemUiPlugin) {
+      plugins.push('expo-system-ui');
+      changed = true;
+    }
+    if (JSON.stringify(expo.plugins) !== JSON.stringify(plugins)) {
+      expo.plugins = plugins;
+      changed = true;
+    }
+  } else {
+    if (Object.prototype.hasOwnProperty.call(expo, 'androidNavigationBar')) {
+      delete expo.androidNavigationBar;
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(expo, 'androidStatusBar')) {
+      delete expo.androidStatusBar;
+      changed = true;
+    }
+  }
+
+  if (shouldIncludeAndroid) {
+    const deprecatedNavigationBar = {
+      position: 'absolute',
+      backgroundColor: '#00000000',
+      style: 'dark',
+      enforceContrast: false,
+    };
+    if (JSON.stringify(expo.androidNavigationBar) === JSON.stringify(deprecatedNavigationBar)) {
+      delete expo.androidNavigationBar;
+    }
+  }
 
   if (!changed) {
     return [];
@@ -1020,7 +1367,8 @@ export async function repairExpoWebOutputForStylistLifecycle(
   }
 
   const hasWebPlatform =
-    !Array.isArray(expo.platforms) || expo.platforms.some((platform) => readString(platform) === 'web');
+    !Array.isArray(expo.platforms) ||
+    expo.platforms.some((platform) => readString(platform) === 'web');
   if (!hasWebPlatform) {
     return [];
   }
@@ -1109,7 +1457,10 @@ async function detectPackageManager(projectPath: string, args: string[]): Promis
 
   if (await pathExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
   if (await pathExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-  if (await pathExists(path.join(projectPath, 'bun.lock')) || await pathExists(path.join(projectPath, 'bun.lockb'))) {
+  if (
+    (await pathExists(path.join(projectPath, 'bun.lock'))) ||
+    (await pathExists(path.join(projectPath, 'bun.lockb')))
+  ) {
     return 'bun';
   }
 
@@ -1222,12 +1573,67 @@ export function buildExpoLatestSdkCommand(packageManager: PackageManager): Comma
   }
 }
 
+export function buildExpoPinnedSdkCommand(packageManager: PackageManager): CommandSpec {
+  const target = `expo@${CURRENT_EXPO_SDK_VERSION}`;
+  switch (packageManager) {
+    case 'pnpm':
+      return {
+        command: 'pnpm',
+        args: ['--ignore-workspace', 'exec', 'expo', 'install', target],
+        display: `pnpm --ignore-workspace exec expo install ${target}`,
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
+      };
+    case 'yarn':
+      return {
+        command: 'yarn',
+        args: ['expo', 'install', target],
+        display: `yarn expo install ${target}`,
+      };
+    case 'bun':
+      return {
+        command: 'bunx',
+        args: ['expo', 'install', target],
+        display: `bunx expo install ${target}`,
+      };
+    case 'npm':
+      return {
+        command: 'npx',
+        args: ['expo', 'install', target],
+        display: `npx expo install ${target}`,
+      };
+  }
+}
+
+export async function shouldRunExpoPinnedSdkCommand(projectPath: string): Promise<boolean> {
+  const packageJson = await readJson(path.join(projectPath, 'package.json'));
+  return shouldRunExpoPinnedSdkCommandFromPackageJson(packageJson);
+}
+
+export function shouldRunExpoPinnedSdkCommandFromPackageJson(
+  packageJson: Record<string, unknown>
+): boolean {
+  const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
+  const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
+  const version = readString(dependencies.expo) ?? readString(devDependencies.expo);
+  const current = version ? readSemverTriplet(version) : undefined;
+  const target = readSemverTriplet(CURRENT_EXPO_SDK_VERSION);
+  if (!current || !target) {
+    return false;
+  }
+  if (current.major !== target.major || current.minor !== target.minor) {
+    return false;
+  }
+  return current.patch < target.patch;
+}
+
 export async function shouldRunExpoLatestSdkCommand(projectPath: string): Promise<boolean> {
   const packageJson = await readJson(path.join(projectPath, 'package.json'));
   return shouldRunExpoLatestSdkCommandFromPackageJson(packageJson);
 }
 
-export function shouldRunExpoLatestSdkCommandFromPackageJson(packageJson: Record<string, unknown>): boolean {
+export function shouldRunExpoLatestSdkCommandFromPackageJson(
+  packageJson: Record<string, unknown>
+): boolean {
   const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
   const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
   const version = readString(dependencies.expo) ?? readString(devDependencies.expo);
@@ -1247,6 +1653,26 @@ function readSemverMajor(version: string): number | undefined {
   }
 
   return Number.parseInt(match[0], 10);
+}
+
+type SemverTriplet = { major: number; minor: number; patch: number };
+
+function readSemverTriplet(version: string): SemverTriplet | undefined {
+  const match = version.match(/(\d+)\.(\d+)\.(\d+)/u);
+  if (!match) {
+    return undefined;
+  }
+  const major = match[1];
+  const minor = match[2];
+  const patch = match[3];
+  if (!major || !minor || !patch) {
+    return undefined;
+  }
+  return {
+    major: Number.parseInt(major, 10),
+    minor: Number.parseInt(minor, 10),
+    patch: Number.parseInt(patch, 10),
+  };
 }
 
 export function buildExpoFontInstallCommand(packageManager: PackageManager): CommandSpec {
@@ -1308,7 +1734,41 @@ export function buildExpoDoctorCommand(packageManager: PackageManager): CommandS
   }
 }
 
-export function buildAddDevDependencyCommand(packageManager: PackageManager, dependency: string): CommandSpec {
+export function buildPrettierWriteCommand(packageManager: PackageManager): CommandSpec {
+  const glob = '**/*.{js,jsx,ts,tsx,json}';
+  switch (packageManager) {
+    case 'pnpm':
+      return {
+        command: 'pnpm',
+        args: ['exec', 'prettier', '--write', glob],
+        display: `pnpm exec prettier --write "${glob}"`,
+      };
+    case 'yarn':
+      return {
+        command: 'yarn',
+        args: ['prettier', '--write', glob],
+        display: `yarn prettier --write "${glob}"`,
+      };
+    case 'bun':
+      return {
+        command: 'bunx',
+        args: ['prettier', '--write', glob],
+        display: `bunx prettier --write "${glob}"`,
+      };
+    case 'npm':
+    default:
+      return {
+        command: 'npx',
+        args: ['prettier', '--write', glob],
+        display: `npx prettier --write "${glob}"`,
+      };
+  }
+}
+
+export function buildAddDevDependencyCommand(
+  packageManager: PackageManager,
+  dependency: string
+): CommandSpec {
   switch (packageManager) {
     case 'pnpm':
       return {
@@ -1341,8 +1801,12 @@ export function buildAddDevDependencyCommand(packageManager: PackageManager, dep
 export function resolveWindowsTailwindOxidePackage({
   platform = process.platform,
   arch = process.arch,
-  nodeTargetType = (process.config?.variables as unknown as Record<string, string | undefined> | undefined)?.node_target_type,
-  shlibSuffix = (process.config?.variables as unknown as Record<string, string | undefined> | undefined)?.shlib_suffix,
+  nodeTargetType = (
+    process.config?.variables as unknown as Record<string, string | undefined> | undefined
+  )?.node_target_type,
+  shlibSuffix = (
+    process.config?.variables as unknown as Record<string, string | undefined> | undefined
+  )?.shlib_suffix,
 }: {
   platform?: string;
   arch?: string;
@@ -1369,7 +1833,9 @@ export function resolveWindowsTailwindOxidePackage({
   return undefined;
 }
 
-export async function resolveMissingWindowsTailwindOxideBinding(projectPath: string): Promise<string | undefined> {
+export async function resolveMissingWindowsTailwindOxideBinding(
+  projectPath: string
+): Promise<string | undefined> {
   const packageName = resolveWindowsTailwindOxidePackage();
   if (!packageName) {
     return undefined;
@@ -1378,7 +1844,8 @@ export async function resolveMissingWindowsTailwindOxideBinding(projectPath: str
   const packageJson = await readJson(path.join(projectPath, 'package.json'));
   const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
   const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
-  const hasUniwind = typeof dependencies.uniwind === 'string' || typeof devDependencies.uniwind === 'string';
+  const hasUniwind =
+    typeof dependencies.uniwind === 'string' || typeof devDependencies.uniwind === 'string';
   if (!hasUniwind) {
     return undefined;
   }
@@ -1387,7 +1854,13 @@ export async function resolveMissingWindowsTailwindOxideBinding(projectPath: str
     return undefined;
   }
 
-  const oxidePackageJsonPath = path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide', 'package.json');
+  const oxidePackageJsonPath = path.join(
+    projectPath,
+    'node_modules',
+    '@tailwindcss',
+    'oxide',
+    'package.json'
+  );
   const oxidePackage = await readJson(oxidePackageJsonPath);
   const oxideVersion = readString(oxidePackage.version);
   return oxideVersion ? `${packageName}@${oxideVersion}` : packageName;
@@ -1398,17 +1871,25 @@ export async function shouldInstallExpoFontPeer(projectPath: string): Promise<bo
   return shouldInstallExpoFontPeerFromPackageJson(packageJson);
 }
 
-export function shouldInstallExpoFontPeerFromPackageJson(packageJson: Record<string, unknown>): boolean {
+export function shouldInstallExpoFontPeerFromPackageJson(
+  packageJson: Record<string, unknown>
+): boolean {
   const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
   const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
   const hasVectorIcons =
-    typeof dependencies['@expo/vector-icons'] === 'string' || typeof devDependencies['@expo/vector-icons'] === 'string';
-  const hasExpoFont = typeof dependencies['expo-font'] === 'string' || typeof devDependencies['expo-font'] === 'string';
+    typeof dependencies['@expo/vector-icons'] === 'string' ||
+    typeof devDependencies['@expo/vector-icons'] === 'string';
+  const hasExpoFont =
+    typeof dependencies['expo-font'] === 'string' ||
+    typeof devDependencies['expo-font'] === 'string';
 
   return hasVectorIcons && !hasExpoFont;
 }
 
-export async function detectEasSetup(projectPath: string, createExpoStackArgs: string[]): Promise<boolean | undefined> {
+export async function detectEasSetup(
+  projectPath: string,
+  createExpoStackArgs: string[]
+): Promise<boolean | undefined> {
   if (hasFlag(createExpoStackArgs, '--eas')) {
     return true;
   }
@@ -1466,7 +1947,11 @@ function quoteDisplayArg(value: string): string {
   return value;
 }
 
-function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?: boolean): OnboardArgv {
+function buildOnboardArgv(
+  projectPath: string,
+  parsed: ParsedArgs,
+  easSelected?: boolean
+): OnboardArgv {
   return {
     project: projectPath,
     yes: parsed.mds.yes,

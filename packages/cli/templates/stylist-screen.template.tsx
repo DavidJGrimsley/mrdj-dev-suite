@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useMemo, useState } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
   Platform,
   Pressable,
@@ -117,7 +120,7 @@ const colorInputModeOptions: Array<{ label: string; value: ColorInputMode }> = [
   { label: 'Color Picker', value: 'picker' },
   { label: 'Tailwind Families', value: 'families' },
 ];
-const NATIVE_SAVE_COMMAND = 'npm run mds:stylist:sync -- --input-file project/theme.json';
+const NATIVE_SAVE_COMMAND = 'npm run stylist:sync:android';
 const GOOGLE_FONTS_KEY_STORAGE = 'mds.stylist.googleFontsApiKey';
 const GOOGLE_FONTS_BANNER_DISMISSED_STORAGE = 'mds.stylist.googleFontsBannerDismissed';
 const GOOGLE_FONTS_API_URL = 'https://www.googleapis.com/webfonts/v1/webfonts';
@@ -146,10 +149,18 @@ const NATIVE_SAFE_FONTS = new Set([
   'notoserif',
   'noto sans',
 ]);
-const fontRoleFields: Array<{ key: FontRoleKey; label: string; placeholder: string }> = [
+const fontRoleFields: Array<{
+  key: FontRoleKey;
+  label: string;
+  placeholder: string;
+}> = [
   { key: 'fontDisplay', label: 'Display', placeholder: 'Display font family' },
   { key: 'fontTitle', label: 'Title', placeholder: 'Title font family' },
-  { key: 'fontSubtitle', label: 'Subtitle', placeholder: 'Subtitle font family' },
+  {
+    key: 'fontSubtitle',
+    label: 'Subtitle',
+    placeholder: 'Subtitle font family',
+  },
   { key: 'fontBody', label: 'Body', placeholder: 'Body font family' },
   { key: 'fontCaption', label: 'Caption', placeholder: 'Caption font family' },
   { key: 'fontMono', label: 'Mono', placeholder: 'Mono font family' },
@@ -214,7 +225,10 @@ const pickerSwatches = [
   '#607d8b',
 ];
 
-const tailwindPalette = tailwindColors as unknown as Record<string, Partial<Record<TailwindShade, string>>>;
+const tailwindPalette = tailwindColors as unknown as Record<
+  string,
+  Partial<Record<TailwindShade, string>>
+>;
 const automaticLockedKeys: PaletteColorKey[] = ['background', 'surface', 'text'];
 const shadeOptions: TailwindShade[] = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 const topToggleHelpCopy: Record<TopToggleHelpKey, { title: string; body: string }> = {
@@ -621,7 +635,11 @@ function isLockedAutomaticPickerKey(
 }
 
 function sanitizeHexDraftInput(raw: string): string {
-  const hexOnly = raw.trim().replace(/[^0-9a-fA-F]/g, '').slice(0, 6).toLowerCase();
+  const hexOnly = raw
+    .trim()
+    .replace(/[^0-9a-fA-F]/g, '')
+    .slice(0, 6)
+    .toLowerCase();
   return `#${hexOnly}`;
 }
 
@@ -710,7 +728,10 @@ function withFontFamilyAlias(theme: ExtendedStylistThemeTokens): ExtendedStylist
   };
 }
 
-function areThemesEqual(left: ExtendedStylistThemeTokens, right: ExtendedStylistThemeTokens): boolean {
+function areThemesEqual(
+  left: ExtendedStylistThemeTokens,
+  right: ExtendedStylistThemeTokens
+): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
@@ -794,6 +815,7 @@ export default function StylistScreen() {
   const [saveMessageTone, setSaveMessageTone] = useState<SaveMessageTone>('info');
   const [nativeDraft, setNativeDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveMessageNonce, setSaveMessageNonce] = useState(0);
   const [writePolicy, setWritePolicy] = useState<WritePolicy | null>(null);
   const [showWritePolicyModal, setShowWritePolicyModal] = useState(false);
   const [activeTopToggleHelp, setActiveTopToggleHelp] = useState<TopToggleHelpKey | null>(null);
@@ -805,14 +827,69 @@ export default function StylistScreen() {
   const [loadingFonts, setLoadingFonts] = useState(false);
   const [fontFetchError, setFontFetchError] = useState('');
   const [fontRefreshIndex, setFontRefreshIndex] = useState(0);
+  const saveStatusTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveMessageKind = useRef<'none' | 'load' | 'sync' | 'status'>('none');
   const [explicitFontRoles, setExplicitFontRoles] = useState<Record<FontRoleKey, boolean>>({
-    fontDisplay: false,
-    fontTitle: false,
-    fontSubtitle: false,
-    fontBody: false,
-    fontCaption: false,
-    fontMono: false,
+    fontDisplay: true,
+    fontTitle: true,
+    fontSubtitle: true,
+    fontBody: true,
+    fontCaption: true,
+    fontMono: true,
   });
+  const saveButtonScale = useMemo(() => new Animated.Value(1), []);
+  const saveBannerOpacity = useMemo(() => new Animated.Value(1), []);
+
+  function pulseSaveButton() {
+    saveButtonScale.stopAnimation();
+    Animated.sequence([
+      Animated.timing(saveButtonScale, {
+        toValue: 0.96,
+        duration: 90,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.spring(saveButtonScale, {
+        toValue: 1,
+        speed: 16,
+        bounciness: 6,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+    ]).start();
+  }
+
+  function publishSaveMessage(tone: SaveMessageTone, message: string) {
+    if (saveStatusTimeout.current) {
+      clearTimeout(saveStatusTimeout.current);
+      saveStatusTimeout.current = null;
+    }
+    const stamp = new Date().toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+    setSaveMessageTone(tone);
+    setSaveMessage(`${message} (${stamp})`);
+    setSaveMessageNonce((value) => value + 1);
+    saveBannerOpacity.stopAnimation();
+    saveBannerOpacity.setValue(0.2);
+    Animated.timing(saveBannerOpacity, {
+      toValue: 1,
+      duration: 220,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }
+
+  function publishSyncMessage(message: string) {
+    saveMessageKind.current = 'sync';
+    publishSaveMessage('success', message);
+    saveStatusTimeout.current = setTimeout(() => {
+      saveMessageKind.current = 'status';
+      publishSaveMessage('info', 'Current theme files and preview are in sync.');
+    }, 3000);
+  }
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -847,18 +924,32 @@ export default function StylistScreen() {
           );
           setTheme((prev) => (areThemesEqual(prev, nextTheme) ? prev : nextTheme));
           setAppTheme(nextTheme);
+          setExplicitFontRoles({
+            fontDisplay: true,
+            fontTitle: true,
+            fontSubtitle: true,
+            fontBody: true,
+            fontCaption: true,
+            fontMono: true,
+          });
         }
         if (payload.hasConfig && payload.writePolicy) {
           setWritePolicy(payload.writePolicy);
         }
         if (payload.themeSource === 'style.md' && payload.mismatchDetected) {
-          setSaveMessageTone('info');
-          setSaveMessage(
-            'Detected mismatch between project/style.md managed block and project/theme.json. Loaded project/style.md by startup priority.'
-          );
+          if (saveMessageKind.current === 'none') {
+            saveMessageKind.current = 'load';
+            setSaveMessageTone('info');
+            setSaveMessage(
+              'Detected mismatch between project/style.md managed block and project/theme.json. Loaded project/style.md by startup priority.'
+            );
+          }
         } else if (payload.themeSource === 'style.md') {
-          setSaveMessageTone('info');
-          setSaveMessage('Loaded theme from project/style.md managed block.');
+          if (saveMessageKind.current === 'none') {
+            saveMessageKind.current = 'load';
+            setSaveMessageTone('info');
+            setSaveMessage('Loaded theme from project/style.md managed block.');
+          }
         }
       } finally {
         if (!cancelled) {
@@ -1127,16 +1218,25 @@ export default function StylistScreen() {
 
     updateTheme((prev) => {
       if (path === 'displaySize') {
-        return { ...prev, typography: { ...prev.typography, displaySize: value } };
+        return {
+          ...prev,
+          typography: { ...prev.typography, displaySize: value },
+        };
       }
       if (path === 'headingSize') {
-        return { ...prev, typography: { ...prev.typography, headingSize: value } };
+        return {
+          ...prev,
+          typography: { ...prev.typography, headingSize: value },
+        };
       }
       if (path === 'bodySize') {
         return { ...prev, typography: { ...prev.typography, bodySize: value } };
       }
       if (path === 'captionSize') {
-        return { ...prev, typography: { ...prev.typography, captionSize: value } };
+        return {
+          ...prev,
+          typography: { ...prev.typography, captionSize: value },
+        };
       }
       if (path === 'radius') {
         return { ...prev, layout: { ...prev.layout, radius: value } };
@@ -1359,7 +1459,8 @@ export default function StylistScreen() {
   }
 
   function applyNotoFonts() {
-    const notoRoles: Omit<Record<FontRoleKey, string>, 'fontDisplay'> = {
+    const notoRoles: Record<FontRoleKey, string> = {
+      fontDisplay: 'Noto Sans Display',
       fontTitle: 'Noto Sans Display',
       fontSubtitle: 'Noto Serif Display',
       fontBody: 'Noto Sans',
@@ -1368,7 +1469,7 @@ export default function StylistScreen() {
     };
 
     setExplicitFontRoles({
-      fontDisplay: false,
+      fontDisplay: true,
       fontTitle: true,
       fontSubtitle: true,
       fontBody: true,
@@ -1380,8 +1481,7 @@ export default function StylistScreen() {
       typography: {
         ...prev.typography,
         ...notoRoles,
-        fontDisplay: 'System',
-        fontFamily: 'System',
+        fontFamily: 'Noto Sans Display',
       },
     }));
   }
@@ -1396,13 +1496,12 @@ export default function StylistScreen() {
       );
       setStoredApiKey(nextKey);
       setFontBannerDismissed(false);
-      setSaveMessageTone(nextKey ? 'success' : 'info');
-      setSaveMessage(
+      publishSaveMessage(
+        nextKey ? 'success' : 'info',
         nextKey ? 'Google Fonts key saved. Live list is refreshing.' : 'Google Fonts key cleared.'
       );
     } catch {
-      setSaveMessageTone('error');
-      setSaveMessage('Unable to save Google Fonts API key on this device.');
+      publishSaveMessage('error', 'Unable to save Google Fonts API key on this device.');
     }
   }
 
@@ -1416,48 +1515,81 @@ export default function StylistScreen() {
   }
 
   async function saveTheme(policyOverride?: WritePolicy) {
-    const payloadTheme = withFontFamilyAlias(theme);
+    const payloadTheme = withFontFamilyAlias(
+      normalizeThemeTypography(reconcileTheme(theme, colorInputMode, bgFamilies, bgFamilyShades))
+    );
     const resolvedPolicy = policyOverride ?? writePolicy ?? 'managed';
+    pulseSaveButton();
     setSaving(true);
-    setSaveMessageTone('info');
-    setSaveMessage('');
+    publishSaveMessage('info', 'Saving theme...');
     try {
-      if (Platform.OS === 'web') {
-        const response = await fetch('/exposition/stylist-sync', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            theme: payloadTheme,
-            metadata: {
-              writePolicy: resolvedPolicy,
-            },
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload?.error ?? 'Stylist sync failed.');
+      const response = await fetch('/exposition/stylist-sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          theme: payloadTheme,
+          metadata: {
+            writePolicy: resolvedPolicy,
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error ?? 'Stylist sync failed.');
+      }
+      const readBackResponse = await fetch('/exposition/stylist-sync', {
+        method: 'GET',
+        headers: { 'cache-control': 'no-store' },
+      });
+      let canonicalTheme = payloadTheme;
+      if (readBackResponse.ok) {
+        const readBackPayload = (await readBackResponse.json()) as {
+          theme?: StylistThemeTokens;
+          writePolicy?: WritePolicy;
+        };
+        if (readBackPayload.theme) {
+          canonicalTheme = withFontFamilyAlias(
+            normalizeThemeTypography(
+              reconcileTheme(readBackPayload.theme, colorInputMode, bgFamilies, bgFamilyShades)
+            )
+          );
+          setTheme((prev) => (areThemesEqual(prev, canonicalTheme) ? prev : canonicalTheme));
+          setAppTheme(canonicalTheme);
+          setExplicitFontRoles({
+            fontDisplay: true,
+            fontTitle: true,
+            fontSubtitle: true,
+            fontBody: true,
+            fontCaption: true,
+            fontMono: true,
+          });
+        } else {
+          setAppTheme(payloadTheme);
         }
+        setWritePolicy(readBackPayload.writePolicy ?? payload.writePolicy ?? resolvedPolicy);
+      } else {
         setWritePolicy(payload.writePolicy ?? resolvedPolicy);
         setAppTheme(payloadTheme);
-        setSaveMessageTone('success');
-        setSaveMessage(`Synced ${payload.updatedFiles?.length ?? 0} files from Stylist.`);
-      } else {
+      }
+      setNativeDraft('');
+      publishSyncMessage(`Synced ${payload.updatedFiles?.length ?? 0} files from Stylist.`);
+    } catch (error) {
+      if (Platform.OS !== 'web') {
         const draft = JSON.stringify(payloadTheme, null, 2);
         setNativeDraft(draft);
         setWritePolicy(resolvedPolicy);
         setAppTheme(payloadTheme);
-        setSaveMessageTone('success');
-        setSaveMessage(
+        publishSaveMessage(
+          'success',
           'Draft saved in Stylist. Run the sync command from your project root terminal.'
         );
+        return;
       }
-    } catch (error) {
       const message = humanizeSaveError(
         error instanceof Error ? error.message : 'Unknown save error.'
       );
       Alert.alert('Stylist save failed', message);
-      setSaveMessageTone('error');
-      setSaveMessage(message);
+      publishSaveMessage('error', message);
     } finally {
       setSaving(false);
     }
@@ -1482,13 +1614,21 @@ export default function StylistScreen() {
     void saveTheme(nextPolicy);
   }
 
-  const nativeSaveCommand = `${NATIVE_SAVE_COMMAND} --write-policy ${writePolicy ?? 'managed'}`;
+  const nativeSaveCommand = NATIVE_SAVE_COMMAND;
   const saveMessageColors =
     saveMessageTone === 'success'
       ? { backgroundColor: '#dcfce7', borderColor: '#86efac', color: '#166534' }
       : saveMessageTone === 'error'
-        ? { backgroundColor: '#fee2e2', borderColor: '#fca5a5', color: '#991b1b' }
-        : { backgroundColor: '#dbeafe', borderColor: '#93c5fd', color: '#1e3a8a' };
+        ? {
+            backgroundColor: '#fee2e2',
+            borderColor: '#fca5a5',
+            color: '#991b1b',
+          }
+        : {
+            backgroundColor: '#dbeafe',
+            borderColor: '#93c5fd',
+            color: '#1e3a8a',
+          };
 
   return (
     <View style={styles.root}>
@@ -1502,39 +1642,46 @@ export default function StylistScreen() {
             paddingBottom: Math.max(insets.bottom + 40, 96),
           },
         ]}
-        style={[styles.screen, { backgroundColor: previewColors.background }]}>
+        style={[styles.screen, { backgroundColor: previewColors.background }]}
+      >
         <View style={styles.titleRow}>
           <Text style={[styles.title, { color: previewColors.text }]}>
             __MDS_APP_NAME__ Stylist
           </Text>
-          <Pressable
-            onPress={handleSaveThemePress}
-            disabled={saving}
-            style={[
-              styles.saveButton,
-              styles.saveButtonInline,
-              { backgroundColor: previewColors.primary },
-            ]}>
-            <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
-          </Pressable>
+          <Animated.View style={{ transform: [{ scale: saveButtonScale }] }}>
+            <Pressable
+              onPress={handleSaveThemePress}
+              disabled={saving}
+              style={[
+                styles.saveButton,
+                styles.saveButtonInline,
+                { backgroundColor: previewColors.primary },
+              ]}
+            >
+              <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
+            </Pressable>
+          </Animated.View>
         </View>
         <Text style={[styles.intro, { color: previewColors.text }]}>
           Adjust design tokens - do not forget to hit Save Theme so the changes will be applied to
           your app color theme files.
         </Text>
         {saveMessage ? (
-          <View
+          <Animated.View
+            key={`save-message-${saveMessageNonce}`}
             style={[
               styles.saveMessageBanner,
               {
                 backgroundColor: saveMessageColors.backgroundColor,
                 borderColor: saveMessageColors.borderColor,
+                opacity: saveBannerOpacity,
               },
-            ]}>
+            ]}
+          >
             <Text style={[styles.saveMessageText, { color: saveMessageColors.color }]}>
               {saveMessage}
             </Text>
-          </View>
+          </Animated.View>
         ) : null}
         {!fontBannerDismissed || !storedApiKey ? (
           <View style={[styles.fontBanner, { borderColor: previewColors.primary }]}>
@@ -1559,12 +1706,14 @@ export default function StylistScreen() {
             <View style={styles.fontBannerActions}>
               <Pressable
                 onPress={saveFontApiSettings}
-                style={[styles.bannerAction, { backgroundColor: previewColors.primary }]}>
+                style={[styles.bannerAction, { backgroundColor: previewColors.primary }]}
+              >
                 <Text style={styles.bannerActionText}>Save Key</Text>
               </Pressable>
               <Pressable
                 onPress={() => setFontRefreshIndex((prev) => prev + 1)}
-                style={[styles.bannerAction, styles.bannerActionGhost]}>
+                style={[styles.bannerAction, styles.bannerActionGhost]}
+              >
                 <Text style={styles.bannerActionGhostText}>Refresh List</Text>
               </Pressable>
             </View>
@@ -1578,8 +1727,12 @@ export default function StylistScreen() {
           style={[
             styles.section,
             styles.sectionOverlay,
-            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
-          ]}>
+            {
+              backgroundColor: previewColors.surface,
+              borderRadius: theme.layout.radius,
+            },
+          ]}
+        >
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Colors</Text>
             <View style={styles.inlineToggle}>
@@ -1592,12 +1745,14 @@ export default function StylistScreen() {
                     style={[
                       styles.inlineToggleOption,
                       isSelected && styles.inlineToggleOptionSelected,
-                    ]}>
+                    ]}
+                  >
                     <Text
                       style={[
                         styles.inlineToggleLabel,
                         { color: isSelected ? '#f8fafc' : previewColors.text },
-                      ]}>
+                      ]}
+                    >
                       {option.label}
                     </Text>
                   </Pressable>
@@ -1642,12 +1797,16 @@ export default function StylistScreen() {
                         borderColor: isSelected ? previewColors.text : '#9ca3af',
                         opacity: locked ? 0.45 : 1,
                       },
-                    ]}>
+                    ]}
+                  >
                     <Text
                       style={[
                         styles.colorChipLabel,
-                        { color: getReadableChipTextColor(editablePalette[key]) },
-                      ]}>
+                        {
+                          color: getReadableChipTextColor(editablePalette[key]),
+                        },
+                      ]}
+                    >
                       {key}
                     </Text>
                   </Pressable>
@@ -1666,7 +1825,8 @@ export default function StylistScreen() {
                 onCompleteJS={({ hex }: { hex: string }) => {
                   applyPickerColor(hex);
                 }}
-                style={styles.picker}>
+                style={styles.picker}
+              >
                 <Preview hideInitialColor />
                 <Panel1 />
                 <HueSlider />
@@ -1733,12 +1893,16 @@ export default function StylistScreen() {
                               backgroundColor: familyChipColor,
                               borderColor: previewColors.text,
                             },
-                          ]}>
+                          ]}
+                        >
                           <Text
                             style={[
                               styles.familyTitleChipText,
-                              { color: getReadableChipTextColor(familyChipColor) },
-                            ]}>
+                              {
+                                color: getReadableChipTextColor(familyChipColor),
+                              },
+                            ]}
+                          >
                             {key}
                           </Text>
                         </View>
@@ -1765,12 +1929,16 @@ export default function StylistScreen() {
                                 backgroundColor: previewColors.primary,
                                 borderColor: previewColors.primary,
                               },
-                            ]}>
+                            ]}
+                          >
                             <Text
                               style={[
                                 styles.familyOptionText,
-                                { color: familyValue === family ? '#f8fafc' : previewColors.text },
-                              ]}>
+                                {
+                                  color: familyValue === family ? '#f8fafc' : previewColors.text,
+                                },
+                              ]}
+                            >
                               {family}
                             </Text>
                           </Pressable>
@@ -1814,7 +1982,8 @@ export default function StylistScreen() {
               fontFamily: resolvePreviewFontFamily(theme.typography.fontDisplay),
               fontSize: theme.typography.displaySize,
               fontWeight: '900',
-            }}>
+            }}
+          >
             Display headline
           </Text>
           <Text
@@ -1823,7 +1992,8 @@ export default function StylistScreen() {
               fontFamily: resolvePreviewFontFamily(theme.typography.fontTitle),
               fontSize: theme.typography.headingSize,
               fontWeight: '800',
-            }}>
+            }}
+          >
             Section heading
           </Text>
           <Text
@@ -1832,7 +2002,8 @@ export default function StylistScreen() {
               fontFamily: resolvePreviewFontFamily(theme.typography.fontSubtitle),
               fontSize: theme.typography.bodySize + 1,
               fontWeight: '600',
-            }}>
+            }}
+          >
             Subtitle copy for card sections and hero support text.
           </Text>
           <Text
@@ -1840,7 +2011,8 @@ export default function StylistScreen() {
               color: previewColors.text,
               fontFamily: resolvePreviewFontFamily(theme.typography.fontBody),
               fontSize: theme.typography.bodySize,
-            }}>
+            }}
+          >
             Readable body copy for product screens, onboarding, settings, and forms.
           </Text>
           <Text
@@ -1849,7 +2021,8 @@ export default function StylistScreen() {
               fontFamily: resolvePreviewFontFamily(theme.typography.fontCaption),
               fontSize: theme.typography.captionSize,
               textTransform: 'uppercase',
-            }}>
+            }}
+          >
             Caption and metadata text
           </Text>
           <Text
@@ -1859,7 +2032,8 @@ export default function StylistScreen() {
               fontSize: 11,
               textTransform: 'uppercase',
               opacity: 0.82,
-            }}>
+            }}
+          >
             Monospaced sample
           </Text>
           <Text
@@ -1870,7 +2044,8 @@ export default function StylistScreen() {
               backgroundColor: previewColors.background,
               padding: 8,
               borderRadius: 8,
-            }}>
+            }}
+          >
             {'const typography = "monospaced";'}
           </Text>
           <AnimatedPressable
@@ -1884,13 +2059,18 @@ export default function StylistScreen() {
           style={[
             styles.section,
             styles.typographySection,
-            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
-          ]}>
+            {
+              backgroundColor: previewColors.surface,
+              borderRadius: theme.layout.radius,
+            },
+          ]}
+        >
           <View style={styles.sectionHeaderRow}>
             <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Typography</Text>
             <Pressable
               onPress={applyNotoFonts}
-              style={[styles.presetButton, { borderColor: controlTextColor }]}>
+              style={[styles.presetButton, { borderColor: controlTextColor }]}
+            >
               <Text style={[styles.presetButtonText, { color: controlTextColor }]}>Noto</Text>
             </Pressable>
           </View>
@@ -1958,7 +2138,8 @@ export default function StylistScreen() {
               borderRadius: theme.layout.radius,
               padding: galleryTokens.sectionPadding,
             },
-          ]}>
+          ]}
+        >
           <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Component Gallery</Text>
           <Text style={[styles.helperText, { color: controlTextColor }]}>
             Token previews using cards, status views, input states, and spacing rhythm. These are
@@ -1975,7 +2156,8 @@ export default function StylistScreen() {
                   gap: galleryTokens.compactGap,
                   padding: galleryTokens.cardPadding,
                 },
-              ]}>
+              ]}
+            >
               <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
                 Default Card
               </Text>
@@ -1993,7 +2175,8 @@ export default function StylistScreen() {
                   gap: galleryTokens.compactGap,
                   padding: galleryTokens.cardPadding,
                 },
-              ]}>
+              ]}
+            >
               <Text style={[styles.galleryCardTitle, { color: previewColors.text }]}>
                 Soft Card
               </Text>
@@ -2019,7 +2202,8 @@ export default function StylistScreen() {
                     paddingHorizontal: galleryTokens.pillPaddingHorizontal,
                     paddingVertical: galleryTokens.pillPaddingVertical,
                   },
-                ]}>
+                ]}
+              >
                 <Text style={styles.statusPillText}>{status.label}</Text>
               </View>
             ))}
@@ -2067,8 +2251,12 @@ export default function StylistScreen() {
         <View
           style={[
             styles.section,
-            { backgroundColor: previewColors.surface, borderRadius: theme.layout.radius },
-          ]}>
+            {
+              backgroundColor: previewColors.surface,
+              borderRadius: theme.layout.radius,
+            },
+          ]}
+        >
           <Text style={[styles.sectionTitle, { color: controlTextColor }]}>Layout Tokens</Text>
           <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
             Hit enter or click out of the text box to take effect.
@@ -2124,7 +2312,8 @@ export default function StylistScreen() {
                 padding: theme.layout.spacing.md,
                 gap: theme.layout.spacing.xs,
               },
-            ]}>
+            ]}
+          >
             {spacingKeys.map((spacingKey, index) => (
               <View
                 key={`layout-preview-${spacingKey}`}
@@ -2136,7 +2325,8 @@ export default function StylistScreen() {
                     borderColor: previewColors.secondary,
                     backgroundColor: previewColors.background,
                   },
-                ]}>
+                ]}
+              >
                 <Text style={[styles.layoutPreviewTitle, { color: previewColors.text }]}>
                   {spacingKey.toUpperCase()} -{' '}
                   {spacingKey === 'xs'
@@ -2165,26 +2355,32 @@ export default function StylistScreen() {
           </View>
         </View>
 
-        <Pressable
-          onPress={handleSaveThemePress}
-          disabled={saving}
-          style={[styles.saveButton, { backgroundColor: previewColors.primary }]}>
-          <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
-        </Pressable>
+        <Animated.View style={{ transform: [{ scale: saveButtonScale }] }}>
+          <Pressable
+            onPress={handleSaveThemePress}
+            disabled={saving}
+            style={[styles.saveButton, { backgroundColor: previewColors.primary }]}
+          >
+            <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Theme'}</Text>
+          </Pressable>
+        </Animated.View>
 
         {saveMessage ? (
-          <View
+          <Animated.View
+            key={`save-message-bottom-${saveMessageNonce}`}
             style={[
               styles.saveMessageBanner,
               {
                 backgroundColor: saveMessageColors.backgroundColor,
                 borderColor: saveMessageColors.borderColor,
+                opacity: saveBannerOpacity,
               },
-            ]}>
+            ]}
+          >
             <Text style={[styles.saveMessageText, { color: saveMessageColors.color }]}>
               {saveMessage}
             </Text>
-          </View>
+          </Animated.View>
         ) : null}
         {Platform.OS !== 'web' ? (
           <View style={styles.nativeHelp}>
@@ -2200,7 +2396,8 @@ export default function StylistScreen() {
         transparent
         animationType="fade"
         visible={showWritePolicyModal}
-        onRequestClose={() => setShowWritePolicyModal(false)}>
+        onRequestClose={() => setShowWritePolicyModal(false)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Choose Save Behavior</Text>
@@ -2211,12 +2408,14 @@ export default function StylistScreen() {
             <View style={styles.modalActions}>
               <Pressable
                 onPress={() => chooseWritePolicyAndSave('managed')}
-                style={[styles.modalButton, styles.modalButtonPrimary]}>
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+              >
                 <Text style={styles.modalButtonPrimaryText}>Managed (Recommended)</Text>
               </Pressable>
               <Pressable
                 onPress={() => chooseWritePolicyAndSave('overwrite')}
-                style={[styles.modalButton, styles.modalButtonSecondary]}>
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+              >
                 <Text style={styles.modalButtonSecondaryText}>Overwrite Full File</Text>
               </Pressable>
             </View>
@@ -2232,7 +2431,8 @@ export default function StylistScreen() {
             borderColor: previewColors.primary,
             top: Platform.OS === 'web' ? 76 : Math.max(insets.top + 8, 14),
           },
-        ]}>
+        ]}
+      >
         <ToggleRow
           label="Color Mode"
           options={colorModeOptions}
@@ -2243,7 +2443,10 @@ export default function StylistScreen() {
         />
         <ToggleRow
           label="Preview"
-          options={schemeKeys.map((scheme) => ({ label: scheme, value: scheme }))}
+          options={schemeKeys.map((scheme) => ({
+            label: scheme,
+            value: scheme,
+          }))}
           value={theme.colorSystem.previewScheme}
           onChange={(value) => updatePreviewScheme(value as StylistColorScheme)}
           infoText={topToggleHelpCopy.preview.body}
@@ -2263,7 +2466,8 @@ export default function StylistScreen() {
         transparent
         animationType="fade"
         visible={Boolean(activeTopToggleHelp)}
-        onRequestClose={() => setActiveTopToggleHelp(null)}>
+        onRequestClose={() => setActiveTopToggleHelp(null)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
@@ -2277,7 +2481,8 @@ export default function StylistScreen() {
             <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setActiveTopToggleHelp(null)}
-                style={[styles.modalButton, styles.modalButtonPrimary]}>
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+              >
                 <Text style={styles.modalButtonPrimaryText}>Close</Text>
               </Pressable>
             </View>
@@ -2305,7 +2510,8 @@ function ToggleRow(props: {
           accessibilityLabel={`${props.label} explanation`}
           accessibilityHint={props.infoText}
           onPress={props.onPressInfo}
-          style={styles.toggleInfoButton}>
+          style={styles.toggleInfoButton}
+        >
           <Text style={styles.toggleInfoButtonText}>i</Text>
         </Pressable>
       </View>
@@ -2316,9 +2522,11 @@ function ToggleRow(props: {
             <Pressable
               key={option.value}
               onPress={() => props.onChange(option.value)}
-              style={[styles.toggleOption, isSelected && styles.toggleOptionSelected]}>
+              style={[styles.toggleOption, isSelected && styles.toggleOptionSelected]}
+            >
               <Text
-                style={[styles.toggleOptionText, isSelected && styles.toggleOptionTextSelected]}>
+                style={[styles.toggleOptionText, isSelected && styles.toggleOptionTextSelected]}
+              >
                 {option.label}
               </Text>
             </Pressable>
@@ -2337,11 +2545,6 @@ function NumberField(props: {
   labelColor?: string;
 }) {
   const [draft, setDraft] = useState(String(props.value));
-
-  useEffect(() => {
-    const nextDraft = String(props.value);
-    setDraft((prev) => (prev === nextDraft ? prev : nextDraft));
-  }, [props.value]);
 
   return (
     <View style={[styles.field, props.grid ? styles.gridField : styles.fullField]}>
@@ -2419,54 +2622,75 @@ function FontFamilyCombobox(props: {
         styles.field,
         props.grid ? styles.gridField : styles.fullField,
         isOpen ? styles.fieldOverlayOpen : null,
-      ]}>
+      ]}
+    >
       <Text style={[styles.fieldLabel, props.labelColor ? { color: props.labelColor } : null]}>
         {props.label}
       </Text>
       <View style={styles.comboboxWrap}>
-        <TextInput
-          value={query}
-          onChangeText={(value) => {
-            setQuery(value);
-            if (!isOpen) {
+        <View style={styles.inputWithAction}>
+          <TextInput
+            value={query}
+            onChangeText={(value) => {
+              setQuery(value);
+              if (!isOpen) {
+                openDropdown();
+              }
+            }}
+            onFocus={() => {
               openDropdown();
-            }
-          }}
-          onFocus={() => {
-            openDropdown();
-          }}
-          onBlur={() => {
-            setTimeout(() => {
-              setIsOpen(false);
-            }, 120);
-          }}
-          onSubmitEditing={() => commitValue(query)}
-          placeholder={props.placeholder}
-          autoCorrect={false}
-          autoCapitalize="none"
-          style={styles.input}
-        />
+            }}
+            onSubmitEditing={() => commitValue(query)}
+            blurOnSubmit
+            returnKeyType="done"
+            placeholder={props.placeholder}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={[styles.input, styles.inputWithTrailingAction]}
+          />
+          {query.trim().length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Clear ${props.label} font`}
+              onPress={() => {
+                commitValue('System');
+              }}
+              style={styles.clearInputButton}
+            >
+              <Text style={styles.clearInputButtonText}>x</Text>
+            </Pressable>
+          ) : null}
+        </View>
         {isOpen ? (
           <View style={styles.comboboxDropdown}>
+            <View style={styles.comboboxHeader}>
+              <Text style={styles.comboboxHeaderText}>Choose a font</Text>
+              <Pressable onPress={() => setIsOpen(false)} style={styles.comboboxCloseButton}>
+                <Text style={styles.comboboxCloseText}>Close</Text>
+              </Pressable>
+            </View>
             <ScrollView
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
-              style={styles.comboboxScroll}>
+              style={styles.comboboxScroll}
+            >
               {filteredOptions.length === 0 ? (
                 <Text style={styles.comboboxEmpty}>No matching fonts</Text>
               ) : (
                 filteredOptions.map((option) => (
                   <Pressable
                     key={`${props.label}-${option}`}
-                    onPressIn={() => {
+                    onPress={() => {
                       commitValue(option);
                     }}
-                    style={styles.comboboxOption}>
+                    style={styles.comboboxOption}
+                  >
                     <Text
                       style={[
                         styles.comboboxOptionText,
                         { fontFamily: resolvePreviewFontFamily(option) },
-                      ]}>
+                      ]}
+                    >
                       {option}
                     </Text>
                   </Pressable>
@@ -2943,17 +3167,39 @@ const styles = StyleSheet.create({
     borderColor: '#cbd5e1',
     borderRadius: 10,
     borderWidth: 1,
-    left: 0,
-    elevation: 24,
-    position: 'absolute',
-    right: 0,
-    top: 44,
-    maxHeight: 360,
+    elevation: 4,
+    marginTop: 6,
+    maxHeight: 220,
     overflow: 'hidden',
-    zIndex: 2000,
   },
   comboboxScroll: {
-    maxHeight: 360,
+    maxHeight: 168,
+  },
+  comboboxHeader: {
+    alignItems: 'center',
+    borderBottomColor: '#e5e7eb',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  comboboxHeaderText: {
+    color: '#374151',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  comboboxCloseButton: {
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  comboboxCloseText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '800',
   },
   comboboxOption: {
     borderBottomColor: '#e5e7eb',
@@ -2978,6 +3224,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 42,
     paddingHorizontal: 12,
+  },
+  inputWithAction: {
+    position: 'relative',
+  },
+  inputWithTrailingAction: {
+    paddingRight: 38,
+  },
+  clearInputButton: {
+    alignItems: 'center',
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 24,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 10,
+    top: 9,
+    width: 24,
+  },
+  clearInputButtonText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '800',
+    lineHeight: 14,
+    textTransform: 'uppercase',
   },
   saveButton: {
     borderRadius: 12,

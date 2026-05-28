@@ -11,6 +11,7 @@ import {
   buildExpoInstallFixCommand,
   buildExpoLatestSdkCommand,
   buildInstallCommand,
+  buildPrettierWriteCommand,
   detectEasSetup,
   isCliEntryPoint,
   parseArgs,
@@ -25,6 +26,7 @@ import {
   resolveProjectTarget,
   resolveWindowsTailwindOxidePackage,
   shouldInstallExpoFontPeerFromPackageJson,
+  shouldRunExpoPinnedSdkCommandFromPackageJson,
   shouldRunExpoLatestSdkCommandFromPackageJson,
   toExpoScheme,
   toExpoSlug,
@@ -54,12 +56,13 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(help).toContain('-h, --help');
   });
 
-  it('builds install, latest SDK, expo repair, Expo font peer, and doctor commands in the required order', () => {
+  it('builds install, latest SDK, expo repair, Expo font peer, formatting, and doctor commands in the required order', () => {
     const commands = [
       buildInstallCommand('npm').display,
       buildExpoLatestSdkCommand('npm').display,
       buildExpoInstallFixCommand('npm').display,
       buildExpoFontInstallCommand('npm').display,
+      buildPrettierWriteCommand('npm').display,
       buildExpoDoctorCommand('npm').display,
     ];
 
@@ -68,6 +71,7 @@ describe('create-expo-super-stack CLI helpers', () => {
       'npx expo install expo@latest',
       'npx expo install --fix',
       'npx expo install expo-font',
+      'npx prettier --write "**/*.{js,jsx,ts,tsx,json}"',
       'npx expo-doctor',
     ]);
   });
@@ -75,15 +79,28 @@ describe('create-expo-super-stack CLI helpers', () => {
   it('uses non-failing pnpm strict dependency build settings during install', () => {
     const command = buildInstallCommand('pnpm');
 
-    expect(command.display).toBe('pnpm install --config.strict-dep-builds=false --ignore-workspace');
-    expect(command.args).toEqual(['install', '--config.strict-dep-builds=false', '--ignore-workspace']);
+    expect(command.display).toBe(
+      'pnpm install --config.strict-dep-builds=false --ignore-workspace'
+    );
+    expect(command.args).toEqual([
+      'install',
+      '--config.strict-dep-builds=false',
+      '--ignore-workspace',
+    ]);
     expect(command.env).toEqual({ PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' });
   });
 
   it('builds add-dev-dependency command for pnpm workspace app projects', () => {
     const command = buildAddDevDependencyCommand('pnpm', '@tailwindcss/oxide-win32-x64-msvc@4.2.1');
-    expect(command.display).toBe('pnpm --ignore-workspace add -D @tailwindcss/oxide-win32-x64-msvc@4.2.1');
-    expect(command.args).toEqual(['--ignore-workspace', 'add', '-D', '@tailwindcss/oxide-win32-x64-msvc@4.2.1']);
+    expect(command.display).toBe(
+      'pnpm --ignore-workspace add -D @tailwindcss/oxide-win32-x64-msvc@4.2.1'
+    );
+    expect(command.args).toEqual([
+      '--ignore-workspace',
+      'add',
+      '-D',
+      '@tailwindcss/oxide-win32-x64-msvc@4.2.1',
+    ]);
     expect(command.env).toEqual({ PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' });
   });
 
@@ -93,7 +110,7 @@ describe('create-expo-super-stack CLI helpers', () => {
         dependencies: {
           '@expo/vector-icons': '^15.0.0',
         },
-      }),
+      })
     ).toBe(true);
 
     expect(
@@ -102,7 +119,7 @@ describe('create-expo-super-stack CLI helpers', () => {
           '@expo/vector-icons': '^15.0.0',
           'expo-font': '~14.0.0',
         },
-      }),
+      })
     ).toBe(false);
 
     expect(
@@ -110,26 +127,44 @@ describe('create-expo-super-stack CLI helpers', () => {
         dependencies: {
           expo: '~54.0.0',
         },
-      }),
+      })
     ).toBe(false);
   });
 
   it('skips redundant expo@latest repair when the project already targets SDK 56', () => {
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
-        dependencies: { expo: '~56.0.4' },
-      }),
+        dependencies: { expo: '~56.0.6' },
+      })
     ).toBe(false);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: '~55.0.0' },
-      }),
+      })
     ).toBe(true);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: {},
-      }),
+      })
     ).toBe(true);
+  });
+
+  it('runs expo patch bump when below the pinned SDK patch', () => {
+    expect(
+      shouldRunExpoPinnedSdkCommandFromPackageJson({
+        dependencies: { expo: '~56.0.5' },
+      })
+    ).toBe(true);
+    expect(
+      shouldRunExpoPinnedSdkCommandFromPackageJson({
+        dependencies: { expo: '~56.0.6' },
+      })
+    ).toBe(false);
+    expect(
+      shouldRunExpoPinnedSdkCommandFromPackageJson({
+        dependencies: { expo: '~56.0.7' },
+      })
+    ).toBe(false);
   });
 
   it('does not execute main when imported by tests', () => {
@@ -154,11 +189,19 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(target.projectName).toBe('Smoke Path App');
     expect(target.parentDir).toContain(path.join('F:', 'SoftwareDev'));
 
-    const parsed = parseArgs([path.join('..', 'Smoke Relative App'), '--expo-router', '--no-install']);
+    const parsed = parseArgs([
+      path.join('..', 'Smoke Relative App'),
+      '--expo-router',
+      '--no-install',
+    ]);
     const resolved = withResolvedProjectName(parsed, 'ignored');
 
     expect(resolved.projectName).toBe('Smoke Relative App');
-    expect(resolved.createExpoStackArgs).toEqual(['Smoke Relative App', '--expo-router', '--no-install']);
+    expect(resolved.createExpoStackArgs).toEqual([
+      'Smoke Relative App',
+      '--expo-router',
+      '--no-install',
+    ]);
     expect(resolved.mds.appName).toBe('Smoke Relative App');
     expect(resolved.mds.projectParentDir).toBeDefined();
   });
@@ -173,7 +216,7 @@ describe('create-expo-super-stack CLI helpers', () => {
 
   it('rejects conflicting create-expo-stack auth provider flags', () => {
     expect(() => validateCreateExpoStackArgs(['App', '--supabase', '--firebase'])).toThrow(
-      /Choose one create-expo-stack auth provider/,
+      /Choose one create-expo-stack auth provider/
     );
     expect(() => validateCreateExpoStackArgs(['App', '--supabase'])).not.toThrow();
     expect(() => validateCreateExpoStackArgs(['App', '--firebase'])).not.toThrow();
@@ -191,8 +234,14 @@ describe('create-expo-super-stack CLI helpers', () => {
       await rm(path.join(projectPath, 'eas.json'), { force: true });
       await writeFile(
         path.join(projectPath, 'app.json'),
-        JSON.stringify({ expo: { extra: { eas: { projectId: '20850e64-94ba-462d-a00c-bd0b4ff351c6' } } } }),
-        'utf8',
+        JSON.stringify({
+          expo: {
+            extra: {
+              eas: { projectId: '20850e64-94ba-462d-a00c-bd0b4ff351c6' },
+            },
+          },
+        }),
+        'utf8'
       );
       expect(await detectEasSetup(projectPath, ['App'])).toBe(true);
     } finally {
@@ -252,11 +301,9 @@ describe('create-expo-super-stack CLI helpers', () => {
       'demo-app',
       '--expo-router',
     ]);
-    expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router', '--no-install'])).toEqual([
-      'demo-app',
-      '--expo-router',
-      '--no-install',
-    ]);
+    expect(
+      prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router', '--no-install'])
+    ).toEqual(['demo-app', '--expo-router', '--no-install']);
     expect(prepareCreateExpoStackArgsForWrapper(['demo-app', '--expo-router'], true)).toEqual([
       'demo-app',
       '--expo-router',
@@ -298,19 +345,45 @@ describe('create-expo-super-stack CLI helpers', () => {
             platforms: ['ios', 'android'],
           },
         }),
-        'utf8',
+        'utf8'
       );
 
-      await expect(repairExpoProjectIdentifiers(projectPath, 'Bandana Designer', ['web', 'ios', 'android'])).resolves.toEqual([
-        path.join(projectPath, 'app.json'),
-      ]);
+      await expect(
+        repairExpoProjectIdentifiers(projectPath, 'Bandana Designer', ['web', 'ios', 'android'])
+      ).resolves.toEqual([path.join(projectPath, 'app.json')]);
 
       const repaired = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
-        expo: { slug: string; scheme: string; platforms: string[] };
+        expo: {
+          slug: string;
+          scheme: string;
+          platforms: string[];
+          backgroundColor?: string;
+          androidStatusBar?: {
+            backgroundColor?: string;
+            barStyle?: string;
+            translucent?: boolean;
+          };
+          plugins?: unknown[];
+        };
       };
       expect(repaired.expo.slug).toBe('bandana-designer');
       expect(repaired.expo.scheme).toBe('bandana-designer');
       expect(repaired.expo.platforms).toContain('web');
+      expect(repaired.expo.backgroundColor).toBe('#f1f0f8');
+      expect(repaired.expo).not.toHaveProperty('androidNavigationBar');
+      expect(repaired.expo.androidStatusBar).toEqual({
+        backgroundColor: '#f1f0f8',
+        barStyle: 'dark-content',
+        translucent: false,
+      });
+      expect(repaired.expo.plugins ?? []).toContainEqual([
+        'expo-navigation-bar',
+        {
+          style: 'dark',
+          enforceContrast: false,
+        },
+      ]);
+      expect(repaired.expo.plugins ?? []).toContain('expo-system-ui');
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }
@@ -329,21 +402,23 @@ describe('create-expo-super-stack CLI helpers', () => {
           'import { TabBarIcon } from "../../components/TabBarIcon";',
           '',
         ].join('\n'),
-        'utf8',
+        'utf8'
       );
 
-      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([tabsLayoutPath]);
+      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([]);
 
       const repaired = await readFile(tabsLayoutPath, 'utf8');
-      expect(repaired).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
-      expect(repaired).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+      expect(repaired).toContain('import { HeaderButton } from "../../components/HeaderButton";');
+      expect(repaired).toContain('import { TabBarIcon } from "../../components/TabBarIcon";');
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }
   });
 
   it('repairs moved src/app drawer layout imports after app directory migration', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-src-app-drawer-imports-'));
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), 'super-stack-src-app-drawer-imports-')
+    );
     try {
       const drawerDir = path.join(projectPath, 'src', 'app', '(drawer)');
       const drawerTabsDir = path.join(drawerDir, '(tabs)');
@@ -354,7 +429,7 @@ describe('create-expo-super-stack CLI helpers', () => {
       await writeFile(
         drawerLayoutPath,
         ['import { HeaderButton } from "../components/HeaderButton";', ''].join('\n'),
-        'utf8',
+        'utf8'
       );
       await writeFile(
         drawerTabsLayoutPath,
@@ -363,16 +438,25 @@ describe('create-expo-super-stack CLI helpers', () => {
           'import { TabBarIcon } from "../../components/TabBarIcon";',
           '',
         ].join('\n'),
-        'utf8',
+        'utf8'
       );
 
-      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([drawerLayoutPath, drawerTabsLayoutPath]);
+      await expect(repairMovedSrcAppImports(projectPath)).resolves.toEqual([
+        drawerLayoutPath,
+        drawerTabsLayoutPath,
+      ]);
 
       const drawerLayout = await readFile(drawerLayoutPath, 'utf8');
       const drawerTabsLayout = await readFile(drawerTabsLayoutPath, 'utf8');
-      expect(drawerLayout).toContain('import { HeaderButton } from "../../components/HeaderButton";');
-      expect(drawerTabsLayout).toContain('import { HeaderButton } from "../../../components/HeaderButton";');
-      expect(drawerTabsLayout).toContain('import { TabBarIcon } from "../../../components/TabBarIcon";');
+      expect(drawerLayout).toContain(
+        'import { HeaderButton } from "../../components/HeaderButton";'
+      );
+      expect(drawerTabsLayout).toContain(
+        'import { HeaderButton } from "../../../components/HeaderButton";'
+      );
+      expect(drawerTabsLayout).toContain(
+        'import { TabBarIcon } from "../../../components/TabBarIcon";'
+      );
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }
@@ -385,13 +469,20 @@ describe('create-expo-super-stack CLI helpers', () => {
       await writeFile(path.join(projectPath, 'css-env.d.ts'), "declare module '*.css';\n", 'utf8');
       await writeFile(
         path.join(projectPath, 'tsconfig.json'),
-        JSON.stringify({ extends: 'expo/tsconfig.base', compilerOptions: { strict: true } }),
-        'utf8',
+        JSON.stringify({
+          extends: 'expo/tsconfig.base',
+          compilerOptions: { strict: true, paths: { '@/*': ['./src/*'] } },
+        }),
+        'utf8'
       );
       await writeFile(
         path.join(projectPath, 'package.json'),
-        JSON.stringify({ name: 'type-support', devDependencies: {} }),
-        'utf8',
+        JSON.stringify({
+          name: 'type-support',
+          dependencies: { uniwind: '^1.6.4' },
+          devDependencies: {},
+        }),
+        'utf8'
       );
       await writeFile(
         path.join(projectPath, 'components', 'TabBarIcon.tsx'),
@@ -400,11 +491,14 @@ describe('create-expo-super-stack CLI helpers', () => {
           "import { StyleSheet } from 'react-native';",
           "export const TabBarIcon = (props: { name: React.ComponentProps<typeof FontAwesome>['name']; color: string; }) => null;",
         ].join('\n'),
-        'utf8',
+        'utf8'
       );
 
       await expect(
-        repairGeneratedTypeSupport(projectPath, { needsNodeTypes: true, needsUniwindTypes: true }),
+        repairGeneratedTypeSupport(projectPath, {
+          needsNodeTypes: true,
+          needsUniwindTypes: true,
+        })
       ).resolves.toEqual([
         path.join(projectPath, 'css-env.d.ts'),
         path.join(projectPath, 'tsconfig.json'),
@@ -413,15 +507,28 @@ describe('create-expo-super-stack CLI helpers', () => {
       ]);
 
       const cssEnv = await readFile(path.join(projectPath, 'css-env.d.ts'), 'utf8');
-      const tsconfig = JSON.parse(await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8')) as {
-        compilerOptions: { types: string[] };
+      const tsconfig = JSON.parse(
+        await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8')
+      ) as {
+        compilerOptions: {
+          types: string[];
+          baseUrl?: string;
+          ignoreDeprecations?: string;
+        };
       };
-      const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectPath, 'package.json'), 'utf8')
+      ) as {
         devDependencies: Record<string, string>;
       };
-      const tabBarIcon = await readFile(path.join(projectPath, 'components', 'TabBarIcon.tsx'), 'utf8');
+      const tabBarIcon = await readFile(
+        path.join(projectPath, 'components', 'TabBarIcon.tsx'),
+        'utf8'
+      );
       expect(cssEnv).toContain('/// <reference types="uniwind/types" />');
       expect(tsconfig.compilerOptions.types).toEqual(['node', 'uniwind/types']);
+      expect(tsconfig.compilerOptions.baseUrl).toBe('.');
+      expect(tsconfig.compilerOptions.ignoreDeprecations).toBe('6.0');
       expect(packageJson.devDependencies['@types/node']).toBe('^25.9.1');
       expect(tabBarIcon).toContain("import type { ColorValue } from 'react-native';");
       expect(tabBarIcon).toContain('color: ColorValue;');
@@ -430,10 +537,128 @@ describe('create-expo-super-stack CLI helpers', () => {
     }
   });
 
+  it('skips Uniwind type references when the dependency is not installed', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-no-uniwind-types-'));
+    try {
+      await writeFile(
+        path.join(projectPath, 'css-env.d.ts'),
+        '/// <reference types="uniwind/types" />\n\ndeclare module \'*.css\';\n',
+        'utf8'
+      );
+      await writeFile(
+        path.join(projectPath, 'tsconfig.json'),
+        JSON.stringify({
+          extends: 'expo/tsconfig.base',
+          compilerOptions: {
+            strict: true,
+            types: ['uniwind/types'],
+            paths: { '@/*': ['./src/*'] },
+          },
+        }),
+        'utf8'
+      );
+      await writeFile(
+        path.join(projectPath, 'package.json'),
+        JSON.stringify({
+          name: 'no-uniwind-types',
+          dependencies: {},
+          devDependencies: {},
+        }),
+        'utf8'
+      );
+
+      await expect(
+        repairGeneratedTypeSupport(projectPath, {
+          needsNodeTypes: true,
+          needsUniwindTypes: true,
+        })
+      ).resolves.toEqual([
+        path.join(projectPath, 'css-env.d.ts'),
+        path.join(projectPath, 'tsconfig.json'),
+        path.join(projectPath, 'package.json'),
+      ]);
+
+      const cssEnv = await readFile(path.join(projectPath, 'css-env.d.ts'), 'utf8');
+      const tsconfig = JSON.parse(
+        await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8')
+      ) as {
+        compilerOptions: {
+          types: string[];
+          baseUrl?: string;
+          ignoreDeprecations?: string;
+        };
+      };
+      expect(cssEnv).not.toContain('uniwind/types');
+      expect(tsconfig.compilerOptions.types).toEqual(['node']);
+      expect(tsconfig.compilerOptions.baseUrl).toBe('.');
+      expect(tsconfig.compilerOptions.ignoreDeprecations).toBe('6.0');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('updates tsconfig path aliases to src when src/app is present', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-src-aliases-'));
+    try {
+      await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+      await mkdir(path.join(projectPath, 'src', 'components'), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(projectPath, 'tsconfig.json'),
+        JSON.stringify({
+          extends: 'expo/tsconfig.base',
+          compilerOptions: {
+            strict: true,
+            paths: {
+              '@/*': ['./*'],
+              'components/*': ['./components/*'],
+              'core/*': ['./core/*'],
+            },
+          },
+        }),
+        'utf8'
+      );
+      await writeFile(
+        path.join(projectPath, 'package.json'),
+        JSON.stringify({ name: 'src-aliases', devDependencies: {} }),
+        'utf8'
+      );
+
+      await expect(
+        repairGeneratedTypeSupport(projectPath, { needsNodeTypes: true })
+      ).resolves.toEqual([
+        path.join(projectPath, 'tsconfig.json'),
+        path.join(projectPath, 'package.json'),
+      ]);
+
+      const tsconfig = JSON.parse(
+        await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8')
+      ) as {
+        compilerOptions: {
+          baseUrl?: string;
+          ignoreDeprecations?: string;
+          types?: string[];
+          paths?: Record<string, string[]>;
+        };
+      };
+      expect(tsconfig.compilerOptions.baseUrl).toBe('.');
+      expect(tsconfig.compilerOptions.ignoreDeprecations).toBe('6.0');
+      expect(tsconfig.compilerOptions.types).toEqual(['node']);
+      expect(tsconfig.compilerOptions.paths?.['@/*']).toEqual(['./src/*']);
+      expect(tsconfig.compilerOptions.paths?.['components/*']).toEqual(['./src/components/*']);
+      expect(tsconfig.compilerOptions.paths?.['core/*']).toEqual(['./core/*']);
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
   it('repairs NativeWindUI Picker web-only unknown prop warnings', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-picker-repair-'));
     try {
-      await mkdir(path.join(projectPath, 'components', 'nativewindui'), { recursive: true });
+      await mkdir(path.join(projectPath, 'components', 'nativewindui'), {
+        recursive: true,
+      });
       const pickerPath = path.join(projectPath, 'components', 'nativewindui', 'Picker.tsx');
       await writeFile(
         pickerPath,
@@ -453,7 +678,45 @@ describe('create-expo-super-stack CLI helpers', () => {
           '}',
           '',
         ].join('\n'),
-        'utf8',
+        'utf8'
+      );
+
+      await expect(repairGeneratedNativeWindUiPicker(projectPath)).resolves.toEqual([pickerPath]);
+      const repaired = await readFile(pickerPath, 'utf8');
+      expect(repaired).toContain("import { Platform, View } from 'react-native';");
+      expect(repaired).toContain("Platform.OS === 'web' ? {}");
+      expect(repaired).not.toContain('        dropdownIconRippleColor=');
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it('repairs NativeWindUI Picker web-only unknown prop warnings inside src/components', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-picker-repair-src-'));
+    try {
+      await mkdir(path.join(projectPath, 'src', 'components', 'nativewindui'), {
+        recursive: true,
+      });
+      const pickerPath = path.join(projectPath, 'src', 'components', 'nativewindui', 'Picker.tsx');
+      await writeFile(
+        pickerPath,
+        [
+          "import { Picker as RNPicker } from '@react-native-picker/picker';",
+          "import { View } from 'react-native';",
+          '',
+          'export function Picker<T>({ dropdownIconRippleColor, ...props }: React.ComponentProps<typeof RNPicker<T>>) {',
+          '  return (',
+          '    <View>',
+          '      <RNPicker',
+          '        dropdownIconRippleColor={dropdownIconRippleColor ?? colors.foreground}',
+          '        {...props}',
+          '      />',
+          '    </View>',
+          '  );',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8'
       );
 
       await expect(repairGeneratedNativeWindUiPicker(projectPath)).resolves.toEqual([pickerPath]);
@@ -469,8 +732,14 @@ describe('create-expo-super-stack CLI helpers', () => {
   it('forces expo.web.output to server while stylist sync API route exists', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-stylist-server-'));
     try {
-      await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
-      await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'), 'export {};', 'utf8');
+      await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'),
+        'export {};',
+        'utf8'
+      );
       await writeFile(
         path.join(projectPath, 'app.json'),
         JSON.stringify({
@@ -481,7 +750,7 @@ describe('create-expo-super-stack CLI helpers', () => {
             platforms: ['ios', 'android', 'web'],
           },
         }),
-        'utf8',
+        'utf8'
       );
 
       await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'static')).resolves.toEqual([
@@ -511,7 +780,7 @@ describe('create-expo-super-stack CLI helpers', () => {
             platforms: ['ios', 'android', 'web'],
           },
         }),
-        'utf8',
+        'utf8'
       );
 
       await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'static')).resolves.toEqual([
@@ -541,7 +810,7 @@ describe('create-expo-super-stack CLI helpers', () => {
             platforms: ['web'],
           },
         }),
-        'utf8',
+        'utf8'
       );
 
       await expect(repairExpoWebOutputForStylistLifecycle(projectPath, 'spa')).resolves.toEqual([
@@ -563,27 +832,29 @@ describe('create-expo-super-stack CLI helpers', () => {
         platform: 'win32',
         arch: 'x64',
         nodeTargetType: 'executable',
-      }),
+      })
     ).toBe('@tailwindcss/oxide-win32-x64-msvc');
     expect(
       resolveWindowsTailwindOxidePackage({
         platform: 'win32',
         arch: 'x64',
         nodeTargetType: 'shared_library',
-      }),
+      })
     ).toBe('@tailwindcss/oxide-win32-x64-gnu');
     expect(
       resolveWindowsTailwindOxidePackage({
         platform: 'darwin',
         arch: 'x64',
-      }),
+      })
     ).toBeUndefined();
   });
 
   it('detects a missing Windows Tailwind oxide binding for uniwind projects', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'super-stack-windows-oxide-'));
     try {
-      await mkdir(path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide'), { recursive: true });
+      await mkdir(path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide'), {
+        recursive: true,
+      });
       await writeFile(
         path.join(projectPath, 'package.json'),
         JSON.stringify({
@@ -591,12 +862,12 @@ describe('create-expo-super-stack CLI helpers', () => {
             uniwind: '^1.6.4',
           },
         }),
-        'utf8',
+        'utf8'
       );
       await writeFile(
         path.join(projectPath, 'node_modules', '@tailwindcss', 'oxide', 'package.json'),
         JSON.stringify({ version: '4.2.1' }),
-        'utf8',
+        'utf8'
       );
 
       const resolved = await resolveMissingWindowsTailwindOxideBinding(projectPath);

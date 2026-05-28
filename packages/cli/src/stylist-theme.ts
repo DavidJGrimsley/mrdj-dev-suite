@@ -59,6 +59,12 @@ export interface StylistTheme {
   };
   typography: {
     fontFamily: string;
+    fontDisplay: string;
+    fontTitle: string;
+    fontSubtitle: string;
+    fontBody: string;
+    fontCaption: string;
+    fontMono: string;
     displaySize: number;
     headingSize: number;
     bodySize: number;
@@ -117,7 +123,7 @@ const RESTYLE_THEME_BLOCK_END = '// MDS_STYLIST_RESTYLE_THEME_END';
 const TAMAGUI_THEME_BLOCK_START = '// MDS_STYLIST_TAMAGUI_THEME_START';
 const TAMAGUI_THEME_BLOCK_END = '// MDS_STYLIST_TAMAGUI_THEME_END';
 const TODO_THEME_TASK =
-  "- [ ] Apply Stylist synced theme tokens to production UI components and screens.";
+  '- [ ] Apply Stylist synced theme tokens to production UI components and screens.';
 
 export const DEFAULT_STYLIST_THEME: StylistTheme = {
   version: 1,
@@ -204,6 +210,12 @@ export const DEFAULT_STYLIST_THEME: StylistTheme = {
   },
   typography: {
     fontFamily: 'System',
+    fontDisplay: 'System',
+    fontTitle: 'System',
+    fontSubtitle: 'System',
+    fontBody: 'System',
+    fontCaption: 'System',
+    fontMono: 'monospace',
     displaySize: 32,
     headingSize: 20,
     bodySize: 15,
@@ -237,8 +249,10 @@ export async function syncStylistTheme(
   const writePolicy = resolved.writePolicy;
 
   const themePath = path.join(projectDir, 'theme.json');
-  await writeFile(themePath, `${JSON.stringify(theme, null, 2)}\n`, 'utf8');
-  updatedFiles.push(themePath);
+  const wroteTheme = await writeTextFileIfChanged(themePath, `${JSON.stringify(theme, null, 2)}\n`);
+  if (wroteTheme) {
+    updatedFiles.push(themePath);
+  }
 
   const stylePath = path.join(projectDir, 'style.md');
   const styleExisting = await readOptionalText(stylePath);
@@ -248,15 +262,23 @@ export async function syncStylistTheme(
     STYLE_THEME_BLOCK_END,
     renderStyleThemeBlock(theme)
   );
-  await writeFile(stylePath, styleNext, 'utf8');
-  updatedFiles.push(stylePath);
+  const wroteStyle = await writeTextFileIfChanged(stylePath, styleNext);
+  if (wroteStyle) {
+    updatedFiles.push(stylePath);
+  }
 
   const tokensPath = path.join(projectPath, 'src', 'theme', 'tokens.ts');
-  await mkdir(path.dirname(tokensPath), { recursive: true });
-  await writeFile(tokensPath, renderThemeTokensFile(theme), 'utf8');
-  updatedFiles.push(tokensPath);
+  const wroteTokens = await writeTextFileIfChanged(tokensPath, renderThemeTokensFile(theme));
+  if (wroteTokens) {
+    updatedFiles.push(tokensPath);
+  }
 
-  const adapterUpdates = await syncStyleLibraryOutputs(projectPath, theme, styleLibrary, writePolicy);
+  const adapterUpdates = await syncStyleLibraryOutputs(
+    projectPath,
+    theme,
+    styleLibrary,
+    writePolicy
+  );
   updatedFiles.push(...adapterUpdates);
 
   const todoPath = path.join(projectDir, 'todo.md');
@@ -270,12 +292,13 @@ export async function syncStylistTheme(
   }
 
   const stylistConfigPath = path.join(projectDir, 'stylist.config.json');
-  await writeFile(
+  const wroteConfig = await writeTextFileIfChanged(
     stylistConfigPath,
-    `${JSON.stringify({ styleLibrary, writePolicy } satisfies StylistConfig, null, 2)}\n`,
-    'utf8'
+    `${JSON.stringify({ styleLibrary, writePolicy } satisfies StylistConfig, null, 2)}\n`
   );
-  updatedFiles.push(stylistConfigPath);
+  if (wroteConfig) {
+    updatedFiles.push(stylistConfigPath);
+  }
 
   return {
     projectPath,
@@ -421,7 +444,10 @@ export function normalizeStylistTheme(value: unknown): StylistTheme {
     version: 1,
     colorSystem: {
       mode: ensureEnumValue(colorSystem.mode, 'colorSystem.mode', ['bg', 'automatic']),
-      previewScheme: ensureEnumValue(colorSystem.previewScheme, 'colorSystem.previewScheme', ['light', 'dark']),
+      previewScheme: ensureEnumValue(colorSystem.previewScheme, 'colorSystem.previewScheme', [
+        'light',
+        'dark',
+      ]),
       familyMode: ensureEnumValue(colorSystem.familyMode, 'colorSystem.familyMode', ['one', 'two']),
     },
     families: {
@@ -444,6 +470,22 @@ export function normalizeStylistTheme(value: unknown): StylistTheme {
     },
     typography: {
       fontFamily: ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontDisplay:
+        ensureOptionalNonEmptyString(typography.fontDisplay) ??
+        ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontTitle:
+        ensureOptionalNonEmptyString(typography.fontTitle) ??
+        ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontSubtitle:
+        ensureOptionalNonEmptyString(typography.fontSubtitle) ??
+        ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontBody:
+        ensureOptionalNonEmptyString(typography.fontBody) ??
+        ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontCaption:
+        ensureOptionalNonEmptyString(typography.fontCaption) ??
+        ensureNonEmptyString(typography.fontFamily, 'typography.fontFamily'),
+      fontMono: ensureOptionalNonEmptyString(typography.fontMono) ?? 'monospace',
       displaySize: ensureNumberInRange(typography.displaySize, 'typography.displaySize', 18, 72),
       headingSize: ensureNumberInRange(typography.headingSize, 'typography.headingSize', 14, 48),
       bodySize: ensureNumberInRange(typography.bodySize, 'typography.bodySize', 10, 24),
@@ -465,6 +507,14 @@ export function normalizeStylistTheme(value: unknown): StylistTheme {
   ensureDistinctPalette(theme.palettes.bg.dark, 'palettes.bg.dark');
   ensureDistinctPalette(theme.palettes.automatic.light, 'palettes.automatic.light');
   ensureDistinctPalette(theme.palettes.automatic.dark, 'palettes.automatic.dark');
+
+  const activePalettes =
+    theme.colorSystem.mode === 'automatic' ? theme.palettes.automatic : theme.palettes.bg;
+  theme.colors = {
+    light: activePalettes.light,
+    dark: activePalettes.dark,
+  };
+
   ensureDistinctPalette(theme.colors.light, 'colors.light');
   ensureDistinctPalette(theme.colors.dark, 'colors.dark');
 
@@ -612,6 +662,12 @@ export function renderThemeTokensFile(theme: StylistTheme): string {
     '  };',
     '  typography: {',
     '    fontFamily: string;',
+    '    fontDisplay: string;',
+    '    fontTitle: string;',
+    '    fontSubtitle: string;',
+    '    fontBody: string;',
+    '    fontCaption: string;',
+    '    fontMono: string;',
     '    displaySize: number;',
     '    headingSize: number;',
     '    bodySize: number;',
@@ -629,11 +685,58 @@ export function renderThemeTokensFile(theme: StylistTheme): string {
     '  };',
     '}',
     '',
-    `export const stylistThemeTokens: StylistThemeTokens = ${JSON.stringify(theme, null, 2)};`,
+    `export const stylistThemeTokens: StylistThemeTokens = ${renderTsLiteral(theme)};`,
     '',
     'export default stylistThemeTokens;',
     '',
   ].join('\n');
+}
+
+function renderTsLiteral(value: unknown, indent = 0): string {
+  if (typeof value === 'string') {
+    return `'${value
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\r/g, '\\r')
+      .replace(/\n/g, '\\n')}'`;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (value === null) {
+    return 'null';
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return '[]';
+    }
+    const nextIndent = indent + 2;
+    const entries = value.map(
+      (item) => `${' '.repeat(nextIndent)}${renderTsLiteral(item, nextIndent)},`
+    );
+    return `[\n${entries.join('\n')}\n${' '.repeat(indent)}]`;
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      return '{}';
+    }
+    const nextIndent = indent + 2;
+    const rendered = entries.map(([key, item]) => {
+      return `${' '.repeat(nextIndent)}${formatTsObjectKey(key)}: ${renderTsLiteral(item, nextIndent)},`;
+    });
+    return `{\n${rendered.join('\n')}\n${' '.repeat(indent)}}`;
+  }
+
+  return 'undefined';
+}
+
+function formatTsObjectKey(key: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(key) ? key : renderTsLiteral(key);
 }
 
 async function syncStyleLibraryOutputs(
@@ -678,7 +781,7 @@ async function writeCssAdapter(
     } else {
       next = `${defaultScaffold}\n\n${renderGlobalCssThemeBlock(theme)}\n`;
     }
-    await writeFile(globalCssPath, normalizeTrailingNewline(next), 'utf8');
+    await writeTextFileIfChanged(globalCssPath, normalizeTrailingNewline(next));
     return globalCssPath;
   }
 
@@ -702,7 +805,7 @@ async function writeCssAdapter(
     );
   }
 
-  await writeFile(globalCssPath, normalizeTrailingNewline(next), 'utf8');
+  await writeTextFileIfChanged(globalCssPath, normalizeTrailingNewline(next));
   return globalCssPath;
 }
 
@@ -722,7 +825,7 @@ async function writeUnistylesThemeFile(
     next = upsertManagedBlock(next, UNISTYLES_THEME_BLOCK_START, UNISTYLES_THEME_BLOCK_END, block);
   }
 
-  await writeFile(themePath, normalizeTrailingNewline(next), 'utf8');
+  await writeTextFileIfChanged(themePath, normalizeTrailingNewline(next));
   return themePath;
 }
 
@@ -742,7 +845,7 @@ async function writeRestyleThemeFile(
     next = upsertManagedBlock(next, RESTYLE_THEME_BLOCK_START, RESTYLE_THEME_BLOCK_END, block);
   }
 
-  await writeFile(themePath, normalizeTrailingNewline(next), 'utf8');
+  await writeTextFileIfChanged(themePath, normalizeTrailingNewline(next));
   return themePath;
 }
 
@@ -766,7 +869,7 @@ async function writeTamaguiThemeFile(
     );
   }
 
-  await writeFile(targetPath, normalizeTrailingNewline(next), 'utf8');
+  await writeTextFileIfChanged(targetPath, normalizeTrailingNewline(next));
   return targetPath;
 }
 
@@ -1151,7 +1254,9 @@ async function detectStyleLibraryFromCesConfig(projectPath: string): Promise<Sty
   return null;
 }
 
-async function detectStyleLibraryFromDependencies(projectPath: string): Promise<StyleLibrary | null> {
+async function detectStyleLibraryFromDependencies(
+  projectPath: string
+): Promise<StyleLibrary | null> {
   const packagePath = path.join(projectPath, 'package.json');
   const raw = await readOptionalText(packagePath);
   if (!raw) {
@@ -1176,7 +1281,9 @@ async function detectStyleLibraryFromDependencies(projectPath: string): Promise<
     if (depKeys.has('react-native-unistyles')) return 'unistyles';
     if (depKeys.has('nativewindui') || depKeys.has('@roninoss/nativewindui')) return 'nativewindui';
     if (depKeys.has('nativewind')) {
-      const hasNativewindUiTree = await pathExists(path.join(projectPath, 'components', 'nativewindui'));
+      const hasNativewindUiTree =
+        (await pathExists(path.join(projectPath, 'components', 'nativewindui'))) ||
+        (await pathExists(path.join(projectPath, 'src', 'components', 'nativewindui')));
       return hasNativewindUiTree ? 'nativewindui' : 'nativewind';
     }
   } catch {
@@ -1205,7 +1312,7 @@ async function detectStyleLibraryFromFiles(projectPath: string): Promise<StyleLi
   }
   if (await pathExists(path.join(projectPath, 'theme.ts'))) {
     const themeFile = await readOptionalText(path.join(projectPath, 'theme.ts'));
-    if (themeFile?.includes("createTheme(") && themeFile.includes("@shopify/restyle")) {
+    if (themeFile?.includes('createTheme(') && themeFile.includes('@shopify/restyle')) {
       return 'restyle';
     }
     if (themeFile?.includes('lightTheme') && themeFile.includes('darkTheme')) {
@@ -1217,9 +1324,7 @@ async function detectStyleLibraryFromFiles(projectPath: string): Promise<StyleLi
 }
 
 function stripJsonComments(raw: string): string {
-  return raw
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
+  return raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
 function parseStyleLibrary(value: unknown): StyleLibrary | null {
@@ -1260,6 +1365,17 @@ async function readOptionalText(filePath: string): Promise<string | null> {
   }
 }
 
+async function writeTextFileIfChanged(filePath: string, contents: string): Promise<boolean> {
+  const existing = await readOptionalText(filePath);
+  if (existing === contents) {
+    return false;
+  }
+
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, contents, 'utf8');
+  return true;
+}
+
 async function pathExists(filePath: string): Promise<boolean> {
   try {
     await access(filePath);
@@ -1296,6 +1412,14 @@ function ensureNonEmptyString(value: unknown, label: string): string {
   }
 
   return value.trim();
+}
+
+function ensureOptionalNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function ensureNumberInRange(
@@ -1335,7 +1459,10 @@ function ensureDistinctPalette(palette: StylistColorPalette, label: string): voi
   }
 }
 
-function ensureSemanticFamilies(value: Record<string, unknown>, label: string): StylistSemanticFamilies {
+function ensureSemanticFamilies(
+  value: Record<string, unknown>,
+  label: string
+): StylistSemanticFamilies {
   return {
     primary: ensureNonEmptyString(value.primary, `${label}.primary`),
     secondary: ensureNonEmptyString(value.secondary, `${label}.secondary`),

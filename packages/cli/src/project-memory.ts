@@ -1,7 +1,11 @@
 ﻿import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock, renderThemeTokensFile } from './stylist-theme.js';
+import {
+  DEFAULT_STYLIST_THEME,
+  renderGlobalCssThemeBlock,
+  renderThemeTokensFile,
+} from './stylist-theme.js';
 
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
@@ -98,7 +102,11 @@ const STYLIST_DEPENDENCIES = {
 } as const;
 
 const EXPO_UI_DEPENDENCIES = {
-  '@expo/ui': '~56.0.13',
+  '@expo/ui': '~56.0.14',
+} as const;
+
+const ANDROID_NAVIGATION_BAR_DEPENDENCIES = {
+  'expo-navigation-bar': '~56.0.3',
 } as const;
 
 const UNIWIND_DEV_DEPENDENCIES = {
@@ -113,14 +121,21 @@ const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   'project',
   'guidelines.md'
 );
-const STYLIST_SCREEN_TEMPLATE_PATH = path.join(PACKAGE_ROOT, 'templates', 'stylist-screen.template.tsx');
-const EMBEDDED_FONTS_TEMPLATE_PATH = path.join(PACKAGE_ROOT, 'templates', 'embedded-fonts.template.ts');
+const STYLIST_SCREEN_TEMPLATE_PATH = path.join(
+  PACKAGE_ROOT,
+  'templates',
+  'stylist-screen.template.tsx'
+);
+const EMBEDDED_FONTS_TEMPLATE_PATH = path.join(
+  PACKAGE_ROOT,
+  'templates',
+  'embedded-fonts.template.ts'
+);
 const EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH = path.join(
   PACKAGE_ROOT,
   'templates',
   'expo-sdk-56-screen-universal.template.tsx'
 );
-
 const INFO_HEADINGS = [
   'Overview',
   'Target Users',
@@ -178,7 +193,11 @@ export async function scaffoldProjectMemory(
 
   if (shouldGenerateIntakeAgentHandoff(answers, existingInfo, existingStyle)) {
     results.push(
-      await writeIfAllowed(path.join(projectDir, 'intake-agent.md'), renderIntakeAgentHandoff(answers), force)
+      await writeIfAllowed(
+        path.join(projectDir, 'intake-agent.md'),
+        renderIntakeAgentHandoff(answers),
+        force
+      )
     );
   }
 
@@ -200,14 +219,14 @@ export async function scaffoldRichBoilerplate(
   options: RichBoilerplateOptions = { manageUniwind: true }
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
+  const needsNativeWindMetroPatch = !options.manageUniwind;
   const navigationShell = await detectNavigationShell(projectPath);
-  const includeNativeWindUiExposition = false;
+  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const stylistScreenTemplate = (
-    await loadTemplateWithFallback(
-      STYLIST_SCREEN_TEMPLATE_PATH,
-      renderStylistScreen(answers)
-    )
-  ).split('__MDS_APP_NAME__').join(answers.appName);
+    await loadTemplateWithFallback(STYLIST_SCREEN_TEMPLATE_PATH, renderStylistScreen(answers))
+  )
+    .split('__MDS_APP_NAME__')
+    .join(answers.appName);
   const embeddedFontsTemplate = await loadTemplateWithFallback(
     EMBEDDED_FONTS_TEMPLATE_PATH,
     renderEmbeddedFonts()
@@ -219,15 +238,33 @@ export async function scaffoldRichBoilerplate(
       )
     : renderExpoSdk56Screen(answers);
 
-  await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
-  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), { recursive: true });
-  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding', 'components'), { recursive: true });
-  await mkdir(path.join(projectPath, 'src', 'features', 'settings'), { recursive: true });
-  await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
-  await mkdir(path.join(projectPath, 'src', 'components', 'exposition'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'features', 'home'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding', 'components'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'settings'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'components', 'exposition'), {
+    recursive: true,
+  });
+  if (includeNativeWindUiExposition) {
+    await mkdir(path.join(projectPath, 'src', 'components', 'nativewindui'), {
+      recursive: true,
+    });
+  }
   await mkdir(path.join(projectPath, 'src', 'data'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'services'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'theme'), { recursive: true });
+  await mkdir(path.join(projectPath, 'scripts'), { recursive: true });
 
   results.push(
     await writeIfAllowed(
@@ -235,6 +272,20 @@ export async function scaffoldRichBoilerplate(
       `${JSON.stringify(DEFAULT_STYLIST_THEME, null, 2)}\n`,
       force
     ),
+    await writeIfAllowed(
+      path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'),
+      renderStylistSyncAndroidScript(),
+      force
+    ),
+    ...(needsNativeWindMetroPatch
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'scripts', 'patch-nativewind-metro.cjs'),
+            renderNativeWindMetroPatchScript(),
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'tokens.ts'),
       renderThemeTokensFile(DEFAULT_STYLIST_THEME),
@@ -331,7 +382,14 @@ export async function scaffoldRichBoilerplate(
       force
     ),
     await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'components', 'legal-document-view.tsx'),
+      path.join(
+        projectPath,
+        'src',
+        'features',
+        'onboarding',
+        'components',
+        'legal-document-view.tsx'
+      ),
       renderLegalDocumentView(),
       force
     ),
@@ -342,7 +400,7 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
-      renderExpositionScreen(),
+      renderExpositionScreen(includeNativeWindUiExposition),
       force
     ),
     await writeIfAllowed(
@@ -373,10 +431,62 @@ export async function scaffoldRichBoilerplate(
         path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
         renderNativeWindUiScreen(),
         force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ActivityIndicator.tsx'),
+        renderNativeWindUiActivityIndicator(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Avatar.tsx'),
+        renderNativeWindUiAvatar(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'),
+        renderNativeWindUiButton(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'DatePicker.tsx'),
+        renderNativeWindUiDatePicker(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Picker.tsx'),
+        renderNativeWindUiPicker(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ProgressIndicator.tsx'),
+        renderNativeWindUiProgressIndicator(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Slider.tsx'),
+        renderNativeWindUiSlider(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Text.tsx'),
+        renderNativeWindUiText(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
+        renderNativeWindUiThemeToggle(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'Toggle.tsx'),
+        renderNativeWindUiToggle(),
+        force
       )
     );
   } else {
-    await removeOptionalFile(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'));
+    await removeOptionalFile(
+      path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx')
+    );
   }
 
   if (answers.dataStart === 'local') {
@@ -393,9 +503,12 @@ export async function scaffoldRichBoilerplate(
   const expositionRouteDir = path.join(appDir, 'exposition');
   await mkdir(expositionRouteDir, { recursive: true });
   if (await pathExists(appDir)) {
-    const routeForce = force || !answers.includeCreateExpoComponents;
-    const shouldWriteRootLayout = routeForce && (await canWriteRichRootLayout(path.join(appDir, '_layout.tsx')));
-    results.push(...(await scaffoldNavigationRoutes(projectPath, appDir, navigationShell, answers, routeForce)));
+    const routeForce = true;
+    const shouldWriteRootLayout =
+      routeForce && (await canWriteRichRootLayout(path.join(appDir, '_layout.tsx')));
+    results.push(
+      ...(await scaffoldNavigationRoutes(projectPath, appDir, navigationShell, answers, routeForce))
+    );
 
     if (shouldWriteRootLayout) {
       results.push(
@@ -414,24 +527,36 @@ export async function scaffoldRichBoilerplate(
 
   if (answers.dataStart === 'supabase') {
     results.push(
-      await writeIfAllowed(path.join(projectPath, 'src', 'services', 'supabase.ts'), renderSupabaseClient(), force)
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'services', 'supabase.ts'),
+        renderSupabaseClient(),
+        force
+      )
     );
   }
 
   if (answers.testToMainSafeguards) {
-    await mkdir(path.join(projectPath, '.github', 'workflows'), { recursive: true });
+    await mkdir(path.join(projectPath, '.github', 'workflows'), {
+      recursive: true,
+    });
     results.push(
       await writeIfAllowed(
         path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'),
         renderGitHubPrChecksWorkflow(),
         force
       ),
-      await writeIfAllowed(path.join(projectPath, 'project', 'release-flow.md'), renderReleaseFlow(answers), force)
+      await writeIfAllowed(
+        path.join(projectPath, 'project', 'release-flow.md'),
+        renderReleaseFlow(answers),
+        force
+      )
     );
   }
 
   if (options.manageUniwind) {
-    results.push(await writeIfAllowed(path.join(projectPath, 'global.css'), renderGlobalCss(), force));
+    results.push(
+      await writeIfAllowed(path.join(projectPath, 'global.css'), renderGlobalCss(), force)
+    );
   }
 
   await ensurePackageJson(projectPath, answers, options.manageUniwind);
@@ -446,7 +571,11 @@ export async function scaffoldRichBoilerplate(
   return results;
 }
 
-export function renderInfo(projectPath: string, answers: OnboardAnswers, existingInfo?: string | null): string {
+export function renderInfo(
+  projectPath: string,
+  answers: OnboardAnswers,
+  existingInfo?: string | null
+): string {
   const importedNotes = renderImportedNotes(existingInfo, INFO_HEADINGS);
   return [
     `# ${answers.appName} Project Info`,
@@ -588,7 +717,9 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
     ...(needsReview
-      ? ['- [ ] Replace generic onboarding placeholders with real app decisions before full implementation.']
+      ? [
+          '- [ ] Replace generic onboarding placeholders with real app decisions before full implementation.',
+        ]
       : []),
     '',
     '## Phase 1: App Shell And First Flow',
@@ -624,8 +755,12 @@ export function renderTodo(answers: OnboardAnswers): string {
     ...(answers.usesExpoUiUniversalComponents
       ? ['- [ ] Review the Expo UI Universal examples before replacing generated exposition code.']
       : []),
-    ...(answers.usesExpoNativeTabs ? ['- [ ] Prototype Expo Native Tabs for mobile navigation.'] : []),
-    ...(answers.easUses.length > 0 ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`) : []),
+    ...(answers.usesExpoNativeTabs
+      ? ['- [ ] Prototype Expo Native Tabs for mobile navigation.']
+      : []),
+    ...(answers.easUses.length > 0
+      ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`)
+      : []),
     '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
@@ -637,7 +772,9 @@ export function renderTodo(answers: OnboardAnswers): string {
           '- [ ] Add GitHub branch protection so PR checks pass before merging into `test` or `main`.',
         ]
       : ['- [ ] Decide on release safeguards before production work begins.']),
-    ...(answers.webOutput !== 'none' ? [`- [ ] Confirm Expo web output mode: ${answers.webOutput}.`] : []),
+    ...(answers.webOutput !== 'none'
+      ? [`- [ ] Confirm Expo web output mode: ${answers.webOutput}.`]
+      : []),
     ...(answers.deployedServer !== 'none'
       ? [`- [ ] Plan deployed server work: ${formatServerChoice(answers.deployedServer)}.`]
       : []),
@@ -811,7 +948,9 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- Run `mds doctor --ci` before pushing.',
     '- Use `mds clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards
-      ? ['- Develop through feature branches into `test`, then promote validated work from `test` to `main`.']
+      ? [
+          '- Develop through feature branches into `test`, then promote validated work from `test` to `main`.',
+        ]
       : []),
     `- Latest Expo SDK preference captured during onboarding: ${formatBoolean(answers.useLatestExpoSdk)}.`,
     `- Expo UI Universal components preference captured during onboarding: ${formatBoolean(answers.usesExpoUiUniversalComponents)}.`,
@@ -984,23 +1123,37 @@ async function ensurePackageJson(
     'build:web': packageJson.scripts?.['build:web'] ?? 'expo export --platform web',
     'mds:continue': packageJson.scripts?.['mds:continue'] ?? `${MDS_NPX_COMMAND} continue`,
     'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? `${MDS_NPX_COMMAND} doctor`,
-    'mds:doctor:ci':
-      packageJson.scripts?.['mds:doctor:ci'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
+    'mds:doctor:ci': packageJson.scripts?.['mds:doctor:ci'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
     'mds:stylist:sync':
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
+    'stylist:sync:android':
+      packageJson.scripts?.['stylist:sync:android'] ?? 'node ./scripts/stylist-sync-android.mjs',
     'mds:stylist:reconcile-output':
       packageJson.scripts?.['mds:stylist:reconcile-output'] ??
       `${MDS_NPX_COMMAND} stylist reconcile-output .`,
     'free-port': packageJson.scripts?.['free-port'] ?? `${MDS_NPX_COMMAND} free-port`,
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? `${MDS_NPX_COMMAND} clear-expo-start`,
-    'expo-install-fix':
-      packageJson.scripts?.['expo-install-fix'] ?? 'npx expo install --fix',
+    'expo-install-fix': packageJson.scripts?.['expo-install-fix'] ?? 'npx expo install --fix',
     'expo-doctor': packageJson.scripts?.['expo-doctor'] ?? 'npx expo-doctor',
     'post-create-check':
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
     'ci:verify': packageJson.scripts?.['ci:verify'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
   };
+
+  if (!manageUniwind) {
+    packageJson.scripts['patch:nativewind-metro'] =
+      packageJson.scripts['patch:nativewind-metro'] ?? 'node ./scripts/patch-nativewind-metro.cjs';
+    packageJson.scripts.prestart =
+      packageJson.scripts.prestart ?? 'node ./scripts/patch-nativewind-metro.cjs';
+    packageJson.scripts.preandroid =
+      packageJson.scripts.preandroid ?? 'node ./scripts/patch-nativewind-metro.cjs';
+    packageJson.scripts.preweb =
+      packageJson.scripts.preweb ?? 'node ./scripts/patch-nativewind-metro.cjs';
+    packageJson.scripts.postinstall = ensureNativeWindMetroPostinstall(
+      packageJson.scripts.postinstall
+    );
+  }
 
   if (answers.webOutput !== 'none') {
     const serveProd = deriveServeProdScript(answers);
@@ -1046,6 +1199,13 @@ async function ensurePackageJson(
   if (answers.usesExpoUi) {
     packageJson.dependencies = {
       ...EXPO_UI_DEPENDENCIES,
+      ...packageJson.dependencies,
+    };
+  }
+
+  if (answers.targetPlatforms.includes('android')) {
+    packageJson.dependencies = {
+      ...ANDROID_NAVIGATION_BAR_DEPENDENCIES,
       ...packageJson.dependencies,
     };
   }
@@ -1149,11 +1309,16 @@ function formatDataStart(value: DataStart): string {
 function formatServerAdapterSummary(answers: OnboardAnswers): string {
   if (answers.webOutput === 'none') return 'none (native-only)';
   switch (answers.expoServerAdapter) {
-    case 'eas': return 'EAS hosting';
-    case 'express': return 'Express adapter (node server.js, port 3000)';
-    case 'bun': return 'Bun adapter (node server.js)';
-    case 'other': return 'custom (not yet specified)';
-    default: return formatServerChoice(answers.deployedServer);
+    case 'eas':
+      return 'EAS hosting';
+    case 'express':
+      return 'Express adapter (node server.js, port 3000)';
+    case 'bun':
+      return 'Bun adapter (node server.js)';
+    case 'other':
+      return 'custom (not yet specified)';
+    default:
+      return formatServerChoice(answers.deployedServer);
   }
 }
 
@@ -1227,8 +1392,8 @@ function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {
     return true;
   }
 
-  return [answers.audience, answers.coreFlows, answers.dataNeeds, answers.deploymentTarget].some((value) =>
-    genericValues.has(value.trim())
+  return [answers.audience, answers.coreFlows, answers.dataNeeds, answers.deploymentTarget].some(
+    (value) => genericValues.has(value.trim())
   );
 }
 
@@ -1275,7 +1440,11 @@ async function ensureUniwindMetroConfig(projectPath: string): Promise<void> {
 async function ensureUniwindGlobalCss(projectPath: string): Promise<void> {
   const globalCssPath = path.join(projectPath, 'global.css');
   const existing = await readOptionalText(globalCssPath);
-  if (!existing || existing.includes("@import 'uniwind'") || existing.includes('@import "uniwind"')) {
+  if (
+    !existing ||
+    existing.includes("@import 'uniwind'") ||
+    existing.includes('@import "uniwind"')
+  ) {
     return;
   }
 
@@ -1317,7 +1486,10 @@ async function removeTailwindPrettierPluginConfig(filePath: string): Promise<voi
   }
 
   const updated = existing
-    .replace(/^\s*plugins:\s*\[\s*require\.resolve\(['"]prettier-plugin-tailwindcss['"]\)\s*\],?\r?\n/m, '')
+    .replace(
+      /^\s*plugins:\s*\[\s*require\.resolve\(['"]prettier-plugin-tailwindcss['"]\)\s*\],?\r?\n/m,
+      ''
+    )
     .replace(/^\s*tailwindAttributes:\s*\[[^\n]*\],?\r?\n/m, '')
     .replace(/^\s*tailwindFunctions:\s*\[[^\n]*\],?\r?\n/m, '')
     .replace(/\n{3,}/g, '\n\n');
@@ -1327,7 +1499,10 @@ async function removeTailwindPrettierPluginConfig(filePath: string): Promise<voi
   }
 }
 
-async function ensureGlobalCssImport(projectPath: string, appDirectory: AppDirectory): Promise<void> {
+async function ensureGlobalCssImport(
+  projectPath: string,
+  appDirectory: AppDirectory
+): Promise<void> {
   const layoutPath = path.join(getExpoRouterAppDir(projectPath, appDirectory), '_layout.tsx');
   const appPath = path.join(projectPath, 'App.tsx');
   const layout = await readOptionalText(layoutPath);
@@ -1349,7 +1524,9 @@ async function ensureGlobalCssImport(projectPath: string, appDirectory: AppDirec
 }
 
 function getExpoRouterAppDir(projectPath: string, appDirectory: AppDirectory): string {
-  return appDirectory === 'src' ? path.join(projectPath, 'src', 'app') : path.join(projectPath, 'app');
+  return appDirectory === 'src'
+    ? path.join(projectPath, 'src', 'app')
+    : path.join(projectPath, 'app');
 }
 
 function renderRouteExport(routeDir: string, targetModulePath: string): string {
@@ -1365,17 +1542,53 @@ async function scaffoldNavigationRoutes(
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
   const homeScreen = path.join(projectPath, 'src', 'features', 'home', 'home-screen');
-  const onboardingScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen');
-  const agreementScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen');
+  const onboardingScreen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'onboarding',
+    'onboarding-screen'
+  );
+  const agreementScreen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'onboarding',
+    'agreement-screen'
+  );
   const termsScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen');
-  const accountSetupScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen');
+  const accountSetupScreen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'onboarding',
+    'account-setup-screen'
+  );
   const settingsScreen = path.join(projectPath, 'src', 'features', 'settings', 'settings-screen');
-  const expositionScreen = path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen');
+  const expositionScreen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'exposition',
+    'exposition-screen'
+  );
   const stylistScreen = path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen');
   const dataScreen = path.join(projectPath, 'src', 'features', 'exposition', 'data-screen');
-  const expoSdk56Screen = path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen');
-  const nativeWindUiScreen = path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen');
-  const includeNativeWindUiExposition = false;
+  const expoSdk56Screen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'exposition',
+    'expo-sdk-56-screen'
+  );
+  const nativeWindUiScreen = path.join(
+    projectPath,
+    'src',
+    'features',
+    'exposition',
+    'nativewindui-screen'
+  );
+  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const shouldWriteExpositionRouteWrappers =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
 
@@ -1385,23 +1598,59 @@ async function scaffoldNavigationRoutes(
   await mkdir(onboardingDir, { recursive: true });
 
   results.push(
-    await writeIfAllowed(path.join(appDir, 'onboarding.tsx'), renderRouteExport(appDir, onboardingScreen), routeForce),
-    await writeIfAllowed(path.join(onboardingDir, 'agreement.tsx'), renderRouteExport(onboardingDir, agreementScreen), routeForce),
-    await writeIfAllowed(path.join(onboardingDir, 'terms.tsx'), renderRouteExport(onboardingDir, termsScreen), routeForce),
+    await writeIfAllowed(
+      path.join(appDir, 'onboarding.tsx'),
+      renderRouteExport(appDir, onboardingScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(onboardingDir, 'agreement.tsx'),
+      renderRouteExport(onboardingDir, agreementScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(onboardingDir, 'terms.tsx'),
+      renderRouteExport(onboardingDir, termsScreen),
+      routeForce
+    ),
     await writeIfAllowed(
       path.join(onboardingDir, 'account-setup.tsx'),
       renderRouteExport(onboardingDir, accountSetupScreen),
       routeForce
     ),
-    await writeIfAllowed(path.join(appDir, 'settings.tsx'), renderRouteExport(appDir, settingsScreen), routeForce),
-    await writeIfAllowed(path.join(rootExpositionDir, 'stylist-sync+api.ts'), renderStylistSyncApiRoute(), routeForce)
+    await writeIfAllowed(
+      path.join(appDir, 'settings.tsx'),
+      renderRouteExport(appDir, settingsScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(rootExpositionDir, 'stylist-sync+api.ts'),
+      renderStylistSyncApiRoute(),
+      routeForce
+    )
   );
   if (shouldWriteExpositionRouteWrappers) {
     results.push(
-      await writeIfAllowed(path.join(rootExpositionDir, 'index.tsx'), renderRouteExport(rootExpositionDir, expositionScreen), routeForce),
-      await writeIfAllowed(path.join(rootExpositionDir, 'stylist.tsx'), renderRouteExport(rootExpositionDir, stylistScreen), routeForce),
-      await writeIfAllowed(path.join(rootExpositionDir, 'data.tsx'), renderRouteExport(rootExpositionDir, dataScreen), routeForce),
-      await writeIfAllowed(path.join(rootExpositionDir, 'sdk-56.tsx'), renderRouteExport(rootExpositionDir, expoSdk56Screen), routeForce)
+      await writeIfAllowed(
+        path.join(rootExpositionDir, 'index.tsx'),
+        renderRouteExport(rootExpositionDir, expositionScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(rootExpositionDir, 'stylist.tsx'),
+        renderRouteExport(rootExpositionDir, stylistScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(rootExpositionDir, 'data.tsx'),
+        renderRouteExport(rootExpositionDir, dataScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(rootExpositionDir, 'sdk-56.tsx'),
+        renderRouteExport(rootExpositionDir, expoSdk56Screen),
+        routeForce
+      )
     );
   } else {
     await removeOptionalFile(path.join(rootExpositionDir, 'index.tsx'));
@@ -1409,7 +1658,7 @@ async function scaffoldNavigationRoutes(
     await removeOptionalFile(path.join(rootExpositionDir, 'data.tsx'));
     await removeOptionalFile(path.join(rootExpositionDir, 'sdk-56.tsx'));
   }
-  if (includeNativeWindUiExposition && shouldWriteExpositionRouteWrappers) {
+  if (includeNativeWindUiExposition) {
     results.push(
       await writeIfAllowed(
         path.join(rootExpositionDir, 'nativewindui.tsx'),
@@ -1422,12 +1671,24 @@ async function scaffoldNavigationRoutes(
   }
 
   if (navigationShell.library !== 'expo-router') {
-    results.push(await writeIfAllowed(path.join(appDir, 'index.tsx'), renderRouteExport(appDir, homeScreen), routeForce));
+    results.push(
+      await writeIfAllowed(
+        path.join(appDir, 'index.tsx'),
+        renderRouteExport(appDir, homeScreen),
+        routeForce
+      )
+    );
     return results;
   }
 
   if (navigationShell.layout === 'stack') {
-    results.push(await writeIfAllowed(path.join(appDir, 'index.tsx'), renderRouteExport(appDir, homeScreen), routeForce));
+    results.push(
+      await writeIfAllowed(
+        path.join(appDir, 'index.tsx'),
+        renderRouteExport(appDir, homeScreen),
+        routeForce
+      )
+    );
     return results;
   }
 
@@ -1435,24 +1696,35 @@ async function scaffoldNavigationRoutes(
     const tabsDir = path.join(appDir, '(tabs)');
     await mkdir(tabsDir, { recursive: true });
     results.push(
-      await writeIfAllowed(path.join(tabsDir, 'index.tsx'), renderRouteExport(tabsDir, homeScreen), routeForce),
-      await writeIfAllowed(path.join(tabsDir, 'software-mansion.tsx'), renderRouteExport(tabsDir, expositionScreen), routeForce),
-      await writeIfAllowed(path.join(tabsDir, 'stylist.tsx'), renderRouteExport(tabsDir, stylistScreen), routeForce),
-      await writeIfAllowed(path.join(tabsDir, 'data.tsx'), renderRouteExport(tabsDir, dataScreen), routeForce),
-      await writeIfAllowed(path.join(tabsDir, 'sdk-56.tsx'), renderRouteExport(tabsDir, expoSdk56Screen), routeForce)
+      await writeIfAllowed(
+        path.join(tabsDir, 'index.tsx'),
+        renderRouteExport(tabsDir, homeScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(tabsDir, 'exposition.tsx'),
+        renderRouteExport(tabsDir, expositionScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(tabsDir, 'stylist.tsx'),
+        renderRouteExport(tabsDir, stylistScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(tabsDir, 'data.tsx'),
+        renderRouteExport(tabsDir, dataScreen),
+        routeForce
+      ),
+      await writeIfAllowed(
+        path.join(tabsDir, 'sdk-56.tsx'),
+        renderRouteExport(tabsDir, expoSdk56Screen),
+        routeForce
+      )
     );
     await removeOptionalFile(path.join(tabsDir, 'two.tsx'));
-    if (includeNativeWindUiExposition) {
-      results.push(
-        await writeIfAllowed(
-          path.join(tabsDir, 'nativewindui.tsx'),
-          renderRouteExport(tabsDir, nativeWindUiScreen),
-          routeForce
-        )
-      );
-    } else {
-      await removeOptionalFile(path.join(tabsDir, 'nativewindui.tsx'));
-    }
+    await removeOptionalFile(path.join(tabsDir, 'software-mansion.tsx'));
+    await removeOptionalFile(path.join(tabsDir, 'nativewindui.tsx'));
     await removeOptionalFile(path.join(appDir, 'index.tsx'));
     return results;
   }
@@ -1461,24 +1733,34 @@ async function scaffoldNavigationRoutes(
   const drawerTabsDir = path.join(drawerDir, '(tabs)');
   await mkdir(drawerTabsDir, { recursive: true });
   results.push(
-    await writeIfAllowed(path.join(drawerDir, 'index.tsx'), renderRouteExport(drawerDir, homeScreen), routeForce),
-    await writeIfAllowed(path.join(drawerTabsDir, 'index.tsx'), renderRouteExport(drawerTabsDir, expositionScreen), routeForce),
-    await writeIfAllowed(path.join(drawerTabsDir, 'stylist.tsx'), renderRouteExport(drawerTabsDir, stylistScreen), routeForce),
-    await writeIfAllowed(path.join(drawerTabsDir, 'data.tsx'), renderRouteExport(drawerTabsDir, dataScreen), routeForce),
-    await writeIfAllowed(path.join(drawerTabsDir, 'sdk-56.tsx'), renderRouteExport(drawerTabsDir, expoSdk56Screen), routeForce)
+    await writeIfAllowed(
+      path.join(drawerDir, 'index.tsx'),
+      renderRouteExport(drawerDir, homeScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(drawerTabsDir, 'index.tsx'),
+      renderRouteExport(drawerTabsDir, expositionScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(drawerTabsDir, 'stylist.tsx'),
+      renderRouteExport(drawerTabsDir, stylistScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(drawerTabsDir, 'data.tsx'),
+      renderRouteExport(drawerTabsDir, dataScreen),
+      routeForce
+    ),
+    await writeIfAllowed(
+      path.join(drawerTabsDir, 'sdk-56.tsx'),
+      renderRouteExport(drawerTabsDir, expoSdk56Screen),
+      routeForce
+    )
   );
   await removeOptionalFile(path.join(drawerTabsDir, 'two.tsx'));
-  if (includeNativeWindUiExposition) {
-    results.push(
-      await writeIfAllowed(
-        path.join(drawerTabsDir, 'nativewindui.tsx'),
-        renderRouteExport(drawerTabsDir, nativeWindUiScreen),
-        routeForce
-      )
-    );
-  } else {
-    await removeOptionalFile(path.join(drawerTabsDir, 'nativewindui.tsx'));
-  }
+  await removeOptionalFile(path.join(drawerTabsDir, 'nativewindui.tsx'));
   await removeOptionalFile(path.join(appDir, 'index.tsx'));
   return results;
 }
@@ -1514,7 +1796,13 @@ function detectNavigationFromCesConfig(raw: string | null): NavigationShell | nu
   }
   try {
     const sanitized = raw.replace(/^\s*\/\/.*$/gmu, '');
-    const parsed = JSON.parse(sanitized) as { packages?: Array<{ name?: string; type?: string; options?: { type?: string } }> };
+    const parsed = JSON.parse(sanitized) as {
+      packages?: Array<{
+        name?: string;
+        type?: string;
+        options?: { type?: string };
+      }>;
+    };
     if (!Array.isArray(parsed.packages)) {
       return null;
     }
@@ -1524,7 +1812,9 @@ function detectNavigationFromCesConfig(raw: string | null): NavigationShell | nu
     }
     const layoutRaw = nav.options?.type;
     const layout: NavigationLayout =
-      layoutRaw === 'tabs' || layoutRaw === 'drawer + tabs' || layoutRaw === 'stack' ? layoutRaw : 'stack';
+      layoutRaw === 'tabs' || layoutRaw === 'drawer + tabs' || layoutRaw === 'stack'
+        ? layoutRaw
+        : 'stack';
     if (nav.name === 'react-navigation') {
       return { library: 'react-navigation', layout };
     }
@@ -1542,10 +1832,141 @@ async function loadTemplateWithFallback(templatePath: string, fallback: string):
   return template ?? fallback;
 }
 
+function ensureNativeWindMetroPostinstall(existing: string | undefined): string {
+  const command = 'node ./scripts/patch-nativewind-metro.cjs';
+  const trimmed = existing?.trim();
+  if (!trimmed) {
+    return command;
+  }
+  if (trimmed.includes(command)) {
+    return trimmed;
+  }
+  if (trimmed === 'patch-package') {
+    return command;
+  }
+  return `${trimmed} && ${command}`;
+}
+
+function renderStylistSyncAndroidScript(): string {
+  return [
+    '#!/usr/bin/env node',
+    "import { existsSync } from 'node:fs';",
+    "import { readFile } from 'node:fs/promises';",
+    "import { createRequire } from 'node:module';",
+    "import path from 'node:path';",
+    "import { fileURLToPath } from 'node:url';",
+    '',
+    "const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');",
+    'const moduleCandidates = [',
+    "  path.resolve(projectRoot, 'node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, '..', '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    '];',
+    '',
+    'const modulePath = moduleCandidates.find((candidate) => existsSync(candidate));',
+    'if (!modulePath) {',
+    "  console.error('Could not find @mr.dj2u/cli stylist sync module. Run npm install, then retry.');",
+    '  process.exit(1);',
+    '}',
+    'const require = createRequire(import.meta.url);',
+    '',
+    'try {',
+    '  const inputFile = process.env.MDS_STYLIST_INPUT_FILE',
+    '    ? path.resolve(projectRoot, process.env.MDS_STYLIST_INPUT_FILE)',
+    "    : path.join(projectRoot, 'project', 'theme.json');",
+    "  const styleLibrary = process.env.MDS_STYLIST_STYLE_LIBRARY || 'auto';",
+    '  const writePolicy =',
+    "    process.env.MDS_STYLIST_WRITE_POLICY === 'overwrite' ? 'overwrite' : 'managed';",
+    "  const theme = JSON.parse(await readFile(inputFile, 'utf8'));",
+    '  const loaded = require(modulePath);',
+    '  const result = await loaded.syncStylistTheme(projectRoot, theme, {',
+    '    styleLibrary,',
+    '    writePolicy,',
+    '  });',
+    '  console.log(JSON.stringify(result, null, 2));',
+    '} catch (error) {',
+    '  console.error(error instanceof Error ? error.message : String(error));',
+    '  process.exit(1);',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindMetroPatchScript(): string {
+  return [
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
+    '',
+    'const targetPath = path.join(',
+    '  __dirname,',
+    "  '..',",
+    "  'node_modules',",
+    "  'react-native-css-interop',",
+    "  'dist',",
+    "  'metro',",
+    "  'index.js'",
+    ');',
+    '',
+    'const legacy = `            haste.emit("change", {',
+    '                eventsQueue: [',
+    '                    {',
+    '                        filePath,',
+    '                        metadata: {',
+    '                            modifiedTime: Date.now(),',
+    '                            size: 1,',
+    '                            type: "virtual",',
+    '                        },',
+    '                        type: "change",',
+    '                    },',
+    '                ],',
+    '            });`;',
+    '',
+    'const patched = `            haste.emit("change", {',
+    '                changes: {',
+    '                    addedFiles: new Map(),',
+    '                    modifiedFiles: new Map([',
+    '                        [',
+    '                            filePath,',
+    '                            {',
+    '                                modifiedTime: Date.now(),',
+    '                                isSymlink: false,',
+    '                            },',
+    '                        ],',
+    '                    ]),',
+    '                    removedFiles: new Map(),',
+    '                },',
+    '                rootDir: "",',
+    '            });`;',
+    '',
+    'try {',
+    '  if (!fs.existsSync(targetPath)) {',
+    '    process.exit(0);',
+    '  }',
+    '',
+    "  const current = fs.readFileSync(targetPath, 'utf8');",
+    "  if (current.includes('addedFiles: new Map()')) {",
+    '    process.exit(0);',
+    '  }',
+    '',
+    '  if (!current.includes(legacy)) {',
+    "    console.warn('[MDS] NativeWind Metro patch target did not match; leaving file unchanged.');",
+    '    process.exit(0);',
+    '  }',
+    '',
+    "  fs.writeFileSync(targetPath, current.replace(legacy, patched), 'utf8');",
+    "  console.log('[MDS] Patched react-native-css-interop Metro change event for Metro 0.85.');",
+    '} catch (error) {',
+    '  console.warn(`[MDS] Could not patch NativeWind Metro integration: ${error.message}`);',
+    '}',
+    '',
+  ].join('\n');
+}
+
 function renderStylistSyncApiRoute(): string {
   return [
     "import { spawn } from 'node:child_process';",
-    "import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';",
+    "import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';",
     "import path from 'node:path';",
     '',
     "import stylistThemeTokens from '../../theme/tokens';",
@@ -1561,6 +1982,22 @@ function renderStylistSyncApiRoute(): string {
     "    writePolicy?: 'managed' | 'overwrite';",
     "    styleLibrary?: 'auto' | 'uniwind' | 'nativewind' | 'nativewindui' | 'unistyles' | 'restyle' | 'tamagui' | 'stylesheet';",
     '  };',
+    '}',
+    '',
+    'function parseSyncResponse(stdout: string): SyncResponse {',
+    '  const trimmed = stdout.trim();',
+    '  if (!trimmed) {',
+    "    throw new Error('Stylist sync returned empty output.');",
+    '  }',
+    '  try {',
+    '    return JSON.parse(trimmed) as SyncResponse;',
+    '  } catch {',
+    '    const match = trimmed.match(/\\{[\\s\\S]*\\}$/);',
+    '    if (!match) {',
+    "      throw new Error('Stylist sync returned non-JSON output.');",
+    '    }',
+    '    return JSON.parse(match[0]) as SyncResponse;',
+    '  }',
     '}',
     '',
     'export async function POST(request: Request) {',
@@ -1592,7 +2029,7 @@ function renderStylistSyncApiRoute(): string {
     '    JSON.stringify(themeFromJson) !== JSON.stringify(themeFromStyle);',
     '  try {',
     "    const raw = await readFile(configPath, 'utf8');",
-    "    const parsed = JSON.parse(raw) as { writePolicy?: string; styleLibrary?: string };",
+    '    const parsed = JSON.parse(raw) as { writePolicy?: string; styleLibrary?: string };',
     '    return Response.json({',
     '      hasConfig: true,',
     '      writePolicy: parsed.writePolicy ?? null,',
@@ -1629,6 +2066,10 @@ function renderStylistSyncApiRoute(): string {
     '    };',
     '  }',
     '',
+    "  if ('metadata' in asRecord) {",
+    "    throw new Error('Invalid stylist payload: missing theme.');",
+    '  }',
+    '',
     '  return { theme: value };',
     '}',
     '',
@@ -1636,84 +2077,94 @@ function renderStylistSyncApiRoute(): string {
     '  inputJson: string,',
     "  metadata?: StylistSyncRequestBody['metadata']",
     '): Promise<SyncResponse> {',
-    "  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
     "  const tempDir = path.resolve(process.cwd(), '.expo', 'stylist-sync');",
     '  await mkdir(tempDir, { recursive: true });',
     '  const tempInputPath = path.join(',
     '    tempDir,',
-    "    `theme-${Date.now()}-${Math.random().toString(36).slice(2)}.json`",
+    '    `theme-${Date.now()}-${Math.random().toString(36).slice(2)}.json`',
     '  );',
     "  await writeFile(tempInputPath, inputJson, 'utf8');",
     '',
-    '  const args = [',
-    "    '-y',",
-    "    '-p',",
-    "    '@mr.dj2u/cli@latest',",
-    "    'mds',",
-    "    'stylist',",
-    "    'sync',",
-    "    '.',",
-    "    '--input-file',",
-    '    tempInputPath,',
-    "    '--json',",
-    '  ];',
-    "  if (metadata?.writePolicy) args.push('--write-policy', metadata.writePolicy);",
-    "  if (metadata?.styleLibrary) args.push('--style-library', metadata.styleLibrary);",
+    '  const fileExists = async (filePath: string): Promise<boolean> => {',
+    '    try {',
+    '      await access(filePath);',
+    '      return true;',
+    '    } catch {',
+    '      return false;',
+    '    }',
+    '  };',
     '',
-    '  return await new Promise<SyncResponse>((resolve, reject) => {',
-    '    const child = spawn(command, args, {',
-    '      cwd: process.cwd(),',
-    '      stdio: [\'ignore\', \'pipe\', \'pipe\'],',
-    '      windowsHide: true,',
+    '  const runAttempt = async (',
+    '    command: string,',
+    '    args: string[],',
+    '    env: NodeJS.ProcessEnv',
+    '  ): Promise<SyncResponse> => {',
+    '    return await new Promise<SyncResponse>((resolve, reject) => {',
+    '      const child = spawn(command, args, {',
+    '        cwd: process.cwd(),',
+    "        stdio: ['ignore', 'pipe', 'pipe'],",
+    '        windowsHide: true,',
+    '        env,',
+    '      });',
+    '',
+    "      let stdout = '';",
+    "      let stderr = '';",
+    "      child.stdout.on('data', (chunk) => {",
+    '        stdout += String(chunk);',
+    '      });',
+    "      child.stderr.on('data', (chunk) => {",
+    '        stderr += String(chunk);',
+    '      });',
+    '',
+    "      child.on('error', (error) => {",
+    '        reject(error);',
+    '      });',
+    '',
+    '      const timeout = setTimeout(() => {',
+    '        child.kill();',
+    "        reject(new Error('Stylist sync timed out after 120 seconds.'));",
+    '      }, 120000);',
+    '',
+    "      child.on('close', (code) => {",
+    '        clearTimeout(timeout);',
+    '        if (code !== 0) {',
+    "          reject(new Error(stderr.trim() || `Stylist sync failed with exit code ${code ?? 'unknown'}.`));",
+    '          return;',
+    '        }',
+    '',
+    '        try {',
+    '          resolve(parseSyncResponse(stdout));',
+    '        } catch (error) {',
+    '          reject(',
+    '            new Error(',
+    "              `Failed to parse stylist sync output: ${error instanceof Error ? error.message : String(error)}${stderr.trim() ? ` | stderr: ${stderr.trim()}` : ''}`",
+    '            )',
+    '          );',
+    '        }',
+    '      });',
     '    });',
+    '  };',
     '',
-    "    let stdout = '';",
-    "    let stderr = '';",
-    "    child.stdout.on('data', (chunk) => {",
-    "      stdout += String(chunk);",
-    '    });',
-    "    child.stderr.on('data', (chunk) => {",
-    "      stderr += String(chunk);",
-    '    });',
+    "  const scriptPath = path.resolve(process.cwd(), 'scripts', 'stylist-sync-android.mjs');",
+    '  const env = {',
+    '    ...process.env,',
+    '    MDS_STYLIST_INPUT_FILE: path.relative(process.cwd(), tempInputPath),',
+    "    MDS_STYLIST_WRITE_POLICY: metadata?.writePolicy ?? 'managed',",
+    "    MDS_STYLIST_STYLE_LIBRARY: metadata?.styleLibrary ?? 'auto',",
+    '  };',
     '',
-    "    child.on('error', async (error) => {",
-    '      try {',
-    '        await unlink(tempInputPath);',
-    '      } catch {',
-    '        // no-op',
-    '      }',
-    '',
-    "      const code = 'code' in error ? String(error.code ?? '') : '';",
-    "      if (code === 'EINVAL') {",
-    '        reject(',
-    '          new Error(',
-    "            'Stylist sync could not start on this machine (spawn EINVAL). The request is now written to a temp file first, but your local shell still rejected the command. Re-run from the project terminal and verify your Node/npm install.'",
-    '          )',
-    '        );',
-    '        return;',
-    '      }',
-    '      reject(error);',
-    '    });',
-    '',
-    "    child.on('close', async (code) => {",
-    '      try {',
-    '        await unlink(tempInputPath);',
-    '      } catch {',
-    '        // no-op',
-    '      }',
-    '',
-    '      if (code !== 0) {',
-    "        reject(new Error(stderr.trim() || `Stylist sync failed with exit code ${code ?? 'unknown'}.`));",
-    '        return;',
-    '      }',
-    '',
-    '      try {',
-    '        resolve(JSON.parse(stdout) as SyncResponse);',
-    '      } catch (error) {',
-    "        reject(new Error(`Failed to parse stylist sync output: ${error instanceof Error ? error.message : String(error)}`));",
-    '      }',
-    '    });',
-    '  });',
+    '  try {',
+    '    if (!(await fileExists(scriptPath))) {',
+    "      throw new Error('Stylist sync helper is missing. Run npm install, then retry.');",
+    '    }',
+    '    return await runAttempt(process.execPath, [scriptPath], env);',
+    '  } finally {',
+    '    try {',
+    '      await unlink(tempInputPath);',
+    '    } catch {',
+    '      // no-op',
+    '    }',
+    '  }',
     '}',
     '',
     'async function readThemeJson(filePath: string): Promise<unknown | null> {',
@@ -1840,7 +2291,10 @@ function renderImportedNotes(
   ];
 }
 
-function hasNonCanonicalContent(existing: string | null | undefined, headings: readonly string[]): boolean {
+function hasNonCanonicalContent(
+  existing: string | null | undefined,
+  headings: readonly string[]
+): boolean {
   const trimmed = existing?.trim();
   if (!trimmed) {
     return false;
@@ -2010,51 +2464,90 @@ function renderNativeLocalDataService(): string {
     "import type { AppTask } from '../data/mock-app';",
     '',
     "const dbPromise = SQLite.openDatabaseAsync('exposition.db');",
+    'let sqliteUnavailable = false;',
+    'let memoryTasks: AppTask[] = [...appSnapshot.tasks];',
     '',
     'async function getDb() {',
-    '  return dbPromise;',
+    '  if (sqliteUnavailable) {',
+    '    return null;',
+    '  }',
+    '',
+    '  try {',
+    '    return await dbPromise;',
+    '  } catch {',
+    '    sqliteUnavailable = true;',
+    '    return null;',
+    '  }',
     '}',
     '',
     'export async function ensureLocalDataReady(): Promise<void> {',
     '  const db = await getDb();',
-    '  await db.execAsync(`',
-    '    CREATE TABLE IF NOT EXISTS exposition_tasks (',
-    '      id TEXT PRIMARY KEY NOT NULL,',
-    '      title TEXT NOT NULL,',
-    '      status TEXT NOT NULL',
-    '    );',
-    '  `);',
-    "  const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM exposition_tasks');",
-    '  if ((row?.count ?? 0) > 0) {',
+    '  if (!db) {',
     '    return;',
     '  }',
     '',
-    '  for (const task of appSnapshot.tasks) {',
-    '    await db.runAsync(',
-    "      'INSERT INTO exposition_tasks (id, title, status) VALUES (?, ?, ?)',",
-    '      task.id,',
-    '      task.title,',
-    '      task.status',
-    '    );',
+    '  try {',
+    '    await db.execAsync(`',
+    '      CREATE TABLE IF NOT EXISTS exposition_tasks (',
+    '        id TEXT PRIMARY KEY NOT NULL,',
+    '        title TEXT NOT NULL,',
+    '        status TEXT NOT NULL',
+    '      );',
+    '    `);',
+    "    const row = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM exposition_tasks');",
+    '    if ((row?.count ?? 0) > 0) {',
+    '      return;',
+    '    }',
+    '',
+    '    for (const task of appSnapshot.tasks) {',
+    '      await db.runAsync(',
+    "        'INSERT INTO exposition_tasks (id, title, status) VALUES (?, ?, ?)',",
+    '        task.id,',
+    '        task.title,',
+    '        task.status',
+    '      );',
+    '    }',
+    '  } catch {',
+    '    sqliteUnavailable = true;',
     '  }',
     '}',
     '',
     'export async function getLocalAppSnapshot(): Promise<typeof appSnapshot> {',
     '  await ensureLocalDataReady();',
     '  const db = await getDb();',
-    "  const tasks = await db.getAllAsync<AppTask>('SELECT id, title, status FROM exposition_tasks ORDER BY id');",
-    '  return {',
-    '    ...appSnapshot,',
-    '    tasks,',
-    '  };',
+    '  if (!db) {',
+    '    return { ...appSnapshot, tasks: memoryTasks };',
+    '  }',
+    '',
+    '  try {',
+    "    const tasks = await db.getAllAsync<AppTask>('SELECT id, title, status FROM exposition_tasks ORDER BY id');",
+    '    return {',
+    '      ...appSnapshot,',
+    '      tasks,',
+    '    };',
+    '  } catch {',
+    '    sqliteUnavailable = true;',
+    '    return { ...appSnapshot, tasks: memoryTasks };',
+    '  }',
     '}',
     '',
     "export async function addLocalTask(title = 'Try the local DB adapter'): Promise<typeof appSnapshot> {",
     '  await ensureLocalDataReady();',
     '  const db = await getDb();',
     '  const id = `task-${Date.now()}`;',
-    "  await db.runAsync('INSERT INTO exposition_tasks (id, title, status) VALUES (?, ?, ?)', id, title, 'todo');",
-    '  return getLocalAppSnapshot();',
+    '  if (!db) {',
+    "    memoryTasks = [...memoryTasks, { id, title, status: 'todo' }];",
+    '    return { ...appSnapshot, tasks: memoryTasks };',
+    '  }',
+    '',
+    '  try {',
+    "    await db.runAsync('INSERT INTO exposition_tasks (id, title, status) VALUES (?, ?, ?)', id, title, 'todo');",
+    '    return getLocalAppSnapshot();',
+    '  } catch {',
+    '    sqliteUnavailable = true;',
+    "    memoryTasks = [...memoryTasks, { id, title, status: 'todo' }];",
+    '    return { ...appSnapshot, tasks: memoryTasks };',
+    '  }',
     '}',
     '',
   ].join('\n');
@@ -2066,59 +2559,130 @@ function renderRichRootLayout(
   navigationShell: NavigationShell,
   answers: OnboardAnswers
 ): string {
-  const themeProviderImport = toRelativeImportPath(appDir, path.join(projectPath, 'src', 'theme', 'provider'));
+  const themeProviderImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'theme', 'provider')
+  );
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
+  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const expositionScreens = shouldRegisterExpositionRoutes
     ? [
-        "        <Stack.Screen name=\"exposition/index\" options={{ title: 'Package Exposition' }} />",
-        "        <Stack.Screen name=\"exposition/stylist\" options={{ title: 'Stylist' }} />",
-        "        <Stack.Screen name=\"exposition/data\" options={{ title: 'Data' }} />",
-        "        <Stack.Screen name=\"exposition/sdk-56\" options={{ title: 'Expo SDK 56' }} />",
+        '        <Stack.Screen name="exposition/index" options={{ title: \'Package Exposition\' }} />',
+        '        <Stack.Screen name="exposition/stylist" options={{ title: \'Stylist\' }} />',
+        '        <Stack.Screen name="exposition/data" options={{ title: \'Data\' }} />',
+        '        <Stack.Screen name="exposition/sdk-56" options={{ title: \'Expo SDK 56\' }} />',
+        ...(includeNativeWindUiExposition
+          ? [
+              '        <Stack.Screen name="exposition/nativewindui" options={{ title: \'NativeWindUI\' }} />',
+            ]
+          : []),
       ]
     : [];
   const nativeWindUiScreen: string[] = [];
   const shellScreen =
     navigationShell.layout === 'tabs'
-      ? "        <Stack.Screen name=\"(tabs)\" options={{ title: 'Home' }} />"
+      ? '        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />'
       : navigationShell.layout === 'drawer + tabs'
-        ? "        <Stack.Screen name=\"(drawer)\" options={{ title: 'Home' }} />"
-        : "        <Stack.Screen name=\"index\" options={{ title: 'Home' }} />";
+        ? '        <Stack.Screen name="(drawer)" options={{ headerShown: false }} />'
+        : '        <Stack.Screen name="index" options={{ title: \'Home\' }} />';
 
   return [
     renderGlobalCssImport(path.join(appDir, '_layout.tsx'), projectPath),
-    "import { Link, Stack } from 'expo-router';",
-    "import { Platform, Pressable, Text } from 'react-native';",
+    "import type { ReactNode } from 'react';",
+    "import { useEffect, useMemo } from 'react';",
+    "import { DarkTheme, DefaultTheme, Link, Stack, ThemeProvider } from 'expo-router';",
+    "import { Platform, Pressable, StatusBar, Text, useColorScheme } from 'react-native';",
+    "import { NavigationBar } from 'expo-navigation-bar';",
+    "import * as SystemUI from 'expo-system-ui';",
+    "import { GestureHandlerRootView } from 'react-native-gesture-handler';",
+    "import { KeyboardProvider } from 'react-native-keyboard-controller';",
     "import { SafeAreaProvider } from 'react-native-safe-area-context';",
-    `import { AppThemeProvider } from '${themeProviderImport}';`,
+    `import { AppThemeProvider, useAppTheme } from '${themeProviderImport}';`,
     '',
-    'export default function Layout() {',
+    'function RouterThemeBridge({ children }: { children: ReactNode }) {',
+    '  const theme = useAppTheme();',
+    '  const systemScheme = useColorScheme();',
+    '  const prefersDark =',
+    "    theme.colorSystem.mode === 'automatic'",
+    "      ? systemScheme === 'dark'",
+    "      : theme.colorSystem.previewScheme === 'dark';",
+    '  const base = prefersDark ? DarkTheme : DefaultTheme;',
+    '  const shellColor = theme.activeColors.background;',
+    '  const routerTheme = useMemo(',
+    '    () => ({',
+    '      ...base,',
+    '      colors: {',
+    '        ...base.colors,',
+    '        background: shellColor,',
+    '        border: theme.activeColors.surface,',
+    '        card: shellColor,',
+    '        notification: theme.activeColors.warning,',
+    '        primary: theme.activeColors.primary,',
+    '        text: theme.activeColors.text,',
+    '      },',
+    '    }),',
+    '    [base, shellColor, theme.activeColors]',
+    '  );',
+    '',
+    '  useEffect(() => {',
+    '    void SystemUI.setBackgroundColorAsync?.(shellColor);',
+    '  }, [shellColor]);',
+    '',
+    '  return <ThemeProvider value={routerTheme}>{children}</ThemeProvider>;',
+    '}',
+    '',
+    'function LayoutInner() {',
+    '  const theme = useAppTheme();',
+    '  const shellColor = theme.activeColors.background;',
     '  return (',
-    '    <SafeAreaProvider>',
-    '      <AppThemeProvider>',
-    '        <Stack',
-    '          screenOptions={{',
-    "            headerShown: Platform.OS !== 'web',",
-    '            headerRight: () => (',
-    "              <Link href=\"/settings\" asChild>",
-    "                <Pressable accessibilityRole=\"button\" style={{ alignItems: 'center', backgroundColor: '#111827', borderRadius: 14, height: 28, justifyContent: 'center', width: 28 }}>",
-    "                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>i</Text>",
-    '                </Pressable>',
-    '              </Link>',
-    '            ),',
-    '          }}',
-    '        >',
+    '    <GestureHandlerRootView style={{ flex: 1, backgroundColor: shellColor }}>',
+    '      <KeyboardProvider>',
+    '        <SafeAreaProvider>',
+    '          <RouterThemeBridge>',
+    '            <StatusBar',
+    '              backgroundColor={shellColor}',
+    '              barStyle={theme.colorSystem.previewScheme === "dark" ? "light-content" : "dark-content"}',
+    '              translucent={false}',
+    '            />',
+    '            {Platform.OS === "android" ? (',
+    '              <NavigationBar',
+    '                style={theme.colorSystem.previewScheme === "dark" ? "dark" : "light"}',
+    '              />',
+    '            ) : null}',
+    '            <Stack',
+    '              screenOptions={{',
+    '                contentStyle: { backgroundColor: shellColor },',
+    "                headerShown: Platform.OS !== 'web',",
+    '                headerRight: () => (',
+    '                  <Link href="/settings" asChild>',
+    "                    <Pressable accessibilityRole=\"button\" style={{ alignItems: 'center', backgroundColor: '#111827', borderRadius: 14, height: 28, justifyContent: 'center', width: 28 }}>",
+    "                      <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>i</Text>",
+    '                    </Pressable>',
+    '                  </Link>',
+    '                ),',
+    '              }}>',
     shellScreen,
-    "        <Stack.Screen name=\"onboarding\" options={{ title: 'Onboarding' }} />",
-    "        <Stack.Screen name=\"onboarding/agreement\" options={{ title: 'Agreement' }} />",
-    "        <Stack.Screen name=\"onboarding/terms\" options={{ title: 'Terms Of Service' }} />",
-    "        <Stack.Screen name=\"onboarding/account-setup\" options={{ title: 'Account Setup' }} />",
+    '        <Stack.Screen name="onboarding" options={{ title: \'Onboarding\' }} />',
+    '        <Stack.Screen name="onboarding/agreement" options={{ title: \'Agreement\' }} />',
+    '        <Stack.Screen name="onboarding/terms" options={{ title: \'Terms Of Service\' }} />',
+    '        <Stack.Screen name="onboarding/account-setup" options={{ title: \'Account Setup\' }} />',
     ...expositionScreens,
     ...nativeWindUiScreen,
     "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
-    '        </Stack>',
-    '      </AppThemeProvider>',
-    '    </SafeAreaProvider>',
+    '            </Stack>',
+    '          </RouterThemeBridge>',
+    '        </SafeAreaProvider>',
+    '      </KeyboardProvider>',
+    '    </GestureHandlerRootView>',
+    '  );',
+    '}',
+    '',
+    'export default function Layout() {',
+    '  return (',
+    '    <AppThemeProvider>',
+    '      <LayoutInner />',
+    '    </AppThemeProvider>',
     '  );',
     '}',
     '',
@@ -2338,21 +2902,21 @@ function renderGestureCard(): string {
 
 function renderKeyboardForm(): string {
   return [
-    "import { Platform, ScrollView, StyleSheet, TextInput } from 'react-native';",
+    "import { Keyboard, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';",
     '',
     'export function KeyboardForm() {',
     '  if (Platform.OS === "web") {',
     '    return (',
     '      <ScrollView contentContainerStyle={styles.form} style={styles.scroller}>',
-    '        <TextInput placeholder="Project note" style={styles.input} />',
-    '        <TextInput multiline placeholder="Details" style={[styles.input, styles.multiline]} />',
+    '        <TextInput blurOnSubmit onSubmitEditing={Keyboard.dismiss} placeholder="Project note" returnKeyType="done" style={styles.input} />',
+    '        <TextInput blurOnSubmit multiline onSubmitEditing={Keyboard.dismiss} placeholder="Details" returnKeyType="done" style={[styles.input, styles.multiline]} />',
     '      </ScrollView>',
     '    );',
     '  }',
     '',
     "  const keyboardController = require('react-native-keyboard-controller') as {",
-    "    KeyboardAwareScrollView: any;",
-    "    KeyboardToolbar: any;",
+    '    KeyboardAwareScrollView: any;',
+    '    KeyboardToolbar: any;',
     '  };',
     '  const KeyboardAwareScrollView = keyboardController.KeyboardAwareScrollView;',
     '  const KeyboardToolbar = keyboardController.KeyboardToolbar;',
@@ -2360,10 +2924,10 @@ function renderKeyboardForm(): string {
     '  return (',
     '    <>',
     '      <KeyboardAwareScrollView bottomOffset={72} contentContainerStyle={styles.form} style={styles.scroller}>',
-    '        <TextInput placeholder="Project note" style={styles.input} />',
-    '        <TextInput multiline placeholder="Details" style={[styles.input, styles.multiline]} />',
+    '        <TextInput blurOnSubmit onSubmitEditing={Keyboard.dismiss} placeholder="Project note" returnKeyType="done" style={styles.input} />',
+    '        <TextInput blurOnSubmit multiline onSubmitEditing={Keyboard.dismiss} placeholder="Details" returnKeyType="done" style={[styles.input, styles.multiline]} />',
     '      </KeyboardAwareScrollView>',
-    '      <KeyboardToolbar />',
+    '      <KeyboardToolbar onDoneCallback={Keyboard.dismiss} />',
     '    </>',
     '  );',
     '}',
@@ -2453,12 +3017,7 @@ function renderScreensCard(): string {
 }
 
 function renderExpositionNotice(): string {
-  return [
-    'export function ExpositionNotice() {',
-    '  return null;',
-    '}',
-    '',
-  ].join('\n');
+  return ['export function ExpositionNotice() {', '  return null;', '}', ''].join('\n');
 }
 
 function renderSoftwareMansionLogo(): string {
@@ -2548,18 +3107,495 @@ function renderExpositionComponentIndex(): string {
   ].join('\n');
 }
 
+function renderNativeWindUiActivityIndicator(): string {
+  return [
+    "import type { ComponentProps } from 'react';",
+    "import { ActivityIndicator as RNActivityIndicator } from 'react-native';",
+    '',
+    'export function ActivityIndicator(props: ComponentProps<typeof RNActivityIndicator>) {',
+    '  return <RNActivityIndicator color="#2563eb" {...props} />;',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiAvatar(): string {
+  return [
+    "import type { ReactNode } from 'react';",
+    "import { StyleSheet, View, type ViewProps } from 'react-native';",
+    '',
+    'type AvatarProps = ViewProps & {',
+    '  children?: ReactNode;',
+    '  className?: string;',
+    '};',
+    '',
+    'export function Avatar({ children, className: _className, style, ...props }: AvatarProps) {',
+    '  return (',
+    '    <View style={[styles.avatar, style]} {...props}>',
+    '      {children}',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'export function AvatarFallback({ children, className: _className, style, ...props }: AvatarProps) {',
+    '  return (',
+    '    <View style={[styles.fallback, style]} {...props}>',
+    '      {children}',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  avatar: {',
+    "    alignItems: 'center',",
+    "    backgroundColor: '#e2e8f0',",
+    '    borderRadius: 999,',
+    '    height: 48,',
+    "    justifyContent: 'center',",
+    '    width: 48,',
+    '  },',
+    '  fallback: {',
+    "    alignItems: 'center',",
+    "    justifyContent: 'center',",
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiButton(): string {
+  return [
+    "import type { ReactNode } from 'react';",
+    "import { Pressable, StyleSheet, type PressableProps } from 'react-native';",
+    '',
+    "type ButtonVariant = 'primary' | 'secondary' | 'tonal' | 'plain';",
+    '',
+    'export interface ButtonProps extends PressableProps {',
+    '  children?: ReactNode;',
+    '  variant?: ButtonVariant;',
+    '}',
+    '',
+    'export function Button({ children, style, variant = "primary", ...props }: ButtonProps) {',
+    '  return (',
+    '    <Pressable',
+    '      {...props}',
+    "      style={(state) => [styles.base, styles[variant], typeof style === 'function' ? style(state) : style]}",
+    '      accessibilityRole="button">',
+    '      {children}',
+    '    </Pressable>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  base: {',
+    "    alignItems: 'center',",
+    '    borderRadius: 12,',
+    '    borderWidth: 1,',
+    "    justifyContent: 'center',",
+    '    minHeight: 40,',
+    '    paddingHorizontal: 14,',
+    '    paddingVertical: 10,',
+    '  },',
+    '  plain: {',
+    "    backgroundColor: 'transparent',",
+    "    borderColor: '#d1d5db',",
+    '  },',
+    '  primary: {',
+    "    backgroundColor: '#2563eb',",
+    "    borderColor: '#1d4ed8',",
+    '  },',
+    '  secondary: {',
+    "    backgroundColor: '#f8fafc',",
+    "    borderColor: '#94a3b8',",
+    '  },',
+    '  tonal: {',
+    "    backgroundColor: '#dbeafe',",
+    "    borderColor: '#93c5fd',",
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiDatePicker(): string {
+  return [
+    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
+    '',
+    'export interface DatePickerProps {',
+    "  mode?: 'date' | 'time' | 'datetime';",
+    '  value: Date;',
+    '  onChange?: (event: unknown, selectedDate?: Date) => void;',
+    '}',
+    '',
+    'export function DatePicker({ value, onChange }: DatePickerProps) {',
+    '  return (',
+    '    <View style={styles.container}>',
+    '      <Text style={styles.value}>{value.toDateString()}</Text>',
+    '      <Pressable',
+    '        onPress={() => onChange?.({ type: "set" }, new Date())}',
+    '        style={styles.button}',
+    '        accessibilityRole="button">',
+    '        <Text style={styles.buttonText}>Use Today</Text>',
+    '      </Pressable>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  button: {',
+    "    backgroundColor: '#eff6ff',",
+    '    borderRadius: 10,',
+    "    borderColor: '#bfdbfe',",
+    '    borderWidth: 1,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 8,',
+    '  },',
+    '  buttonText: {',
+    "    color: '#1d4ed8',",
+    '    fontWeight: "700",',
+    '  },',
+    '  container: {',
+    "    alignItems: 'center',",
+    "    flexDirection: 'row',",
+    "    justifyContent: 'space-between',",
+    '  },',
+    '  value: {',
+    "    color: '#334155',",
+    '    fontSize: 14,',
+    '    fontWeight: "600",',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiPicker(): string {
+  return [
+    "import { Children, isValidElement, type ReactNode } from 'react';",
+    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
+    '',
+    'export interface PickerItemProps {',
+    '  label: string;',
+    '  value: string;',
+    '}',
+    '',
+    'export interface PickerProps {',
+    '  selectedValue: string;',
+    '  onValueChange?: (value: string) => void;',
+    '  children?: ReactNode;',
+    '}',
+    '',
+    'export function Picker({ selectedValue, onValueChange, children }: PickerProps) {',
+    '  const items = Children.toArray(children)',
+    '    .filter(isValidElement)',
+    '    .map((child) => child.props as PickerItemProps);',
+    '',
+    '  return (',
+    '    <View style={styles.row}>',
+    '      {items.map((item) => {',
+    '        const active = item.value === selectedValue;',
+    '        return (',
+    '          <Pressable',
+    '            key={item.value}',
+    '            onPress={() => onValueChange?.(item.value)}',
+    '            style={[styles.item, active ? styles.itemActive : styles.itemIdle]}',
+    '            accessibilityRole="button">',
+    '            <Text style={active ? styles.textActive : styles.textIdle}>{item.label}</Text>',
+    '          </Pressable>',
+    '        );',
+    '      })}',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'export function PickerItem(_props: PickerItemProps) {',
+    '  return null;',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  item: {',
+    '    borderRadius: 999,',
+    '    borderWidth: 1,',
+    '    minHeight: 34,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 8,',
+    '  },',
+    '  itemActive: {',
+    "    backgroundColor: '#2563eb',",
+    "    borderColor: '#1d4ed8',",
+    '  },',
+    '  itemIdle: {',
+    "    backgroundColor: '#f8fafc',",
+    "    borderColor: '#cbd5e1',",
+    '  },',
+    '  row: {',
+    "    flexDirection: 'row',",
+    "    flexWrap: 'wrap',",
+    '    gap: 8,',
+    '  },',
+    '  textActive: {',
+    "    color: '#ffffff',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+    '  },',
+    '  textIdle: {',
+    "    color: '#334155',",
+    '    fontSize: 13,',
+    '    fontWeight: "700",',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiProgressIndicator(): string {
+  return [
+    "import { StyleSheet, View } from 'react-native';",
+    '',
+    'export interface ProgressIndicatorProps {',
+    '  value: number;',
+    '}',
+    '',
+    'export function ProgressIndicator({ value }: ProgressIndicatorProps) {',
+    '  const clamped = Math.max(0, Math.min(100, Math.round(value)));',
+    '  return (',
+    '    <View style={styles.track}>',
+    '      <View style={[styles.fill, { width: `${clamped}%` }]} />',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  fill: {',
+    "    backgroundColor: '#2563eb',",
+    '    borderRadius: 999,',
+    "    height: '100%',",
+    '  },',
+    '  track: {',
+    "    backgroundColor: '#dbeafe',",
+    '    borderRadius: 999,',
+    '    height: 10,',
+    "    overflow: 'hidden',",
+    '    width: "100%",',
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiSlider(): string {
+  return [
+    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
+    '',
+    'export interface SliderProps {',
+    '  value: number;',
+    '  onValueChange?: (value: number) => void;',
+    '  min?: number;',
+    '  max?: number;',
+    '  step?: number;',
+    '  disabled?: boolean;',
+    '}',
+    '',
+    'export function Slider({',
+    '  value,',
+    '  onValueChange,',
+    '  min = 0,',
+    '  max = 1,',
+    '  step = 0.05,',
+    '  disabled = false,',
+    '}: SliderProps) {',
+    '  const clamp = (next: number) => Math.max(min, Math.min(max, next));',
+    '  const changeBy = (delta: number) => onValueChange?.(clamp(Number((value + delta).toFixed(3))));',
+    '',
+    '  return (',
+    '    <View style={[styles.row, disabled && styles.disabled]}>',
+    '      <Pressable disabled={disabled} onPress={() => changeBy(-step)} style={styles.button} accessibilityRole="button">',
+    '        <Text style={styles.buttonLabel}>-</Text>',
+    '      </Pressable>',
+    '      <Text style={styles.value}>{value.toFixed(2)}</Text>',
+    '      <Pressable disabled={disabled} onPress={() => changeBy(step)} style={styles.button} accessibilityRole="button">',
+    '        <Text style={styles.buttonLabel}>+</Text>',
+    '      </Pressable>',
+    '    </View>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  button: {',
+    "    alignItems: 'center',",
+    "    backgroundColor: '#eff6ff',",
+    '    borderRadius: 10,',
+    "    borderColor: '#bfdbfe',",
+    '    borderWidth: 1,',
+    "    justifyContent: 'center',",
+    '    minHeight: 36,',
+    '    minWidth: 36,',
+    '  },',
+    '  buttonLabel: {',
+    "    color: '#1d4ed8',",
+    '    fontSize: 18,',
+    '    fontWeight: "700",',
+    '  },',
+    '  disabled: {',
+    '    opacity: 0.45,',
+    '  },',
+    '  row: {',
+    "    alignItems: 'center',",
+    "    flexDirection: 'row',",
+    '    gap: 10,',
+    '  },',
+    '  value: {',
+    "    color: '#334155',",
+    '    fontSize: 14,',
+    '    fontVariant: ["tabular-nums"],',
+    '    fontWeight: "700",',
+    '    minWidth: 52,',
+    "    textAlign: 'center',",
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiText(): string {
+  return [
+    "import type { TextProps } from 'react-native';",
+    "import { StyleSheet, Text as RNText } from 'react-native';",
+    '',
+    "type Variant = 'largeTitle' | 'heading' | 'body' | 'callout' | 'subhead' | 'footnote' | 'caption2';",
+    "type Tone = 'primary' | 'secondary' | 'tertiary' | 'quarternary';",
+    '',
+    'export interface NativeWindUiTextProps extends TextProps {',
+    '  variant?: Variant;',
+    '  color?: Tone;',
+    '  className?: string;',
+    '}',
+    '',
+    'const variantStyles: Record<Variant, TextProps["style"]> = {',
+    '  largeTitle: { fontSize: 30, fontWeight: "900", lineHeight: 36 },',
+    '  heading: { fontSize: 18, fontWeight: "800", lineHeight: 24 },',
+    '  body: { fontSize: 16, fontWeight: "500", lineHeight: 22 },',
+    '  callout: { fontSize: 15, fontWeight: "600", lineHeight: 21 },',
+    '  subhead: { fontSize: 14, fontWeight: "700", lineHeight: 20 },',
+    '  footnote: { fontSize: 13, fontWeight: "500", lineHeight: 18 },',
+    '  caption2: { fontSize: 12, fontWeight: "700", lineHeight: 16 },',
+    '};',
+    '',
+    'const toneStyles: Record<Tone, TextProps["style"]> = {',
+    '  primary: { color: "#0f172a" },',
+    '  secondary: { color: "#334155" },',
+    '  tertiary: { color: "#475569" },',
+    '  quarternary: { color: "#64748b" },',
+    '};',
+    '',
+    'export function Text({',
+    '  variant = "body",',
+    '  color = "primary",',
+    '  className: _className,',
+    '  style,',
+    '  ...props',
+    '}: NativeWindUiTextProps) {',
+    '  return <RNText {...props} style={[styles.base, variantStyles[variant], toneStyles[color], style]} />;',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  base: {',
+    "    color: '#0f172a',",
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiThemeToggle(): string {
+  return [
+    "import { useState } from 'react';",
+    "import { Pressable, StyleSheet, Text } from 'react-native';",
+    '',
+    'export function ThemeToggle() {',
+    '  const [darkPreview, setDarkPreview] = useState(false);',
+    '  return (',
+    '    <Pressable',
+    '      onPress={() => setDarkPreview((current) => !current)}',
+    '      style={[styles.button, darkPreview ? styles.dark : styles.light]}',
+    '      accessibilityRole="button">',
+    '      <Text style={[styles.label, darkPreview ? styles.darkLabel : styles.lightLabel]}>{darkPreview ? "Dark preview" : "Light preview"}</Text>',
+    '    </Pressable>',
+    '  );',
+    '}',
+    '',
+    'const styles = StyleSheet.create({',
+    '  button: {',
+    "    alignItems: 'center',",
+    '    borderRadius: 999,',
+    '    borderWidth: 1,',
+    "    justifyContent: 'center',",
+    '    minHeight: 34,',
+    '    minWidth: 120,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 6,',
+    '  },',
+    '  dark: {',
+    "    backgroundColor: '#0f172a',",
+    "    borderColor: '#1e293b',",
+    '  },',
+    '  darkLabel: {',
+    "    color: '#f8fafc',",
+    '  },',
+    '  label: {',
+    '    fontSize: 12,',
+    '    fontWeight: "700",',
+    '  },',
+    '  light: {',
+    "    backgroundColor: '#dbeafe',",
+    "    borderColor: '#93c5fd',",
+    '  },',
+    '  lightLabel: {',
+    "    color: '#0f172a',",
+    '  },',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function renderNativeWindUiToggle(): string {
+  return [
+    "import { Switch } from 'react-native';",
+    '',
+    'export interface ToggleProps {',
+    '  value: boolean;',
+    '  onValueChange?: (next: boolean) => void;',
+    '}',
+    '',
+    'export function Toggle({ value, onValueChange }: ToggleProps) {',
+    '  return (',
+    '    <Switch',
+    '      value={value}',
+    '      onValueChange={onValueChange}',
+    '      trackColor={{ false: "#cbd5e1", true: "#93c5fd" }}',
+    '      thumbColor={value ? "#2563eb" : "#f8fafc"}',
+    '    />',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
+}
+
 function renderNativeWindUiScreen(): string {
   return [
     "import { useMemo, useState } from 'react';",
-    "import { Linking, ScrollView, StyleSheet, View } from 'react-native';",
+    "import { Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';",
     '',
-    "import { ActivityIndicator } from '../../../components/nativewindui/ActivityIndicator';",
-    "import { Button } from '../../../components/nativewindui/Button';",
-    "import { Picker, PickerItem } from '../../../components/nativewindui/Picker';",
-    "import { ProgressIndicator } from '../../../components/nativewindui/ProgressIndicator';",
-    "import { Slider } from '../../../components/nativewindui/Slider';",
-    "import { Text } from '../../../components/nativewindui/Text';",
-    "import { Toggle } from '../../../components/nativewindui/Toggle';",
+    "import { ActivityIndicator } from '../../components/nativewindui/ActivityIndicator';",
+    "import { Avatar, AvatarFallback } from '../../components/nativewindui/Avatar';",
+    "import { Button } from '../../components/nativewindui/Button';",
+    "import { DatePicker } from '../../components/nativewindui/DatePicker';",
+    "import { Picker, PickerItem } from '../../components/nativewindui/Picker';",
+    "import { ProgressIndicator } from '../../components/nativewindui/ProgressIndicator';",
+    "import { Slider } from '../../components/nativewindui/Slider';",
+    "import { Text } from '../../components/nativewindui/Text';",
+    "import { ThemeToggle } from '../../components/nativewindui/ThemeToggle';",
+    "import { Toggle } from '../../components/nativewindui/Toggle';",
     "import { ExpositionNotice } from '../../components/exposition';",
     "import { useAppTheme } from '../../theme/provider';",
     '',
@@ -2569,6 +3605,7 @@ function renderNativeWindUiScreen(): string {
     '  const [enabled, setEnabled] = useState(true);',
     '  const [intensity, setIntensity] = useState(0.64);',
     "  const [density, setDensity] = useState('balanced');",
+    '  const [appointmentDate, setAppointmentDate] = useState<Date>(new Date());',
     '  const progress = useMemo(() => Math.round(intensity * 100), [intensity]);',
     '',
     '  return (',
@@ -2580,8 +3617,20 @@ function renderNativeWindUiScreen(): string {
     '      <ExpositionNotice />',
     '      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
     '        <Text variant="heading">Interactive primitives</Text>',
+    '        <View style={styles.feedbackRow}>',
+    '          <Avatar className="h-12 w-12">',
+    '            <AvatarFallback>',
+    '              <Text variant="caption2">NW</Text>',
+    '            </AvatarFallback>',
+    '          </Avatar>',
+    '          <View style={styles.feedbackBody}>',
+    '            <Text variant="subhead">Theme preview controls</Text>',
+    '            <Text variant="footnote" color="secondary">Avatar and ThemeToggle are local NativeWindUI primitives.</Text>',
+    '          </View>',
+    '          <ThemeToggle />',
+    '        </View>',
     '        <View style={styles.row}>',
-    "          <Button onPress={() => Linking.openURL('https://nativewindui.com')} variant=\"primary\">",
+    '          <Button onPress={() => Linking.openURL(\'https://nativewindui.com\')} variant="primary">',
     '            <Text>Open NativeWindUI docs</Text>',
     '          </Button>',
     '          <Button variant="tonal">',
@@ -2594,18 +3643,26 @@ function renderNativeWindUiScreen(): string {
     '        </View>',
     '        <Slider value={intensity} onValueChange={setIntensity} />',
     '        <ProgressIndicator value={progress} />',
-    "        <Text variant=\"footnote\" color=\"secondary\">Progress {progress}% · Toggle {enabled ? 'on' : 'off'}</Text>",
+    '        <Text variant="footnote" color="secondary">Progress {progress}% - Toggle {enabled ? \'on\' : \'off\'}</Text>',
     '      </View>',
     '      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
-    '        <Text variant="heading">Picker and feedback</Text>',
+    '        <Text variant="heading">Picker, DatePicker, and feedback</Text>',
     '        <Picker selectedValue={density} onValueChange={(value) => setDensity(String(value))}>',
     '          <PickerItem label="Compact density" value="compact" />',
     '          <PickerItem label="Balanced density" value="balanced" />',
     '          <PickerItem label="Spacious density" value="spacious" />',
     '        </Picker>',
+    '        {Platform.OS !== "web" ? (',
+    '          <DatePicker mode="date" value={appointmentDate} onChange={(_event, selected) => selected && setAppointmentDate(selected)} />',
+    '        ) : (',
+    '          <Text variant="footnote" color="secondary">DatePicker preview appears on native targets.</Text>',
+    '        )}',
     '        <View style={styles.feedbackRow}>',
     '          <ActivityIndicator />',
-    '          <Text variant="subhead" color="secondary">NativeWind class tokens, generated theme colors, and Expo web are rendering together.</Text>',
+    '          <View style={styles.feedbackBody}>',
+    '            <Text variant="subhead" color="secondary">NativeWind class tokens, generated theme colors, and Expo web are rendering together.</Text>',
+    '            <Text variant="footnote" color="secondary">Date: {appointmentDate.toDateString()}</Text>',
+    '          </View>',
     '        </View>',
     '      </View>',
     '    </ScrollView>',
@@ -2646,20 +3703,34 @@ function renderNativeWindUiScreen(): string {
     "    flexDirection: 'row',",
     '    gap: 12,',
     '  },',
+    '  feedbackBody: {',
+    '    flex: 1,',
+    '    gap: 4,',
+    '  },',
     '});',
     '',
   ].join('\n');
 }
 
 function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationShell): string {
+  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const expositionLinks =
     navigationShell.library === 'expo-router' && navigationShell.layout !== 'stack'
-      ? []
+      ? includeNativeWindUiExposition
+        ? [
+            "  { href: '/exposition/nativewindui' as const, title: 'NativeWindUI', body: 'Explore the bundled NativeWindUI components.' },",
+          ]
+        : []
       : [
-          "  { href: '/exposition' as const, title: 'Software Mansion exposition', body: 'Review included Software Mansion packages and decide what stays.' },",
+          "  { href: '/exposition' as const, title: 'Exposition', body: 'Review included Software Mansion packages and decide what stays.' },",
           "  { href: '/exposition/stylist' as const, title: 'Stylist', body: 'Test colors, type, motion, and component density.' },",
           "  { href: '/exposition/data' as const, title: 'Data adapter', body: 'Try the local data boundary before replacing it.' },",
           "  { href: '/exposition/sdk-56' as const, title: 'Expo SDK 56', body: 'Review the new Expo UI, Router, module, and performance changes.' },",
+          ...(includeNativeWindUiExposition
+            ? [
+                "  { href: '/exposition/nativewindui' as const, title: 'NativeWindUI', body: 'Explore the bundled NativeWindUI components.' },",
+              ]
+            : []),
         ];
 
   return [
@@ -2747,15 +3818,15 @@ function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationSh
     '    alignItems: "center",',
     '    width: "100%",',
     '  },',
-  '  brandText: {',
+    '  brandText: {',
     '    gap: 0,',
-  '  },',
+    '  },',
     '  brandLine: {',
     '    fontSize: 16,',
     '    fontWeight: "900",',
     '    lineHeight: 17,',
     '    textTransform: "uppercase",',
-  '  },',
+    '  },',
     '  infoButton: {',
     '    alignItems: "center",',
     "    backgroundColor: '#111827',",
@@ -2902,88 +3973,88 @@ function renderOnboardingScreen(): string {
     '    flex: 1,',
     '    gap: 14,',
     '    padding: 20,',
-  '  },',
-  '  title: {',
+    '  },',
+    '  title: {',
     "    color: '#111827',",
     '    fontSize: 26,',
     '    fontWeight: "800",',
-  '  },',
-  '  body: {',
+    '  },',
+    '  body: {',
     "    color: '#4b5563',",
     '    fontSize: 15,',
     '    lineHeight: 22,',
-  '  },',
-  '  card: {',
+    '  },',
+    '  card: {',
     "    backgroundColor: '#ffffff',",
     "    borderColor: '#d1d5db',",
     '    borderRadius: 12,',
     '    borderWidth: 1,',
     '    gap: 8,',
     '    padding: 14,',
-  '  },',
-  '  rowTop: {',
+    '  },',
+    '  rowTop: {',
     '    alignItems: "center",',
     '    flexDirection: "row",',
     '    justifyContent: "space-between",',
-  '  },',
-  '  rowBottom: {',
+    '  },',
+    '  rowBottom: {',
     '    alignItems: "center",',
     '    flexDirection: "row",',
     '    justifyContent: "space-between",',
-  '  },',
-  '  cardTitle: {',
+    '  },',
+    '  cardTitle: {',
     "    color: '#111827',",
     '    fontSize: 18,',
     '    fontWeight: "800",',
-  '  },',
-  '  cardBody: {',
+    '  },',
+    '  cardBody: {',
     "    color: '#4b5563',",
     '    fontSize: 14,',
     '    lineHeight: 20,',
-  '  },',
-  '  meta: {',
+    '  },',
+    '  meta: {',
     "    color: '#6b7280',",
     '    fontSize: 12,',
     '    fontWeight: "700",',
-  '  },',
-  '  linkButton: {',
+    '  },',
+    '  linkButton: {',
     "    backgroundColor: '#111827',",
     '    borderRadius: 9,',
     '    paddingHorizontal: 12,',
     '    paddingVertical: 8,',
-  '  },',
-  '  linkButtonText: {',
+    '  },',
+    '  linkButtonText: {',
     "    color: '#ffffff',",
     '    fontSize: 13,',
     '    fontWeight: "700",',
-  '  },',
-  '  acceptWrap: {',
+    '  },',
+    '  acceptWrap: {',
     '    alignItems: "center",',
     '    flexDirection: "row",',
     '    gap: 8,',
-  '  },',
-  '  acceptText: {',
+    '  },',
+    '  acceptText: {',
     "    color: '#111827',",
     '    fontSize: 13,',
     '    fontWeight: "700",',
-  '  },',
-  '  ctaButton: {',
+    '  },',
+    '  ctaButton: {',
     '    alignItems: "center",',
     "    backgroundColor: '#0f172a',",
     '    borderRadius: 12,',
     '    marginTop: "auto",',
     '    paddingVertical: 14,',
-  '  },',
-  '  ctaButtonDisabled: {',
+    '  },',
+    '  ctaButtonDisabled: {',
     "    backgroundColor: '#9ca3af',",
-  '  },',
-  '  ctaButtonText: {',
+    '  },',
+    '  ctaButtonText: {',
     "    color: '#ffffff',",
     '    fontSize: 15,',
     '    fontWeight: "800",',
-  '  },',
-  '});',
-  '',
+    '  },',
+    '});',
+    '',
   ].join('\n');
 }
 
@@ -3236,13 +4307,14 @@ async function ensureExpoRouterGroupLayouts(
     return [];
   }
   const results: WriteResult[] = [];
+  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   if (navigationShell.layout === 'tabs') {
     const tabsDir = path.join(appDir, '(tabs)');
     await mkdir(tabsDir, { recursive: true });
     const layoutPath = path.join(tabsDir, '_layout.tsx');
     await writeFile(
       layoutPath,
-      renderTabsGroupLayout(answers.usesExpoNativeTabs, false),
+      renderTabsGroupLayout(answers.usesExpoNativeTabs, includeNativeWindUiExposition),
       'utf8'
     );
     results.push({ filePath: layoutPath, wrote: true });
@@ -3257,7 +4329,7 @@ async function ensureExpoRouterGroupLayouts(
     await writeFile(drawerLayoutPath, renderDrawerGroupLayout(), 'utf8');
     await writeFile(
       drawerTabsLayoutPath,
-      renderDrawerTabsGroupLayout(answers.usesExpoNativeTabs, false),
+      renderDrawerTabsGroupLayout(answers.usesExpoNativeTabs, includeNativeWindUiExposition),
       'utf8'
     );
     results.push(
@@ -3267,48 +4339,46 @@ async function ensureExpoRouterGroupLayouts(
   }
   return results;
 }
-function renderTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeWindUiExposition: boolean): string {
-  const nativeTabsNativeWindUiTrigger = includeNativeWindUiExposition
-    ? [
-        '      <NativeTabs.Trigger name="nativewindui">',
-        '        <NativeTabs.Trigger.Icon sf={"wind" as any} md={"air" as any} />',
-        '        <NativeTabs.Trigger.Label>NativeWindUI</NativeTabs.Trigger.Label>',
-        '      </NativeTabs.Trigger>',
-      ]
-    : [];
-  const jsTabsNativeWindUiScreen = includeNativeWindUiExposition
-    ? [
-        "      <Tabs.Screen name=\"nativewindui\" options={{ title: 'NativeWindUI', tabBarIcon: () => <Text>NW</Text> }} />",
-      ]
-    : [];
+function renderTabsGroupLayout(
+  usesExpoNativeTabs: boolean,
+  includeNativeWindUiExposition: boolean
+): string {
+  void includeNativeWindUiExposition;
   if (usesExpoNativeTabs) {
     return [
       "import { NativeTabs } from 'expo-router/unstable-native-tabs';",
       '',
+      "import { useAppTheme } from '../../theme/provider';",
+      '',
       'export default function TabsLayout() {',
+      '  const theme = useAppTheme();',
+      '  const colors = theme.activeColors;',
+      '  const tabContentStyle = {',
+      '    backgroundColor: colors.background,',
+      '  };',
+      '',
       '  return (',
-      '    <NativeTabs minimizeBehavior="onScrollDown">',
-      '      <NativeTabs.Trigger name="index">',
+      '    <NativeTabs backgroundColor={colors.background} disableTransparentOnScrollEdge minimizeBehavior="onScrollDown">',
+      '      <NativeTabs.Trigger name="index" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"house.fill" as any} md={"home" as any} />',
       '        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="software-mansion">',
+      '      <NativeTabs.Trigger name="exposition" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"shippingbox.fill" as any} md={"deployed_code" as any} />',
-      '        <NativeTabs.Trigger.Label>Software Mansion</NativeTabs.Trigger.Label>',
+      '        <NativeTabs.Trigger.Label>Exposition</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="stylist">',
+      '      <NativeTabs.Trigger name="stylist" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"paintpalette.fill" as any} md={"palette" as any} />',
       '        <NativeTabs.Trigger.Label>Stylist</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="data">',
+      '      <NativeTabs.Trigger name="data" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"externaldrive.fill" as any} md={"database" as any} />',
       '        <NativeTabs.Trigger.Label>Data</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="sdk-56">',
+      '      <NativeTabs.Trigger name="sdk-56" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"sparkles.rectangle.stack.fill" as any} md={"rocket_launch" as any} />',
       '        <NativeTabs.Trigger.Label>SDK 56</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      ...nativeTabsNativeWindUiTrigger,
       '    </NativeTabs>',
       '  );',
       '}',
@@ -3322,12 +4392,11 @@ function renderTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeWindUiE
     'export default function TabsLayout() {',
     '  return (',
     '    <Tabs>',
-    "      <Tabs.Screen name=\"index\" options={{ title: 'Home', tabBarIcon: () => <Text>H</Text> }} />",
-    "      <Tabs.Screen name=\"software-mansion\" options={{ title: 'Software Mansion', tabBarIcon: () => <Text>SM</Text> }} />",
-    "      <Tabs.Screen name=\"stylist\" options={{ title: 'Stylist', tabBarIcon: () => <Text>SS</Text> }} />",
-    "      <Tabs.Screen name=\"data\" options={{ title: 'Data', tabBarIcon: () => <Text>DB</Text> }} />",
-    "      <Tabs.Screen name=\"sdk-56\" options={{ title: 'SDK 56', tabBarIcon: () => <Text>56</Text> }} />",
-    ...jsTabsNativeWindUiScreen,
+    '      <Tabs.Screen name="index" options={{ title: \'Home\', tabBarIcon: () => <Text>H</Text> }} />',
+    '      <Tabs.Screen name="exposition" options={{ title: \'Exposition\', tabBarIcon: () => <Text>EX</Text> }} />',
+    '      <Tabs.Screen name="stylist" options={{ title: \'Stylist\', tabBarIcon: () => <Text>SS</Text> }} />',
+    '      <Tabs.Screen name="data" options={{ title: \'Data\', tabBarIcon: () => <Text>DB</Text> }} />',
+    '      <Tabs.Screen name="sdk-56" options={{ title: \'SDK 56\', tabBarIcon: () => <Text>56</Text> }} />',
     '    </Tabs>',
     '  );',
     '}',
@@ -3342,7 +4411,7 @@ function renderDrawerGroupLayout(): string {
     '  return (',
     '    <Drawer>',
     "      <Drawer.Screen name=\"index\" options={{ title: 'Home', drawerLabel: 'Home' }} />",
-    "      <Drawer.Screen name=\"(tabs)\" options={{ title: 'Software Mansion', drawerLabel: 'Software Mansion' }} />",
+    "      <Drawer.Screen name=\"(tabs)\" options={{ title: 'Exposition', drawerLabel: 'Exposition' }} />",
     '    </Drawer>',
     '  );',
     '}',
@@ -3350,44 +4419,42 @@ function renderDrawerGroupLayout(): string {
   ].join('\n');
 }
 
-function renderDrawerTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeWindUiExposition: boolean): string {
-  const nativeTabsNativeWindUiTrigger = includeNativeWindUiExposition
-    ? [
-        '      <NativeTabs.Trigger name="nativewindui">',
-        '        <NativeTabs.Trigger.Icon sf={"wind" as any} md={"air" as any} />',
-        '        <NativeTabs.Trigger.Label>NativeWindUI</NativeTabs.Trigger.Label>',
-        '      </NativeTabs.Trigger>',
-      ]
-    : [];
-  const jsTabsNativeWindUiScreen = includeNativeWindUiExposition
-    ? [
-        "      <Tabs.Screen name=\"nativewindui\" options={{ title: 'NativeWindUI', tabBarIcon: () => <Text>NW</Text> }} />",
-      ]
-    : [];
+function renderDrawerTabsGroupLayout(
+  usesExpoNativeTabs: boolean,
+  includeNativeWindUiExposition: boolean
+): string {
+  void includeNativeWindUiExposition;
   if (usesExpoNativeTabs) {
     return [
       "import { NativeTabs } from 'expo-router/unstable-native-tabs';",
       '',
+      "import { useAppTheme } from '../../../theme/provider';",
+      '',
       'export default function DrawerTabsLayout() {',
+      '  const theme = useAppTheme();',
+      '  const colors = theme.activeColors;',
+      '  const tabContentStyle = {',
+      '    backgroundColor: colors.background,',
+      '  };',
+      '',
       '  return (',
-      '    <NativeTabs minimizeBehavior="onScrollDown">',
-      '      <NativeTabs.Trigger name="index">',
+      '    <NativeTabs backgroundColor={colors.background} disableTransparentOnScrollEdge minimizeBehavior="onScrollDown">',
+      '      <NativeTabs.Trigger name="index" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"shippingbox.fill" as any} md={"deployed_code" as any} />',
-      '        <NativeTabs.Trigger.Label>Software Mansion</NativeTabs.Trigger.Label>',
+      '        <NativeTabs.Trigger.Label>Exposition</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="stylist">',
+      '      <NativeTabs.Trigger name="stylist" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"paintpalette.fill" as any} md={"palette" as any} />',
       '        <NativeTabs.Trigger.Label>Stylist</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="data">',
+      '      <NativeTabs.Trigger name="data" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"externaldrive.fill" as any} md={"database" as any} />',
       '        <NativeTabs.Trigger.Label>Data</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      '      <NativeTabs.Trigger name="sdk-56">',
+      '      <NativeTabs.Trigger name="sdk-56" contentStyle={tabContentStyle} disableAutomaticContentInsets>',
       '        <NativeTabs.Trigger.Icon sf={"sparkles.rectangle.stack.fill" as any} md={"rocket_launch" as any} />',
       '        <NativeTabs.Trigger.Label>SDK 56</NativeTabs.Trigger.Label>',
       '      </NativeTabs.Trigger>',
-      ...nativeTabsNativeWindUiTrigger,
       '    </NativeTabs>',
       '  );',
       '}',
@@ -3401,11 +4468,10 @@ function renderDrawerTabsGroupLayout(usesExpoNativeTabs: boolean, includeNativeW
     'export default function DrawerTabsLayout() {',
     '  return (',
     '    <Tabs>',
-    "      <Tabs.Screen name=\"index\" options={{ title: 'Software Mansion', tabBarIcon: () => <Text>SM</Text> }} />",
-    "      <Tabs.Screen name=\"stylist\" options={{ title: 'Stylist', tabBarIcon: () => <Text>SS</Text> }} />",
-    "      <Tabs.Screen name=\"data\" options={{ title: 'Data', tabBarIcon: () => <Text>DB</Text> }} />",
-    "      <Tabs.Screen name=\"sdk-56\" options={{ title: 'SDK 56', tabBarIcon: () => <Text>56</Text> }} />",
-    ...jsTabsNativeWindUiScreen,
+    '      <Tabs.Screen name="index" options={{ title: \'Exposition\', tabBarIcon: () => <Text>EX</Text> }} />',
+    '      <Tabs.Screen name="stylist" options={{ title: \'Stylist\', tabBarIcon: () => <Text>SS</Text> }} />',
+    '      <Tabs.Screen name="data" options={{ title: \'Data\', tabBarIcon: () => <Text>DB</Text> }} />',
+    '      <Tabs.Screen name="sdk-56" options={{ title: \'SDK 56\', tabBarIcon: () => <Text>56</Text> }} />',
     '    </Tabs>',
     '  );',
     '}',
@@ -3459,20 +4525,26 @@ function renderSettingsScreen(): string {
   ].join('\n');
 }
 
-function renderExpositionScreen(): string {
+function renderExpositionScreen(includeNativeWindUiExposition = false): string {
+  const nativeWindUiRouteCard = includeNativeWindUiExposition
+    ? [
+        '      <PackageCard',
+        '        packageName="nativewindui route"',
+        '        title="NativeWindUI route"',
+        '        body="NativeWindUI examples stay in the app as a dedicated route, linked here instead of pinned in the bottom tabs.">',
+        '        <Link href="/exposition/nativewindui" asChild>',
+        '          <Text style={styles.link}>Open NativeWindUI screen</Text>',
+        '        </Link>',
+        '      </PackageCard>',
+      ]
+    : [];
+  const linkImport = includeNativeWindUiExposition ? ["import { Link } from 'expo-router';"] : [];
   return [
+    ...linkImport,
     "import { Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';",
     '',
     "import { AnimatedPressable, ExpositionNotice, GestureCard, KeyboardForm, PackageCard, ScreensCard, SoftwareMansionLogo } from '../../components/exposition';",
     "import { useAppTheme } from '../../theme/provider';",
-    '',
-    'const packageLinks = [',
-    "  { label: 'Software Mansion - Reanimated', href: 'https://docs.swmansion.com/react-native-reanimated' },",
-    "  { label: 'Software Mansion - Gesture Handler', href: 'https://docs.swmansion.com/react-native-gesture-handler' },",
-    "  { label: 'Software Mansion - Screens', href: 'https://docs.swmansion.com/react-native-screens' },",
-    "  { label: 'Software Mansion - SVG', href: 'https://docs.expo.dev/versions/latest/sdk/svg' },",
-    "  { label: 'Software Mansion - Keyboard Controller', href: 'https://kirillzyusko.github.io/react-native-keyboard-controller/' },",
-    '];',
     '',
     'export default function ExpositionScreen() {',
     '  const theme = useAppTheme();',
@@ -3482,20 +4554,61 @@ function renderExpositionScreen(): string {
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
     '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Package Exposition</Text>',
     '      <Text style={[styles.intro, { color: colors.text }]}>Browse the included Software Mansion packages, then keep only what your app needs.</Text>',
-    '      <View style={styles.linksWrap}>',
-    '        {packageLinks.map((item) => (',
-    '          <Text key={item.href} style={styles.link} onPress={() => Linking.openURL(item.href)}>',
-    '            {item.label}',
-    '          </Text>',
-    '        ))}',
-    '      </View>',
     '      <ExpositionNotice />',
+    '      <PackageCard',
+    '        packageName="reanimated-color-picker"',
+    '        title="Stylist color editing"',
+    '        body="Stylist uses this package for the hue slider, color preview, and manual palette picker that writes theme tokens."',
+    '      >',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://github.com/alabsi91/reanimated-color-picker')}>",
+    '          Reanimated Color Picker',
+    '        </Text>',
+    '      </PackageCard>',
+    '      <PackageCard',
+    '        packageName="@react-native-async-storage/async-storage"',
+    '        title="Stylist local preferences"',
+    '        body="Stylist stores local-only preferences such as the Google Fonts API key, dismissed banners, and editor settings with Async Storage."',
+    '      >',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://react-native-async-storage.github.io/async-storage/')}>",
+    '          Async Storage Docs',
+    '        </Text>',
+    '      </PackageCard>',
+    '      <PackageCard',
+    '        packageName="react-native-safe-area-context"',
+    '        title="Stylist safe spacing"',
+    '        body="Stylist reads safe-area insets so editor controls stay clear of cutouts, native tabs, and device navigation areas."',
+    '      >',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.expo.dev/versions/latest/sdk/safe-area-context/')}>",
+    '          Expo SDK - SafeAreaContext',
+    '        </Text>',
+    '      </PackageCard>',
+    '      <PackageCard',
+    '        packageName="tailwindcss/colors"',
+    '        title="Stylist palette families"',
+    '        body="Stylist uses Tailwind color families and shade scales to drive the palette-family mode and accessible token previews."',
+    '      >',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://tailwindcss.com/docs/customizing-colors')}>",
+    '          Tailwind CSS - Colors',
+    '        </Text>',
+    '      </PackageCard>',
+    '      <PackageCard',
+    '        packageName="expo-router API routes"',
+    '        title="Stylist sync endpoint"',
+    '        body="Stylist uses an Expo Router +api route so both native and web can sync theme output files by calling /exposition/stylist-sync."',
+    '      >',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.expo.dev/router/web/api-routes/')}>",
+    '          Expo Router - API Routes',
+    '        </Text>',
+    '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-reanimated + react-native-worklets"',
     '        title="Motion that feels native"',
     '        body="Press the button to see the Reanimated timing demo. Worklets make this kind of UI-thread animation possible."',
     '      >',
     '        <AnimatedPressable label="Press and hold" />',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.swmansion.com/react-native-reanimated')}>",
+    '          Software Mansion - Reanimated',
+    '        </Text>',
     '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-gesture-handler"',
@@ -3503,6 +4616,9 @@ function renderExpositionScreen(): string {
     '        body="Drag the card below. If your product does not need touch-heavy interactions, this demo helps you decide what to remove."',
     '      >',
     '        <GestureCard title="Drag me" body="This card springs back when the gesture ends." />',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.swmansion.com/react-native-gesture-handler')}>",
+    '          Software Mansion - Gesture Handler',
+    '        </Text>',
     '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-screens"',
@@ -3510,6 +4626,9 @@ function renderExpositionScreen(): string {
     '        body="Screens support the navigation layer with native lifecycle and memory behavior."',
     '      >',
     '        <ScreensCard />',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.swmansion.com/react-native-screens')}>",
+    '          Software Mansion - Screens',
+    '        </Text>',
     '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-svg"',
@@ -3517,6 +4636,9 @@ function renderExpositionScreen(): string {
     '        body="Use SVG for marks, badges, charts, and vector states that need to scale cleanly."',
     '      >',
     '        <View style={styles.svgDemo}><SoftwareMansionLogo width={150} height={80} /></View>',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://docs.expo.dev/versions/latest/sdk/svg')}>",
+    '          Expo SDK - SVG',
+    '        </Text>',
     '      </PackageCard>',
     '      <PackageCard',
     '        packageName="react-native-keyboard-controller"',
@@ -3524,7 +4646,11 @@ function renderExpositionScreen(): string {
     '        body="Use this when forms, chat, notes, or auth flows need better keyboard control than manual offsets."',
     '      >',
     '        <KeyboardForm />',
+    "        <Text style={styles.link} onPress={() => Linking.openURL('https://kirillzyusko.github.io/react-native-keyboard-controller/')}>",
+    '          Kirill Zyusko - Keyboard Controller',
+    '        </Text>',
     '      </PackageCard>',
+    ...nativeWindUiRouteCard,
     '    </ScrollView>',
     '  );',
     '}',
@@ -3548,9 +4674,6 @@ function renderExpositionScreen(): string {
     "    color: '#4b5563',",
     '    fontSize: 16,',
     '    lineHeight: 24,',
-    '  },',
-    '  linksWrap: {',
-    '    gap: 8,',
     '  },',
     '  link: {',
     "    color: '#1d4ed8',",
@@ -3610,17 +4733,19 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     "import { useState } from 'react';",
     "import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';",
     ...(answers.usesExpoUiUniversalComponents
-      ? ["import { Host, Column, Button as ExpoUIButton, Switch as ExpoUISwitch, Text as ExpoUIText } from '@expo/ui';"]
+      ? [
+          "import { Host, Column, Button as ExpoUIButton, Switch as ExpoUISwitch, Text as ExpoUIText } from '@expo/ui';",
+        ]
       : []),
     '',
     "import { ExpositionNotice, PackageCard } from '../../components/exposition';",
     '',
     'const highlights = [',
     "  { kind: 'expo-ui', title: 'Expo UI is production-ready', packageName: '@expo/ui', body: 'SwiftUI and Jetpack Compose APIs are stable in SDK 56 with deeper native parity.', links: [{ label: 'Expo UI docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/' }] },",
-    "  { kind: 'universal', title: 'Universal components', packageName: '@expo/ui', body: 'Host, Button, Switch, Text, layout primitives, lists, and controls can live in one source tree.', experimental: true, links: [{ label: 'Universal components docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/universal/' }] },",
+    "  { kind: 'universal', title: 'Universal components', packageName: '@expo/ui', body: 'Host, Button, Switch, Text, layout primitives, lists, and controls can live in one source tree.', links: [{ label: 'Universal components docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/universal/' }] },",
     "  { kind: 'native-state', title: 'useNativeState', packageName: '@expo/ui/swift-ui', body: 'Native state can drive form controls and text entry without JS-thread controlled-input jitter.', links: [{ label: 'useNativeState docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/swift-ui/usenativestate/' }] },",
     "  { kind: 'drop-in', title: 'Drop-in replacements', packageName: '@expo/ui', body: 'Expo UI maps common community UI primitives to native-backed replacements.', links: [{ label: 'Drop-in replacements docs', href: 'https://docs.expo.dev/versions/latest/sdk/ui/drop-in-replacements/' }] },",
-    "  { kind: 'inline-modules', title: 'Inline modules', packageName: 'expo-modules-core', body: 'Swift/Kotlin modules can be authored directly beside app code for project-local native features.', experimental: true, links: [{ label: 'Inline modules tutorial', href: 'https://docs.expo.dev/modules/inline-modules-tutorial/' }] },",
+    "  { kind: 'inline-modules', title: 'Inline modules', packageName: 'expo-modules-core', body: 'Swift/Kotlin modules can be authored directly beside app code for project-local native features.', links: [{ label: 'Inline modules tutorial', href: 'https://docs.expo.dev/modules/inline-modules-tutorial/' }] },",
     "  { kind: 'native-tabs', title: 'Router and native tabs', packageName: 'expo-router', body: 'Expo Router absorbs more of its stack internals and ships stronger native tabs support.', links: [{ label: 'Native tabs docs', href: 'https://docs.expo.dev/versions/latest/sdk/router/native-tabs/' }] },",
     "  { kind: 'runtime', title: 'Runtime baseline', packageName: 'react-native + react', body: 'SDK 56 aligns to React Native 0.85, React 19.2, Hermes V1 defaults, and faster builds.', links: [] },",
     "  { kind: 'widgets', title: 'Widgets', packageName: 'expo-widgets', body: 'Expo widgets are stable, with strong iOS support for lock-screen and home-screen experiences.', links: [{ label: 'Widgets docs', href: 'https://docs.expo.dev/versions/latest/sdk/widgets/' }] },",
@@ -3704,7 +4829,6 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     '      {highlights.map((item) => (',
     '        <PackageCard key={item.title} packageName={item.packageName} title={item.title} body={item.body}>',
     '          <View style={styles.cardChildren}>',
-    '            {item.experimental ? <Text style={styles.experimentalChip}>Experimental</Text> : null}',
     '            <TopicExample kind={item.kind} />',
     '            {item.links.length ? (',
     '              <View style={styles.linkList}>',
@@ -3720,7 +4844,7 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     '      ))}',
     '      <View style={styles.linksCard}>',
     '        <Text style={styles.linksTitle}>Video sources</Text>',
-    "        <Text accessibilityRole=\"link\" onPress={() => Linking.openURL(\"https://www.youtube.com/watch?v=MKqGbv-Tssg&t\")} style={styles.link}>What's New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo</Text>",
+    '        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=MKqGbv-Tssg&t")} style={styles.link}>What\'s New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo</Text>',
     '        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=ywvywq0AGPM")} style={styles.link}>Everything new in Expo SDK 56 by Code with Beto</Text>',
     '      </View>',
     '    </ScrollView>',
@@ -3914,18 +5038,6 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     '    gap: 8,',
     '    paddingTop: 2,',
     '  },',
-    '  experimentalChip: {',
-    '    alignSelf: "flex-start",',
-    "    backgroundColor: '#7c3aed',",
-    '    borderRadius: 999,',
-    "    color: '#ffffff',",
-    '    fontSize: 11,',
-    '    fontWeight: "800",',
-    '    overflow: "hidden",',
-    '    paddingHorizontal: 10,',
-    '    paddingVertical: 4,',
-    '    textTransform: "uppercase",',
-    '  },',
     '  linksCard: {',
     "    backgroundColor: '#eef2ff',",
     "    borderColor: '#c7d2fe',",
@@ -3972,7 +5084,7 @@ function renderStylistScreen(answers: OnboardAnswers): string {
     '];',
     '',
     "const spacingKeys: Array<keyof StylistTheme['layout']['spacing']> = ['xs', 'sm', 'md', 'lg', 'xl'];",
-    "const NATIVE_SAVE_COMMAND = 'npm run mds:stylist:sync -- --input-file project/theme.json --write-policy managed';",
+    "const NATIVE_SAVE_COMMAND = 'npm run stylist:sync:android';",
     '',
     'export default function StylistScreen() {',
     '  const [theme, setTheme] = useState<StylistTheme>(stylistThemeTokens);',
@@ -4022,7 +5134,7 @@ function renderStylistScreen(answers: OnboardAnswers): string {
     '      ...prev,',
     '      layout: {',
     '        ...prev.layout,',
-    "        spacing: { ...prev.layout.spacing, [path]: value },",
+    '        spacing: { ...prev.layout.spacing, [path]: value },',
     '      },',
     '    }));',
     '  }',
@@ -4466,4 +5578,3 @@ function renderDataScreenStyles(): string[] {
     '',
   ];
 }
-
