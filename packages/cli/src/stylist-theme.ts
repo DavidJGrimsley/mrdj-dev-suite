@@ -273,6 +273,9 @@ export async function syncStylistTheme(
     updatedFiles.push(tokensPath);
   }
 
+  const fontAssetUpdates = await syncThemeFontAssets(projectPath, theme);
+  updatedFiles.push(...fontAssetUpdates);
+
   const adapterUpdates = await syncStyleLibraryOutputs(
     projectPath,
     theme,
@@ -307,6 +310,209 @@ export async function syncStylistTheme(
     styleLibrary,
     writePolicy,
   };
+}
+
+const SYSTEM_FONT_FAMILIES = new Set([
+  'system',
+  'monospace',
+  'sans-serif',
+  'serif',
+  'ui-sans-serif',
+  'ui-serif',
+  'ui-monospace',
+  'arial',
+  'helvetica',
+  'times new roman',
+  'georgia',
+  'courier new',
+]);
+
+function normalizeFontFamilyName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function isSystemFontFamily(fontFamily: string): boolean {
+  const normalized = normalizeFontFamilyName(fontFamily).toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  return SYSTEM_FONT_FAMILIES.has(normalized);
+}
+
+function toFontAssetBaseKey(fontFamily: string): string {
+  const normalized = normalizeFontFamilyName(fontFamily);
+  if (!normalized) {
+    return 'System';
+  }
+  return normalized.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+}
+
+function toFontAssetFileName(fontFamily: string, weight: 400 | 700): string {
+  const base = toFontAssetBaseKey(fontFamily);
+  return `${base}-${weight}.ttf`;
+}
+
+async function syncThemeFontAssets(projectPath: string, theme: StylistTheme): Promise<string[]> {
+  const fontAssetsPath = path.join(projectPath, 'src', 'theme', 'font-assets.ts');
+
+  const families = new Set<string>();
+  for (const family of [
+    theme.typography.fontDisplay,
+    theme.typography.fontTitle,
+    theme.typography.fontSubtitle,
+    theme.typography.fontBody,
+    theme.typography.fontCaption,
+    theme.typography.fontMono,
+  ]) {
+    const normalized = normalizeFontFamilyName(family);
+    if (normalized && !isSystemFontFamily(normalized)) {
+      families.add(normalized);
+    }
+  }
+
+  if (families.size === 0) {
+    const wrote = await writeTextFileIfChanged(fontAssetsPath, renderFontAssetsFile(new Map()));
+    return wrote ? [fontAssetsPath] : [];
+  }
+
+  const assetsDir = path.join(projectPath, 'assets', 'fonts');
+  await mkdir(assetsDir, { recursive: true });
+
+  const fontAssetEntries = new Map<string, string>();
+  const updated: string[] = [];
+
+  for (const family of families) {
+    const css = await fetchGoogleFontsCss(family);
+    const urls = parseTtfUrlsByWeight(css);
+    const preferredWeights: Array<400 | 700> = [400, 700];
+    const availableWeight = preferredWeights.find((weight) => urls.has(weight));
+    if (!availableWeight) {
+      continue;
+    }
+
+    const url = urls.get(availableWeight);
+    if (!url) {
+      continue;
+    }
+
+    const fileName = toFontAssetFileName(family, availableWeight);
+    const destPath = path.join(assetsDir, fileName);
+    if (!(await pathExists(destPath))) {
+      const buffer = await downloadFontFile(url);
+      await writeFile(destPath, buffer);
+      updated.push(destPath);
+    }
+
+    const key = normalizeFontFamilyName(family);
+    if (key) {
+      fontAssetEntries.set(key, `../../assets/fonts/${fileName}`);
+    }
+  }
+
+  const wroteAssetsFile = await writeTextFileIfChanged(
+    fontAssetsPath,
+    renderFontAssetsFile(fontAssetEntries)
+  );
+  if (wroteAssetsFile) {
+    updated.push(fontAssetsPath);
+  }
+
+  return updated;
+}
+
+async function fetchGoogleFontsCss(fontFamily: string): Promise<string> {
+  const familyParam = normalizeFontFamilyName(fontFamily).replace(/\s+/g, '+');
+  const url = `https://fonts.googleapis.com/css2?family=${familyParam}:wght@400;700&display=swap`;
+  const fetchFn = (globalThis as { fetch?: unknown }).fetch;
+  if (typeof fetchFn !== 'function') {
+    throw new Error('Global fetch is unavailable. Update Node to 18+ and retry.');
+  }
+
+  // Google Fonts varies the returned formats (woff2 vs ttf) based on user agent.
+  // For native apps we need truetype/otf sources, so we try a couple of UAs until we see them.
+  const userAgents: Array<string | null> = [null, 'curl/8.0.1', 'Mozilla/5.0'];
+  let lastError: unknown = null;
+
+  for (const userAgent of userAgents) {
+    try {
+      const response = await (fetchFn as any)(url, {
+        headers: userAgent ? { 'user-agent': userAgent } : undefined,
+      });
+      if (!response.ok) {
+        lastError = new Error(`Failed to download Google Fonts stylesheet for ${fontFamily}.`);
+        continue;
+      }
+      const css = await response.text();
+      if (css.includes('.ttf') || css.includes('.otf')) {
+        return css;
+      }
+      lastError = new Error(
+        `Google Fonts stylesheet for ${fontFamily} did not include truetype/otf sources.`
+      );
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Failed to load Google Fonts CSS.');
+}
+
+function parseTtfUrlsByWeight(css: string): Map<400 | 700, string> {
+  const result = new Map<400 | 700, string>();
+  const faceBlocks = css.match(/@font-face\s*\{[^}]*\}/g) ?? [];
+  for (const block of faceBlocks) {
+    const weightMatch = block.match(/font-weight:\s*(\d+)/);
+    const weightValue = weightMatch ? Number.parseInt(weightMatch[1] ?? '', 10) : NaN;
+    if (weightValue !== 400 && weightValue !== 700) {
+      continue;
+    }
+    if (result.has(weightValue)) {
+      continue;
+    }
+    const urlMatches = [...block.matchAll(/url\(([^)]+)\)/g)];
+    const urls = urlMatches
+      .map((match) => (match[1] ?? '').replace(/^['\"]|['\"]$/g, '').trim())
+      .filter(Boolean);
+    const asset = urls.find((value) => {
+      const lowered = value.toLowerCase();
+      return lowered.includes('.ttf') || lowered.includes('.otf');
+    });
+    if (asset) {
+      result.set(weightValue, asset);
+    }
+  }
+  return result;
+}
+
+async function downloadFontFile(url: string): Promise<Buffer> {
+  const fetchFn = (globalThis as { fetch?: unknown }).fetch;
+  if (typeof fetchFn !== 'function') {
+    throw new Error('Global fetch is unavailable. Update Node to 18+ and retry.');
+  }
+  const response = await (fetchFn as any)(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download font file: ${url}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+function renderFontAssetsFile(fontAssets: Map<string, string>): string {
+  const entries = [...fontAssets.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const lines = entries.map(([key, relativePath]) => {
+    const quotedKey = JSON.stringify(key);
+    const quotedPath = JSON.stringify(relativePath);
+    return `  ${quotedKey}: require(${quotedPath}),`;
+  });
+
+  return [
+    'export const THEME_FONT_ASSETS: Record<string, number> = {',
+    ...(lines.length ? lines : []),
+    '};',
+    '',
+    'export default THEME_FONT_ASSETS;',
+    '',
+  ].join('\n');
 }
 
 export async function resolveStylistContext(

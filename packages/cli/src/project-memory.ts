@@ -292,6 +292,11 @@ export async function scaffoldRichBoilerplate(
       force
     ),
     await writeIfAllowed(
+      path.join(projectPath, 'src', 'theme', 'font-assets.ts'),
+      renderThemeFontAssetsFile(),
+      force
+    ),
+    await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'provider.tsx'),
       renderThemeProvider(),
       force
@@ -887,6 +892,16 @@ function renderThemeProvider(): string {
     '  }',
     '  return setTheme;',
     '}',
+    '',
+  ].join('\n');
+}
+
+function renderThemeFontAssetsFile(): string {
+  return [
+    'export const THEME_FONT_ASSETS: Record<string, number> = {',
+    '};',
+    '',
+    'export default THEME_FONT_ASSETS;',
     '',
   ].join('\n');
 }
@@ -1858,10 +1873,10 @@ function renderStylistSyncAndroidScript(): string {
     '',
     "const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');",
     'const moduleCandidates = [',
-    "  path.resolve(projectRoot, 'node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'),",
-    "  path.resolve(projectRoot, 'packages', 'cli', 'dist', 'stylist-theme.js'),",
-    "  path.resolve(projectRoot, '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
     "  path.resolve(projectRoot, '..', '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, 'packages', 'cli', 'dist', 'stylist-theme.js'),",
+    "  path.resolve(projectRoot, 'node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'),",
     '];',
     '',
     'const modulePath = moduleCandidates.find((candidate) => existsSync(candidate));',
@@ -2563,6 +2578,10 @@ function renderRichRootLayout(
     appDir,
     path.join(projectPath, 'src', 'theme', 'provider')
   );
+  const themeFontAssetsImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'theme', 'font-assets')
+  );
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
@@ -2592,12 +2611,14 @@ function renderRichRootLayout(
     "import type { ReactNode } from 'react';",
     "import { useEffect, useMemo } from 'react';",
     "import { DarkTheme, DefaultTheme, Link, Stack, ThemeProvider } from 'expo-router';",
+    "import { useFonts } from 'expo-font';",
     "import { Platform, Pressable, StatusBar, Text, useColorScheme } from 'react-native';",
     "import { NavigationBar } from 'expo-navigation-bar';",
     "import * as SystemUI from 'expo-system-ui';",
     "import { GestureHandlerRootView } from 'react-native-gesture-handler';",
     "import { KeyboardProvider } from 'react-native-keyboard-controller';",
     "import { SafeAreaProvider } from 'react-native-safe-area-context';",
+    `import THEME_FONT_ASSETS from '${themeFontAssetsImport}';`,
     `import { AppThemeProvider, useAppTheme } from '${themeProviderImport}';`,
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
@@ -2679,6 +2700,13 @@ function renderRichRootLayout(
     '}',
     '',
     'export default function Layout() {',
+    '  const hasFontAssets = Object.keys(THEME_FONT_ASSETS).length > 0;',
+    '  const [fontsLoaded, fontsError] = useFonts(THEME_FONT_ASSETS);',
+    '',
+    '  if (hasFontAssets && !fontsLoaded && !fontsError) {',
+    '    return null;',
+    '  }',
+    '',
     '  return (',
     '    <AppThemeProvider>',
     '      <LayoutInner />',
@@ -3054,7 +3082,7 @@ function renderPackageCard(): string {
     '  return (',
     '    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
     '      <Text style={[styles.packageName, { color: colors.text }]}>{packageName}</Text>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>{title}</Text>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>{title}</Text>',
     '      <Text style={[styles.body, { color: colors.text }]}>{body}</Text>',
     '      {children ? <View style={styles.demo}>{children}</View> : null}',
     '    </View>',
@@ -3760,7 +3788,7 @@ function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationSh
     '          </View>',
     '        </View>',
     '        <View style={styles.headerText}>',
-    `          <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>${answers.appName}</Text>`,
+    `          <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === 'System' || theme.typography.fontFamily === 'monospace' ? '800' : 'normal' }]}>${answers.appName}</Text>`,
     '          <Text style={[styles.subtitle, { color: colors.text }]}>{appSnapshot.audience}</Text>',
     '        </View>',
     '        {Platform.OS === "web" ? (',
@@ -4492,7 +4520,7 @@ function renderSettingsScreen(): string {
     '  return (',
     '    <View style={[styles.screen, { backgroundColor: colors.background }]}>',
     '      <View style={styles.header}>',
-    '        <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Settings</Text>',
+    '        <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Settings</Text>',
     '        <Text style={[styles.body, { color: colors.text }]}>Keyboard Controller is ready for form-heavy screens.</Text>',
     '      </View>',
     '      <KeyboardForm />',
@@ -4552,7 +4580,7 @@ function renderExpositionScreen(includeNativeWindUiExposition = false): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Package Exposition</Text>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Package Exposition</Text>',
     '      <Text style={[styles.intro, { color: colors.text }]}>Browse the included Software Mansion packages, then keep only what your app needs.</Text>',
     '      <ExpositionNotice />',
     '      <PackageCard',
@@ -5234,8 +5262,8 @@ function renderStylistScreen(answers: OnboardAnswers): string {
     '      </View>',
     '',
     '      <View style={previewCard}>',
-    '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.displaySize, fontWeight: "900" }}>Display headline</Text>',
-    '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.headingSize, fontWeight: "800" }}>Section heading</Text>',
+    '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.displaySize, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "900" : "normal" }}>Display headline</Text>',
+    '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.headingSize, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }}>Section heading</Text>',
     '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.bodySize }}>Readable body copy for product screens, onboarding, settings, and forms.</Text>',
     '        <Text style={{ color: theme.colors.text, fontFamily: theme.typography.fontFamily, fontSize: theme.typography.captionSize, textTransform: "uppercase" }}>Caption and metadata text</Text>',
     '        <AnimatedPressable label="Primary action" />',
@@ -5445,7 +5473,7 @@ function renderDataScreen(answers: OnboardAnswers): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Data Exposition</Text>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Data Exposition</Text>',
     '      <Text style={[styles.intro, { color: colors.text }]}>This app starts with a web-safe local adapter and a native Expo SQLite adapter. Keep the boundary, then swap implementation details when Supabase is ready.</Text>',
     '      <ExpositionNotice />',
     '      <Pressable onPress={addTask} style={[styles.button, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }]}>',
@@ -5482,7 +5510,7 @@ function renderSupabaseDataScreen(answers: OnboardAnswers): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily }]}>Data Exposition</Text>',
+    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Data Exposition</Text>',
     `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. Keep the adapter boundary in src/services so screens stay independent from backend details.</Text>`,
     '      <ExpositionNotice />',
     '      <View style={styles.guidance}>',

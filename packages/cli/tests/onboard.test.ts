@@ -907,6 +907,12 @@ describe('runOnboardCommand', () => {
     ).resolves.not.toContain('if (Platform.OS === "android")');
     await expect(
       readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain("import { Tabs } from 'expo-router'");
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('Platform.OS');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
     ).resolves.toContain('<NativeTabs.Trigger name="exposition"');
     await expect(
       readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')

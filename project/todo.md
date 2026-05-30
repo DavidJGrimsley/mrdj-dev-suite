@@ -302,11 +302,14 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
 - [x] Existing project memory can be normalized without losing original notes.
 
-## Mono repo support
-- [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.
+## Mono repo support (turbo repo)
+- [ ] During onboarding, at the very beginning, before CES starts, there should be a question for "Do you want a web app & landing page/website (e.g. app.domain.com & domain.com) or just a web app or only other platforms?" This will generate an expo app (a modified generated superstack for each with shared packages) in two places in the apps folder with a packages folder that uses the same project memory, components, style files, etc for shared context but separate app folders and entry points. This is a simple way to support monorepos without having to ask about it directly. The web app folder can be maybe apps/app while the landing page is apps/site. 
+- [ ] If the user answered no to the previous question, show a question explicitly asking this needs to be a is a monorepo or not, with no as the default, and if yes, what package(s) the user wants to target (expo app and separate backend or something.). This will at first just be added to the project info and small todo item and then the agent can take it from there but maybe over time we can have a default setup for something like this. 
 - [ ] For onboarding, generate the project memory files and rich boilerplate inside the target package instead of the root, and adjust all file paths accordingly.
 - [ ] For Doctor, run checks only against the target package instead of the whole repo, and adjust any file path outputs accordingly.
 (previous todo, might be partially done but is related and we could finish it now: - [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.)
+- [ ] Create a monorepo doctor that runs as well
+
 
 ## Random
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
@@ -333,7 +336,8 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] GO through generated app info pages and fix any references that mismatch expo sdk 56.
 - [ ] Fix presentation view for modal on web after 56 update to be like a mobile modal instead of a full screen page.
 - [x] Use expo ui, native tabs, and other newly stable packages from expo in the generated app and exposition pages. Create and exposition page for expo sdk 56 including an inline expo module! add it to all layout generations.
-- [ ] Add a list of commands that come with a generated project to the readme with short explanations of what they do and when to use them. 
+- [ ] Add a list of commands that come with a generated project to the readme with short explanations of what they do and when to use them (already in progress, just update).
+- [ ] 
 - [ ] Add an 'eject-exposition' command (effectively what reset app by expo does but a little more interactive). This should be an interactive prompt like CESS that asks the user which parts of the exposition they want to reset. options to keep being: Onboarding Setup, Settings Page, Data Adapter, and Stylist. This would mean the eject stylist would have to be integrated into this command maybe... cause if the user already ejected stylist then they can't keep it so this script needs just check if the stylist has been ejected, if so, don't show it in the list. But the eject stylist script could still be useful for later ejecting it specifically. Edit the Phase 0 Section to Instruct the user to mark the tasks done if they have actually done them or if they want to defer, this really only applies to eject stylist since eject exposition has the option to keep things and should be run either way to complete phase 0. But of course they can do what they want to do.
 - [ ] Add a help prompt that explains all the prompts and tools and when to use them. This could be a CLI command like `mds help` AND a prompt that gives an overview of the suite and then options to dive deeper into each tool or prompt. This would be great for onboarding new users to the suite and also for providing a reference for existing users.
 - [ ] add the deferred MCP/slash wrapper for mds stylist eject (without changing CLI behavior). - couple with next task.
@@ -345,7 +349,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 
 ## Future Goals
 - [ ] Consider adding agentic workflows for issues on github.
-- What I really want is 
 - [ ] Consider publishing the stylist component to npm
 - [ ] The agent should not only run tests and doctor after finishing work but it should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
 - [ ] Revisit the Stylist save flow to see if we can make it more designer friendly with less duplication and unused fields. Maybe the style.md template should include a json Style section and we'll just have to educate on how to edit it. The better experience would be if the Stylist was something that the dev could share with the rest of the nontechnical team so they could set it themselves. This could easily be done locally but remotely would present challenges. Maybe we could have a shareable link Or I could just host the stylist in a generic way on my portfolio website or expostylist.com that would let them edit the style and then save it back to the project style file/download the save configuration and email it to the dev. This would be super cool for collaboration and also for making it easier for non-technical team members to contribute to the design of the app.
+- [ ] 

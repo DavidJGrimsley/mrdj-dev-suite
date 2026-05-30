@@ -124,6 +124,7 @@ const NATIVE_SAVE_COMMAND = 'npm run stylist:sync:android';
 const GOOGLE_FONTS_KEY_STORAGE = 'mds.stylist.googleFontsApiKey';
 const GOOGLE_FONTS_BANNER_DISMISSED_STORAGE = 'mds.stylist.googleFontsBannerDismissed';
 const GOOGLE_FONTS_API_URL = 'https://www.googleapis.com/webfonts/v1/webfonts';
+const WEB_LAST_SYNC_MESSAGE_STORAGE = 'mds.stylist.lastSyncMessage';
 const WEB_SYSTEM_FONTS = new Set([
   'system',
   'arial',
@@ -177,6 +178,58 @@ const builtInFontChoices = [
   'serif',
 ];
 const loadedWebFonts = new Set<string>();
+
+type WebSyncMessageSnapshot = { message: string; timestamp: number };
+
+function readWebSyncMessageSnapshot(): WebSyncMessageSnapshot | null {
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+
+  try {
+    const raw = (globalThis as any).sessionStorage?.getItem(WEB_LAST_SYNC_MESSAGE_STORAGE);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<WebSyncMessageSnapshot>;
+    if (!parsed.message || typeof parsed.message !== 'string') {
+      return null;
+    }
+    if (typeof parsed.timestamp !== 'number') {
+      return null;
+    }
+    return { message: parsed.message, timestamp: parsed.timestamp };
+  } catch {
+    return null;
+  }
+}
+
+function writeWebSyncMessageSnapshot(message: string) {
+  if (Platform.OS !== 'web') {
+    return;
+  }
+
+  try {
+    (globalThis as any).sessionStorage?.setItem(
+      WEB_LAST_SYNC_MESSAGE_STORAGE,
+      JSON.stringify({ message, timestamp: Date.now() } satisfies WebSyncMessageSnapshot)
+    );
+  } catch {
+    // no-op
+  }
+}
+
+function clearWebSyncMessageSnapshot() {
+  if (Platform.OS !== 'web') {
+    return;
+  }
+
+  try {
+    (globalThis as any).sessionStorage?.removeItem(WEB_LAST_SYNC_MESSAGE_STORAGE);
+  } catch {
+    // no-op
+  }
+}
 
 const tailwindFamilies: TailwindColorFamily[] = [
   'slate',
@@ -744,6 +797,11 @@ function makeFontCssFamily(fontFamily: string): string {
   return normalized.includes(' ') ? `"${normalized}"` : normalized;
 }
 
+function makeNativeFontFamily(fontFamily: string): string {
+  const normalized = normalizeFontFamilyName(fontFamily);
+  return normalized || 'System';
+}
+
 function isNativeUnsafeFont(fontFamily: string): boolean {
   const key = normalizeFontFamilyName(fontFamily).toLowerCase();
   if (!key) {
@@ -754,10 +812,17 @@ function isNativeUnsafeFont(fontFamily: string): boolean {
 }
 
 function resolvePreviewFontFamily(fontFamily: string): string {
-  if (Platform.OS !== 'web' && isNativeUnsafeFont(fontFamily)) {
-    return 'System';
+  return Platform.OS === 'web' ? makeFontCssFamily(fontFamily) : makeNativeFontFamily(fontFamily);
+}
+
+function resolvePreviewFontWeight(fontFamily: string, weight: string): string {
+  if (Platform.OS === 'web') {
+    return weight;
   }
-  return makeFontCssFamily(fontFamily);
+
+  // Many Google Fonts are single-weight on native until the sync downloads assets, so avoid
+  // requesting unsupported weights that can cause the font to fall back.
+  return isNativeUnsafeFont(fontFamily) ? 'normal' : weight;
 }
 
 function buildGoogleFontsStylesheetUrl(fontFamily: string): string {
@@ -885,8 +950,10 @@ export default function StylistScreen() {
   function publishSyncMessage(message: string) {
     saveMessageKind.current = 'sync';
     publishSaveMessage('success', message);
+    writeWebSyncMessageSnapshot(message);
     saveStatusTimeout.current = setTimeout(() => {
       saveMessageKind.current = 'status';
+      clearWebSyncMessageSnapshot();
       publishSaveMessage('info', 'Current theme files and preview are in sync.');
     }, 3000);
   }
@@ -894,6 +961,19 @@ export default function StylistScreen() {
   useEffect(() => {
     if (Platform.OS !== 'web') {
       return;
+    }
+
+    const restored = readWebSyncMessageSnapshot();
+    if (restored) {
+      saveMessageKind.current = 'sync';
+      publishSaveMessage('success', restored.message);
+      const elapsed = Date.now() - restored.timestamp;
+      const remaining = Math.max(0, 3000 - elapsed);
+      saveStatusTimeout.current = setTimeout(() => {
+        saveMessageKind.current = 'status';
+        clearWebSyncMessageSnapshot();
+        publishSaveMessage('info', 'Current theme files and preview are in sync.');
+      }, remaining);
     }
 
     let cancelled = false;
@@ -1981,7 +2061,7 @@ export default function StylistScreen() {
               color: previewColors.text,
               fontFamily: resolvePreviewFontFamily(theme.typography.fontDisplay),
               fontSize: theme.typography.displaySize,
-              fontWeight: '900',
+              fontWeight: resolvePreviewFontWeight(theme.typography.fontDisplay, '900'),
             }}
           >
             Display headline
@@ -1991,7 +2071,7 @@ export default function StylistScreen() {
               color: previewColors.text,
               fontFamily: resolvePreviewFontFamily(theme.typography.fontTitle),
               fontSize: theme.typography.headingSize,
-              fontWeight: '800',
+              fontWeight: resolvePreviewFontWeight(theme.typography.fontTitle, '800'),
             }}
           >
             Section heading
@@ -2001,7 +2081,7 @@ export default function StylistScreen() {
               color: previewColors.text,
               fontFamily: resolvePreviewFontFamily(theme.typography.fontSubtitle),
               fontSize: theme.typography.bodySize + 1,
-              fontWeight: '600',
+              fontWeight: resolvePreviewFontWeight(theme.typography.fontSubtitle, '600'),
             }}
           >
             Subtitle copy for card sections and hero support text.
@@ -2094,8 +2174,8 @@ export default function StylistScreen() {
           {Platform.OS !== 'web' &&
           fontRoleFields.some((field) => isNativeUnsafeFont(theme.typography[field.key])) ? (
             <Text style={[styles.helperText, styles.lockedNote, { color: controlTextColor }]}>
-              Some selected Google fonts are not bundled on native, so iOS/Android preview falls
-              back to System.
+              Custom fonts apply on native after you press Save Theme and reload. Until the sync
+              downloads the font assets, previews may render with System.
             </Text>
           ) : null}
           <View style={[styles.grid, styles.tokenSizeGrid]}>
