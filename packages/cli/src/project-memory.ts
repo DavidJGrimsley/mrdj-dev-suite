@@ -715,6 +715,8 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Browse exposition pages to understand included base packages.',
     "- [ ] Review styling in the 'Stylist' page.",
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
+    '- [ ] Decide whether to keep or defer `eject-stylist`; mark the decision explicitly.',
+    '- [ ] Run `mds eject exposition` and keep only the generated sections you want to retain.',
     '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed. (There may be none of these if the agent was thorough in onboarding, but if there are any, they should be resolved before development starts.)',
     '',
     '- [x] Confirm app purpose, audience, and primary flows in `project/info.md`.',
@@ -1143,9 +1145,12 @@ async function ensurePackageJson(
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
     'stylist:sync:android':
       packageJson.scripts?.['stylist:sync:android'] ?? 'node ./scripts/stylist-sync-android.mjs',
-    'mds:stylist:reconcile-output':
-      packageJson.scripts?.['mds:stylist:reconcile-output'] ??
-      `${MDS_NPX_COMMAND} stylist reconcile-output .`,
+    'mds:eject':
+      packageJson.scripts?.['mds:eject'] ?? `${MDS_NPX_COMMAND} eject .`,
+    'mds:eject:exposition':
+      packageJson.scripts?.['mds:eject:exposition'] ?? `${MDS_NPX_COMMAND} eject exposition .`,
+    'mds:eject:stylist':
+      packageJson.scripts?.['mds:eject:stylist'] ?? `${MDS_NPX_COMMAND} eject stylist .`,
     'free-port': packageJson.scripts?.['free-port'] ?? `${MDS_NPX_COMMAND} free-port`,
     'clear-expo-start':
       packageJson.scripts?.['clear-expo-start'] ?? `${MDS_NPX_COMMAND} clear-expo-start`,

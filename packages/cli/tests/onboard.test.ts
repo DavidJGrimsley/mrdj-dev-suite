@@ -532,6 +532,13 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['mds:stylist:sync']).toBe(
       'npx -y -p @mr.dj2u/cli@latest mds stylist sync .'
     );
+    expect(packageJson.scripts['mds:eject']).toBe('npx -y -p @mr.dj2u/cli@latest mds eject .');
+    expect(packageJson.scripts['mds:eject:exposition']).toBe(
+      'npx -y -p @mr.dj2u/cli@latest mds eject exposition .'
+    );
+    expect(packageJson.scripts['mds:eject:stylist']).toBe(
+      'npx -y -p @mr.dj2u/cli@latest mds eject stylist .'
+    );
     expect(packageJson.scripts['stylist:sync:android']).toBe(
       'node ./scripts/stylist-sync-android.mjs'
     );

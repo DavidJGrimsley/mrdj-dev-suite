@@ -8,6 +8,7 @@ import { fixDoctor, runDoctor } from '@mr.dj2u/doctor';
 import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
+import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
@@ -15,7 +16,6 @@ import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
 import {
   runStylistEjectCommand,
-  runStylistReconcileOutputCommand,
   runStylistSyncCommand,
 } from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
@@ -24,16 +24,13 @@ import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/docto
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
+import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
-import type {
-  StylistEjectArgv,
-  StylistReconcileOutputArgv,
-  StylistSyncArgv,
-} from './commands/stylist.js';
+import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -357,7 +354,63 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      'stylist eject [path]',
+      'eject [path]',
+      'Interactively eject generated exposition artifacts while keeping selected sections',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('keep', {
+            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            type: 'string',
+          })
+          .option('all', {
+            describe: 'Remove all generated sections and keep nothing',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runEjectExpositionCommand(argv as EjectExpositionArgv);
+      }
+    )
+    .command(
+      'eject exposition [path]',
+      'Eject generated exposition artifacts and keep only selected sections',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('keep', {
+            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            type: 'string',
+          })
+          .option('all', {
+            describe: 'Remove all generated sections and keep nothing',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runEjectExpositionCommand(argv as EjectExpositionArgv);
+      }
+    )
+    .command(
+      'eject stylist [path]',
       'Sync theme tokens, remove Stylist UI/API artifacts, and restore project output/platform settings',
       (builder) =>
         builder
@@ -394,26 +447,21 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'stylist eject [path]',
+      false,
+      () => undefined,
+      async () => {
+        throw new Error('`mds stylist eject` was removed. Use `mds eject stylist [path]`.');
+      }
+    )
+    .command(
       'stylist reconcile-output [path]',
-      'Reconcile expo.web.output for Stylist lifecycle (server while Stylist API route exists, preferred mode after removal)',
-      (builder) =>
-        builder
-          .positional('path', {
-            describe: 'Project path',
-            type: 'string',
-            default: '.',
-          })
-          .option('preferred', {
-            describe: 'Override preferred project web output (defaults to project/info.md)',
-            choices: ['static', 'server', 'spa', 'none'] as const,
-          })
-          .option('json', {
-            describe: 'Print reconciliation result as JSON',
-            type: 'boolean',
-            default: false,
-          }),
-      async (argv) => {
-        await runStylistReconcileOutputCommand(argv as StylistReconcileOutputArgv);
+      false,
+      () => undefined,
+      async () => {
+        throw new Error(
+          '`mds stylist reconcile-output` was removed. Use `mds eject stylist [path]` or `mds eject exposition [path]`.'
+        );
       }
     )
     .command(
