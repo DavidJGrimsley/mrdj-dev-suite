@@ -21,6 +21,7 @@ import {
   formatDataNeedsSelection,
   loadPersonalOnboardDefaults,
   getServerPrompt,
+  normalizePromptText,
   resolvePersonalOnboardDefaultsPath,
   runOnboardCommand,
   savePersonalOnboardDefaults,
@@ -412,6 +413,9 @@ describe('runOnboardCommand', () => {
     ).resolves.not.toContain('await import(');
     await expect(
       readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain("node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'");
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
     ).resolves.toContain('syncStylistTheme');
     await expect(
       readFile(path.join(projectPath, 'src', 'components', 'mds', 'index.ts'), 'utf8')
@@ -524,21 +528,13 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['post-create-check']).toBe(
       'npx expo install --fix && npx expo-doctor'
     );
-    expect(packageJson.scripts['ci:verify']).toBe('npx -y -p @mr.dj2u/cli@latest mds doctor --ci');
-    expect(packageJson.scripts['free-port']).toBe('npx -y -p @mr.dj2u/cli@latest mds free-port');
-    expect(packageJson.scripts['clear-expo-start']).toBe(
-      'npx -y -p @mr.dj2u/cli@latest mds clear-expo-start'
-    );
-    expect(packageJson.scripts['mds:stylist:sync']).toBe(
-      'npx -y -p @mr.dj2u/cli@latest mds stylist sync .'
-    );
-    expect(packageJson.scripts['mds:eject']).toBe('npx -y -p @mr.dj2u/cli@latest mds eject .');
-    expect(packageJson.scripts['mds:eject:exposition']).toBe(
-      'npx -y -p @mr.dj2u/cli@latest mds eject exposition .'
-    );
-    expect(packageJson.scripts['mds:eject:stylist']).toBe(
-      'npx -y -p @mr.dj2u/cli@latest mds eject stylist .'
-    );
+    expect(packageJson.scripts['ci:verify']).toBe('npx mds doctor --ci');
+    expect(packageJson.scripts['free-port']).toBe('npx mds free-port');
+    expect(packageJson.scripts['clear-expo-start']).toBe('npx mds clear-expo-start');
+    expect(packageJson.scripts['mds:stylist:sync']).toBe('npx mds stylist sync .');
+    expect(packageJson.scripts['mds:eject']).toBe('npx mds eject .');
+    expect(packageJson.scripts['mds:eject:exposition']).toBe('npx mds eject exposition .');
+    expect(packageJson.scripts['mds:eject:stylist']).toBe('npx mds eject stylist .');
     expect(packageJson.scripts['stylist:sync:android']).toBe(
       'node ./scripts/stylist-sync-android.mjs'
     );
@@ -547,6 +543,7 @@ describe('runOnboardCommand', () => {
     expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
     expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
+    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe('^0.1.9');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
   });
 
@@ -1348,6 +1345,16 @@ describe('runOnboardCommand', () => {
         process.env.VITEST_WORKER_ID = previousVitestWorker;
       }
     }
+  });
+});
+
+describe('normalizePromptText', () => {
+  it('returns an empty string for undefined optional prompt answers', () => {
+    expect(normalizePromptText(undefined)).toBe('');
+  });
+
+  it('trims string prompt answers', () => {
+    expect(normalizePromptText('  Home, settings  ')).toBe('Home, settings');
   });
 });
 

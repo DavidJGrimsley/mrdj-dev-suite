@@ -344,7 +344,7 @@ function toFontAssetBaseKey(fontFamily: string): string {
   if (!normalized) {
     return 'System';
   }
-  return normalized.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+  return normalized.replace(/\s+/g, '_').replace(/[^\w-]/g, '');
 }
 
 function toFontAssetFileName(fontFamily: string, weight: 400 | 700): string {
@@ -423,7 +423,7 @@ async function syncThemeFontAssets(projectPath: string, theme: StylistTheme): Pr
 async function fetchGoogleFontsCss(fontFamily: string): Promise<string> {
   const familyParam = normalizeFontFamilyName(fontFamily).replace(/\s+/g, '+');
   const url = `https://fonts.googleapis.com/css2?family=${familyParam}:wght@400;700&display=swap`;
-  const fetchFn = (globalThis as { fetch?: unknown }).fetch;
+  const fetchFn = globalThis.fetch;
   if (typeof fetchFn !== 'function') {
     throw new Error('Global fetch is unavailable. Update Node to 18+ and retry.');
   }
@@ -435,7 +435,7 @@ async function fetchGoogleFontsCss(fontFamily: string): Promise<string> {
 
   for (const userAgent of userAgents) {
     try {
-      const response = await (fetchFn as any)(url, {
+      const response = await fetchFn(url, {
         headers: userAgent ? { 'user-agent': userAgent } : undefined,
       });
       if (!response.ok) {
@@ -471,7 +471,7 @@ function parseTtfUrlsByWeight(css: string): Map<400 | 700, string> {
     }
     const urlMatches = [...block.matchAll(/url\(([^)]+)\)/g)];
     const urls = urlMatches
-      .map((match) => (match[1] ?? '').replace(/^['\"]|['\"]$/g, '').trim())
+      .map((match) => (match[1] ?? '').replace(/^['"]|['"]$/g, '').trim())
       .filter(Boolean);
     const asset = urls.find((value) => {
       const lowered = value.toLowerCase();
@@ -485,11 +485,11 @@ function parseTtfUrlsByWeight(css: string): Map<400 | 700, string> {
 }
 
 async function downloadFontFile(url: string): Promise<Buffer> {
-  const fetchFn = (globalThis as { fetch?: unknown }).fetch;
+  const fetchFn = globalThis.fetch;
   if (typeof fetchFn !== 'function') {
     throw new Error('Global fetch is unavailable. Update Node to 18+ and retry.');
   }
-  const response = await (fetchFn as any)(url);
+  const response = await fetchFn(url);
   if (!response.ok) {
     throw new Error(`Failed to download font file: ${url}`);
   }

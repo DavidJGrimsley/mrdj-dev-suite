@@ -877,7 +877,7 @@ async function askText(message: string, fallback: string): Promise<string> {
     defaultValue: fallback,
     validate: (value) => validateRequiredInput(value, fallback),
   });
-  return handleCancel(answer).trim() || fallback;
+  return normalizePromptText(handleCancel(answer)) || fallback;
 }
 
 async function askOptionalText(message: string, fallback = ''): Promise<string> {
@@ -886,7 +886,7 @@ async function askOptionalText(message: string, fallback = ''): Promise<string> 
     placeholder: fallback || 'Optional',
     defaultValue: fallback || undefined,
   });
-  return handleCancel(answer).trim();
+  return normalizePromptText(handleCancel(answer));
 }
 
 async function askYesNo(message: string, fallback: boolean): Promise<boolean> {
@@ -979,6 +979,10 @@ function handleCancel<T>(value: T | symbol): T {
   }
 
   return value;
+}
+
+export function normalizePromptText(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function printOnboardingNextSteps(): void {

@@ -114,7 +114,8 @@ const UNIWIND_DEV_DEPENDENCIES = {
 } as const;
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MDS_NPX_COMMAND = 'npx -y -p @mr.dj2u/cli@latest mds';
+const MDS_CLI_VERSION = '0.1.9';
+const MDS_NPX_COMMAND = 'npx mds';
 const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   PACKAGE_ROOT,
   'templates',
@@ -1246,6 +1247,11 @@ async function ensurePackageJson(
     delete packageJson.devDependencies['prettier-plugin-tailwindcss'];
   }
 
+  packageJson.devDependencies = {
+    ...packageJson.devDependencies,
+    '@mr.dj2u/cli': packageJson.devDependencies?.['@mr.dj2u/cli'] ?? `^${MDS_CLI_VERSION}`,
+  };
+
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 }
 
@@ -1884,15 +1890,14 @@ function renderStylistSyncAndroidScript(): string {
     "  path.resolve(projectRoot, 'node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'),",
     '];',
     '',
-    'const modulePath = moduleCandidates.find((candidate) => existsSync(candidate));',
-    'if (!modulePath) {',
-    "  console.error('Could not find @mr.dj2u/cli stylist sync module. Run npm install, then retry.');",
-    '  process.exit(1);',
-    '}',
-    'const require = createRequire(import.meta.url);',
-    '',
     'try {',
-    '  const inputFile = process.env.MDS_STYLIST_INPUT_FILE',
+    '  const modulePath = moduleCandidates.find((candidate) => existsSync(candidate));',
+    '  if (!modulePath) {',
+    "    console.error('Could not find @mr.dj2u/cli stylist sync module. Run npm install, then retry.');",
+    '    process.exit(1);',
+    '  }',
+    '  const require = createRequire(import.meta.url);',
+    "  const inputFile = process.env.MDS_STYLIST_INPUT_FILE",
     '    ? path.resolve(projectRoot, process.env.MDS_STYLIST_INPUT_FILE)',
     "    : path.join(projectRoot, 'project', 'theme.json');",
     "  const styleLibrary = process.env.MDS_STYLIST_STYLE_LIBRARY || 'auto';",
@@ -3087,7 +3092,7 @@ function renderPackageCard(): string {
     '  return (',
     '    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
     '      <Text style={[styles.packageName, { color: colors.text }]}>{packageName}</Text>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>{title}</Text>',
+    `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>{title}</Text>`,
     '      <Text style={[styles.body, { color: colors.text }]}>{body}</Text>',
     '      {children ? <View style={styles.demo}>{children}</View> : null}',
     '    </View>',
@@ -4525,7 +4530,7 @@ function renderSettingsScreen(): string {
     '  return (',
     '    <View style={[styles.screen, { backgroundColor: colors.background }]}>',
     '      <View style={styles.header}>',
-    '        <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Settings</Text>',
+    `        <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Settings</Text>`,
     '        <Text style={[styles.body, { color: colors.text }]}>Keyboard Controller is ready for form-heavy screens.</Text>',
     '      </View>',
     '      <KeyboardForm />',
@@ -4585,7 +4590,7 @@ function renderExpositionScreen(includeNativeWindUiExposition = false): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Package Exposition</Text>',
+    `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Package Exposition</Text>`,
     '      <Text style={[styles.intro, { color: colors.text }]}>Browse the included Software Mansion packages, then keep only what your app needs.</Text>',
     '      <ExpositionNotice />',
     '      <PackageCard',
@@ -5478,7 +5483,7 @@ function renderDataScreen(answers: OnboardAnswers): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Data Exposition</Text>',
+    `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Data Exposition</Text>`,
     '      <Text style={[styles.intro, { color: colors.text }]}>This app starts with a web-safe local adapter and a native Expo SQLite adapter. Keep the boundary, then swap implementation details when Supabase is ready.</Text>',
     '      <ExpositionNotice />',
     '      <Pressable onPress={addTask} style={[styles.button, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }]}>',
@@ -5515,7 +5520,7 @@ function renderSupabaseDataScreen(answers: OnboardAnswers): string {
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
-    '      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === \"System\" || theme.typography.fontFamily === \"monospace\" ? \"800\" : \"normal\" }]}>Data Exposition</Text>',
+    `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Data Exposition</Text>`,
     `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. Keep the adapter boundary in src/services so screens stay independent from backend details.</Text>`,
     '      <ExpositionNotice />',
     '      <View style={styles.guidance}>',

@@ -74,7 +74,8 @@ describe('mds MCP helpers', () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-refactor-'));
     tempDirs.push(projectPath);
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
-    await writeFile(path.join(projectPath, '.env'), 'EXPO_PUBLIC_SERVICE_ROLE_TOKEN=bad\n', 'utf8');
+    const unsafeName = 'EXPO_PUBLIC_' + 'SUPABASE_SERVICE_ROLE_KEY';
+    await writeFile(path.join(projectPath, '.env'), `${unsafeName}=bad\n`, 'utf8');
 
     const result = (await executeTool('generate_refactor_plan', {
       projectPath,

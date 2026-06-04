@@ -346,10 +346,21 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Confirm/add scripts from my other projects such as copy-icons, generate-sitemap(for static( i don't think it worked on server output but we want to ensure the sitemap is rebuilt every time we build) unless expo or some other package exists and is better)
 - [ ] Modify clear-expo-start to also force close all applications on android because 9/10 times I press a to open on Android, nothing happens. 
 - [ ] Add expo-mcp local installation as an onboarding question and if the answer is yes, wire it up according to this: https://docs.expo.dev/eas/ai/mcp/#set-up-local-capabilities-recommended
+- [ ] Fix this behavior (we want @latest): 
+```
+...
+Run `npm audit` for details.
+  Expo SDK already targets SDK 56; skipping expo@latest.
+  npx expo install expo@~56.0.6
+env:...
+› Installing 1 other package using npm
+› Using ~56.0.6 instead of ~56.0.8 for expo because this version was explicitly provided. Packages excluded from dependency validation should be listed in expo.install.exclude in package.json
+```
+- [ ] Fix issue around 'On Node 24, that now emits [DEP0190] when you pass args with shell: true, because Node concatenates them for the shell instead of escaping them safely.
 
 ## Future Goals
 - [ ] Consider adding agentic workflows for issues on github.
 - [ ] Consider publishing the stylist component to npm
 - [ ] The agent should not only run tests and doctor after finishing work but it should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
 - [ ] Revisit the Stylist save flow to see if we can make it more designer friendly with less duplication and unused fields. Maybe the style.md template should include a json Style section and we'll just have to educate on how to edit it. The better experience would be if the Stylist was something that the dev could share with the rest of the nontechnical team so they could set it themselves. This could easily be done locally but remotely would present challenges. Maybe we could have a shareable link Or I could just host the stylist in a generic way on my portfolio website or expostylist.com that would let them edit the style and then save it back to the project style file/download the save configuration and email it to the dev. This would be super cool for collaboration and also for making it easier for non-technical team members to contribute to the design of the app.
-- [ ] 
+
