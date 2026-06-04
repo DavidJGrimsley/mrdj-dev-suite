@@ -26,7 +26,7 @@ export interface ResolvedServer {
 export const SERVER_KEY = 'mr-djs-dev-suite';
 export const VSCODE_SERVER_KEY = 'mds';
 export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = '0.1.2';
+export const PUBLISHED_MCP_SERVER_VERSION = '0.1.4';
 export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
 export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
 export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];

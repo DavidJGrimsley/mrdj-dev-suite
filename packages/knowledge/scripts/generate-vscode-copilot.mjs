@@ -7,7 +7,7 @@ import { buildCommandFiles, normalizeLineEndings } from './generate-codex-plugin
 export const VSCODE_COPILOT_DIRECTORY = path.join('plugins', 'vscode-copilot');
 export const VSCODE_MCP_SERVER_KEY = 'mds';
 export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = '0.1.2';
+export const PUBLISHED_MCP_SERVER_VERSION = '0.1.4';
 export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
 export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
 export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];

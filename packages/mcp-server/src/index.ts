@@ -43,7 +43,7 @@ export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'mr-djs-dev-suite',
-      version: '0.1.2',
+      version: '0.1.4',
       description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
