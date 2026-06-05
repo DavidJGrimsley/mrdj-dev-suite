@@ -164,7 +164,7 @@ function renderClaudeMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    "You are the Mr. DJ's Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.",
+    "You are the Mr. DJ's Dev Suite agent for Expo projects. Treat callable MDS MCP tools as the runtime behavior surface and plugin markdown as guidance only.",
     '',
     '## Tool Routing',
     '',
@@ -181,7 +181,8 @@ function renderClaudeMdsAgent() {
     '- Keep route files thin, env secrets server-only, and release work gated by Doctor checks.',
     '- Prefer official Expo/React Native guidance for framework mechanics; MDS adds project memory, checks, defaults, and workflows.',
     '- Do not skip unresolved `# TodoForContext(optional):` markers before implementation.',
-    '- When MCP is unavailable, use CLI fallbacks such as `mds doctor`, `mds continue`, and `mds report`.',
+    '- When a workflow specifically requires guided MDS MCP tools and they are unavailable, stop and tell the user to refresh or reinstall the MDS plugin/MCP server instead of inventing defaults.',
+    '- For ordinary CLI workflows that do allow fallback, use commands such as `mds doctor`, `mds continue`, and `mds report`.',
     '',
   ].join('\n');
 }
@@ -198,7 +199,7 @@ function buildClaudePluginManifest(version) {
     displayName: "Mr. DJ's Dev Suite",
     version,
     description:
-      'MCP-first Expo review, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code.',
+      'Expo review, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code, backed by callable MDS MCP tools.',
     author: {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',

@@ -53,4 +53,14 @@ describe('knowledge catalog expansion', () => {
     expect(prompt?.content).toContain('gh-address-comments');
     expect(prompt?.content).toContain('intentionally omitted files');
   });
+
+  it('reads the create-expo-super-stack tool-first prompt content', async () => {
+    const prompt = await readPromptSpec('create-expo-super-stack');
+
+    expect(prompt).not.toBeNull();
+    expect(prompt?.content).toContain('create_expo_super_stack_intake_step');
+    expect(prompt?.content).toContain('create_expo_super_stack_generate');
+    expect(prompt?.content).toContain('mds_runtime_versions');
+    expect(prompt?.content).toContain('Do not fall back to `--mds-yes`');
+  });
 });

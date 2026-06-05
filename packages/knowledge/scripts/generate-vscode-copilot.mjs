@@ -7,7 +7,7 @@ import { buildCommandFiles, normalizeLineEndings } from './generate-codex-plugin
 export const VSCODE_COPILOT_DIRECTORY = path.join('plugins', 'vscode-copilot');
 export const VSCODE_MCP_SERVER_KEY = 'mds';
 export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = '0.1.4';
+export const PUBLISHED_MCP_SERVER_VERSION = '0.1.5';
 export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
 export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
 export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];
@@ -222,7 +222,7 @@ function renderVscodePrompt(fileName, content) {
   return [
     renderFrontmatter({
       mode: 'agent',
-      description: `Run the MDS ${title} workflow with MCP-first diagnostics and CLI fallback.`,
+      description: `Run the MDS ${title} workflow with callable MDS MCP diagnostics and explicit fallback rules.`,
     }),
     '',
     content.replaceAll('mr-djs-dev-suite', VSCODE_MCP_SERVER_KEY),
@@ -238,7 +238,7 @@ function renderMdsAgent() {
     '',
     '# MDS Agent',
     '',
-    "You are the Mr. DJ's Dev Suite agent for Expo projects. Prefer MDS MCP tools first, then CLI fallbacks.",
+    "You are the Mr. DJ's Dev Suite agent for Expo projects. Treat callable MDS MCP tools as the runtime behavior surface and prompt markdown as guidance only.",
     '',
     '## Tool Routing',
     '',
@@ -262,7 +262,7 @@ function renderCopilotInstructions() {
     "# Mr. DJ's Dev Suite Copilot Instructions",
     '',
     '- Treat `project/` as the source of truth for product intent, roadmap, style, and technical rules.',
-    '- Prefer MDS MCP tools before broad edits: `doctor_scan_project`, `doctor_scan_file`, `generate_refactor_plan`, and `generate_deploy_checklist`.',
+    '- Prefer callable MDS MCP tools before broad edits: `doctor_scan_project`, `doctor_scan_file`, `generate_refactor_plan`, and `generate_deploy_checklist`.',
     '- Use `list_skills`, `get_skill`, and `get_guide` for MDS guidance, while delegating framework mechanics to official Expo/React Native guidance when available.',
     '- Keep route files thin, env secrets server-only, and release work gated by Doctor checks.',
     '<!-- END MDS COPILOT INSTRUCTIONS -->',

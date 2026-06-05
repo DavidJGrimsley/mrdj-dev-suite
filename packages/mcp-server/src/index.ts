@@ -1,11 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { runDoctor, scanFile } from '@mr.dj2u/doctor';
+import {
+  buildCessIntakeStep,
+  buildCreateExpoSuperStackArgv,
+  resolveCessPlan,
+  validateCessGenerationReadiness,
+} from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
 import {
   getSkill,
@@ -17,13 +25,26 @@ import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 import type { KnowledgeKind } from '@mr.dj2u/knowledge';
 
+interface SuperStackInvocationSpec {
+  command: string;
+  args: string[];
+  display: string;
+  source: 'published-latest';
+  target: string;
+}
+
+export function resolveSuperStackInvocationSpec(): SuperStackInvocationSpec {
+  return {
+    command: 'npx',
+    args: ['-y', 'create-expo-super-stack@latest'],
+    display: 'npx -y create-expo-super-stack@latest',
+    source: 'published-latest',
+    target: 'create-expo-super-stack@latest',
+  };
+}
+
 export function resolveSuperStackInvocation(): string {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const localBin = path.resolve(moduleDir, '..', '..', 'create-expo-super-stack', 'dist', 'cli.js');
-  if (existsSync(localBin)) {
-    return `node "${localBin}"`;
-  }
-  return 'npx -y create-expo-super-stack';
+  return resolveSuperStackInvocationSpec().display;
 }
 
 export interface MCPTool {
@@ -43,7 +64,7 @@ export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'mr-djs-dev-suite',
-      version: '0.1.4',
+      version: getMcpServerRuntimeVersion(),
       description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
@@ -200,6 +221,43 @@ export function listTools(): MCPTool[] {
         },
       },
     },
+    {
+      name: 'create_expo_super_stack_intake_step',
+      description:
+        'Advance one guided Create Expo Super Stack intake step using the shared CLI-backed questionnaire.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          parentDir: { type: 'string' },
+          appName: { type: 'string' },
+          answers: { type: 'object', additionalProperties: true },
+        },
+      },
+    },
+    {
+      name: 'create_expo_super_stack_generate',
+      description:
+        'Run create-expo-super-stack after guided intake has been fully answered and explicitly confirmed.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          parentDir: { type: 'string' },
+          appName: { type: 'string' },
+          answers: { type: 'object', additionalProperties: true },
+          confirmed: { type: 'boolean' },
+        },
+        required: ['confirmed'],
+      },
+    },
+    {
+      name: 'mds_runtime_versions',
+      description:
+        'Report the active MDS MCP server, CLI, and create-expo-super-stack runtime versions and sources.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+      },
+    },
   ];
 }
 
@@ -266,6 +324,19 @@ export async function executeTool(
     }
     case 'generate_setup_tasks': {
       return generateSetupTasks(readString(input.projectPath) ?? '.', readStringArray(input.defaults));
+    }
+    case 'create_expo_super_stack_intake_step': {
+      return buildCessIntakeStep({
+        parentDir: readString(input.parentDir),
+        appName: readString(input.appName),
+        answers: readRecord(input.answers) as Record<string, unknown> | undefined,
+      });
+    }
+    case 'create_expo_super_stack_generate': {
+      return generateCreateExpoSuperStack(input);
+    }
+    case 'mds_runtime_versions': {
+      return getMdsRuntimeVersions();
     }
     default:
       throw new Error(`Unknown MCP tool: ${name}`);
@@ -465,6 +536,63 @@ function registerTools(server: McpServer): void {
     },
     async ({ projectPath, defaults }) => toolJson(generateSetupTasks(projectPath ?? '.', defaults ?? []))
   );
+
+  server.registerTool(
+    'create_expo_super_stack_intake_step',
+    {
+      title: 'Create Expo Super Stack Intake Step',
+      description:
+        'Advance one guided Create Expo Super Stack intake step using the shared CLI-backed questionnaire.',
+      inputSchema: {
+        parentDir: z.string().optional(),
+        appName: z.string().optional(),
+        answers: z.record(z.string(), z.unknown()).optional(),
+      },
+    },
+    async ({ parentDir, appName, answers }) =>
+      toolJson(
+        buildCessIntakeStep({
+          parentDir,
+          appName,
+          answers,
+        })
+      )
+  );
+
+  server.registerTool(
+    'create_expo_super_stack_generate',
+    {
+      title: 'Create Expo Super Stack Generate',
+      description:
+        'Run create-expo-super-stack after guided intake has been fully answered and explicitly confirmed.',
+      inputSchema: {
+        parentDir: z.string().optional(),
+        appName: z.string().optional(),
+        answers: z.record(z.string(), z.unknown()).optional(),
+        confirmed: z.boolean(),
+      },
+    },
+    async ({ parentDir, appName, answers, confirmed }) =>
+      toolJson(
+        await generateCreateExpoSuperStack({
+          parentDir,
+          appName,
+          answers,
+          confirmed,
+        })
+      )
+  );
+
+  server.registerTool(
+    'mds_runtime_versions',
+    {
+      title: 'MDS Runtime Versions',
+      description:
+        'Report the active MDS MCP server, CLI, and create-expo-super-stack runtime versions and sources.',
+      inputSchema: {},
+    },
+    async () => toolJson(getMdsRuntimeVersions())
+  );
 }
 
 function registerPrompts(server: McpServer): void {
@@ -590,7 +718,7 @@ function fileIntakePhase(label: string): string {
   ].join('\n');
 }
 
-function creditsAndWaitMessage(): string {
+function _creditsAndWaitMessage(): string {
   return [
     'When confirmed, run the generator silently from the parent folder via your shell tool. Do NOT print the command.',
     '',
@@ -622,6 +750,30 @@ function creditsAndWaitMessage(): string {
 }
 
 export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
+  const promptParent = parentDir?.trim() ? parentDir : 'the current working directory';
+  const promptAppHint = appName ? `The user already named the app: \`${appName}\`.` : '';
+  return [
+    `You are kicking off a brand-new Expo app from ${promptParent}. ${promptAppHint}`.trim(),
+    '',
+    'Use the callable MDS MCP tools for this flow. Plugin commands and skill markdown are guidance only.',
+    '',
+    'Required tool flow:',
+    '1. Use `create_expo_super_stack_intake_step` for every intake step.',
+    '2. Ask exactly one question per turn.',
+    '3. Always show the returned default value and options.',
+    '4. Never invent or silently accept defaults on the user\'s behalf.',
+    '5. When the intake tool returns `confirm`, summarize the returned `summaryLines` and ask the user to confirm.',
+    '6. After explicit confirmation, set `answers.confirmed=true`, call the intake tool again, and only proceed when it returns `ready`.',
+    '7. Then call `create_expo_super_stack_generate` with `confirmed: true`.',
+    '',
+    'Failure behavior:',
+    '- If the intake or generate tools are unavailable, stop and tell the user to refresh or reinstall the MDS plugin or MCP server.',
+    '- Use `mds_runtime_versions` to diagnose stale cached plugin or MCP installs.',
+    '- Do not fall back to `--mds-yes` or direct CLI shortcuts unless the user explicitly asked for a fast non-interactive run.',
+    '',
+    'After generation succeeds, tell the user to open a fresh agent session inside the generated app folder and run `mds continue` there.',
+  ].join('\n');
+  /*
   const looksLikePath = (s: string) => s.includes('/') || s.includes('\\') || s.includes(':');
   const parent =
     parentDir && looksLikePath(parentDir) ? parentDir : 'the current working directory';
@@ -856,6 +1008,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '- One question per turn. Always show the default. Skip dependent questions when prerequisites are not met.',
     '- The generator runs all of MDS onboarding (project memory, exposition pages, dependencies, expo-doctor) once you pass --mds-yes plus the --mds-* flags. Do not run `mds onboard` separately afterward — it is already done.',
   ].join('\n');
+*/
 }
 
 export function buildContinueProjectPromptText(projectPath?: string): string {
@@ -1400,6 +1553,179 @@ function readString(value: unknown): string | undefined {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function getMcpServerRuntimeVersion(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageJsonPath = path.resolve(moduleDir, '..', 'package.json');
+  return readPackageVersion(packageJsonPath, '0.1.5') ?? '0.1.5';
+}
+
+function getMdsRuntimeVersions(): {
+  mcpServerVersion: string;
+  cliVersion: string | null;
+  createExpoSuperStack: {
+    version: string | null;
+    invocation: string;
+    source: 'published-latest';
+    target: string;
+  };
+  intakeToolsAvailable: boolean;
+} {
+  const invocation = resolveSuperStackInvocationSpec();
+  const cliVersion = resolveInstalledPackageVersion('@mr.dj2u/cli');
+
+  return {
+    mcpServerVersion: getMcpServerRuntimeVersion(),
+    cliVersion,
+    createExpoSuperStack: {
+      version: 'latest',
+      invocation: invocation.display,
+      source: invocation.source,
+      target: invocation.target,
+    },
+    intakeToolsAvailable: true,
+  };
+}
+
+async function generateCreateExpoSuperStack(
+  input: Record<string, unknown>
+): Promise<{
+  status: 'generated';
+  projectPath: string;
+  summaryLines: string[];
+  runtime: ReturnType<typeof getMdsRuntimeVersions>;
+  stdoutTail: string;
+  stderrTail: string;
+}> {
+  const parentDir = readString(input.parentDir);
+  const appName = readString(input.appName);
+  const answers = readRecord(input.answers);
+  const confirmed = input.confirmed === true;
+  const missingRequirements = validateCessGenerationReadiness({
+    parentDir,
+    appName,
+    answers,
+  });
+
+  if (!confirmed) {
+    throw new Error(
+      'create_expo_super_stack_generate requires confirmed=true after the user explicitly approves the summary.'
+    );
+  }
+  if (missingRequirements.length > 0) {
+    throw new Error(
+      `Cannot generate yet. Missing guided intake answers for: ${missingRequirements.join(', ')}.`
+    );
+  }
+
+  const plan = resolveCessPlan({
+    parentDir,
+    appName,
+    answers: {
+      ...(answers ?? {}),
+      confirmed: true,
+    },
+  });
+  const invocation = resolveSuperStackInvocationSpec();
+  const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
+  const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
+
+  return {
+    status: 'generated',
+    projectPath: plan.projectPath,
+    summaryLines: plan.summaryLines,
+    runtime: getMdsRuntimeVersions(),
+    stdoutTail: tailText(result.stdout, 60),
+    stderrTail: tailText(result.stderr, 40),
+  };
+}
+
+async function runCommandCapture(
+  command: string,
+  args: string[],
+  cwd: string
+): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      shell: process.platform === 'win32' && command !== 'node',
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(
+        new Error(
+          `create-expo-super-stack exited with code ${code ?? 'unknown'}.\n${tailText(stderr || stdout, 40)}`
+        )
+      );
+    });
+  });
+}
+
+function tailText(value: string, lines: number): string {
+  return value
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .slice(-lines)
+    .join('\n');
+}
+
+function resolveInstalledPackageVersion(packageName: string): string | null {
+  try {
+    const require = createRequire(import.meta.url);
+    const resolved = require.resolve(packageName);
+    return readPackageVersion(findNearestPackageJson(resolved), null);
+  } catch {
+    return null;
+  }
+}
+
+function findNearestPackageJson(startPath: string): string {
+  let current = path.dirname(startPath);
+  for (;;) {
+    const candidate = path.join(current, 'package.json');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return candidate;
+    }
+    current = parent;
+  }
+}
+
+function readPackageVersion(packageJsonPath: string, fallback: string | null): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+    return typeof parsed.version === 'string' && parsed.version.trim().length > 0
+      ? parsed.version
+      : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function explainDoctorResult(input: Record<string, unknown>): string {

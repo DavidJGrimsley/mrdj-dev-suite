@@ -53,6 +53,7 @@ describe('create-expo-super-stack CLI helpers', () => {
     expect(help).toContain('create-expo-super-stack [project-name]');
     expect(help).toContain('--mds-yes');
     expect(help).toContain('--mds-save-defaults');
+    expect(help).toContain('--mds-no-guidelines-template');
     expect(help).toContain('-h, --help');
   });
 
@@ -294,6 +295,11 @@ describe('create-expo-super-stack CLI helpers', () => {
   it('supports explicit opt-out for saving onboarding defaults', () => {
     const parsed = parseArgs(['demo-app', '--mds-no-save-defaults']);
     expect(parsed.mds.saveDefaults).toBe(false);
+  });
+
+  it('supports explicit opt-out for the bundled guidelines template', () => {
+    const parsed = parseArgs(['demo-app', '--mds-no-guidelines-template']);
+    expect(parsed.mds.guidelinesTemplate).toBe(false);
   });
 
   it('preserves create-expo-stack install behavior unless user explicitly passes --no-install', () => {

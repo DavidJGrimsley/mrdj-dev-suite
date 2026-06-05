@@ -60,6 +60,9 @@ describe('mds MCP helpers', () => {
   it('lists skills with the Phase 8 list_skills alias', async () => {
     const tools = listTools();
     expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_intake_step')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'mds_runtime_versions')).toBe(true);
 
     const result = (await executeTool('list_skills', { query: 'deployment' })) as Array<{
       id: string;
@@ -137,10 +140,32 @@ describe('mds MCP helpers', () => {
   it('tells generated app users to start a fresh app-folder session for MDS Continue', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
-    expect(prompt).toContain('mds continue');
-    expect(prompt).toContain('open a new agent session directly inside');
-    expect(prompt).toContain('To keep token usage low');
-    expect(prompt).toContain('Do NOT walk through markers or ask questions about them in this session');
+    expect(prompt).toContain('create_expo_super_stack_intake_step');
+    expect(prompt).toContain('create_expo_super_stack_generate');
+    expect(prompt).toContain('mds_runtime_versions');
+    expect(prompt).toContain('Do not fall back to `--mds-yes`');
+  });
+
+  it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
+    const intake = (await executeTool('create_expo_super_stack_intake_step', {
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'demo-app',
+      answers: {},
+    })) as {
+      status: string;
+      nextQuestion?: { id: string };
+    };
+
+    expect(intake.status).toBe('question');
+    expect(intake.nextQuestion?.id).toBe('scriptLanguage');
+
+    const runtime = (await executeTool('mds_runtime_versions', {})) as {
+      intakeToolsAvailable: boolean;
+      createExpoSuperStack: { invocation: string };
+    };
+
+    expect(runtime.intakeToolsAvailable).toBe(true);
+    expect(runtime.createExpoSuperStack.invocation.length).toBeGreaterThan(0);
   });
 
   it('builds a continue slash prompt that calls continue_project first', () => {

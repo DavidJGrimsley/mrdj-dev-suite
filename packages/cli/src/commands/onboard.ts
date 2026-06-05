@@ -68,22 +68,22 @@ export interface ServerPromptPlan {
   explanation: string;
 }
 
-const EXPO_SERVER_ADAPTER_OPTIONS: Array<{ value: ExpoServerAdapter; label: string; hint: string }> = [
+export const EXPO_SERVER_ADAPTER_OPTIONS: Array<{ value: ExpoServerAdapter; label: string; hint: string }> = [
   { value: 'eas', label: 'EAS hosting', hint: 'Managed by Expo — use npx expo serve locally' },
   { value: 'express', label: 'Express adapter', hint: 'Self-hosted via node server.js on port 3000' },
   { value: 'bun', label: 'Bun adapter', hint: 'Self-hosted with Bun runtime' },
   { value: 'other', label: 'Other / not sure yet', hint: 'You can update this in project/info.md later' },
 ];
 
-const EXPO_SERVER_ADAPTER_EXPLANATION =
+export const EXPO_SERVER_ADAPTER_EXPLANATION =
   'The Express adapter (expo-server/adapter/express) lets you self-host Expo Router on your own server (Plesk, VPS, etc.). EAS is Expo\'s managed cloud hosting. Both start the same way locally — `node server.js` or `npx expo serve`.';
 
-const CUSTOM_BACKEND_EXPLANATION =
+export const CUSTOM_BACKEND_EXPLANATION =
   'A separate backend API server runs alongside Expo (not through Expo Router API routes). Example: a TypeScript/Node API server that your app calls directly. This requires starting two processes in development.';
 
 const EXPLAIN_CHOICE = '__mds_explain__';
-const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
-const EAS_USE_OPTIONS = [
+export const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
+export const EAS_USE_OPTIONS = [
   'building mobile applications',
   'hosting a deployed server',
   'hosting web apps',

@@ -7,7 +7,7 @@ export const PLUGIN_ID = 'mr-djs-dev-suite';
 export const PLUGIN_DIRECTORY = path.join('plugins', 'codex');
 export const MCP_SERVER_KEY = 'mr-djs-dev-suite';
 export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = '0.1.4';
+export const PUBLISHED_MCP_SERVER_VERSION = readPublishedMcpServerVersion();
 export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
 export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
 export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];
@@ -183,9 +183,9 @@ export function buildPluginManifest(options) {
     mcpServers: './.mcp.json',
     interface: {
       displayName: "Mr. DJ's Dev Suite",
-      shortDescription: 'MCP-first Expo review, doctor, onboarding, and deploy workflows',
+      shortDescription: 'Expo review, doctor, onboarding, and deploy workflows powered by MDS MCP tools',
       longDescription:
-        'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.',
+        'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.',
       developerName: 'MDS',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
@@ -313,10 +313,11 @@ export function buildCodexWorkflowSkills() {
         '',
         '# Codex Workflow Routing',
         '',
-        '- This is a Mr. DJ\'s Dev Suite plugin workflow. Prefer the bundled MCP tools before terminal fallbacks.',
-        '- When an MCP tool named in this workflow is available, call that tool directly instead of running app-local npm scripts.',
+        '- This is a Mr. DJ\'s Dev Suite plugin workflow. Plugin skills and command markdown are guidance only.',
+        '- Prefer callable MDS MCP tools exposed by `@mr.dj2u/mcp-server` when this workflow names them.',
         '- Do not use stale package names such as `@mrdj/cli`. The CLI package is `@mr.dj2u/cli`; the executable is `mds`.',
-        '- If the MCP server is unavailable, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.',
+        '- If a workflow specifically requires guided MDS MCP tools and they are unavailable, stop and tell the user to refresh or reinstall the MDS plugin/MCP server instead of inventing defaults.',
+        '- For ordinary CLI workflows that do allow fallback, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.',
         '',
         content,
       ].join('\n'),
@@ -337,6 +338,7 @@ The Mr. DJ's Dev Suite Codex plugin bundle is generated from \`packages/knowledg
 - Command prompt files: \`commands/*.md\`
 
 The source of truth for skills remains \`packages/knowledge/src/content/skills\`.
+Runtime behavior comes from callable MDS MCP tools exposed by \`@mr.dj2u/mcp-server\`.
 
 ## One-Command Install
 
@@ -357,9 +359,11 @@ mds agent install --client codex --scope user --dry-run
 
 After install, restart Codex so it picks up the local marketplace. Then type \`@Mr. DJ's Dev Suite\` in chat to get the install pop-up, hit Install, and use \`@Mr. DJ's Dev Suite\` in Codex Desktop or the Codex extension for VS Code.
 
+If Codex keeps using stale behavior after republish, refresh the local plugin cache, reinstall the MDS MCP server, then run \`mds_runtime_versions\` from the host surface to confirm which versions are active.
+
 ## MCP-Only Fallback
 
-Use this when you only want predictable MCP tools/prompts and not the plugin/skills bundle:
+Use this when you only want the callable MDS MCP tools/prompts and not the plugin/skills bundle:
 
 \`\`\`sh
 mds mcp install --client codex --scope project --target /path/to/your/expo-app
@@ -440,6 +444,19 @@ async function readWorkspaceVersion(repoRoot) {
   const raw = await readFile(packageJsonPath, 'utf8');
   const parsed = JSON.parse(raw);
   return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.0';
+}
+
+function readPublishedMcpServerVersion() {
+  const packageJsonPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'mcp-server',
+    'package.json'
+  );
+  const raw = readFileSync(packageJsonPath, 'utf8');
+  const parsed = JSON.parse(raw);
+  return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.5';
 }
 
 function isDirectRun() {

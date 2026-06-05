@@ -308,6 +308,11 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg === '--mds-no-guidelines-template' || arg === '--mds-guidelines-template=false') {
+      mds.guidelinesTemplate = false;
+      continue;
+    }
+
     if (arg.startsWith('--mds-guidelines-template=')) {
       mds.guidelinesTemplate = true;
       mds.guidelinesTemplatePath = arg.slice('--mds-guidelines-template='.length);
@@ -507,6 +512,7 @@ export function renderHelpText(): string {
     '  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
     '  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
     '  --mds-guidelines-template     Use bundled MDS project/guidelines template',
+    '  --mds-no-guidelines-template  Do not use the bundled MDS project/guidelines template',
     '  --mds-app-name=<name>         Set display app name for project memory',
     '  --mds-screens=                List must-include screens for project memory',
     '  --mds-expo-ui-universal       Use Expo UI Universal components when Expo UI is selected',
