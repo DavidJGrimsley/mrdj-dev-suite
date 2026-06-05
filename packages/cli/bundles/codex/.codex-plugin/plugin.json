@@ -1,6 +1,6 @@
 {
   "name": "mr-djs-dev-suite",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
   "author": {
     "name": "DJ Grimsley",
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Mr. DJ's Dev Suite",
-    "shortDescription": "MCP-first Expo review, doctor, onboarding, and deploy workflows",
-    "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation with reliable MCP and CLI fallback paths.",
+    "shortDescription": "Expo review, doctor, onboarding, and deploy workflows powered by MDS MCP tools",
+    "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.",
     "developerName": "MDS",
     "category": "Coding",
     "capabilities": [

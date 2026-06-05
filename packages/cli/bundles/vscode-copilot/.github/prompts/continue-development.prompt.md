@@ -1,6 +1,6 @@
 ---
 mode: "agent"
-description: "Run the MDS Continue Development workflow with MCP-first diagnostics and CLI fallback."
+description: "Run the MDS Continue Development workflow with callable MDS MCP diagnostics and explicit fallback rules."
 ---
 
 # /continue-development

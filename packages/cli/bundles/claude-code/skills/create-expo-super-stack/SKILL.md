@@ -1,35 +1,36 @@
 ---
-description: Create a new Expo app with the MDS Super Stack flow, using this knowledge package as the shared source of truth for agent-facing text and the published CLI as the execution source of truth.
+description: Create a new Expo app with the MDS Super Stack flow, using the published CESS CLI as the execution source of truth and callable MDS MCP tools as the guided intake surface.
 disable-model-invocation: true
 ---
 
 # /create-expo-super-stack
 
-Create a new Expo app with the MDS Super Stack flow, using this knowledge package as the shared source of truth for agent-facing text and the published CLI as the execution source of truth.
+Create a new Expo app with the MDS Super Stack flow, using the published CESS CLI as the execution source of truth and callable MDS MCP tools as the guided intake surface.
 
 ## Arguments
 
 - `parentDir`: folder where the new app directory should be created.
 - `appName`: app folder name.
 
-## MCP-First Workflow
+## Required MDS MCP Tool Flow
 
 1. Confirm the `mr-djs-dev-suite` MCP server is available.
-2. Invoke the MCP prompt `create_expo_super_stack` from a parent directory when you want guided intake.
-3. Keep the conversation one question per turn and summarize the captured choices before generation.
-4. Treat the MCP prompt as the intake surface and the CLI as the generator, so CLI changes are picked up automatically when the published command changes.
-5. After generation, move into the new app folder and invoke `continue_project` (or prompt `continue_mds_project`) for the first implementation session.
+2. Drive intake with `create_expo_super_stack_intake_step`.
+3. Ask exactly one question per turn.
+4. Always show the returned default and options.
+5. Never invent or silently accept defaults on the user's behalf.
+6. When the intake tool returns `confirm`, summarize the returned `summaryLines` and ask the user to confirm.
+7. After explicit confirmation, set `answers.confirmed=true`, call the intake tool again, and proceed only when it returns `ready`.
+8. Then call `create_expo_super_stack_generate` with `confirmed: true`.
 
-## CLI / Manual Fallback
+## Failure Behavior
 
-1. If MCP is not configured, install it manually:
-   - `mds mcp install --client <client> --scope project`
-2. Direct CLI generation:
-   - `npx -y create-expo-super-stack <appName>`
-3. Then onboard/continue from inside the generated app using the current CLI behavior:
-   - `mds continue <new-app-path>`
+1. If the guided intake or generate tools are unavailable, stop.
+2. Call `mds_runtime_versions` to diagnose stale plugin or MCP installs.
+3. Tell the user to refresh or reinstall the MDS plugin/MCP server.
+4. Do not fall back to `--mds-yes` or direct CLI shortcuts unless the user explicitly asked for a fast non-interactive run.
 
 ## Verification And Output
 
 - Confirm generated app has `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
-- Output: generated app path, onboarding status, and immediate next command.
+- Output: generated app path, onboarding status, and the handoff to open a fresh agent session inside the new app folder and run `mds continue`.

@@ -10,6 +10,7 @@ The Mr. DJ's Dev Suite Codex plugin bundle is generated from `packages/knowledge
 - Command prompt files: `commands/*.md`
 
 The source of truth for skills remains `packages/knowledge/src/content/skills`.
+Runtime behavior comes from callable MDS MCP tools exposed by `@mr.dj2u/mcp-server`.
 
 ## One-Command Install
 
@@ -30,9 +31,11 @@ mds agent install --client codex --scope user --dry-run
 
 After install, restart Codex so it picks up the local marketplace. Then type `@Mr. DJ's Dev Suite` in chat to get the install pop-up, hit Install, and use `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.
 
+If Codex keeps using stale behavior after republish, refresh the local plugin cache, reinstall the MDS MCP server, then run `mds_runtime_versions` from the host surface to confirm which versions are active.
+
 ## MCP-Only Fallback
 
-Use this when you only want predictable MCP tools/prompts and not the plugin/skills bundle:
+Use this when you only want the callable MDS MCP tools/prompts and not the plugin/skills bundle:
 
 ```sh
 mds mcp install --client codex --scope project --target /path/to/your/expo-app
