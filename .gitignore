@@ -16,6 +16,10 @@ temp/
 
 # Build-generated plugin skill files (sourced from packages/knowledge at build time)
 plugins/claude-code/skills/
+plugins/mr-djs-dev-suite/
+
+# Local Codex client state
+.codex/
 
 .claude/worktrees/
 

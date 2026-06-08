@@ -60,7 +60,6 @@ export interface CessIntakeAnswers {
   customBackendEntry?: string;
   deploymentTarget?: string;
   includeCreateExpoComponents?: boolean;
-  useLatestExpoSdk?: boolean;
   usesExpoUi?: boolean;
   usesExpoUiUniversalComponents?: boolean;
   usesExpoNativeTabs?: boolean;
@@ -403,16 +402,6 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
     defaultValue: (context) => context.onboardAnswers.includeCreateExpoComponents,
   },
   {
-    id: 'useLatestExpoSdk',
-    prompt: 'Use the latest Expo SDK even if Expo Go availability may lag?',
-    kind: 'single-select',
-    options: () => [
-      { value: true, label: 'Yes', hint: 'Default' },
-      { value: false, label: 'No' },
-    ],
-    defaultValue: (context) => context.onboardAnswers.useLatestExpoSdk,
-  },
-  {
     id: 'usesExpoUi',
     prompt: 'Use Expo UI for native-feeling screens?',
     kind: 'single-select',
@@ -704,7 +693,6 @@ export function normalizeCessIntakeAnswers(
   normalized.customBackendEntry = normalizeText(answers.customBackendEntry);
   normalized.deploymentTarget = normalizeText(answers.deploymentTarget);
   normalized.includeCreateExpoComponents = normalizeBoolean(answers.includeCreateExpoComponents);
-  normalized.useLatestExpoSdk = normalizeBoolean(answers.useLatestExpoSdk);
   normalized.usesExpoUi = normalizeBoolean(answers.usesExpoUi);
   normalized.usesExpoUiUniversalComponents = normalizeBoolean(
     answers.usesExpoUiUniversalComponents
@@ -796,11 +784,6 @@ export function buildMdsFlags(
     flags.push('--mds-create-expo-components');
   } else {
     flags.push('--mds-no-create-expo-components');
-  }
-  if (onboardAnswers.useLatestExpoSdk) {
-    flags.push('--mds-latest-expo-sdk');
-  } else {
-    flags.push('--mds-no-latest-expo-sdk');
   }
   if (onboardAnswers.usesExpoUi) {
     flags.push('--mds-expo-ui');
@@ -930,7 +913,6 @@ function buildResolvedCessAnswers(
     deploymentTarget: currentAnswers.deploymentTarget ?? onboardAnswers.deploymentTarget,
     includeCreateExpoComponents:
       currentAnswers.includeCreateExpoComponents ?? onboardAnswers.includeCreateExpoComponents,
-    useLatestExpoSdk: currentAnswers.useLatestExpoSdk ?? onboardAnswers.useLatestExpoSdk,
     usesExpoUi,
     usesExpoUiUniversalComponents:
       currentAnswers.usesExpoUiUniversalComponents ??
@@ -971,7 +953,6 @@ function buildOnboardArgvFromCess(
     dataNeeds,
     deploymentTarget: normalizeText(answers.deploymentTarget),
     createExpoComponents: answers.includeCreateExpoComponents,
-    latestExpoSdk: answers.useLatestExpoSdk,
     platforms: targetPlatforms,
     firstPlatform: normalizeText(answers.firstTargetPlatform),
     platformStrategy: answers.platformStrategy,

@@ -1114,6 +1114,9 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
       'KeyboardProvider'
     );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      "name=\"exposition/nativewindui\""
+    );
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
     ).resolves.toContain("href: '/exposition/nativewindui'");
@@ -1196,7 +1199,6 @@ describe('runOnboardCommand', () => {
       defaultOnboardPlan({ webOutput: 'static', deployedServer: 'custom' }).answers.deployedServer
     ).toBe('custom');
     expect(plan.answers.includeCreateExpoComponents).toBe(false);
-    expect(plan.answers.useLatestExpoSdk).toBe(true);
     expect(plan.answers.usesExpoUi).toBe(true);
     expect(plan.answers.usesExpoUiUniversalComponents).toBe(true);
     expect(defaultOnboardPlan({ expoUi: false }).answers.usesExpoUiUniversalComponents).toBe(false);
@@ -1300,7 +1302,6 @@ describe('runOnboardCommand', () => {
           usesExpoUi: 'yes',
           usesExpoNativeTabs: false,
           includeCreateExpoComponents: true,
-          useLatestExpoSdk: false,
           dataStart: 'supabase',
           testToMainSafeguards: true,
           easUses: ['hosting web apps', null],
@@ -1318,7 +1319,6 @@ describe('runOnboardCommand', () => {
         expoServerAdapter: 'express',
         usesExpoNativeTabs: false,
         includeCreateExpoComponents: true,
-        useLatestExpoSdk: false,
         dataStart: 'supabase',
         testToMainSafeguards: true,
         easUses: ['hosting web apps'],
@@ -1368,7 +1368,6 @@ function sampleAnswers(appName: string): OnboardAnswers {
     deploymentTarget: 'Expo web/native deployment',
     advancedPackageSetup: true,
     includeCreateExpoComponents: true,
-    useLatestExpoSdk: true,
     targetPlatforms: ['web', 'ios', 'android'],
     firstTargetPlatform: 'web',
     platformFileStrategy: 'files-only',

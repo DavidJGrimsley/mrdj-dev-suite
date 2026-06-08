@@ -137,10 +137,6 @@ async function main(): Promise<void> {
             describe: 'Track whether starter create-expo-app components should be kept',
             type: 'boolean',
           })
-          .option('latest-expo-sdk', {
-            describe: 'Track whether the project should prefer the latest Expo SDK',
-            type: 'boolean',
-          })
           .option('platforms', {
             describe: 'Comma-separated target platforms: web, android, ios, apple-tv',
             type: 'string',

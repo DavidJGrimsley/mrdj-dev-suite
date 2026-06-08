@@ -28,7 +28,6 @@ export interface OnboardArgv {
   defaults?: string | string[];
   advancedSetup?: boolean;
   createExpoComponents?: boolean;
-  latestExpoSdk?: boolean;
   platforms?: string | string[];
   firstPlatform?: string;
   platformStrategy?: 'folders' | 'files-only';
@@ -145,7 +144,6 @@ interface PersonalOnboardDefaults {
   usesExpoUiUniversalComponents?: boolean;
   usesExpoNativeTabs?: boolean;
   includeCreateExpoComponents?: boolean;
-  useLatestExpoSdk?: boolean;
   dataStart?: OnboardAnswers['dataStart'];
   testToMainSafeguards?: boolean;
   easUses?: string[];
@@ -319,12 +317,6 @@ export async function collectOnboardPlan(
       'Keep or generate the starter components that come with create-expo-app?',
       seed.includeCreateExpoComponents
     ));
-  const useLatestExpoSdk =
-    argv.latestExpoSdk ??
-    (await askYesNo(
-      'Use the latest Expo SDK even if Expo Go availability may lag?',
-      seed.useLatestExpoSdk
-    ));
   const usesExpoUi =
     hasMobileTarget &&
     (argv.expoUi ?? (await askYesNo('Will you use Expo UI for native-feeling screens?', seed.usesExpoUi)));
@@ -389,7 +381,6 @@ export async function collectOnboardPlan(
       deploymentTarget,
       advancedPackageSetup,
       includeCreateExpoComponents,
-      useLatestExpoSdk,
       targetPlatforms,
       firstTargetPlatform,
       platformFileStrategy,
@@ -541,7 +532,6 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     advancedPackageSetup: argv.advancedSetup ?? true,
     includeCreateExpoComponents:
       argv.createExpoComponents ?? savedDefaults.includeCreateExpoComponents ?? false,
-    useLatestExpoSdk: argv.latestExpoSdk ?? savedDefaults.useLatestExpoSdk ?? true,
     targetPlatforms,
     firstTargetPlatform,
     platformFileStrategy: argv.platformStrategy ?? 'files-only',
@@ -631,7 +621,6 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
-    useLatestExpoSdk: answers.useLatestExpoSdk,
     dataStart: answers.dataStart,
     testToMainSafeguards: answers.testToMainSafeguards,
     easUses: answers.easUses,
@@ -694,7 +683,6 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   if (typeof raw.includeCreateExpoComponents === 'boolean') {
     normalized.includeCreateExpoComponents = raw.includeCreateExpoComponents;
   }
-  if (typeof raw.useLatestExpoSdk === 'boolean') normalized.useLatestExpoSdk = raw.useLatestExpoSdk;
   if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
   if (dataStart) normalized.dataStart = dataStart;
   if (easUses) normalized.easUses = easUses;

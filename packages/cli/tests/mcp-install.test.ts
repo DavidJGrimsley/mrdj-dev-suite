@@ -5,7 +5,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  buildVscodeAddMcpPayload,
   renderCodexBlock,
+  renderVscodeAddMcpCommand,
   resolveServerInvocation,
   runMcpInstallCommand,
   stripExistingCodexBlock,
@@ -170,6 +172,25 @@ describe('renderCodexBlock', () => {
   it('renders a TOML block with JSON-escaped strings', () => {
     expect(renderCodexBlock('mr-djs-dev-suite', { command: 'node', args: ['a b', 'c'] })).toBe(
       '[mcp_servers.mr-djs-dev-suite]\ncommand = "node"\nargs = ["a b", "c"]\n'
+    );
+  });
+});
+
+describe('renderVscodeAddMcpCommand', () => {
+  it('renders a shell-safe add-mcp command for the current platform', () => {
+    const command = renderVscodeAddMcpCommand(
+      buildVscodeAddMcpPayload({ command: 'cmd', args: ['/c', 'npx', '-y', '@mr.dj2u/mcp-server@0.1.5'] })
+    );
+
+    if (process.platform === 'win32') {
+      expect(command).toBe(
+        `code --add-mcp '{"name":"mds","command":"cmd","args":["/c","npx","-y","@mr.dj2u/mcp-server@0.1.5"]}'`
+      );
+      return;
+    }
+
+    expect(command).toBe(
+      'code --add-mcp "{\\"name\\":\\"mds\\",\\"command\\":\\"cmd\\",\\"args\\":[\\"/c\\",\\"npx\\",\\"-y\\",\\"@mr.dj2u/mcp-server@0.1.5\\"]}"'
     );
   });
 });

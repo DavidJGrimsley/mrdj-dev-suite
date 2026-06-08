@@ -41,7 +41,6 @@ it for the app before treating it as final.
 - Platform layout mode: {{platformLayoutMode}}
 - Web output: {{webOutput}}
 - Deployed server: {{deployedServer}}
-- Latest Expo SDK preference: {{useLatestExpoSdk}}
 - Advanced package setup: {{advancedPackageSetup}}
 - Create Expo starter components: {{includeCreateExpoComponents}}
 - Expo UI: {{usesExpoUi}}

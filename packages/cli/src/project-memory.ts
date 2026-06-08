@@ -21,7 +21,6 @@ export interface OnboardAnswers {
   deploymentTarget: string;
   advancedPackageSetup: boolean;
   includeCreateExpoComponents: boolean;
-  useLatestExpoSdk: boolean;
   targetPlatforms: string[];
   firstTargetPlatform: string;
   platformFileStrategy: 'folders' | 'files-only';
@@ -694,7 +693,6 @@ export function renderInfo(
     '',
     `- Advanced package setup: ${formatBoolean(answers.advancedPackageSetup)}`,
     `- Create Expo starter components: ${formatBoolean(answers.includeCreateExpoComponents)}`,
-    `- Latest Expo SDK preference: ${formatBoolean(answers.useLatestExpoSdk)}`,
     `- MDS guidelines template: yes`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
     `- Expo UI Universal components: ${formatBoolean(answers.usesExpoUiUniversalComponents)}`,
@@ -970,7 +968,6 @@ export function renderGuidelines(answers: OnboardAnswers): string {
           '- Develop through feature branches into `test`, then promote validated work from `test` to `main`.',
         ]
       : []),
-    `- Latest Expo SDK preference captured during onboarding: ${formatBoolean(answers.useLatestExpoSdk)}.`,
     `- Expo UI Universal components preference captured during onboarding: ${formatBoolean(answers.usesExpoUiUniversalComponents)}.`,
     '- Treat monorepo scaffolding as future work until the single-app MVP is stable.',
     '',
@@ -1276,7 +1273,6 @@ function applyGuidelinesTemplate(template: string, answers: OnboardAnswers): str
     deploymentTarget: answers.deploymentTarget,
     advancedPackageSetup: formatBoolean(answers.advancedPackageSetup),
     includeCreateExpoComponents: formatBoolean(answers.includeCreateExpoComponents),
-    useLatestExpoSdk: formatBoolean(answers.useLatestExpoSdk),
     targetPlatforms: answers.targetPlatforms.map((item) => `- ${item}`).join('\n'),
     firstTargetPlatform: answers.firstTargetPlatform,
     appDirectory: formatAppDirectory(answers.appDirectory),

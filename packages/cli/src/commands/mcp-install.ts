@@ -1,5 +1,4 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -236,24 +235,7 @@ export async function installVscodeUserMcp(
   server: ResolvedServer,
   dryRun: boolean
 ): Promise<void> {
-  const payload = buildVscodeAddMcpPayload(server);
-  const renderedCommand = renderVscodeAddMcpCommand(payload);
-
-  if (dryRun) {
-    printVscodeUserMcpInstructions(renderedCommand, 'dry-run');
-    return;
-  }
-
-  if (!(await commandExists('code'))) {
-    printVscodeUserMcpInstructions(renderedCommand, 'missing-code-command');
-    return;
-  }
-
-  const result = await runCommand('code', ['--add-mcp', JSON.stringify(payload)], 'inherit');
-  if (result !== 0) {
-    console.log(chalk.yellow(`VS Code returned exit code ${result}. If setup did not complete, run manually:`));
-    console.log(`  ${renderedCommand}`);
-  }
+  await writeVscodeMcpConfig(resolveVscodeUserMcpConfigPath(), server, dryRun);
 }
 
 export function buildVscodeAddMcpPayload(server: ResolvedServer): Record<string, unknown> {
@@ -265,7 +247,25 @@ export function buildVscodeAddMcpPayload(server: ResolvedServer): Record<string,
 }
 
 export function renderVscodeAddMcpCommand(payload: Record<string, unknown>): string {
-  return `code --add-mcp ${JSON.stringify(JSON.stringify(payload))}`;
+  const json = JSON.stringify(payload);
+  if (process.platform === 'win32') {
+    return `code --add-mcp '${json}'`;
+  }
+
+  return `code --add-mcp ${JSON.stringify(json)}`;
+}
+
+export function resolveVscodeUserMcpConfigPath(): string {
+  if (process.platform === 'win32') {
+    const appDataRoot = process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appDataRoot, 'Code', 'User', 'mcp.json');
+  }
+
+  if (process.platform === 'darwin') {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'mcp.json');
+  }
+
+  return path.join(os.homedir(), '.config', 'Code', 'User', 'mcp.json');
 }
 
 export function stripExistingCodexBlock(content: string, key: string): string {
@@ -301,18 +301,6 @@ function printClaudeUserFollowup(): void {
   console.log('       /mcp__mr-djs-dev-suite__onboard_new_expo_app       (run inside an existing Expo app folder)');
 }
 
-function printVscodeUserMcpInstructions(command: string, reason: 'dry-run' | 'missing-code-command'): void {
-  console.log();
-  console.log(chalk.bold('Next steps for VS Code Copilot (user scope):'));
-  if (reason === 'missing-code-command') {
-    console.log(chalk.yellow('The `code` command was not found on PATH, so MDS did not mutate VS Code user MCP settings.'));
-  } else {
-    console.log(chalk.cyan('--dry-run output:'));
-  }
-  console.log('Run this command after installing/enabling the VS Code `code` command:');
-  console.log(`  ${command}`);
-}
-
 async function readJsonIfExists(filePath: string): Promise<Record<string, unknown> | null> {
   const raw = await readTextIfExists(filePath);
   if (raw === null) {
@@ -338,23 +326,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function commandExists(command: string): Promise<boolean> {
-  const lookup = process.platform === 'win32' ? 'where' : 'which';
-  return (await runCommand(lookup, [command], 'ignore')) === 0;
-}
-
-async function runCommand(
-  command: string,
-  args: string[],
-  stdio: 'ignore' | 'inherit'
-): Promise<number | null> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      stdio,
-      shell: process.platform === 'win32',
-    });
-
-    child.on('error', () => resolve(1));
-    child.on('close', (code) => resolve(code));
-  });
-}

@@ -43,7 +43,6 @@ describe('CESS intake contract', () => {
       customBackend: false,
       deploymentTarget: 'TestFlight to friends',
       includeCreateExpoComponents: false,
-      useLatestExpoSdk: true,
       usesExpoUi: true,
       usesExpoUiUniversalComponents: true,
       usesExpoNativeTabs: true,
@@ -105,7 +104,6 @@ describe('CESS intake contract', () => {
         customBackendEntry: 'server/index.js',
         deploymentTarget: 'Internal preview',
         includeCreateExpoComponents: true,
-        useLatestExpoSdk: false,
         usesExpoUi: false,
         usesExpoUiUniversalComponents: false,
         usesExpoNativeTabs: false,
@@ -130,7 +128,6 @@ describe('CESS intake contract', () => {
 
     const argv = buildCreateExpoSuperStackArgv(plan);
     expect(argv).toContain('--mds-no-guidelines-template');
-    expect(argv).toContain('--mds-no-latest-expo-sdk');
     expect(argv).toContain('--mds-no-expo-ui');
     expect(argv).toContain('--mds-no-test-to-main');
     expect(argv).toContain('--mds-save-defaults');
