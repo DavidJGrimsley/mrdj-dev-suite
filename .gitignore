@@ -11,11 +11,21 @@ coverage/
 !.env.example
 
 temp/
+# test-apps folder is purposfully not ignored, as we sometimes work on a generated app there and then apply the changes to the generator and we want to be ale to push wip commits for the generated app.
 .pnpm-store/
 
 # Build-generated plugin skill files (sourced from packages/knowledge at build time)
 plugins/claude-code/skills/
+plugins/mr-djs-dev-suite/
+
+# Local Codex client state
+.codex/
 
 .claude/worktrees/
 
 *.code-workspace
+
+# Local nested-repo backup folders used when flattening embedded git repos
+**/.git.backup-*/
+
+test-apps/

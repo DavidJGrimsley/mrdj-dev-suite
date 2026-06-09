@@ -1,12 +1,21 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { runDoctor, scanFile } from '@mr.dj2u/doctor';
+import {
+  buildCessIntakeStep,
+  buildCreateExpoSuperStackArgv,
+  resolveCessPlan,
+  validateCessGenerationReadiness,
+} from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
+import { generateProjectRoadmap } from '@mr.dj2u/cli/roadmap';
 import {
   getSkill,
   listKnowledgeResources,
@@ -17,13 +26,26 @@ import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 import type { KnowledgeKind } from '@mr.dj2u/knowledge';
 
+interface SuperStackInvocationSpec {
+  command: string;
+  args: string[];
+  display: string;
+  source: 'published-latest';
+  target: string;
+}
+
+export function resolveSuperStackInvocationSpec(): SuperStackInvocationSpec {
+  return {
+    command: 'npx',
+    args: ['-y', 'create-expo-super-stack@latest'],
+    display: 'npx -y create-expo-super-stack@latest',
+    source: 'published-latest',
+    target: 'create-expo-super-stack@latest',
+  };
+}
+
 export function resolveSuperStackInvocation(): string {
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const localBin = path.resolve(moduleDir, '..', '..', 'create-expo-super-stack', 'dist', 'cli.js');
-  if (existsSync(localBin)) {
-    return `node "${localBin}"`;
-  }
-  return 'npx -y create-expo-super-stack';
+  return resolveSuperStackInvocationSpec().display;
 }
 
 export interface MCPTool {
@@ -43,7 +65,7 @@ export function createMrdjMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: 'mr-djs-dev-suite',
-      version: '0.1.2',
+      version: getMcpServerRuntimeVersion(),
       description: 'MDS Expo dev-suite Doctor, knowledge resources, and onboarding prompts.',
     },
     {
@@ -190,6 +212,19 @@ export function listTools(): MCPTool[] {
       },
     },
     {
+      name: 'generate_project_roadmap',
+      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          write: { type: 'boolean' },
+          preserveStatus: { type: 'boolean' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
       name: 'generate_setup_tasks',
       description: 'Generate post-create onboarding setup tasks.',
       inputSchema: {
@@ -198,6 +233,43 @@ export function listTools(): MCPTool[] {
           projectPath: { type: 'string' },
           defaults: { type: 'array', items: { type: 'string' } },
         },
+      },
+    },
+    {
+      name: 'create_expo_super_stack_intake_step',
+      description:
+        'Advance one guided Create Expo Super Stack intake step using the shared CLI-backed questionnaire.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          parentDir: { type: 'string' },
+          appName: { type: 'string' },
+          answers: { type: 'object', additionalProperties: true },
+        },
+      },
+    },
+    {
+      name: 'create_expo_super_stack_generate',
+      description:
+        'Run create-expo-super-stack after guided intake has been fully answered and explicitly confirmed.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          parentDir: { type: 'string' },
+          appName: { type: 'string' },
+          answers: { type: 'object', additionalProperties: true },
+          confirmed: { type: 'boolean' },
+        },
+        required: ['confirmed'],
+      },
+    },
+    {
+      name: 'mds_runtime_versions',
+      description:
+        'Report the active MDS MCP server, CLI, and create-expo-super-stack runtime versions and sources.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
       },
     },
   ];
@@ -264,8 +336,31 @@ export async function executeTool(
       }
       return generateDeployChecklist(projectPath, input);
     }
+    case 'generate_project_roadmap': {
+      const projectPath = readString(input.projectPath);
+      if (!projectPath) {
+        throw new Error('generate_project_roadmap requires projectPath.');
+      }
+      return generateProjectRoadmap(projectPath, {
+        write: input.write === true,
+        preserveStatus: typeof input.preserveStatus === 'boolean' ? input.preserveStatus : true,
+      });
+    }
     case 'generate_setup_tasks': {
       return generateSetupTasks(readString(input.projectPath) ?? '.', readStringArray(input.defaults));
+    }
+    case 'create_expo_super_stack_intake_step': {
+      return buildCessIntakeStep({
+        parentDir: readString(input.parentDir),
+        appName: readString(input.appName),
+        answers: readRecord(input.answers) as Record<string, unknown> | undefined,
+      });
+    }
+    case 'create_expo_super_stack_generate': {
+      return generateCreateExpoSuperStack(input);
+    }
+    case 'mds_runtime_versions': {
+      return getMdsRuntimeVersions();
     }
     default:
       throw new Error(`Unknown MCP tool: ${name}`);
@@ -440,6 +535,26 @@ function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    'generate_project_roadmap',
+    {
+      title: 'Generate Project Roadmap',
+      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      inputSchema: {
+        projectPath: z.string(),
+        write: z.boolean().optional(),
+        preserveStatus: z.boolean().optional(),
+      },
+    },
+    async (input) =>
+      toolJson(
+        await generateProjectRoadmap(input.projectPath, {
+          write: input.write,
+          preserveStatus: input.preserveStatus,
+        })
+      )
+  );
+
+  server.registerTool(
     'doctor_explain_result',
     {
       title: 'Explain Doctor Result',
@@ -464,6 +579,63 @@ function registerTools(server: McpServer): void {
       },
     },
     async ({ projectPath, defaults }) => toolJson(generateSetupTasks(projectPath ?? '.', defaults ?? []))
+  );
+
+  server.registerTool(
+    'create_expo_super_stack_intake_step',
+    {
+      title: 'Create Expo Super Stack Intake Step',
+      description:
+        'Advance one guided Create Expo Super Stack intake step using the shared CLI-backed questionnaire.',
+      inputSchema: {
+        parentDir: z.string().optional(),
+        appName: z.string().optional(),
+        answers: z.record(z.string(), z.unknown()).optional(),
+      },
+    },
+    async ({ parentDir, appName, answers }) =>
+      toolJson(
+        buildCessIntakeStep({
+          parentDir,
+          appName,
+          answers,
+        })
+      )
+  );
+
+  server.registerTool(
+    'create_expo_super_stack_generate',
+    {
+      title: 'Create Expo Super Stack Generate',
+      description:
+        'Run create-expo-super-stack after guided intake has been fully answered and explicitly confirmed.',
+      inputSchema: {
+        parentDir: z.string().optional(),
+        appName: z.string().optional(),
+        answers: z.record(z.string(), z.unknown()).optional(),
+        confirmed: z.boolean(),
+      },
+    },
+    async ({ parentDir, appName, answers, confirmed }) =>
+      toolJson(
+        await generateCreateExpoSuperStack({
+          parentDir,
+          appName,
+          answers,
+          confirmed,
+        })
+      )
+  );
+
+  server.registerTool(
+    'mds_runtime_versions',
+    {
+      title: 'MDS Runtime Versions',
+      description:
+        'Report the active MDS MCP server, CLI, and create-expo-super-stack runtime versions and sources.',
+      inputSchema: {},
+    },
+    async () => toolJson(getMdsRuntimeVersions())
   );
 }
 
@@ -590,7 +762,7 @@ function fileIntakePhase(label: string): string {
   ].join('\n');
 }
 
-function creditsAndWaitMessage(): string {
+function _creditsAndWaitMessage(): string {
   return [
     'When confirmed, run the generator silently from the parent folder via your shell tool. Do NOT print the command.',
     '',
@@ -622,6 +794,32 @@ function creditsAndWaitMessage(): string {
 }
 
 export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
+  const promptParent = parentDir?.trim() ? parentDir : 'the current working directory';
+  const promptAppHint = appName ? `The user already named the app: \`${appName}\`.` : '';
+  return [
+    `You are kicking off a brand-new Expo app from ${promptParent}. ${promptAppHint}`.trim(),
+    '',
+    'Use the callable MDS MCP tools for this flow. Plugin commands and skill markdown are guidance only.',
+    '',
+    'Required tool flow:',
+    '1. Use `create_expo_super_stack_intake_step` for every intake step.',
+    '2. Ask exactly one question per turn.',
+    '3. Always show the returned default value and options.',
+    '4. Never invent or silently accept defaults on the user\'s behalf.',
+    '5. When the intake tool returns `confirm`, summarize the returned `summaryLines` and ask the user to confirm.',
+    '6. After explicit confirmation, set `answers.confirmed=true`, call the intake tool again, and only proceed when it returns `ready`.',
+    '7. Then call `create_expo_super_stack_generate` with `confirmed: true`.',
+    '',
+    'Failure behavior:',
+    '- If the intake or generate tools are unavailable, stop and tell the user to refresh or reinstall the MDS plugin or MCP server.',
+    '- Use `mds_runtime_versions` to diagnose stale cached plugin or MCP installs.',
+    '- Do not fall back to `--mds-yes` or direct CLI shortcuts unless the user explicitly asked for a fast non-interactive run.',
+    '',
+    'After generation succeeds, tell the user to open a fresh agent session inside the generated app folder and run `mds continue` there.',
+    'If unresolved `# TodoForContext(optional):` markers remain in `project/`, do not claim the roadmap is derived yet. Tell the user to resolve those markers first, then refresh `project/todo.md` from `project/info.md`.',
+    'If the roadmap tool later returns `needsClarification: true`, the next agent session should ask the listed clarification questions one at a time before rerunning roadmap.',
+  ].join('\n');
+  /*
   const looksLikePath = (s: string) => s.includes('/') || s.includes('\\') || s.includes(':');
   const parent =
     parentDir && looksLikePath(parentDir) ? parentDir : 'the current working directory';
@@ -691,7 +889,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '',
     'Q3.2 — Who is this app for? Include user type, demographic, role, or context if known.',
     '',
-    'Q3.3 — What should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. (Press enter / say "defer" to let an agent derive this later from project/info.md.)',
+    'Q3.3 — What should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. (Press enter / say "defer" to leave this for the roadmap pass after project/info.md is clarified.)',
     '',
     'Q3.3a — What screens do you know you will need in the app as of now? (Press enter / say "defer" to leave a TodoForContext marker.)',
     '',
@@ -753,10 +951,6 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. No (default — MDS rich boilerplate replaces them)',
     '  2. Yes',
     '',
-    'Q3.12 — Use the latest Expo SDK even if Expo Go availability may lag?',
-    '  1. Yes (default)',
-    '  2. No',
-    '',
     'Q3.13 — Use Expo UI for native-feeling screens? (only ask if mobile is in Q3.5)',
     '  1. Yes (default)',
     '  2. No',
@@ -814,7 +1008,6 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  Q3.9 → --mds-deployed-server=    (standard-expo|custom|none)',
     '  Q3.10 → --mds-deployment-target=',
     '  Q3.11 → --mds-create-expo-components or --mds-no-create-expo-components',
-    '  Q3.12 → --mds-latest-expo-sdk or --mds-no-latest-expo-sdk',
     '  Q3.13 → --mds-expo-ui or --mds-no-expo-ui',
     '  Q3.14 → --mds-expo-native-tabs or --mds-no-expo-native-tabs',
     '  Q3.15 → --mds-eas-uses=          (comma-joined labels; only if Q2.8 = Yes)',
@@ -846,9 +1039,10 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. Find the line "Onboarding next steps" in the generator output. Quote everything from that line to the end of stdout verbatim in a fenced code block. Do NOT quote the CREATED file list or anything before "Onboarding next steps".',
     '  2. Then tell the user (in plain text, not a code block):',
     '     "Your app is ready. To keep token usage low, open a new agent session directly inside the `<appName>` folder and run `mds continue` there."',
-    '  3. If TodoForContext markers exist in the new app\'s project/ files, add one line:',
-    '     "There are unresolved context markers in project/ — resolve them in your new session before starting implementation work."',
-    '  4. Do NOT walk through markers or ask questions about them in this session.',
+    '  3. If the tool result says `roadmap.blockedByMarkers` is true, add one line:',
+    '     "There are unresolved context markers in project/info.md — resolve them in your new session before starting implementation work."',
+    '  4. If the tool result says `roadmap.needsClarification` is true, add one line explaining that the project docs are still too generic for a high-confidence roadmap and that the next agent session should ask the listed clarification questions one at a time before rerunning roadmap.',
+    '  5. Do NOT walk through markers or ask roadmap clarification questions in this session.',
     '',
     'Rules:',
     '- Never run the generator inside an existing app folder. If you suspect you are inside one, stop and ask.',
@@ -856,6 +1050,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '- One question per turn. Always show the default. Skip dependent questions when prerequisites are not met.',
     '- The generator runs all of MDS onboarding (project memory, exposition pages, dependencies, expo-doctor) once you pass --mds-yes plus the --mds-* flags. Do not run `mds onboard` separately afterward — it is already done.',
   ].join('\n');
+*/
 }
 
 export function buildContinueProjectPromptText(projectPath?: string): string {
@@ -876,6 +1071,9 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     '   - After the user answers, write the answer into the file under the marker and delete the marker line. Then move to the next question.',
     '   - Do not offer "skip markers and implement anyway."',
     '4. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
+    '5. Before implementation planning, call `generate_project_roadmap`.',
+    '   - If it returns `needsClarification: true`, ask the listed clarification questions EXACTLY ONE AT A TIME, update `project/info.md`, and rerun `generate_project_roadmap` until it no longer needs clarification.',
+    '   - Only move into implementation planning after roadmap is not blocked and does not need clarification.',
   ].join('\n');
 }
 
@@ -1019,8 +1217,6 @@ export function buildOnboardPromptText(projectPath?: string): string {
     'Q1.10 — How will the first version reach its users? (DEPLOYMENT/DISTRIBUTION method, NOT which OSes)',
     '  Examples: TestFlight to friends, internal client demo, App Store / Play Store launch, web hosting, side-loaded APK, internal-only.',
     '',
-    'Q1.11 — Use latest Expo SDK even if Expo Go availability may lag? (Yes default / No)',
-    '',
     'Q1.12 — Use Expo UI for native-feeling screens? (only if mobile target; Yes default / No)',
     '',
     'Q1.13 — Use Expo Native Tabs? (only if mobile target; Yes default / No)',
@@ -1046,6 +1242,9 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '',
     'When confirmed, run silently via your shell tool. Do NOT print the command. Just say:',
     '  "Scaffolding project memory and rich boilerplate now. This takes a few seconds."',
+    'After onboarding completes, only describe `project/todo.md` as auto-derived if no unresolved `# TodoForContext(optional):` markers remain in `project/info.md` and the roadmap tool does not return `needsClarification: true`.',
+    'If markers remain, tell the developer the scaffolded phase template is intentional and that they should resolve the markers before refreshing the roadmap from `project/info.md`.',
+    'If roadmap returns `needsClarification: true`, ask the listed clarification questions one at a time, update `project/info.md`, and rerun roadmap before handing the project back.',
     '',
     '====== Flag map for `mds onboard` (use these EXACTLY) ======',
     '',
@@ -1400,6 +1599,185 @@ function readString(value: unknown): string | undefined {
 
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function getMcpServerRuntimeVersion(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const packageJsonPath = path.resolve(moduleDir, '..', 'package.json');
+  return readPackageVersion(packageJsonPath, '0.1.6') ?? '0.1.6';
+}
+
+function getMdsRuntimeVersions(): {
+  mcpServerVersion: string;
+  cliVersion: string | null;
+  createExpoSuperStack: {
+    version: string | null;
+    invocation: string;
+    source: 'published-latest';
+    target: string;
+  };
+  intakeToolsAvailable: boolean;
+} {
+  const invocation = resolveSuperStackInvocationSpec();
+  const cliVersion = resolveInstalledPackageVersion('@mr.dj2u/cli');
+
+  return {
+    mcpServerVersion: getMcpServerRuntimeVersion(),
+    cliVersion,
+    createExpoSuperStack: {
+      version: 'latest',
+      invocation: invocation.display,
+      source: invocation.source,
+      target: invocation.target,
+    },
+    intakeToolsAvailable: true,
+  };
+}
+
+async function generateCreateExpoSuperStack(
+  input: Record<string, unknown>
+): Promise<{
+  status: 'generated';
+  projectPath: string;
+  summaryLines: string[];
+  runtime: ReturnType<typeof getMdsRuntimeVersions>;
+  roadmap: Awaited<ReturnType<typeof generateProjectRoadmap>>;
+  stdoutTail: string;
+  stderrTail: string;
+}> {
+  const parentDir = readString(input.parentDir);
+  const appName = readString(input.appName);
+  const answers = readRecord(input.answers);
+  const confirmed = input.confirmed === true;
+  const missingRequirements = validateCessGenerationReadiness({
+    parentDir,
+    appName,
+    answers,
+  });
+
+  if (!confirmed) {
+    throw new Error(
+      'create_expo_super_stack_generate requires confirmed=true after the user explicitly approves the summary.'
+    );
+  }
+  if (missingRequirements.length > 0) {
+    throw new Error(
+      `Cannot generate yet. Missing guided intake answers for: ${missingRequirements.join(', ')}.`
+    );
+  }
+
+  const plan = resolveCessPlan({
+    parentDir,
+    appName,
+    answers: {
+      ...(answers ?? {}),
+      confirmed: true,
+    },
+  });
+  const invocation = resolveSuperStackInvocationSpec();
+  const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
+  const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
+  const roadmap = await generateProjectRoadmap(plan.projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
+
+  return {
+    status: 'generated',
+    projectPath: plan.projectPath,
+    summaryLines: plan.summaryLines,
+    runtime: getMdsRuntimeVersions(),
+    roadmap,
+    stdoutTail: tailText(result.stdout, 60),
+    stderrTail: tailText(result.stderr, 40),
+  };
+}
+
+async function runCommandCapture(
+  command: string,
+  args: string[],
+  cwd: string
+): Promise<{ stdout: string; stderr: string }> {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      shell: process.platform === 'win32' && command !== 'node',
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(
+        new Error(
+          `create-expo-super-stack exited with code ${code ?? 'unknown'}.\n${tailText(stderr || stdout, 40)}`
+        )
+      );
+    });
+  });
+}
+
+function tailText(value: string, lines: number): string {
+  return value
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .slice(-lines)
+    .join('\n');
+}
+
+function resolveInstalledPackageVersion(packageName: string): string | null {
+  try {
+    const require = createRequire(import.meta.url);
+    const resolved = require.resolve(packageName);
+    return readPackageVersion(findNearestPackageJson(resolved), null);
+  } catch {
+    return null;
+  }
+}
+
+function findNearestPackageJson(startPath: string): string {
+  let current = path.dirname(startPath);
+  for (;;) {
+    const candidate = path.join(current, 'package.json');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return candidate;
+    }
+    current = parent;
+  }
+}
+
+function readPackageVersion(packageJsonPath: string, fallback: string | null): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
+    return typeof parsed.version === 'string' && parsed.version.trim().length > 0
+      ? parsed.version
+      : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function explainDoctorResult(input: Record<string, unknown>): string {

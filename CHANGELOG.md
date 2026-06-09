@@ -32,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 5**: CI/CD pipeline automation
 - **Phase 6**: Documentation and community support
 
+## [0.1.9] - 2026-06-09
+
+### Added
+- `mds roadmap` CLI support and roadmap generation coverage
+- richer Super Stack onboarding and stylist scaffolding updates
+- MCP server guidance for the new release and roadmap flows
+
+### Changed
+- regenerated Codex, Claude, and VS Code plugin assets from the knowledge source of truth
+- refreshed published package references for the CLI and MCP install flows
+
+### Fixed
+- create-expo-super-stack lint failure in release prep
+- Doctor checks around Expo config, SEO metadata, and todo-for-context handling
+
 ## [0.1.0] - 2025-01-XX
 
 ### Initial Release

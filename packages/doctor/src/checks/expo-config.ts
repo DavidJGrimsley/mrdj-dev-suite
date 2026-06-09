@@ -21,8 +21,10 @@ export async function checkExpoConfiguration(
   const apiRouteFiles = await findFiles(projectPath, (filePath) => filePath.endsWith('+api.ts'));
   if (apiRouteFiles.length > 0) {
     const appJson = await readAppJson(projectPath);
+    const platformList = readNestedStringArray(appJson, ['expo', 'platforms']);
     const webOutput = readNestedString(appJson, ['expo', 'web', 'output']);
-    if (webOutput !== 'server') {
+    const targetsWeb = platformList.length === 0 || platformList.includes('web');
+    if (targetsWeb && webOutput !== 'server') {
       warnings.push('Expo API routes found, but app.json does not set expo.web.output to "server".');
     }
   }
@@ -61,3 +63,19 @@ async function readAppJson(projectPath: string): Promise<Record<string, unknown>
   }
 }
 
+function readNestedStringArray(
+  value: Record<string, unknown> | null,
+  pathKeys: string[]
+): string[] {
+  let current: unknown = value;
+  for (const key of pathKeys) {
+    if (!isRecord(current) || !(key in current)) {
+      return [];
+    }
+    current = current[key];
+  }
+
+  return Array.isArray(current)
+    ? current.filter((item): item is string => typeof item === 'string')
+    : [];
+}

@@ -302,11 +302,14 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
 - [x] Existing project memory can be normalized without losing original notes.
 
-## Mono repo support
-- [ ] Add a question at the very beginning of onboarding about whether the project is a monorepo or not, and if so, what package(s) the user wants to target for Expo app creation and Doctor checks.
+## Mono repo support (turbo repo)
+- [ ] During onboarding, at the very beginning, before CES starts, there should be a question for "Do you want a web app & landing page/website (e.g. app.domain.com & domain.com) or just a web app or only other platforms?" This will generate an expo app (a modified generated superstack for each with shared packages) in two places in the apps folder with a packages folder that uses the same project memory, components, style files, etc for shared context but separate app folders and entry points. This is a simple way to support monorepos without having to ask about it directly. The web app folder can be maybe apps/app while the landing page is apps/site. 
+- [ ] If the user answered no to the previous question, show a question explicitly asking this needs to be a is a monorepo or not, with no as the default, and if yes, what package(s) the user wants to target (expo app and separate backend or something.). This will at first just be added to the project info and small todo item and then the agent can take it from there but maybe over time we can have a default setup for something like this. 
 - [ ] For onboarding, generate the project memory files and rich boilerplate inside the target package instead of the root, and adjust all file paths accordingly.
 - [ ] For Doctor, run checks only against the target package instead of the whole repo, and adjust any file path outputs accordingly.
 (previous todo, might be partially done but is related and we could finish it now: - [ ] in onboarding, after asking about platform specific needs, ask if the different platforms need their own layouts. maybe we can even go so far as to ask if they want a monorepo structure with separate packages for each platform, but that might be too much for now. at the very least we should ask if they want the app folder within the src folder with yes as the default.)
+- [ ] Create a monorepo doctor that runs as well
+
 
 ## Random
 - [x] Add a question to onboarding that asks if the user wants the app folder within the src folder with yes as the default.
@@ -320,9 +323,44 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Add `/wrap-up` prompt for post-testing release preflight: mark completed todo items, run `mds doctor --ci`, review `git status`, and confirm intentionally omitted files before publish flow.
 - [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
 - [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
-- [ ] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [x] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
+- [ ] Ensure the style guide is using the information in the style.md to generate the app and that the Stylist uses that theme on launch, even before the user has ever opened the app or if they have. This will be from the Style.md that they added to the project/style.md.
+- [x] Go through generated exposition pages and fix any bugs.
+- [x] After editing the generated app for a while, we need to finally update the generator in create expo super stack. to do this, please review StylistCheck app (all of it's pages, components and such, not just the Stylist), possibly by creating a new app with the same command and diffing the files to update the updateGenerator.md. Then update the app generator per updateGenerator.md. 
+- [x] Ensure that create expo super stack is actually using the layout choice chosen during create expo stack. 
+- [ ] Set up CI for npm packages
+### Create Expo Super Stack
+- [ ] Remove question about using the latest expo sdk from onboarding CLI. We are only going to use latest. We can have a note about it in the very beginning.
+- [ ] Add light and dark mode to generated app in the way that create expo app does.
+- [x] Add/edit the super stack/our create expo stack fork to use SDK 56
+- [x] GO through generated app info pages and fix any references that mismatch expo sdk 56.
+- [ ] Fix presentation view for modal on web after 56 update to be like a mobile modal instead of a full screen page.
+- [x] Use expo ui, native tabs, and other newly stable packages from expo in the generated app and exposition pages. Create and exposition page for expo sdk 56 including an inline expo module! add it to all layout generations.
+- [ ] Add a list of commands that come with a generated project to the readme with short explanations of what they do and when to use them (already in progress, just update).
+- [ ] eject-stylist script
+- [ ] Add an 'eject-exposition' command (effectively what reset app by expo does but a little more interactive). This should be an interactive prompt like CESS that asks the user which parts of the exposition they want to reset. options to keep being: Onboarding Setup, Settings Page, Data Adapter, and Stylist. This would mean the eject stylist would have to be integrated into this command maybe... cause if the user already ejected stylist then they can't keep it so this script needs just check if the stylist has been ejected, if so, don't show it in the list. But the eject stylist script could still be useful for later ejecting it specifically. Edit the Phase 0 Section to Instruct the user to mark the tasks done if they have actually done them or if they want to defer, this really only applies to eject stylist since eject exposition has the option to keep things and should be run either way to complete phase 0. But of course they can do what they want to do.
 - [ ] Add a help prompt that explains all the prompts and tools and when to use them. This could be a CLI command like `mds help` AND a prompt that gives an overview of the suite and then options to dive deeper into each tool or prompt. This would be great for onboarding new users to the suite and also for providing a reference for existing users.
+- [ ] add the deferred MCP/slash wrapper for mds stylist eject (without changing CLI behavior). - couple with next task.
 - [ ] Ensure agentic onboarding aligns with everything in Create expo stack (forked) and create expo super stack and more.
 - [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
+- [ ] Confirm/add scripts from my other projects such as copy-icons, generate-sitemap(for static( i don't think it worked on server output but we want to ensure the sitemap is rebuilt every time we build) unless expo or some other package exists and is better)
+- [ ] Modify clear-expo-start to also force close all applications on android because 9/10 times I press a to open on Android, nothing happens. 
+- [ ] Add expo-mcp local installation as an onboarding question and if the answer is yes, wire it up according to this: https://docs.expo.dev/eas/ai/mcp/#set-up-local-capabilities-recommended
+- [ ] Fix this behavior (we want @latest): 
+```
+...
+Run `npm audit` for details.
+  Expo SDK already targets SDK 56; skipping expo@latest.
+  npx expo install expo@~56.0.6
+env:...
+› Installing 1 other package using npm
+› Using ~56.0.6 instead of ~56.0.8 for expo because this version was explicitly provided. Packages excluded from dependency validation should be listed in expo.install.exclude in package.json
+```
+- [ ] Fix issue around 'On Node 24, that now emits [DEP0190] when you pass args with shell: true, because Node concatenates them for the shell instead of escaping them safely.
+
+## Future Goals
 - [ ] Consider adding agentic workflows for issues on github.
+- [ ] Consider publishing the stylist component to npm
+- [ ] The agent should not only run tests and doctor after finishing work but it should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
+- [ ] Revisit the Stylist save flow to see if we can make it more designer friendly with less duplication and unused fields. Maybe the style.md template should include a json Style section and we'll just have to educate on how to edit it. The better experience would be if the Stylist was something that the dev could share with the rest of the nontechnical team so they could set it themselves. This could easily be done locally but remotely would present challenges. Maybe we could have a shareable link Or I could just host the stylist in a generic way on my portfolio website or expostylist.com that would let them edit the style and then save it back to the project style file/download the save configuration and email it to the dev. This would be super cool for collaboration and also for making it easier for non-technical team members to contribute to the design of the app.
 

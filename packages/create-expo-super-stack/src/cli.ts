@@ -1,20 +1,31 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
-import { access, mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawn } from "node:child_process";
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { cancel, isCancel, log, text } from '@clack/prompts';
+import { cancel, isCancel, log, text } from "@clack/prompts";
 import {
   SUPER_STACK_SUCCESS_MESSAGE,
   collectOnboardPlan,
   defaultOnboardPlan,
   savePersonalOnboardDefaults,
-} from '@mr.dj2u/cli/onboarding';
-import { scaffoldProjectMemory } from '@mr.dj2u/cli/project-memory';
+} from "@mr.dj2u/cli/onboarding";
+import { scaffoldProjectMemory } from "@mr.dj2u/cli/project-memory";
+import {
+  generateProjectRoadmap,
+} from "@mr.dj2u/cli/roadmap";
 
-import type { OnboardArgv } from '@mr.dj2u/cli/onboarding';
+import type { OnboardArgv } from "@mr.dj2u/cli/onboarding";
 
 export interface ParsedArgs {
   projectName?: string;
@@ -26,7 +37,7 @@ export interface ParsedArgs {
     coreFlows?: string;
     screens?: string;
     dataNeeds?: string;
-    dataStart?: 'local' | 'supabase';
+    dataStart?: "local" | "supabase";
     deploymentTarget?: string;
     defaults?: string[];
     createExpoStackBin?: string;
@@ -41,23 +52,28 @@ export interface ParsedArgs {
     skipCreate: boolean;
     platforms?: string[];
     firstPlatform?: string;
-    platformStrategy?: 'folders' | 'files-only';
-    appDirectory?: 'src' | 'root';
-    platformLayouts?: 'shared' | 'platform-specific';
-    webOutput?: 'static' | 'server' | 'spa' | 'none';
-    deployedServer?: 'standard-expo' | 'custom' | 'none';
+    platformStrategy?: "folders" | "files-only";
+    appDirectory?: "src" | "root";
+    platformLayouts?: "shared" | "platform-specific";
+    webOutput?: "static" | "server" | "spa" | "none";
+    deployedServer?: "standard-expo" | "custom" | "none";
     createExpoComponents?: boolean;
-    latestExpoSdk?: boolean;
     expoUi?: boolean;
+    expoUiUniversal?: boolean;
     expoNativeTabs?: boolean;
     easUses?: string[];
     saveDefaults?: boolean;
   };
 }
 
-type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
-const DEFAULT_PROJECT_NAME = 'my-expo-app';
-const CURRENT_EXPO_SDK_MAJOR = 55;
+type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+type OnboardWebOutput = "static" | "server" | "spa" | "none";
+type ExpoWebOutput = "single" | "static" | "server";
+const DEFAULT_PROJECT_NAME = "my-expo-app";
+const STYLIST_SYNC_API_ROUTES = [
+  "app/exposition/stylist-sync+api.ts",
+  "src/app/exposition/stylist-sync+api.ts",
+] as const;
 
 interface CommandSpec {
   command: string;
@@ -67,38 +83,61 @@ interface CommandSpec {
   env?: Record<string, string>;
 }
 
-interface ExpoProjectCheckOptions {
-  useLatestExpoSdk?: boolean;
-}
-
 export async function main(): Promise<void> {
   const initialParsed = parseArgs(process.argv.slice(2));
   if (initialParsed.helpRequested) {
     console.log(renderHelpText());
     return;
   }
-  const parsed = withResolvedProjectName(initialParsed, await promptForMissingProjectName(initialParsed));
+  const parsed = withResolvedProjectName(
+    initialParsed,
+    await promptForMissingProjectName(initialParsed),
+  );
   validateCreateExpoStackArgs(parsed.createExpoStackArgs);
   const projectName = parsed.projectName ?? DEFAULT_PROJECT_NAME;
   const projectParentDir = parsed.mds.projectParentDir ?? process.cwd();
+  const createExpoStackArgs = prepareCreateExpoStackArgsForWrapper(
+    parsed.createExpoStackArgs,
+    parsed.mds.skipExpoFix,
+  );
 
-  printIntro(projectName, parsed.createExpoStackArgs, projectParentDir);
+  printIntro(projectName, createExpoStackArgs, projectParentDir);
 
   if (!parsed.mds.skipCreate) {
-    await runCreateExpoStack(parsed.createExpoStackArgs, parsed.mds.createExpoStackBin, projectParentDir);
+    await runCreateExpoStack(
+      createExpoStackArgs,
+      parsed.mds.createExpoStackBin,
+      projectParentDir,
+    );
   } else {
-    console.log('Skipping create-expo-stack because --mds-skip-create was passed.');
+    console.log(
+      "Skipping create-expo-stack because --mds-skip-create was passed.",
+    );
   }
 
-  const projectPath = await resolveGeneratedProjectPath(projectParentDir, projectName);
-  const easSelected = await detectEasSetup(projectPath, parsed.createExpoStackArgs);
+  const projectPath = await resolveGeneratedProjectPath(
+    projectParentDir,
+    projectName,
+  );
+  const easSelected = await detectEasSetup(
+    projectPath,
+    parsed.createExpoStackArgs,
+  );
   const onboardArgv = buildOnboardArgv(projectPath, parsed, easSelected);
   const plan = parsed.mds.yes
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
-  const movedAppDir = !parsed.mds.skipCreate && plan.answers.appDirectory === 'src'
-    ? await moveRootAppIntoSrc(projectPath)
-    : null;
+  const movedAppDir =
+    !parsed.mds.skipCreate && plan.answers.appDirectory === "src"
+      ? await moveRootAppIntoSrc(projectPath)
+      : null;
+  const consolidatedSourceRepairs =
+    !parsed.mds.skipCreate && plan.answers.appDirectory === "src"
+      ? await consolidateRootSourceFolders(projectPath)
+      : [];
+  const movedImportRepairs = movedAppDir
+    ? await repairMovedSrcAppImports(projectPath)
+    : [];
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
     force: parsed.mds.force,
     guidelinesTemplate: plan.guidelinesTemplate,
@@ -106,17 +145,63 @@ export async function main(): Promise<void> {
     manageUniwind: parsed.mds.skipCreate,
     richBoilerplate: plan.richBoilerplate,
   });
-  const identifierRepairs = await repairExpoProjectIdentifiers(projectPath, projectName, plan.answers.targetPlatforms);
+  const postScaffoldImportRepairs = movedAppDir
+    ? await repairMovedSrcAppImports(projectPath)
+    : [];
+  const identifierRepairs = await repairExpoProjectIdentifiers(
+    projectPath,
+    projectName,
+    plan.answers.targetPlatforms,
+  );
+  const stylistWebOutputRepairs = plan.answers.targetPlatforms.includes("web")
+    ? await repairExpoWebOutputForStylistLifecycle(
+        projectPath,
+        plan.answers.webOutput,
+      )
+    : [];
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  const typeSupportRepairs = await repairGeneratedTypeSupport(projectPath, {
+    needsNodeTypes: hasStylistSyncRoute,
+    needsUniwindTypes: plan.answers.defaults.includes("uniwind"),
+  });
+  const nativeWindUiPickerRepairs =
+    await repairGeneratedNativeWindUiPicker(projectPath);
+  const eslintConfigRepairs = await repairGeneratedEslintConfig(projectPath);
 
   console.log();
-  console.log('MDS onboarding complete.');
+  console.log("MDS onboarding complete.");
   for (const result of written) {
-    console.log(`${result.wrote ? 'CREATED' : 'KEPT'} ${path.relative(process.cwd(), result.filePath)}`);
+    console.log(
+      `${result.wrote ? "CREATED" : "KEPT"} ${path.relative(process.cwd(), result.filePath)}`,
+    );
   }
   if (movedAppDir) {
-    console.log(`MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`);
+    console.log(
+      `MOVED ${path.relative(process.cwd(), movedAppDir.from)} -> ${path.relative(process.cwd(), movedAppDir.to)}`,
+    );
+  }
+  for (const result of consolidatedSourceRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of movedImportRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of postScaffoldImportRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   for (const result of identifierRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of stylistWebOutputRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of typeSupportRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of nativeWindUiPickerRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of eslintConfigRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
   if (plan.saveDefaults) {
@@ -126,47 +211,76 @@ export async function main(): Promise<void> {
     }
   }
 
-  const packageManager = await detectPackageManager(projectPath, parsed.createExpoStackArgs);
+  const roadmapStatus = await generateProjectRoadmap(projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
+  if (roadmapStatus.blockedByMarkers) {
+    console.log();
+    console.log("Roadmap note:");
+    console.log(
+      "Unresolved # TodoForContext(optional): markers are still present in project/info.md, so MDS intentionally left the scaffolded phase template in place.",
+    );
+    console.log(
+      "Resolve those project/info.md markers first, then run `mds roadmap` or let your agent refresh project/todo.md from project/info.md.",
+    );
+  } else if (roadmapStatus.needsClarification) {
+    console.log();
+    console.log("Roadmap note:");
+    console.log(
+      "The project docs are still too generic for a high-confidence derived roadmap, so have your agent ask clarifying questions and then rerun `mds roadmap`.",
+    );
+  }
+
+  const packageManager = await detectPackageManager(
+    projectPath,
+    parsed.createExpoStackArgs,
+  );
   const noInstallRequested = hasNoInstallFlag(parsed.createExpoStackArgs);
   if (shouldRunExpoProjectChecks(parsed, noInstallRequested)) {
-    await runExpoProjectChecks(projectPath, packageManager, {
-      useLatestExpoSdk: plan.answers.useLatestExpoSdk,
-    });
+    await runExpoProjectChecks(projectPath, packageManager);
   } else if (noInstallRequested) {
     console.log();
-    console.log('Skipped install and Expo dependency repair because create-expo-stack was run with --no-install.');
+    console.log(
+      "Skipped install and Expo dependency repair because create-expo-stack was run with --no-install.",
+    );
   }
 
   console.log();
-  console.log('Onboarding next steps:');
-  console.log('1. Play with styling in the style-guide page.');
-  console.log('2. Browse exposition pages to understand included base packages.');
-  console.log('3. Review project/ files for accuracy and planning adjustments.');
-  console.log('4. Tell the agent to commence development phase by phase.');
-  console.log();
-  console.log('Next steps:');
-  console.log(`  cd ${quoteDisplayArg(path.relative(process.cwd(), projectPath) || '.')}`);
+  const nextStepsCommands = [
+    `cd ${quoteDisplayArg(path.relative(process.cwd(), projectPath) || ".")}`,
+  ];
   if (noInstallRequested || parsed.mds.skipExpoFix || parsed.mds.skipCreate) {
-    console.log(`  ${buildInstallCommand(packageManager).display}`);
-    if (plan.answers.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
-      console.log(`  ${buildExpoLatestSdkCommand(packageManager).display}`);
+    nextStepsCommands.push(buildInstallCommand(packageManager).display);
+    if (await shouldRunExpoLatestSdkCommand(projectPath)) {
+      nextStepsCommands.push(buildExpoLatestSdkCommand(packageManager).display);
     }
-    console.log(`  ${buildExpoInstallFixCommand(packageManager).display}`);
+    nextStepsCommands.push(buildExpoInstallFixCommand(packageManager).display);
     if (await shouldInstallExpoFontPeer(projectPath)) {
-      console.log(`  ${buildExpoFontInstallCommand(packageManager).display}`);
+      nextStepsCommands.push(buildExpoFontInstallCommand(packageManager).display);
     }
-    console.log(`  ${buildExpoDoctorCommand(packageManager).display}`);
+    nextStepsCommands.push(buildExpoDoctorCommand(packageManager).display);
   }
-  console.log(`  ${buildRunScriptCommand(packageManager, 'clear-expo-start')}`);
+  nextStepsCommands.push(buildRunScriptCommand(packageManager, "clear-expo-start"));
+  printCopyableCommands("Next steps", nextStepsCommands);
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
-  console.log('For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.');
+  console.log(
+    "For the full dev-suite locally, use the generated scripts or install @mr.dj2u/cli in the app.",
+  );
+}
+
+export function prepareCreateExpoStackArgsForWrapper(
+  args: string[],
+  _skipExpoFix = false,
+): string[] {
+  return args;
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
   const createExpoStackArgs: string[] = [];
-  const mds: ParsedArgs['mds'] = {
+  const mds: ParsedArgs["mds"] = {
     force: false,
     skipExpoFix: false,
     yes: false,
@@ -181,8 +295,8 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
-    if (!arg.startsWith('--') && !projectName) {
-      if (arg === '-h') {
+    if (!arg.startsWith("--") && !projectName) {
+      if (arg === "-h") {
         helpRequested = true;
         continue;
       }
@@ -191,218 +305,239 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
-    if (arg === '--help' || arg === '-h' || arg === '--mds-help') {
+    if (arg === "--help" || arg === "-h" || arg === "--mds-help") {
       helpRequested = true;
       continue;
     }
 
-    if (arg === '--mds-force') {
+    if (arg === "--mds-force") {
       mds.force = true;
       continue;
     }
 
-    if (arg === '--mds-no-rich') {
+    if (arg === "--mds-no-rich") {
       mds.rich = false;
       continue;
     }
 
-    if (arg === '--mds-rich') {
+    if (arg === "--mds-rich") {
       mds.rich = true;
       continue;
     }
 
-    if (arg === '--mds-save-defaults') {
+    if (arg === "--mds-save-defaults") {
       mds.saveDefaults = true;
       continue;
     }
 
-    if (arg === '--mds-no-save-defaults') {
+    if (arg === "--mds-no-save-defaults") {
       mds.saveDefaults = false;
       continue;
     }
 
-    if (arg === '--mds-yes' || arg === '--mds-non-interactive') {
+    if (arg === "--mds-yes" || arg === "--mds-non-interactive") {
       mds.yes = true;
       continue;
     }
 
-    if (arg === '--mds-skip-create') {
+    if (arg === "--mds-skip-create") {
       mds.skipCreate = true;
       continue;
     }
 
-    if (arg === '--mds-skip-expo-fix' || arg === '--mds-no-expo-fix') {
+    if (arg === "--mds-skip-expo-fix" || arg === "--mds-no-expo-fix") {
       mds.skipExpoFix = true;
       continue;
     }
 
-    if (arg.startsWith('--mds-create-expo-stack-bin=')) {
-      mds.createExpoStackBin = arg.slice('--mds-create-expo-stack-bin='.length);
+    if (arg.startsWith("--mds-create-expo-stack-bin=")) {
+      mds.createExpoStackBin = arg.slice("--mds-create-expo-stack-bin=".length);
       continue;
     }
 
-    if (arg === '--mds-guidelines-template') {
+    if (arg === "--mds-guidelines-template") {
       mds.guidelinesTemplate = true;
       continue;
     }
 
-    if (arg.startsWith('--mds-guidelines-template=')) {
+    if (
+      arg === "--mds-no-guidelines-template" ||
+      arg === "--mds-guidelines-template=false"
+    ) {
+      mds.guidelinesTemplate = false;
+      continue;
+    }
+
+    if (arg.startsWith("--mds-guidelines-template=")) {
       mds.guidelinesTemplate = true;
-      mds.guidelinesTemplatePath = arg.slice('--mds-guidelines-template='.length);
+      mds.guidelinesTemplatePath = arg.slice(
+        "--mds-guidelines-template=".length,
+      );
       continue;
     }
 
-    if (arg.startsWith('--mds-guidelines-template-path=')) {
+    if (arg.startsWith("--mds-guidelines-template-path=")) {
       mds.guidelinesTemplate = true;
-      mds.guidelinesTemplatePath = arg.slice('--mds-guidelines-template-path='.length);
+      mds.guidelinesTemplatePath = arg.slice(
+        "--mds-guidelines-template-path=".length,
+      );
       continue;
     }
 
-    if (arg.startsWith('--mds-defaults=')) {
-      mds.defaults = splitList(arg.slice('--mds-defaults='.length));
+    if (arg.startsWith("--mds-defaults=")) {
+      mds.defaults = splitList(arg.slice("--mds-defaults=".length));
       continue;
     }
 
-    if (arg.startsWith('--mds-app-name=')) {
-      mds.appName = arg.slice('--mds-app-name='.length);
+    if (arg.startsWith("--mds-app-name=")) {
+      mds.appName = arg.slice("--mds-app-name=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-audience=')) {
-      mds.audience = arg.slice('--mds-audience='.length);
+    if (arg.startsWith("--mds-audience=")) {
+      mds.audience = arg.slice("--mds-audience=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-core-flows=')) {
-      mds.coreFlows = arg.slice('--mds-core-flows='.length);
+    if (arg.startsWith("--mds-core-flows=")) {
+      mds.coreFlows = arg.slice("--mds-core-flows=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-screens=')) {
-      mds.screens = arg.slice('--mds-screens='.length);
+    if (arg.startsWith("--mds-screens=")) {
+      mds.screens = arg.slice("--mds-screens=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-data-needs=')) {
-      mds.dataNeeds = arg.slice('--mds-data-needs='.length);
+    if (arg.startsWith("--mds-data-needs=")) {
+      mds.dataNeeds = arg.slice("--mds-data-needs=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-data-start=')) {
-      const value = arg.slice('--mds-data-start='.length);
-      if (value === 'local' || value === 'supabase') {
+    if (arg.startsWith("--mds-data-start=")) {
+      const value = arg.slice("--mds-data-start=".length);
+      if (value === "local" || value === "supabase") {
         mds.dataStart = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mds-deployment-target=')) {
-      mds.deploymentTarget = arg.slice('--mds-deployment-target='.length);
+    if (arg.startsWith("--mds-deployment-target=")) {
+      mds.deploymentTarget = arg.slice("--mds-deployment-target=".length);
       continue;
     }
 
-    if (arg === '--mds-test-to-main') {
+    if (arg === "--mds-test-to-main") {
       mds.testToMain = true;
       continue;
     }
 
-    if (arg === '--mds-no-test-to-main') {
+    if (arg === "--mds-no-test-to-main") {
       mds.testToMain = false;
       continue;
     }
 
-    if (arg.startsWith('--mds-platforms=')) {
-      mds.platforms = splitList(arg.slice('--mds-platforms='.length));
+    if (arg.startsWith("--mds-platforms=")) {
+      mds.platforms = splitList(arg.slice("--mds-platforms=".length));
       continue;
     }
 
-    if (arg.startsWith('--mds-first-platform=')) {
-      mds.firstPlatform = arg.slice('--mds-first-platform='.length);
+    if (arg.startsWith("--mds-first-platform=")) {
+      mds.firstPlatform = arg.slice("--mds-first-platform=".length);
       continue;
     }
 
-    if (arg.startsWith('--mds-platform-strategy=')) {
-      const value = arg.slice('--mds-platform-strategy='.length);
-      if (value === 'folders' || value === 'files-only') {
+    if (arg.startsWith("--mds-platform-strategy=")) {
+      const value = arg.slice("--mds-platform-strategy=".length);
+      if (value === "folders" || value === "files-only") {
         mds.platformStrategy = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mds-app-directory=')) {
-      const value = arg.slice('--mds-app-directory='.length);
-      if (value === 'src' || value === 'root') {
+    if (arg.startsWith("--mds-app-directory=")) {
+      const value = arg.slice("--mds-app-directory=".length);
+      if (value === "src" || value === "root") {
         mds.appDirectory = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mds-platform-layouts=')) {
-      const value = arg.slice('--mds-platform-layouts='.length);
-      if (value === 'shared' || value === 'platform-specific') {
+    if (arg.startsWith("--mds-platform-layouts=")) {
+      const value = arg.slice("--mds-platform-layouts=".length);
+      if (value === "shared" || value === "platform-specific") {
         mds.platformLayouts = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mds-web-output=')) {
-      const value = arg.slice('--mds-web-output='.length);
-      if (value === 'static' || value === 'server' || value === 'spa' || value === 'none') {
+    if (arg.startsWith("--mds-web-output=")) {
+      const value = arg.slice("--mds-web-output=".length);
+      if (
+        value === "static" ||
+        value === "server" ||
+        value === "spa" ||
+        value === "none"
+      ) {
         mds.webOutput = value;
       }
       continue;
     }
 
-    if (arg.startsWith('--mds-deployed-server=')) {
-      const value = arg.slice('--mds-deployed-server='.length);
-      if (value === 'standard-expo' || value === 'custom' || value === 'none') {
+    if (arg.startsWith("--mds-deployed-server=")) {
+      const value = arg.slice("--mds-deployed-server=".length);
+      if (value === "standard-expo" || value === "custom" || value === "none") {
         mds.deployedServer = value;
       }
       continue;
     }
 
-    if (arg === '--mds-create-expo-components') {
+    if (arg === "--mds-create-expo-components") {
       mds.createExpoComponents = true;
       continue;
     }
 
-    if (arg === '--mds-no-create-expo-components') {
+    if (arg === "--mds-no-create-expo-components") {
       mds.createExpoComponents = false;
       continue;
     }
 
-    if (arg === '--mds-latest-expo-sdk') {
-      mds.latestExpoSdk = true;
+    if (arg === "--mds-latest-expo-sdk" || arg === "--mds-no-latest-expo-sdk") {
       continue;
     }
 
-    if (arg === '--mds-no-latest-expo-sdk') {
-      mds.latestExpoSdk = false;
-      continue;
-    }
-
-    if (arg === '--mds-expo-ui') {
+    if (arg === "--mds-expo-ui") {
       mds.expoUi = true;
       continue;
     }
 
-    if (arg === '--mds-no-expo-ui') {
+    if (arg === "--mds-no-expo-ui") {
       mds.expoUi = false;
       continue;
     }
 
-    if (arg === '--mds-expo-native-tabs') {
+    if (arg === "--mds-expo-ui-universal") {
+      mds.expoUiUniversal = true;
+      continue;
+    }
+
+    if (arg === "--mds-no-expo-ui-universal") {
+      mds.expoUiUniversal = false;
+      continue;
+    }
+
+    if (arg === "--mds-expo-native-tabs") {
       mds.expoNativeTabs = true;
       continue;
     }
 
-    if (arg === '--mds-no-expo-native-tabs') {
+    if (arg === "--mds-no-expo-native-tabs") {
       mds.expoNativeTabs = false;
       continue;
     }
 
-    if (arg.startsWith('--mds-eas-uses=')) {
-      mds.easUses = splitList(arg.slice('--mds-eas-uses='.length));
+    if (arg.startsWith("--mds-eas-uses=")) {
+      mds.easUses = splitList(arg.slice("--mds-eas-uses=".length));
       continue;
     }
 
@@ -419,34 +554,39 @@ export function parseArgs(args: string[]): ParsedArgs {
 
 export function renderHelpText(): string {
   return [
-    'create-expo-super-stack',
-    '',
-    'Usage:',
-    '  create-expo-super-stack [project-name] [create-expo-stack options] [mds options]',
-    '',
-    'Examples:',
-    '  create-expo-super-stack my-app --expo-router --uniwind',
-    '  create-expo-super-stack ../MyApp --expo-router --mds-yes',
-    '',
-    'Common mds options:',
-    '  --mds-yes                     Run non-interactive onboarding defaults',
-    '  --mds-save-defaults           Save onboarding answers as personal defaults',
-    '  --mds-no-save-defaults        Do not save onboarding answers as personal defaults',
-    '  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app',
-    '  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass',
-    '  --mds-guidelines-template     Use bundled MDS project/guidelines template',
-    '  --mds-app-name=<name>         Set display app name for project memory',
-    '  --mds-screens=                List must-include screens for project memory',
-    '',
-    'Help:',
-    '  -h, --help                     Show this help and exit',
-    '',
-    'Note:',
-    '  Unknown non-mds flags are forwarded to create-expo-stack.',
-  ].join('\n');
+    "create-expo-super-stack",
+    "",
+    "Usage:",
+    "  create-expo-super-stack [project-name] [create-expo-stack options] [mds options]",
+    "",
+    "Examples:",
+    "  create-expo-super-stack my-app --expo-router --uniwind",
+    "  create-expo-super-stack ../MyApp --expo-router --mds-yes",
+    "",
+    "Common mds options:",
+    "  --mds-yes                     Run non-interactive onboarding defaults",
+    "  --mds-save-defaults           Save onboarding answers as personal defaults",
+    "  --mds-no-save-defaults        Do not save onboarding answers as personal defaults",
+    "  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app",
+    "  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass",
+    "  --mds-guidelines-template     Use bundled MDS project/guidelines template",
+    "  --mds-no-guidelines-template  Do not use the bundled MDS project/guidelines template",
+    "  --mds-app-name=<name>         Set display app name for project memory",
+    "  --mds-screens=                List must-include screens for project memory",
+    "  --mds-expo-ui-universal       Use Expo UI Universal components when Expo UI is selected",
+    "",
+    "Help:",
+    "  -h, --help                     Show this help and exit",
+    "",
+    "Note:",
+    "  Unknown non-mds flags are forwarded to create-expo-stack.",
+  ].join("\n");
 }
 
-export function withResolvedProjectName(parsed: ParsedArgs, projectName: string): ParsedArgs {
+export function withResolvedProjectName(
+  parsed: ParsedArgs,
+  projectName: string,
+): ParsedArgs {
   const target = resolveProjectTarget(parsed.projectName ?? projectName);
   const resolvedProjectName = target.projectName;
   const createExpoStackArgs = parsed.mds.skipCreate
@@ -478,7 +618,9 @@ export function withResolvedProjectName(parsed: ParsedArgs, projectName: string)
   };
 }
 
-async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> {
+async function promptForMissingProjectName(
+  parsed: ParsedArgs,
+): Promise<string> {
   if (parsed.projectName) {
     return parsed.projectName;
   }
@@ -488,19 +630,21 @@ async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> 
   }
 
   const answer = await text({
-    message: 'What do you want to name your Expo app?',
+    message: "What do you want to name your Expo app?",
     placeholder: DEFAULT_PROJECT_NAME,
     defaultValue: DEFAULT_PROJECT_NAME,
     validate: (value) => {
       if (!value.trim()) {
-        return 'Please enter an app name, or press Enter to use the visible default.';
+        return "Please enter an app name, or press Enter to use the visible default.";
       }
       return undefined;
     },
   });
 
   if (isCancel(answer)) {
-    cancel('Cancelled. You can rerun create-expo-super-stack whenever you are ready.');
+    cancel(
+      "Cancelled. You can rerun create-expo-super-stack whenever you are ready.",
+    );
     process.exit(0);
   }
 
@@ -509,11 +653,19 @@ async function promptForMissingProjectName(parsed: ParsedArgs): Promise<string> 
   return projectName;
 }
 
-function printIntro(projectName: string, createExpoStackArgs: string[], projectParentDir = process.cwd()): void {
-  console.log('create-expo-super-stack');
+function printIntro(
+  projectName: string,
+  createExpoStackArgs: string[],
+  projectParentDir = process.cwd(),
+): void {
+  console.log("create-expo-super-stack");
   console.log();
-  console.log('This uses create-expo-stack under the hood, then applies MDS onboarding.');
-  console.log(`Delegating: create-expo-stack ${formatDisplayArgs(createExpoStackArgs)}`);
+  console.log(
+    "This uses create-expo-stack under the hood, then applies MDS onboarding.",
+  );
+  console.log(
+    `Delegating: create-expo-stack ${formatDisplayArgs(createExpoStackArgs)}`,
+  );
   console.log(`Target app: ${projectName}`);
   if (projectParentDir !== process.cwd()) {
     console.log(`Target folder: ${path.join(projectParentDir, projectName)}`);
@@ -521,31 +673,43 @@ function printIntro(projectName: string, createExpoStackArgs: string[], projectP
   console.log();
 }
 
-async function runCreateExpoStack(args: string[], overrideBin?: string, cwd = process.cwd()): Promise<void> {
+async function runCreateExpoStack(
+  args: string[],
+  overrideBin?: string,
+  cwd = process.cwd(),
+): Promise<void> {
   const command = await resolveCreateExpoStackCommand(overrideBin);
   console.log(`Using create-expo-stack command: ${command.display}`);
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command.command, [...command.args, ...args], {
       cwd,
-      shell: command.shell ?? process.platform === 'win32',
-      stdio: 'inherit',
+      shell: command.shell ?? process.platform === "win32",
+      stdio: "inherit",
       windowsHide: true,
     });
-    child.on('error', reject);
-    child.on('close', (code) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`create-expo-stack exited with code ${code ?? 'unknown'}.`));
+        reject(
+          new Error(`create-expo-stack exited with code ${code ?? "unknown"}.`),
+        );
       }
     });
   });
 }
 
-export function resolveProjectTarget(rawProjectName: string, cwd = process.cwd()): { projectName: string; parentDir: string } {
+export function resolveProjectTarget(
+  rawProjectName: string,
+  cwd = process.cwd(),
+): { projectName: string; parentDir: string } {
   const trimmed = rawProjectName.trim();
-  const normalized = trimmed.replace(/[\\/]+$/u, '') || DEFAULT_PROJECT_NAME;
-  const hasPathSyntax = path.isAbsolute(normalized) || normalized.includes('/') || normalized.includes('\\');
+  const normalized = trimmed.replace(/[\\/]+$/u, "") || DEFAULT_PROJECT_NAME;
+  const hasPathSyntax =
+    path.isAbsolute(normalized) ||
+    normalized.includes("/") ||
+    normalized.includes("\\");
 
   if (!hasPathSyntax) {
     return {
@@ -564,7 +728,7 @@ export function resolveProjectTarget(rawProjectName: string, cwd = process.cwd()
 
 function replaceProjectArg(args: string[], projectName: string): string[] {
   const nextArgs = [...args];
-  const projectArgIndex = nextArgs.findIndex((arg) => !arg.startsWith('--'));
+  const projectArgIndex = nextArgs.findIndex((arg) => !arg.startsWith("--"));
 
   if (projectArgIndex >= 0) {
     nextArgs[projectArgIndex] = projectName;
@@ -575,14 +739,14 @@ function replaceProjectArg(args: string[], projectName: string): string[] {
 }
 
 export function validateCreateExpoStackArgs(args: string[]): void {
-  const authFlags = ['--supabase', '--firebase'].filter((flag) =>
+  const authFlags = ["--supabase", "--firebase"].filter((flag) =>
     args.some((arg) => arg === flag || arg.startsWith(`${flag}=`)),
   );
 
   if (authFlags.length > 1) {
     throw new Error(
       `Choose one create-expo-stack auth provider, not ${authFlags.join(
-        ' and ',
+        " and ",
       )}. create-expo-stack scaffolds a single auth slice; Super Stack can still document future data/backend plans in project/.`,
     );
   }
@@ -591,48 +755,88 @@ export function validateCreateExpoStackArgs(args: string[]): void {
 export async function runExpoProjectChecks(
   projectPath: string,
   packageManager: PackageManager,
-  options: ExpoProjectCheckOptions = {}
 ): Promise<void> {
   console.log();
-  console.log('Installing MDS-added dependencies, then running Expo dependency repair and doctor.');
+  console.log(
+    "Installing MDS-added dependencies, then running Expo dependency repair and doctor.",
+  );
   await runProjectCommand(projectPath, buildInstallCommand(packageManager));
-  if (options.useLatestExpoSdk && (await shouldRunExpoLatestSdkCommand(projectPath))) {
-    await runProjectCommand(projectPath, buildExpoLatestSdkCommand(packageManager));
-  } else if (options.useLatestExpoSdk) {
-    console.log(`  Expo SDK already targets SDK ${CURRENT_EXPO_SDK_MAJOR}; skipping expo@latest.`);
+  const missingWindowsOxideBinding =
+    await resolveMissingWindowsTailwindOxideBinding(projectPath);
+  if (missingWindowsOxideBinding) {
+    await runProjectCommand(
+      projectPath,
+      buildAddDevDependencyCommand(packageManager, missingWindowsOxideBinding),
+    );
   }
-  await runProjectCommand(projectPath, buildExpoInstallFixCommand(packageManager));
+  if (await shouldRunExpoLatestSdkCommand(projectPath)) {
+    await runProjectCommand(
+      projectPath,
+      buildExpoLatestSdkCommand(packageManager),
+    );
+  } else {
+    console.log(
+      "  Expo already uses the latest release channel; skipping expo@latest.",
+    );
+  }
+  await runProjectCommand(
+    projectPath,
+    buildExpoInstallFixCommand(packageManager),
+  );
   if (await shouldInstallExpoFontPeer(projectPath)) {
-    await runProjectCommand(projectPath, buildExpoFontInstallCommand(packageManager));
+    await runProjectCommand(
+      projectPath,
+      buildExpoFontInstallCommand(packageManager),
+    );
   }
+  await runProjectCommand(
+    projectPath,
+    buildPrettierWriteCommand(packageManager),
+  );
   await runProjectCommand(projectPath, buildExpoDoctorCommand(packageManager));
 }
 
-async function runProjectCommand(projectPath: string, spec: CommandSpec): Promise<void> {
+async function runProjectCommand(
+  projectPath: string,
+  spec: CommandSpec,
+): Promise<void> {
   console.log(`  ${spec.display}`);
   await new Promise<void>((resolve, reject) => {
     const child = spawn(spec.command, spec.args, {
       cwd: projectPath,
-      shell: spec.shell ?? process.platform === 'win32',
-      stdio: 'inherit',
+      shell: spec.shell ?? process.platform === "win32",
+      stdio: "inherit",
       env: spec.env ? { ...process.env, ...spec.env } : process.env,
       windowsHide: true,
     });
-    child.on('error', reject);
-    child.on('close', (code) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${spec.display} exited with code ${code ?? 'unknown'}.`));
+        reject(
+          new Error(`${spec.display} exited with code ${code ?? "unknown"}.`),
+        );
       }
     });
   });
 }
 
-async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<CommandSpec> {
-  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const executable = process.platform === 'win32' ? 'create-expo-stack.cmd' : 'create-expo-stack';
-  const override = overrideBin ?? process.env.MRDJ_CREATE_EXPO_STACK_BIN ?? process.env.CREATE_EXPO_STACK_BIN;
+async function resolveCreateExpoStackCommand(
+  overrideBin?: string,
+): Promise<CommandSpec> {
+  const packageRoot = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "..",
+  );
+  const executable =
+    process.platform === "win32"
+      ? "create-expo-stack.cmd"
+      : "create-expo-stack";
+  const override =
+    overrideBin ??
+    process.env.MRDJ_CREATE_EXPO_STACK_BIN ??
+    process.env.CREATE_EXPO_STACK_BIN;
   if (override) {
     const overridePath = path.resolve(override);
     return {
@@ -643,8 +847,19 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
     };
   }
 
-  const localForkCliRoot = path.join(packageRoot, '..', '..', '..', 'create-expo-stack', 'cli');
-  const localForkBin = path.join(localForkCliRoot, 'bin', 'create-expo-stack.js');
+  const localForkCliRoot = path.join(
+    packageRoot,
+    "..",
+    "..",
+    "..",
+    "create-expo-stack",
+    "cli",
+  );
+  const localForkBin = path.join(
+    localForkCliRoot,
+    "bin",
+    "create-expo-stack.js",
+  );
   if (await pathExists(localForkBin)) {
     await ensureLocalCreateExpoStackBuild(localForkCliRoot);
     return {
@@ -656,8 +871,24 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
   }
 
   const scopedForkCandidates = [
-    path.join(packageRoot, 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
-    path.join(packageRoot, '..', '..', 'node_modules', '@mr.dj2u', 'create-expo-stack', 'bin', 'create-expo-stack.js'),
+    path.join(
+      packageRoot,
+      "node_modules",
+      "@mr.dj2u",
+      "create-expo-stack",
+      "bin",
+      "create-expo-stack.js",
+    ),
+    path.join(
+      packageRoot,
+      "..",
+      "..",
+      "node_modules",
+      "@mr.dj2u",
+      "create-expo-stack",
+      "bin",
+      "create-expo-stack.js",
+    ),
   ];
 
   for (const candidate of scopedForkCandidates) {
@@ -672,8 +903,8 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
   }
 
   const candidates = [
-    path.join(packageRoot, 'node_modules', '.bin', executable),
-    path.join(packageRoot, '..', '..', 'node_modules', '.bin', executable),
+    path.join(packageRoot, "node_modules", ".bin", executable),
+    path.join(packageRoot, "..", "..", "node_modules", ".bin", executable),
   ];
 
   for (const candidate of candidates) {
@@ -687,63 +918,75 @@ async function resolveCreateExpoStackCommand(overrideBin?: string): Promise<Comm
   }
 
   return {
-    command: 'create-expo-stack',
+    command: "create-expo-stack",
     args: [],
-    display: 'create-expo-stack',
+    display: "create-expo-stack",
   };
 }
 
-async function ensureLocalCreateExpoStackBuild(localForkCliRoot: string): Promise<void> {
-  const buildEntry = path.join(localForkCliRoot, 'build', 'cli.js');
+async function ensureLocalCreateExpoStackBuild(
+  localForkCliRoot: string,
+): Promise<void> {
+  const buildEntry = path.join(localForkCliRoot, "build", "cli.js");
   if (await pathExists(buildEntry)) {
     return;
   }
 
   console.log(`Building local create-expo-stack fork: ${localForkCliRoot}`);
-  if (await commandExists('bun')) {
+  if (await commandExists("bun")) {
     await runProjectCommand(localForkCliRoot, {
-      command: 'bun',
-      args: ['run', 'build'],
-      display: 'bun run build',
+      command: "bun",
+      args: ["run", "build"],
+      display: "bun run build",
     });
     return;
   }
 
-  console.log('Bun was not found, so using npm to build the local fork.');
-  if (!(await pathExists(path.join(localForkCliRoot, 'node_modules')))) {
+  console.log("Bun was not found, so using npm to build the local fork.");
+  if (!(await pathExists(path.join(localForkCliRoot, "node_modules")))) {
     await runProjectCommand(localForkCliRoot, {
-      command: 'npm',
-      args: ['install'],
-      display: 'npm install',
+      command: "npm",
+      args: ["install"],
+      display: "npm install",
     });
   }
   await runProjectCommand(localForkCliRoot, {
-    command: 'npx',
-    args: ['tsc', '-p', '.'],
-    display: 'npx tsc -p .',
+    command: "npx",
+    args: ["tsc", "-p", "."],
+    display: "npx tsc -p .",
   });
   await runProjectCommand(localForkCliRoot, {
-    command: 'npx',
-    args: ['copyfiles', '-u', '2', '-a', './src/templates/**/*', './build/templates'],
+    command: "npx",
+    args: [
+      "copyfiles",
+      "-u",
+      "2",
+      "-a",
+      "./src/templates/**/*",
+      "./build/templates",
+    ],
     display: 'npx copyfiles -u 2 -a "./src/templates/**/*" ./build/templates',
   });
 }
 
 async function commandExists(command: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(command, ['--version'], {
-      shell: process.platform === 'win32',
-      stdio: 'ignore',
+    const child = spawn(command, ["--version"], {
+      shell: process.platform === "win32",
+      stdio: "ignore",
       windowsHide: true,
     });
-    child.on('error', () => resolve(false));
-    child.on('close', (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
   });
 }
 
-async function resolveGeneratedProjectPath(cwd: string, projectName: string): Promise<string> {
+async function resolveGeneratedProjectPath(
+  cwd: string,
+  projectName: string,
+): Promise<string> {
   const directPath = path.resolve(cwd, projectName);
-  if (await pathExists(path.join(directPath, 'package.json'))) {
+  if (await pathExists(path.join(directPath, "package.json"))) {
     return directPath;
   }
 
@@ -755,9 +998,11 @@ async function resolveGeneratedProjectPath(cwd: string, projectName: string): Pr
   return directPath;
 }
 
-async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; to: string } | null> {
-  const rootAppDir = path.join(projectPath, 'app');
-  const srcAppDir = path.join(projectPath, 'src', 'app');
+async function moveRootAppIntoSrc(
+  projectPath: string,
+): Promise<{ from: string; to: string } | null> {
+  const rootAppDir = path.join(projectPath, "app");
+  const srcAppDir = path.join(projectPath, "src", "app");
   if (!(await pathExists(rootAppDir)) || (await pathExists(srcAppDir))) {
     return null;
   }
@@ -767,12 +1012,417 @@ async function moveRootAppIntoSrc(projectPath: string): Promise<{ from: string; 
   return { from: rootAppDir, to: srcAppDir };
 }
 
+async function consolidateRootSourceFolders(
+  projectPath: string,
+): Promise<string[]> {
+  const folderNames = ["components", "theme", "lib"];
+  const updatedPaths: string[] = [];
+  for (const folderName of folderNames) {
+    const rootDir = path.join(projectPath, folderName);
+    if (!(await pathExists(rootDir))) {
+      continue;
+    }
+    const srcDir = path.join(projectPath, "src", folderName);
+    if (!(await pathExists(srcDir))) {
+      await mkdir(path.dirname(srcDir), { recursive: true });
+      await rename(rootDir, srcDir);
+      updatedPaths.push(srcDir);
+      continue;
+    }
+    await mergeDirectoryInto(rootDir, srcDir);
+    await rm(rootDir, { recursive: true, force: true });
+    updatedPaths.push(srcDir);
+  }
+
+  return updatedPaths;
+}
+
+async function mergeDirectoryInto(
+  sourceDir: string,
+  targetDir: string,
+): Promise<void> {
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      await mergeDirectoryInto(sourcePath, targetPath);
+      continue;
+    }
+    if (await pathExists(targetPath)) {
+      await rm(sourcePath, { force: true });
+      continue;
+    }
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await rename(sourcePath, targetPath);
+  }
+}
+
+export async function repairMovedSrcAppImports(
+  projectPath: string,
+): Promise<string[]> {
+  const layoutPaths: Array<{
+    filePath: string;
+    replacements: Array<[from: string, to: string]>;
+  }> = [
+    {
+      filePath: path.join(projectPath, "src", "app", "(tabs)", "_layout.tsx"),
+      replacements: [
+        ['"../components/HeaderButton"', '"../../components/HeaderButton"'],
+        ['"../components/TabBarIcon"', '"../../components/TabBarIcon"'],
+        ["'../components/HeaderButton'", "'../../components/HeaderButton'"],
+        ["'../components/TabBarIcon'", "'../../components/TabBarIcon'"],
+      ],
+    },
+    {
+      filePath: path.join(projectPath, "src", "app", "(drawer)", "_layout.tsx"),
+      replacements: [
+        ['"../components/HeaderButton"', '"../../components/HeaderButton"'],
+        ['"../components/TabBarIcon"', '"../../components/TabBarIcon"'],
+        ["'../components/HeaderButton'", "'../../components/HeaderButton'"],
+        ["'../components/TabBarIcon'", "'../../components/TabBarIcon'"],
+      ],
+    },
+    {
+      filePath: path.join(
+        projectPath,
+        "src",
+        "app",
+        "(drawer)",
+        "(tabs)",
+        "_layout.tsx",
+      ),
+      replacements: [
+        [
+          '"../../components/HeaderButton"',
+          '"../../../components/HeaderButton"',
+        ],
+        ['"../../components/TabBarIcon"', '"../../../components/TabBarIcon"'],
+        [
+          "'../../components/HeaderButton'",
+          "'../../../components/HeaderButton'",
+        ],
+        ["'../../components/TabBarIcon'", "'../../../components/TabBarIcon'"],
+      ],
+    },
+  ];
+  const updatedPaths: string[] = [];
+
+  for (const layout of layoutPaths) {
+    const raw = await readOptionalText(layout.filePath);
+    if (!raw) {
+      continue;
+    }
+
+    let updated = raw;
+    for (const [from, to] of layout.replacements) {
+      updated = updated.split(from).join(to);
+    }
+
+    if (updated === raw) {
+      continue;
+    }
+
+    await writeFile(layout.filePath, updated, "utf8");
+    updatedPaths.push(layout.filePath);
+  }
+
+  return updatedPaths;
+}
+
+export async function repairGeneratedTypeSupport(
+  projectPath: string,
+  options: { needsNodeTypes?: boolean; needsUniwindTypes?: boolean } = {},
+): Promise<string[]> {
+  const updatedPaths = new Set<string>();
+  let shouldIncludeUniwindTypes = false;
+
+  if (options.needsUniwindTypes) {
+    const packageJson = await readJson(path.join(projectPath, "package.json"));
+    const dependencies = isRecord(packageJson.dependencies)
+      ? packageJson.dependencies
+      : {};
+    const devDependencies = isRecord(packageJson.devDependencies)
+      ? packageJson.devDependencies
+      : {};
+    const optionalDependencies = isRecord(packageJson.optionalDependencies)
+      ? packageJson.optionalDependencies
+      : {};
+    shouldIncludeUniwindTypes =
+      typeof dependencies.uniwind === "string" ||
+      typeof devDependencies.uniwind === "string" ||
+      typeof optionalDependencies.uniwind === "string" ||
+      (await pathExists(
+        path.join(projectPath, "node_modules", "uniwind", "types.d.ts"),
+      )) ||
+      (await pathExists(
+        path.join(
+          projectPath,
+          "node_modules",
+          "uniwind",
+          "types",
+          "index.d.ts",
+        ),
+      ));
+  }
+
+  if (options.needsUniwindTypes) {
+    const cssEnvPath = path.join(projectPath, "css-env.d.ts");
+    const raw = (await readOptionalText(cssEnvPath)) ?? "";
+    if (shouldIncludeUniwindTypes && !raw.includes("uniwind/types")) {
+      await writeFile(
+        cssEnvPath,
+        `/// <reference types="uniwind/types" />\n\n${raw}`,
+        "utf8",
+      );
+      updatedPaths.add(cssEnvPath);
+    } else if (!shouldIncludeUniwindTypes && raw.includes("uniwind/types")) {
+      const updated = raw
+        .replace(
+          /^\/\/\/ <reference types="uniwind\/types" \/>\r?\n\r?\n?/m,
+          "",
+        )
+        .trimStart();
+      await writeFile(cssEnvPath, updated, "utf8");
+      updatedPaths.add(cssEnvPath);
+    }
+  }
+
+  if (options.needsNodeTypes || options.needsUniwindTypes) {
+    const tsconfigPath = path.join(projectPath, "tsconfig.json");
+    const tsconfig = await readJson(tsconfigPath);
+    const compilerOptions = isRecord(tsconfig.compilerOptions)
+      ? tsconfig.compilerOptions
+      : {};
+    const pathsConfig = isRecord(compilerOptions.paths)
+      ? compilerOptions.paths
+      : {};
+    const usingSrcApp = await pathExists(path.join(projectPath, "src", "app"));
+    const normalizedPathsConfig = usingSrcApp
+      ? await normalizeTsconfigPathsForSrcDirectory(projectPath, pathsConfig)
+      : pathsConfig;
+    const existingTypes = Array.isArray(compilerOptions.types)
+      ? compilerOptions.types.filter(
+          (item): item is string => typeof item === "string",
+        )
+      : [];
+    const currentTypes = existingTypes
+      ? existingTypes.filter(
+          (item) => shouldIncludeUniwindTypes || item !== "uniwind/types",
+        )
+      : [];
+    const desiredTypes = [
+      ...currentTypes,
+      ...(options.needsNodeTypes ? ["node"] : []),
+      ...(shouldIncludeUniwindTypes ? ["uniwind/types"] : []),
+    ];
+    const nextTypes = Array.from(new Set(desiredTypes));
+    const shouldRemoveDeprecatedTsconfigOptions =
+      "baseUrl" in compilerOptions || "ignoreDeprecations" in compilerOptions;
+    const shouldUpdatePaths =
+      JSON.stringify(pathsConfig) !== JSON.stringify(normalizedPathsConfig);
+    const shouldUpdateTypes =
+      JSON.stringify(existingTypes) !== JSON.stringify(nextTypes);
+    if (
+      shouldUpdateTypes ||
+      shouldRemoveDeprecatedTsconfigOptions ||
+      shouldUpdatePaths
+    ) {
+      const {
+        baseUrl: _baseUrl,
+        ignoreDeprecations: _ignoreDeprecations,
+        ...compilerOptionsWithoutDeprecatedOptions
+      } = compilerOptions;
+      tsconfig.compilerOptions = {
+        ...compilerOptionsWithoutDeprecatedOptions,
+        ...(shouldUpdatePaths ? { paths: normalizedPathsConfig } : {}),
+        types: shouldUpdateTypes ? nextTypes : currentTypes,
+      };
+      await writeFile(
+        tsconfigPath,
+        `${JSON.stringify(tsconfig, null, 2)}\n`,
+        "utf8",
+      );
+      updatedPaths.add(tsconfigPath);
+    }
+  }
+
+  if (options.needsNodeTypes) {
+    const packageJsonPath = path.join(projectPath, "package.json");
+    const packageJson = await readJson(packageJsonPath);
+    const devDependencies = isRecord(packageJson.devDependencies)
+      ? packageJson.devDependencies
+      : {};
+    if (devDependencies["@types/node"] !== "^25.9.1") {
+      packageJson.devDependencies = {
+        ...devDependencies,
+        "@types/node": "^25.9.1",
+      };
+      await writeFile(
+        packageJsonPath,
+        `${JSON.stringify(packageJson, null, 2)}\n`,
+        "utf8",
+      );
+      updatedPaths.add(packageJsonPath);
+    }
+  }
+
+  const tabBarIconPaths = [
+    path.join(projectPath, "components", "TabBarIcon.tsx"),
+    path.join(projectPath, "src", "components", "TabBarIcon.tsx"),
+  ];
+  for (const tabBarIconPath of tabBarIconPaths) {
+    const tabBarIconRaw = await readOptionalText(tabBarIconPath);
+    if (!tabBarIconRaw || !tabBarIconRaw.includes("color: string")) {
+      continue;
+    }
+    const updated = tabBarIconRaw
+      .replace(
+        "import { StyleSheet } from 'react-native';",
+        "import type { ColorValue } from 'react-native';\nimport { StyleSheet } from 'react-native';",
+      )
+      .replace("color: string;", "color: ColorValue;");
+    if (updated !== tabBarIconRaw) {
+      await writeFile(tabBarIconPath, updated, "utf8");
+      updatedPaths.add(tabBarIconPath);
+    }
+  }
+
+  return Array.from(updatedPaths);
+}
+
+async function normalizeTsconfigPathsForSrcDirectory(
+  projectPath: string,
+  pathsConfig: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const nextPaths: Record<string, unknown> = {};
+
+  for (const [alias, targets] of Object.entries(pathsConfig)) {
+    if (!Array.isArray(targets)) {
+      nextPaths[alias] = targets;
+      continue;
+    }
+
+    const nextTargets: unknown[] = [];
+    for (const target of targets) {
+      if (typeof target !== "string") {
+        nextTargets.push(target);
+        continue;
+      }
+
+      const normalized = await normalizeAliasTargetForSrcDirectory(
+        projectPath,
+        alias,
+        target,
+      );
+      nextTargets.push(normalized);
+    }
+    nextPaths[alias] = nextTargets;
+  }
+
+  return nextPaths;
+}
+
+async function normalizeAliasTargetForSrcDirectory(
+  projectPath: string,
+  alias: string,
+  target: string,
+): Promise<string> {
+  const normalizedTarget = target.replace(/\\/g, "/").trim();
+  if (
+    normalizedTarget.startsWith("./src/") ||
+    normalizedTarget.startsWith("src/")
+  ) {
+    return target;
+  }
+
+  if (
+    alias === "@/*" &&
+    (normalizedTarget === "./*" || normalizedTarget === "*")
+  ) {
+    return "./src/*";
+  }
+
+  const relativeTarget = normalizedTarget.startsWith("./")
+    ? normalizedTarget.slice(2)
+    : normalizedTarget;
+  const wildcardSuffix = relativeTarget.endsWith("/*") ? "/*" : "";
+  const relativeBase = wildcardSuffix
+    ? relativeTarget.slice(0, -2)
+    : relativeTarget;
+  if (!relativeBase || relativeBase === "*") {
+    return target;
+  }
+
+  const rootCandidate = path.join(projectPath, relativeBase);
+  const srcCandidate = path.join(projectPath, "src", relativeBase);
+  const rootExists = await pathExists(rootCandidate);
+  const srcExists = await pathExists(srcCandidate);
+  if (!rootExists && srcExists) {
+    return `./src/${relativeBase}${wildcardSuffix}`;
+  }
+
+  return target;
+}
+
+export async function repairGeneratedNativeWindUiPicker(
+  projectPath: string,
+): Promise<string[]> {
+  const pickerPaths = [
+    path.join(projectPath, "components", "nativewindui", "Picker.tsx"),
+    path.join(projectPath, "src", "components", "nativewindui", "Picker.tsx"),
+  ];
+  const updatedPaths: string[] = [];
+  for (const pickerPath of pickerPaths) {
+    const raw = await readOptionalText(pickerPath);
+    if (!raw || !raw.includes("dropdownIconRippleColor=")) {
+      continue;
+    }
+
+    let updated = raw;
+    updated = updated.replace(
+      "import { View } from 'react-native';",
+      "import { Platform, View } from 'react-native';",
+    );
+    updated = updated.replace(
+      "        dropdownIconRippleColor={dropdownIconRippleColor ?? colors.foreground}",
+      "        {...(Platform.OS === 'web' ? {} : { dropdownIconRippleColor: dropdownIconRippleColor ?? colors.foreground })}",
+    );
+
+    if (updated === raw) {
+      continue;
+    }
+
+    await writeFile(pickerPath, updated, "utf8");
+    updatedPaths.push(pickerPath);
+  }
+
+  return updatedPaths;
+}
+
+export async function repairGeneratedEslintConfig(projectPath: string): Promise<string[]> {
+  const eslintConfigPath = path.join(projectPath, "eslint.config.js");
+  const raw = await readOptionalText(eslintConfigPath);
+  if (!raw) {
+    return [];
+  }
+
+  const updated = raw.replace(/^\/\* eslint-env node \*\/\r?\n/, "");
+  if (updated === raw) {
+    return [];
+  }
+
+  await writeFile(eslintConfigPath, updated, "utf8");
+  return [eslintConfigPath];
+}
+
 export async function repairExpoProjectIdentifiers(
   projectPath: string,
   projectName: string,
-  targetPlatforms: string[] = []
+  targetPlatforms: string[] = [],
 ): Promise<string[]> {
-  const appJsonPath = path.join(projectPath, 'app.json');
+  const appJsonPath = path.join(projectPath, "app.json");
   const raw = await readOptionalText(appJsonPath);
   if (!raw) {
     return [];
@@ -793,10 +1443,12 @@ export async function repairExpoProjectIdentifiers(
 
   const nextSlug = toExpoSlug(readString(expo.slug) ?? projectName);
   const currentScheme = expo.scheme;
-  const hasScheme = Object.prototype.hasOwnProperty.call(expo, 'scheme');
+  const hasScheme = Object.prototype.hasOwnProperty.call(expo, "scheme");
   const nextScheme = hasScheme
     ? Array.isArray(currentScheme)
-      ? currentScheme.map((item) => toExpoScheme(readString(item) ?? projectName))
+      ? currentScheme.map((item) =>
+          toExpoScheme(readString(item) ?? projectName),
+        )
       : toExpoScheme(readString(currentScheme) ?? projectName)
     : undefined;
 
@@ -805,26 +1457,216 @@ export async function repairExpoProjectIdentifiers(
     expo.slug = nextSlug;
     changed = true;
   }
-  if (hasScheme && JSON.stringify(currentScheme) !== JSON.stringify(nextScheme)) {
+  if (
+    hasScheme &&
+    JSON.stringify(currentScheme) !== JSON.stringify(nextScheme)
+  ) {
     expo.scheme = nextScheme;
     changed = true;
   }
-  const shouldIncludeWeb = targetPlatforms.includes('web');
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
-  if (shouldIncludeWeb && !currentPlatforms.includes('web')) {
-    expo.platforms = [...currentPlatforms, 'web'];
+  const normalizedTargetPlatforms = Array.from(
+    new Set(
+      targetPlatforms
+        .map((platform) => readString(platform) ?? platform)
+        .filter((platform): platform is string => Boolean(platform))
+    )
+  );
+  if (
+    normalizedTargetPlatforms.length > 0 &&
+    JSON.stringify(currentPlatforms) !== JSON.stringify(normalizedTargetPlatforms)
+  ) {
+    expo.platforms = normalizedTargetPlatforms;
     changed = true;
+  }
+  const shouldIncludeAndroid = targetPlatforms.includes("android");
+  if (shouldIncludeAndroid) {
+    if (readString(expo.backgroundColor) !== "#f1f0f8") {
+      expo.backgroundColor = "#f1f0f8";
+      changed = true;
+    }
+
+    const androidConfig = isRecord(expo.android) ? { ...expo.android } : {};
+    if (readString(androidConfig.backgroundColor) !== "#f1f0f8") {
+      androidConfig.backgroundColor = "#f1f0f8";
+      expo.android = androidConfig;
+      changed = true;
+    }
+
+    const desiredAndroidStatusBar = {
+      backgroundColor: "#f1f0f8",
+      barStyle: "dark-content",
+      translucent: false,
+    };
+    if (
+      JSON.stringify(expo.androidStatusBar) !==
+      JSON.stringify(desiredAndroidStatusBar)
+    ) {
+      expo.androidStatusBar = desiredAndroidStatusBar;
+      changed = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(expo, "androidNavigationBar")) {
+      delete expo.androidNavigationBar;
+      changed = true;
+    }
+    const desiredNavigationBarPlugin = [
+      "expo-navigation-bar",
+      {
+        style: "dark",
+        enforceContrast: false,
+      },
+    ];
+    const plugins = Array.isArray(expo.plugins) ? [...expo.plugins] : [];
+    const existingNavigationBarPluginIndex = plugins.findIndex((plugin) => {
+      if (readString(plugin) === "expo-navigation-bar") {
+        return true;
+      }
+      return (
+        Array.isArray(plugin) && readString(plugin[0]) === "expo-navigation-bar"
+      );
+    });
+    if (
+      existingNavigationBarPluginIndex === -1 ||
+      JSON.stringify(plugins[existingNavigationBarPluginIndex]) !==
+        JSON.stringify(desiredNavigationBarPlugin)
+    ) {
+      if (existingNavigationBarPluginIndex === -1) {
+        plugins.push(desiredNavigationBarPlugin);
+      } else {
+        plugins[existingNavigationBarPluginIndex] = desiredNavigationBarPlugin;
+      }
+      changed = true;
+    }
+    const hasSystemUiPlugin = plugins.some((plugin) => {
+      if (readString(plugin) === "expo-system-ui") {
+        return true;
+      }
+      return (
+        Array.isArray(plugin) && readString(plugin[0]) === "expo-system-ui"
+      );
+    });
+    if (!hasSystemUiPlugin) {
+      plugins.push("expo-system-ui");
+      changed = true;
+    }
+    if (JSON.stringify(expo.plugins) !== JSON.stringify(plugins)) {
+      expo.plugins = plugins;
+      changed = true;
+    }
+  } else {
+    if (Object.prototype.hasOwnProperty.call(expo, "androidNavigationBar")) {
+      delete expo.androidNavigationBar;
+      changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(expo, "androidStatusBar")) {
+      delete expo.androidStatusBar;
+      changed = true;
+    }
+  }
+
+  if (shouldIncludeAndroid) {
+    const deprecatedNavigationBar = {
+      position: "absolute",
+      backgroundColor: "#00000000",
+      style: "dark",
+      enforceContrast: false,
+    };
+    if (
+      JSON.stringify(expo.androidNavigationBar) ===
+      JSON.stringify(deprecatedNavigationBar)
+    ) {
+      delete expo.androidNavigationBar;
+    }
   }
 
   if (!changed) {
     return [];
   }
 
-  await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+  await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
   return [appJsonPath];
 }
 
-async function findProjectFromCesConfig(cwd: string, projectName: string): Promise<string | null> {
+export async function repairExpoWebOutputForStylistLifecycle(
+  projectPath: string,
+  preferredWebOutput: OnboardWebOutput = "static",
+): Promise<string[]> {
+  const appJsonPath = path.join(projectPath, "app.json");
+  const raw = await readOptionalText(appJsonPath);
+  if (!raw) {
+    return [];
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value = JSON.parse(raw) as unknown;
+    parsed = isRecord(value) ? value : {};
+  } catch {
+    return [];
+  }
+
+  const expo = isRecord(parsed.expo) ? parsed.expo : undefined;
+  if (!expo) {
+    return [];
+  }
+
+  const hasWebPlatform =
+    !Array.isArray(expo.platforms) ||
+    expo.platforms.some((platform) => readString(platform) === "web");
+  if (!hasWebPlatform) {
+    return [];
+  }
+
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  const preferred = normalizeExpoWebOutput(preferredWebOutput);
+  const desiredOutput: ExpoWebOutput = hasStylistSyncRoute
+    ? "server"
+    : preferred;
+
+  const webConfig = isRecord(expo.web) ? expo.web : {};
+  const currentOutput = readString(webConfig.output);
+  if (currentOutput === desiredOutput) {
+    return [];
+  }
+
+  expo.web = {
+    ...webConfig,
+    output: desiredOutput,
+  };
+
+  await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  return [appJsonPath];
+}
+
+async function hasStylistSyncApiRoute(projectPath: string): Promise<boolean> {
+  for (const relativeRoutePath of STYLIST_SYNC_API_ROUTES) {
+    if (await pathExists(path.join(projectPath, relativeRoutePath))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function normalizeExpoWebOutput(value: OnboardWebOutput): ExpoWebOutput {
+  switch (value) {
+    case "server":
+      return "server";
+    case "spa":
+      return "single";
+    case "none":
+      return "static";
+    case "static":
+    default:
+      return "static";
+  }
+}
+
+async function findProjectFromCesConfig(
+  cwd: string,
+  projectName: string,
+): Promise<string | null> {
   try {
     const entries = await readdir(cwd, { withFileTypes: true });
     for (const entry of entries) {
@@ -833,7 +1675,9 @@ async function findProjectFromCesConfig(cwd: string, projectName: string): Promi
       }
 
       const projectPath = path.join(cwd, entry.name);
-      const raw = await readOptionalText(path.join(projectPath, 'cesconfig.jsonc'));
+      const raw = await readOptionalText(
+        path.join(projectPath, "cesconfig.jsonc"),
+      );
       if (!raw) {
         continue;
       }
@@ -850,250 +1694,433 @@ async function findProjectFromCesConfig(cwd: string, projectName: string): Promi
   return null;
 }
 
-async function detectPackageManager(projectPath: string, args: string[]): Promise<PackageManager> {
-  if (args.includes('--pnpm')) return 'pnpm';
-  if (args.includes('--yarn')) return 'yarn';
-  if (args.includes('--bun')) return 'bun';
-  if (args.includes('--npm')) return 'npm';
+async function detectPackageManager(
+  projectPath: string,
+  args: string[],
+): Promise<PackageManager> {
+  if (args.includes("--pnpm")) return "pnpm";
+  if (args.includes("--yarn")) return "yarn";
+  if (args.includes("--bun")) return "bun";
+  if (args.includes("--npm")) return "npm";
 
-  const packageJson = await readJson(path.join(projectPath, 'package.json'));
+  const packageJson = await readJson(path.join(projectPath, "package.json"));
   const declared = readString(packageJson.packageManager);
-  if (declared?.startsWith('pnpm@')) return 'pnpm';
-  if (declared?.startsWith('yarn@')) return 'yarn';
-  if (declared?.startsWith('bun@')) return 'bun';
-  if (declared?.startsWith('npm@')) return 'npm';
+  if (declared?.startsWith("pnpm@")) return "pnpm";
+  if (declared?.startsWith("yarn@")) return "yarn";
+  if (declared?.startsWith("bun@")) return "bun";
+  if (declared?.startsWith("npm@")) return "npm";
 
-  if (await pathExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await pathExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-  if (await pathExists(path.join(projectPath, 'bun.lock')) || await pathExists(path.join(projectPath, 'bun.lockb'))) {
-    return 'bun';
+  if (await pathExists(path.join(projectPath, "pnpm-lock.yaml"))) return "pnpm";
+  if (await pathExists(path.join(projectPath, "yarn.lock"))) return "yarn";
+  if (
+    (await pathExists(path.join(projectPath, "bun.lock"))) ||
+    (await pathExists(path.join(projectPath, "bun.lockb")))
+  ) {
+    return "bun";
   }
 
-  return 'npm';
+  return "npm";
 }
 
-function shouldRunExpoProjectChecks(parsed: ParsedArgs, noInstallRequested: boolean): boolean {
-  return !parsed.mds.skipCreate && !parsed.mds.skipExpoFix && !noInstallRequested;
+function shouldRunExpoProjectChecks(
+  parsed: ParsedArgs,
+  noInstallRequested: boolean,
+): boolean {
+  return (
+    !parsed.mds.skipCreate && !parsed.mds.skipExpoFix && !noInstallRequested
+  );
 }
 
 function hasNoInstallFlag(args: string[]): boolean {
   return args.some((arg) => {
     const normalized = arg.trim().toLowerCase();
     return (
-      normalized === '--no-install' ||
-      normalized === '--noinstall' ||
-      normalized === '--no-install=true' ||
-      normalized === '--install=false'
+      normalized === "--no-install" ||
+      normalized === "--noinstall" ||
+      normalized === "--no-install=true" ||
+      normalized === "--install=false"
     );
   });
 }
 
-export function buildInstallCommand(packageManager: PackageManager): CommandSpec {
+export function buildInstallCommand(
+  packageManager: PackageManager,
+): CommandSpec {
   switch (packageManager) {
-    case 'pnpm':
+    case "pnpm":
       return {
-        command: 'pnpm',
-        args: ['install', '--config.strict-dep-builds=false'],
-        display: 'pnpm install --config.strict-dep-builds=false',
-        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
+        command: "pnpm",
+        args: [
+          "install",
+          "--config.strict-dep-builds=false",
+          "--ignore-workspace",
+        ],
+        display:
+          "pnpm install --config.strict-dep-builds=false --ignore-workspace",
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
-    case 'yarn':
+    case "yarn":
       return {
-        command: 'yarn',
-        args: ['install'],
-        display: 'yarn install',
+        command: "yarn",
+        args: ["install"],
+        display: "yarn install",
       };
-    case 'bun':
+    case "bun":
       return {
-        command: 'bun',
-        args: ['install'],
-        display: 'bun install',
+        command: "bun",
+        args: ["install"],
+        display: "bun install",
       };
-    case 'npm':
+    case "npm":
       return {
-        command: 'npm',
-        args: ['install'],
-        display: 'npm install',
+        command: "npm",
+        args: ["install"],
+        display: "npm install",
       };
   }
 }
 
-export function buildExpoInstallFixCommand(packageManager: PackageManager): CommandSpec {
+export function buildExpoInstallFixCommand(
+  packageManager: PackageManager,
+): CommandSpec {
   switch (packageManager) {
-    case 'pnpm':
+    case "pnpm":
       return {
-        command: 'pnpm',
-        args: ['exec', 'expo', 'install', '--fix'],
-        display: 'pnpm exec expo install --fix',
-        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
+        command: "pnpm",
+        args: ["--ignore-workspace", "exec", "expo", "install", "--fix"],
+        display: "pnpm --ignore-workspace exec expo install --fix",
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
-    case 'yarn':
+    case "yarn":
       return {
-        command: 'yarn',
-        args: ['expo', 'install', '--fix'],
-        display: 'yarn expo install --fix',
+        command: "yarn",
+        args: ["expo", "install", "--fix"],
+        display: "yarn expo install --fix",
       };
-    case 'bun':
+    case "bun":
       return {
-        command: 'bunx',
-        args: ['expo', 'install', '--fix'],
-        display: 'bunx expo install --fix',
+        command: "bunx",
+        args: ["expo", "install", "--fix"],
+        display: "bunx expo install --fix",
       };
-    case 'npm':
+    case "npm":
       return {
-        command: 'npx',
-        args: ['expo', 'install', '--fix'],
-        display: 'npx expo install --fix',
+        command: "npx",
+        args: ["expo", "install", "--fix"],
+        display: "npx expo install --fix",
       };
   }
 }
 
-export function buildExpoLatestSdkCommand(packageManager: PackageManager): CommandSpec {
+export function buildExpoLatestSdkCommand(
+  packageManager: PackageManager,
+): CommandSpec {
   switch (packageManager) {
-    case 'pnpm':
+    case "pnpm":
       return {
-        command: 'pnpm',
-        args: ['exec', 'expo', 'install', 'expo@latest'],
-        display: 'pnpm exec expo install expo@latest',
-        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
+        command: "pnpm",
+        args: ["--ignore-workspace", "exec", "expo", "install", "expo@latest"],
+        display: "pnpm --ignore-workspace exec expo install expo@latest",
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
-    case 'yarn':
+    case "yarn":
       return {
-        command: 'yarn',
-        args: ['expo', 'install', 'expo@latest'],
-        display: 'yarn expo install expo@latest',
+        command: "yarn",
+        args: ["expo", "install", "expo@latest"],
+        display: "yarn expo install expo@latest",
       };
-    case 'bun':
+    case "bun":
       return {
-        command: 'bunx',
-        args: ['expo', 'install', 'expo@latest'],
-        display: 'bunx expo install expo@latest',
+        command: "bunx",
+        args: ["expo", "install", "expo@latest"],
+        display: "bunx expo install expo@latest",
       };
-    case 'npm':
+    case "npm":
       return {
-        command: 'npx',
-        args: ['expo', 'install', 'expo@latest'],
-        display: 'npx expo install expo@latest',
+        command: "npx",
+        args: ["expo", "install", "expo@latest"],
+        display: "npx expo install expo@latest",
       };
   }
 }
 
-export async function shouldRunExpoLatestSdkCommand(projectPath: string): Promise<boolean> {
-  const packageJson = await readJson(path.join(projectPath, 'package.json'));
+export async function shouldRunExpoLatestSdkCommand(
+  projectPath: string,
+): Promise<boolean> {
+  const packageJson = await readJson(path.join(projectPath, "package.json"));
   return shouldRunExpoLatestSdkCommandFromPackageJson(packageJson);
 }
 
-export function shouldRunExpoLatestSdkCommandFromPackageJson(packageJson: Record<string, unknown>): boolean {
-  const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
-  const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
-  const version = readString(dependencies.expo) ?? readString(devDependencies.expo);
+export function shouldRunExpoLatestSdkCommandFromPackageJson(
+  packageJson: Record<string, unknown>,
+): boolean {
+  const dependencies = isRecord(packageJson.dependencies)
+    ? packageJson.dependencies
+    : {};
+  const devDependencies = isRecord(packageJson.devDependencies)
+    ? packageJson.devDependencies
+    : {};
+  const version =
+    readString(dependencies.expo) ?? readString(devDependencies.expo);
 
-  if (!version || version === 'latest') {
-    return !version;
-  }
-
-  const major = readSemverMajor(version);
-  return major === undefined || major < CURRENT_EXPO_SDK_MAJOR;
+  return version !== "latest";
 }
 
-function readSemverMajor(version: string): number | undefined {
-  const match = version.match(/\d+/u);
-  if (!match) {
+export function buildExpoFontInstallCommand(
+  packageManager: PackageManager,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["--ignore-workspace", "exec", "expo", "install", "expo-font"],
+        display: "pnpm --ignore-workspace exec expo install expo-font",
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["expo", "install", "expo-font"],
+        display: "yarn expo install expo-font",
+      };
+    case "bun":
+      return {
+        command: "bunx",
+        args: ["expo", "install", "expo-font"],
+        display: "bunx expo install expo-font",
+      };
+    case "npm":
+      return {
+        command: "npx",
+        args: ["expo", "install", "expo-font"],
+        display: "npx expo install expo-font",
+      };
+  }
+}
+
+export function buildExpoDoctorCommand(
+  packageManager: PackageManager,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["--ignore-workspace", "dlx", "expo-doctor"],
+        display: "pnpm --ignore-workspace dlx expo-doctor",
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["dlx", "expo-doctor"],
+        display: "yarn dlx expo-doctor",
+      };
+    case "bun":
+      return {
+        command: "bunx",
+        args: ["expo-doctor"],
+        display: "bunx expo-doctor",
+      };
+    case "npm":
+      return {
+        command: "npx",
+        args: ["expo-doctor"],
+        display: "npx expo-doctor",
+      };
+  }
+}
+
+export function buildPrettierWriteCommand(
+  packageManager: PackageManager,
+): CommandSpec {
+  const glob = "**/*.{js,jsx,ts,tsx,json}";
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["exec", "prettier", "--write", glob],
+        display: `pnpm exec prettier --write "${glob}"`,
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["prettier", "--write", glob],
+        display: `yarn prettier --write "${glob}"`,
+      };
+    case "bun":
+      return {
+        command: "bunx",
+        args: ["prettier", "--write", glob],
+        display: `bunx prettier --write "${glob}"`,
+      };
+    case "npm":
+    default:
+      return {
+        command: "npx",
+        args: ["prettier", "--write", glob],
+        display: `npx prettier --write "${glob}"`,
+      };
+  }
+}
+
+export function buildAddDevDependencyCommand(
+  packageManager: PackageManager,
+  dependency: string,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["--ignore-workspace", "add", "-D", dependency],
+        display: `pnpm --ignore-workspace add -D ${dependency}`,
+        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["add", "--dev", dependency],
+        display: `yarn add --dev ${dependency}`,
+      };
+    case "bun":
+      return {
+        command: "bun",
+        args: ["add", "--dev", dependency],
+        display: `bun add --dev ${dependency}`,
+      };
+    case "npm":
+      return {
+        command: "npm",
+        args: ["install", "--save-dev", dependency],
+        display: `npm install --save-dev ${dependency}`,
+      };
+  }
+}
+
+export function resolveWindowsTailwindOxidePackage({
+  platform = process.platform,
+  arch = process.arch,
+  nodeTargetType = (
+    process.config?.variables as unknown as
+      | Record<string, string | undefined>
+      | undefined
+  )?.node_target_type,
+  shlibSuffix = (
+    process.config?.variables as unknown as
+      | Record<string, string | undefined>
+      | undefined
+  )?.shlib_suffix,
+}: {
+  platform?: string;
+  arch?: string;
+  nodeTargetType?: string | undefined;
+  shlibSuffix?: string | undefined;
+} = {}): string | undefined {
+  if (platform !== "win32") {
     return undefined;
   }
 
-  return Number.parseInt(match[0], 10);
-}
-
-export function buildExpoFontInstallCommand(packageManager: PackageManager): CommandSpec {
-  switch (packageManager) {
-    case 'pnpm':
-      return {
-        command: 'pnpm',
-        args: ['exec', 'expo', 'install', 'expo-font'],
-        display: 'pnpm exec expo install expo-font',
-        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: 'false' },
-      };
-    case 'yarn':
-      return {
-        command: 'yarn',
-        args: ['expo', 'install', 'expo-font'],
-        display: 'yarn expo install expo-font',
-      };
-    case 'bun':
-      return {
-        command: 'bunx',
-        args: ['expo', 'install', 'expo-font'],
-        display: 'bunx expo install expo-font',
-      };
-    case 'npm':
-      return {
-        command: 'npx',
-        args: ['expo', 'install', 'expo-font'],
-        display: 'npx expo install expo-font',
-      };
+  if (arch === "x64") {
+    const usesGnu =
+      shlibSuffix === "dll.a" || nodeTargetType === "shared_library";
+    return usesGnu
+      ? "@tailwindcss/oxide-win32-x64-gnu"
+      : "@tailwindcss/oxide-win32-x64-msvc";
   }
-}
 
-export function buildExpoDoctorCommand(packageManager: PackageManager): CommandSpec {
-  switch (packageManager) {
-    case 'pnpm':
-      return {
-        command: 'pnpm',
-        args: ['dlx', 'expo-doctor'],
-        display: 'pnpm dlx expo-doctor',
-      };
-    case 'yarn':
-      return {
-        command: 'yarn',
-        args: ['dlx', 'expo-doctor'],
-        display: 'yarn dlx expo-doctor',
-      };
-    case 'bun':
-      return {
-        command: 'bunx',
-        args: ['expo-doctor'],
-        display: 'bunx expo-doctor',
-      };
-    case 'npm':
-      return {
-        command: 'npx',
-        args: ['expo-doctor'],
-        display: 'npx expo-doctor',
-      };
+  if (arch === "ia32") {
+    return "@tailwindcss/oxide-win32-ia32-msvc";
   }
+
+  if (arch === "arm64") {
+    return "@tailwindcss/oxide-win32-arm64-msvc";
+  }
+
+  return undefined;
 }
 
-export async function shouldInstallExpoFontPeer(projectPath: string): Promise<boolean> {
-  const packageJson = await readJson(path.join(projectPath, 'package.json'));
+export async function resolveMissingWindowsTailwindOxideBinding(
+  projectPath: string,
+): Promise<string | undefined> {
+  const packageName = resolveWindowsTailwindOxidePackage();
+  if (!packageName) {
+    return undefined;
+  }
+
+  const packageJson = await readJson(path.join(projectPath, "package.json"));
+  const dependencies = isRecord(packageJson.dependencies)
+    ? packageJson.dependencies
+    : {};
+  const devDependencies = isRecord(packageJson.devDependencies)
+    ? packageJson.devDependencies
+    : {};
+  const hasUniwind =
+    typeof dependencies.uniwind === "string" ||
+    typeof devDependencies.uniwind === "string";
+  if (!hasUniwind) {
+    return undefined;
+  }
+
+  if (await pathExists(path.join(projectPath, "node_modules", packageName))) {
+    return undefined;
+  }
+
+  const oxidePackageJsonPath = path.join(
+    projectPath,
+    "node_modules",
+    "@tailwindcss",
+    "oxide",
+    "package.json",
+  );
+  const oxidePackage = await readJson(oxidePackageJsonPath);
+  const oxideVersion = readString(oxidePackage.version);
+  return oxideVersion ? `${packageName}@${oxideVersion}` : packageName;
+}
+
+export async function shouldInstallExpoFontPeer(
+  projectPath: string,
+): Promise<boolean> {
+  const packageJson = await readJson(path.join(projectPath, "package.json"));
   return shouldInstallExpoFontPeerFromPackageJson(packageJson);
 }
 
-export function shouldInstallExpoFontPeerFromPackageJson(packageJson: Record<string, unknown>): boolean {
-  const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : {};
-  const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : {};
+export function shouldInstallExpoFontPeerFromPackageJson(
+  packageJson: Record<string, unknown>,
+): boolean {
+  const dependencies = isRecord(packageJson.dependencies)
+    ? packageJson.dependencies
+    : {};
+  const devDependencies = isRecord(packageJson.devDependencies)
+    ? packageJson.devDependencies
+    : {};
   const hasVectorIcons =
-    typeof dependencies['@expo/vector-icons'] === 'string' || typeof devDependencies['@expo/vector-icons'] === 'string';
-  const hasExpoFont = typeof dependencies['expo-font'] === 'string' || typeof devDependencies['expo-font'] === 'string';
+    typeof dependencies["@expo/vector-icons"] === "string" ||
+    typeof devDependencies["@expo/vector-icons"] === "string";
+  const hasExpoFont =
+    typeof dependencies["expo-font"] === "string" ||
+    typeof devDependencies["expo-font"] === "string";
 
   return hasVectorIcons && !hasExpoFont;
 }
 
-export async function detectEasSetup(projectPath: string, createExpoStackArgs: string[]): Promise<boolean | undefined> {
-  if (hasFlag(createExpoStackArgs, '--eas')) {
+export async function detectEasSetup(
+  projectPath: string,
+  createExpoStackArgs: string[],
+): Promise<boolean | undefined> {
+  if (hasFlag(createExpoStackArgs, "--eas")) {
     return true;
   }
 
-  if (await pathExists(path.join(projectPath, 'eas.json'))) {
+  if (await pathExists(path.join(projectPath, "eas.json"))) {
     return true;
   }
 
-  const appJson = await readJson(path.join(projectPath, 'app.json'));
+  const appJson = await readJson(path.join(projectPath, "app.json"));
   if (hasExpoEasProjectId(appJson)) {
     return true;
   }
 
-  const appConfigJson = await readJson(path.join(projectPath, 'app.config.json'));
+  const appConfigJson = await readJson(
+    path.join(projectPath, "app.config.json"),
+  );
   if (hasExpoEasProjectId(appConfigJson)) {
     return true;
   }
@@ -1109,24 +2136,27 @@ function hasExpoEasProjectId(config: Record<string, unknown>): boolean {
   const expo = isRecord(config.expo) ? config.expo : config;
   const extra = isRecord(expo.extra) ? expo.extra : undefined;
   const eas = extra && isRecord(extra.eas) ? extra.eas : undefined;
-  return typeof eas?.projectId === 'string' && eas.projectId.trim().length > 0;
+  return typeof eas?.projectId === "string" && eas.projectId.trim().length > 0;
 }
 
-function buildRunScriptCommand(packageManager: PackageManager, script: string): string {
+function buildRunScriptCommand(
+  packageManager: PackageManager,
+  script: string,
+): string {
   switch (packageManager) {
-    case 'pnpm':
+    case "pnpm":
       return `pnpm ${script}`;
-    case 'yarn':
+    case "yarn":
       return `yarn ${script}`;
-    case 'bun':
+    case "bun":
       return `bun run ${script}`;
-    case 'npm':
+    case "npm":
       return `npm run ${script}`;
   }
 }
 
 function formatDisplayArgs(args: string[]): string {
-  return args.map(quoteDisplayArg).join(' ');
+  return args.map(quoteDisplayArg).join(" ");
 }
 
 function quoteDisplayArg(value: string): string {
@@ -1137,7 +2167,43 @@ function quoteDisplayArg(value: string): string {
   return value;
 }
 
-function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?: boolean): OnboardArgv {
+function printCopyableCommands(title: string, commands: string[]): void {
+  console.log(`${title} (copy this):`);
+  console.log(renderCommandBox(commands));
+}
+
+function renderCommandBox(commands: string[]): string {
+  const visibleCommands = commands.filter((command) => command.trim().length > 0);
+  if (visibleCommands.length === 0) {
+    return "";
+  }
+
+  const formattedCommands = visibleCommands.map((command) =>
+    colorizeCommand(`> ${command}`),
+  );
+
+  return ["┌", ...formattedCommands.map((command) => `│ ${command}`), "└"].join(
+    "\n",
+  );
+}
+
+function colorizeCommand(command: string): string {
+  if (!supportsAnsiColor()) {
+    return command;
+  }
+
+  return `\x1b[36m${command}\x1b[0m`;
+}
+
+function supportsAnsiColor(): boolean {
+  return process.stdout.isTTY === true && process.env.TERM !== "dumb";
+}
+
+function buildOnboardArgv(
+  projectPath: string,
+  parsed: ParsedArgs,
+  easSelected?: boolean,
+): OnboardArgv {
   return {
     project: projectPath,
     yes: parsed.mds.yes,
@@ -1159,13 +2225,13 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
     platforms: parsed.mds.platforms,
     firstPlatform: parsed.mds.firstPlatform,
     platformStrategy: parsed.mds.platformStrategy,
-    appDirectory: parsed.mds.appDirectory ?? 'src',
+    appDirectory: parsed.mds.appDirectory ?? "src",
     platformLayouts: parsed.mds.platformLayouts,
     webOutput: parsed.mds.webOutput,
     deployedServer: parsed.mds.deployedServer,
     createExpoComponents: parsed.mds.createExpoComponents,
-    latestExpoSdk: parsed.mds.latestExpoSdk,
     expoUi: parsed.mds.expoUi,
+    expoUiUniversal: parsed.mds.expoUiUniversal,
     expoNativeTabs: parsed.mds.expoNativeTabs,
     easUses: parsed.mds.easUses,
   };
@@ -1173,7 +2239,7 @@ function buildOnboardArgv(projectPath: string, parsed: ParsedArgs, easSelected?:
 
 function splitList(value: string): string[] {
   return value
-    .split(',')
+    .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -1189,7 +2255,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 async function readOptionalText(filePath: string): Promise<string | null> {
   try {
-    return await readFile(filePath, 'utf8');
+    return await readFile(filePath, "utf8");
   } catch {
     return null;
   }
@@ -1210,38 +2276,38 @@ async function readJson(filePath: string): Promise<Record<string, unknown>> {
 }
 
 function parseJsonc(value: string): Record<string, unknown> {
-  const cleaned = value.replace(/^\s*\/\/.*$/gm, '');
+  const cleaned = value.replace(/^\s*\/\/.*$/gm, "");
   const parsed = JSON.parse(cleaned) as unknown;
   return isRecord(parsed) ? parsed : {};
 }
 
 function readString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  return typeof value === "string" ? value : undefined;
 }
 
 export function toExpoSlug(value: string): string {
   const slug = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
-  return slug || 'expo-app';
+  return slug || "expo-app";
 }
 
 export function toExpoScheme(value: string): string {
   const scheme = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9+.-]+/g, '-')
-    .replace(/^[^a-z]+/, '')
-    .replace(/-+$/g, '');
+    .replace(/[^a-z0-9+.-]+/g, "-")
+    .replace(/^[^a-z]+/, "")
+    .replace(/-+$/g, "");
 
-  return scheme || 'expo-app';
+  return scheme || "expo-app";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function isCliEntryPoint(argv = process.argv): boolean {

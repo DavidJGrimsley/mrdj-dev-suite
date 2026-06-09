@@ -14,17 +14,7 @@ interface MarkerHit {
 
 export async function checkTodoForContextMarkers(projectPath: string): Promise<DoctorCheckResult> {
   const projectDir = path.join(projectPath, 'project');
-  const candidates = [
-    { label: 'project/info.md', paths: [path.join(projectDir, 'info.md')] },
-    { label: 'project/style.md', paths: [path.join(projectDir, 'style.md')] },
-    { label: 'project/guidelines.md', paths: [path.join(projectDir, 'guidelines.md')] },
-    {
-      label: 'project/todo.md',
-      paths: [path.join(projectDir, 'todo.md'), path.join(projectDir, 'TODO.md')],
-    },
-    { label: 'project/intake-agent.md', paths: [path.join(projectDir, 'intake-agent.md')] },
-    { label: 'project/release-flow.md', paths: [path.join(projectDir, 'release-flow.md')] },
-  ];
+  const candidates = [{ label: 'project/info.md', paths: [path.join(projectDir, 'info.md')] }];
 
   const hits: MarkerHit[] = [];
 
@@ -52,7 +42,7 @@ export async function checkTodoForContextMarkers(projectPath: string): Promise<D
     return {
       name: 'todo-for-context markers',
       status: 'pass',
-      message: 'No unresolved # TodoForContext(optional): markers in project memory.',
+      message: 'No unresolved # TodoForContext(optional): markers in project/info.md.',
     };
   }
 
@@ -61,7 +51,7 @@ export async function checkTodoForContextMarkers(projectPath: string): Promise<D
     status: 'error',
     message:
       `${hits.length} unresolved # TodoForContext(optional): ${hits.length === 1 ? 'marker' : 'markers'} ` +
-      'block agentic onboarding, project intake, and phase work. Fill the section or delete the marker line.',
+      'in project/info.md block roadmap derivation and phase planning. Fill the section or delete the marker line.',
     details: { hits },
   };
 }

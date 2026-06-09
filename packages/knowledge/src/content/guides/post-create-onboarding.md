@@ -42,13 +42,14 @@ mds mcp install --dry-run         # preview merge before writing
 Restart the host (or run `claude mcp reload`) and the MDS prompts are
 available from any workspace.
 
-Two prompts ship with the server:
+Two prompts and several callable MDS MCP tools ship with the server:
 
 - `create_expo_super_stack` — invoke from a **parent folder** (e.g.
-  `F:\ReactNativeApps`) when the app folder does not exist yet. The
-  agent confirms platforms, styling, data start, etc., then runs
-  `create-expo-super-stack`, verifies the generated app folder, and
-  offers to resolve TodoForContext markers.
+  `F:\ReactNativeApps`) when the app folder does not exist yet. This is
+  now a thin orchestration prompt: the real guided intake happens
+  through `create_expo_super_stack_intake_step`, generation happens
+  through `create_expo_super_stack_generate`, and diagnostics come from
+  `mds_runtime_versions`.
 - `onboard_new_expo_app` — invoke from **inside an existing Expo app
   folder** (a freshly generated one or a year-old project). Runs the
   intake → normalize → plan → scaffold flow.
@@ -68,7 +69,7 @@ delete the marker line.
 error so the same blocker stops CI and editor surfaces until the user
 fills the section or deletes the marker line.
 
-### What's new in the agentic prompts
+### What's new in the agentic prompts and tools
 
 - **PHASE 0 file intake.** The agent offers to digest an existing
   `project/info.md` and `project/style.md` if the user has them already.
@@ -81,10 +82,17 @@ fills the section or deletes the marker line.
   with leanback config in `app.json`; Apple TV is a separate tvOS build
   target via `react-native-tvos`. Selecting either records the intent
   in project memory.
-- **Embedded flag map.** Both prompts now include the exact
-  create-expo-stack and `--mds-*` flag map so the agent does not have
-  to grep `node_modules` or scan source to translate answers into a
-  command. This was the biggest source of slowness in early test runs.
+- **Shared CLI-backed intake contract.** The agentic CESS flow now uses
+  callable MCP tools backed by the shared `@mr.dj2u/cli` intake
+  contract. That keeps the questionnaire, defaults, dependency rules,
+  and flag mapping aligned with the published CLI behavior.
+- **No silent defaults.** Guided intake must explicitly collect answers
+  or explicitly present visible defaults. If the CESS intake tools are
+  unavailable, the agent should stop and tell the user to refresh the
+  plugin or MCP install instead of inventing `--mds-yes` defaults.
+- **Runtime version diagnostics.** `mds_runtime_versions` reports the
+  active MCP server version, CLI version, and the published
+  `create-expo-super-stack@latest` generation path in use.
 - **Credits while waiting.** When generation kicks off, the agent
   prints a recognition note for the upstream teams and individuals
   whose work fills the MDS knowledge base.
@@ -139,5 +147,9 @@ Copy-Item -Path .\plugins\vscode-copilot\.vscode\* -Destination .\.vscode -Recur
 - The agent itself is not this file — it is a runtime that loads generated prompts/skills from the plugin bundles or the MCP server. To activate the agent surfaces you must either:
   - Install the MCP prompts via `mds mcp install --client <client>` (user or project scope), or
   - Copy the generated plugin files from `plugins/vscode-copilot` / `plugins/codex` / `plugins/claude-code` into the target workspace or user profile and restart the corresponding client.
+- If a host keeps using stale prompt or plugin behavior after republish,
+  refresh the local plugin cache, reinstall the MDS MCP server, and run
+  `mds_runtime_versions` from the host surface to confirm which version
+  is actually active.
 
 If you want, I can: regenerate the VS Code bundle now, copy the assets into the current workspace, and verify Copilot sees the prompts. Say "Do it" and I'll run the build and copy steps for you.

@@ -7,6 +7,7 @@ import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } 
 import chalk from 'chalk';
 
 import { scaffoldProjectMemory } from '../project-memory.js';
+import { generateProjectRoadmap } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
@@ -28,7 +29,6 @@ export interface OnboardArgv {
   defaults?: string | string[];
   advancedSetup?: boolean;
   createExpoComponents?: boolean;
-  latestExpoSdk?: boolean;
   platforms?: string | string[];
   firstPlatform?: string;
   platformStrategy?: 'folders' | 'files-only';
@@ -40,6 +40,7 @@ export interface OnboardArgv {
   customBackend?: boolean;
   customBackendEntry?: string;
   expoUi?: boolean;
+  expoUiUniversal?: boolean;
   expoNativeTabs?: boolean;
   easSelected?: boolean;
   easUses?: string | string[];
@@ -67,22 +68,22 @@ export interface ServerPromptPlan {
   explanation: string;
 }
 
-const EXPO_SERVER_ADAPTER_OPTIONS: Array<{ value: ExpoServerAdapter; label: string; hint: string }> = [
+export const EXPO_SERVER_ADAPTER_OPTIONS: Array<{ value: ExpoServerAdapter; label: string; hint: string }> = [
   { value: 'eas', label: 'EAS hosting', hint: 'Managed by Expo — use npx expo serve locally' },
   { value: 'express', label: 'Express adapter', hint: 'Self-hosted via node server.js on port 3000' },
   { value: 'bun', label: 'Bun adapter', hint: 'Self-hosted with Bun runtime' },
   { value: 'other', label: 'Other / not sure yet', hint: 'You can update this in project/info.md later' },
 ];
 
-const EXPO_SERVER_ADAPTER_EXPLANATION =
+export const EXPO_SERVER_ADAPTER_EXPLANATION =
   'The Express adapter (expo-server/adapter/express) lets you self-host Expo Router on your own server (Plesk, VPS, etc.). EAS is Expo\'s managed cloud hosting. Both start the same way locally — `node server.js` or `npx expo serve`.';
 
-const CUSTOM_BACKEND_EXPLANATION =
+export const CUSTOM_BACKEND_EXPLANATION =
   'A separate backend API server runs alongside Expo (not through Expo Router API routes). Example: a TypeScript/Node API server that your app calls directly. This requires starting two processes in development.';
 
 const EXPLAIN_CHOICE = '__mds_explain__';
-const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
-const EAS_USE_OPTIONS = [
+export const PLATFORM_OPTIONS = ['web', 'android', 'ios', 'apple-tv', 'android-tv'] as const;
+export const EAS_USE_OPTIONS = [
   'building mobile applications',
   'hosting a deployed server',
   'hosting web apps',
@@ -118,7 +119,7 @@ export const TEST_TO_MAIN_EXPLANATION =
 export const SERVER_OUTPUT_EXPLANATION =
   'Expo Router API routes require Expo web output set to server. Static and SPA exports can still call Supabase, external APIs, serverless functions, or a separate custom backend, but they cannot host Expo Router API routes inside the static export.';
 export const AGENT_DERIVED_CORE_FLOWS =
-  'Agent should derive the first core user flows from project/info.md during intake.';
+  'Let the agent derive the first real core user flows later from the fully clarified `project/info.md`.';
 export const SUPER_STACK_ONBOARDING_INTRO = 'MDS Super Stack onboarding';
 export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
@@ -141,9 +142,9 @@ interface PersonalOnboardDefaults {
   customBackend?: boolean;
   customBackendEntry?: string;
   usesExpoUi?: boolean;
+  usesExpoUiUniversalComponents?: boolean;
   usesExpoNativeTabs?: boolean;
   includeCreateExpoComponents?: boolean;
-  useLatestExpoSdk?: boolean;
   dataStart?: OnboardAnswers['dataStart'];
   testToMainSafeguards?: boolean;
   easUses?: string[];
@@ -178,6 +179,27 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     }
   }
   printOnboardingNextSteps();
+
+  const roadmapStatus = await generateProjectRoadmap(projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
+  if (roadmapStatus.blockedByMarkers) {
+    console.log();
+    console.log(chalk.yellow('Roadmap note'));
+    console.log(
+      'Unresolved `# TodoForContext(optional):` markers are still present in `project/info.md`, so MDS intentionally left the scaffolded phase template in place.'
+    );
+    console.log(
+      'Resolve those `project/info.md` markers first, then run `mds roadmap` or let your agent refresh `project/todo.md` from `project/info.md`.'
+    );
+  } else if (roadmapStatus.needsClarification) {
+    console.log();
+    console.log(chalk.yellow('Roadmap note'));
+    console.log(
+      'The project docs are still too generic for a high-confidence derived roadmap, so let your agent ask clarifying questions and then rerun `mds roadmap`.'
+    );
+  }
 }
 
 export async function collectOnboardPlan(
@@ -205,7 +227,7 @@ export async function collectOnboardPlan(
   const coreFlows =
     argv.coreFlows ??
     (await askText(
-      'If you know it already, what should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. Press Enter to let the agent derive this later.',
+      'If you know it already, what should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. Press Enter to leave this for the roadmap pass after `project/info.md` is clarified.',
       seed.coreFlows
     ));
   const screens =
@@ -317,15 +339,13 @@ export async function collectOnboardPlan(
       'Keep or generate the starter components that come with create-expo-app?',
       seed.includeCreateExpoComponents
     ));
-  const useLatestExpoSdk =
-    argv.latestExpoSdk ??
-    (await askYesNo(
-      'Use the latest Expo SDK even if Expo Go availability may lag?',
-      seed.useLatestExpoSdk
-    ));
   const usesExpoUi =
     hasMobileTarget &&
     (argv.expoUi ?? (await askYesNo('Will you use Expo UI for native-feeling screens?', seed.usesExpoUi)));
+  const usesExpoUiUniversalComponents =
+    usesExpoUi &&
+    (argv.expoUiUniversal ??
+      (await askYesNo('Do you want to use ExpoUI Universal components?', seed.usesExpoUiUniversalComponents)));
   const usesExpoNativeTabs =
     hasMobileTarget &&
     (argv.expoNativeTabs ??
@@ -383,7 +403,6 @@ export async function collectOnboardPlan(
       deploymentTarget,
       advancedPackageSetup,
       includeCreateExpoComponents,
-      useLatestExpoSdk,
       targetPlatforms,
       firstTargetPlatform,
       platformFileStrategy,
@@ -393,6 +412,7 @@ export async function collectOnboardPlan(
       customBackend,
       customBackendEntry,
       usesExpoUi,
+      usesExpoUiUniversalComponents,
       usesExpoNativeTabs,
       easUses,
       projectInfoReady,
@@ -534,7 +554,6 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     advancedPackageSetup: argv.advancedSetup ?? true,
     includeCreateExpoComponents:
       argv.createExpoComponents ?? savedDefaults.includeCreateExpoComponents ?? false,
-    useLatestExpoSdk: argv.latestExpoSdk ?? savedDefaults.useLatestExpoSdk ?? true,
     targetPlatforms,
     firstTargetPlatform,
     platformFileStrategy: argv.platformStrategy ?? 'files-only',
@@ -544,6 +563,8 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     customBackend,
     customBackendEntry,
     usesExpoUi: argv.expoUi ?? savedDefaults.usesExpoUi ?? true,
+    usesExpoUiUniversalComponents:
+      argv.expoUiUniversal ?? savedDefaults.usesExpoUiUniversalComponents ?? (argv.expoUi ?? savedDefaults.usesExpoUi ?? true),
     usesExpoNativeTabs: argv.expoNativeTabs ?? savedDefaults.usesExpoNativeTabs ?? true,
     easUses,
     projectInfoReady: false,
@@ -619,9 +640,9 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     customBackend: answers.customBackend,
     customBackendEntry: answers.customBackendEntry,
     usesExpoUi: answers.usesExpoUi,
+    usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
-    useLatestExpoSdk: answers.useLatestExpoSdk,
     dataStart: answers.dataStart,
     testToMainSafeguards: answers.testToMainSafeguards,
     easUses: answers.easUses,
@@ -677,11 +698,13 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   if (typeof raw.customBackend === 'boolean') normalized.customBackend = raw.customBackend;
   if (customBackendEntry) normalized.customBackendEntry = customBackendEntry;
   if (typeof raw.usesExpoUi === 'boolean') normalized.usesExpoUi = raw.usesExpoUi;
+  if (typeof raw.usesExpoUiUniversalComponents === 'boolean') {
+    normalized.usesExpoUiUniversalComponents = raw.usesExpoUiUniversalComponents;
+  }
   if (typeof raw.usesExpoNativeTabs === 'boolean') normalized.usesExpoNativeTabs = raw.usesExpoNativeTabs;
   if (typeof raw.includeCreateExpoComponents === 'boolean') {
     normalized.includeCreateExpoComponents = raw.includeCreateExpoComponents;
   }
-  if (typeof raw.useLatestExpoSdk === 'boolean') normalized.useLatestExpoSdk = raw.useLatestExpoSdk;
   if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
   if (dataStart) normalized.dataStart = dataStart;
   if (easUses) normalized.easUses = easUses;
@@ -864,7 +887,7 @@ async function askText(message: string, fallback: string): Promise<string> {
     defaultValue: fallback,
     validate: (value) => validateRequiredInput(value, fallback),
   });
-  return handleCancel(answer).trim() || fallback;
+  return normalizePromptText(handleCancel(answer)) || fallback;
 }
 
 async function askOptionalText(message: string, fallback = ''): Promise<string> {
@@ -873,7 +896,7 @@ async function askOptionalText(message: string, fallback = ''): Promise<string> 
     placeholder: fallback || 'Optional',
     defaultValue: fallback || undefined,
   });
-  return handleCancel(answer).trim();
+  return normalizePromptText(handleCancel(answer));
 }
 
 async function askYesNo(message: string, fallback: boolean): Promise<boolean> {
@@ -968,13 +991,20 @@ function handleCancel<T>(value: T | symbol): T {
   return value;
 }
 
+export function normalizePromptText(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function printOnboardingNextSteps(): void {
   console.log('Onboarding Phase 0 checklist:');
   console.log('1. Browse exposition pages to understand included base packages.');
-  console.log("2. Review styling in the 'Stylist' page.");
+  console.log("2. Review styling in the 'Stylist' page and save theme tokens.");
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log(
-    '4. Resolve every # TodoForContext(optional): marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+    '4. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+  );
+  console.log(
+    '5. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }

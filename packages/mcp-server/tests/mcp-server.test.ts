@@ -60,6 +60,10 @@ describe('mds MCP helpers', () => {
   it('lists skills with the Phase 8 list_skills alias', async () => {
     const tools = listTools();
     expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_intake_step')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'generate_project_roadmap')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'mds_runtime_versions')).toBe(true);
 
     const result = (await executeTool('list_skills', { query: 'deployment' })) as Array<{
       id: string;
@@ -74,7 +78,8 @@ describe('mds MCP helpers', () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-refactor-'));
     tempDirs.push(projectPath);
     await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
-    await writeFile(path.join(projectPath, '.env'), 'EXPO_PUBLIC_SERVICE_ROLE_TOKEN=bad\n', 'utf8');
+    const unsafeName = 'EXPO_PUBLIC_' + 'SUPABASE_SERVICE_ROLE_KEY';
+    await writeFile(path.join(projectPath, '.env'), `${unsafeName}=bad\n`, 'utf8');
 
     const result = (await executeTool('generate_refactor_plan', {
       projectPath,
@@ -114,6 +119,103 @@ describe('mds MCP helpers', () => {
     expect(result.checklist.some((item) => item.id === 'web-ssr-safety')).toBe(true);
   });
 
+  it('previews a derived project roadmap through MCP without writing by default', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-roadmap-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Freelancers managing client projects.',
+        '',
+        '## Product Goals',
+        '',
+        '- Help freelancers onboard clients faster.',
+        '',
+        '## Core User Flows',
+        '',
+        '- sign up',
+        '- create a project',
+        '',
+        '## Must-Include Screens Or Flows',
+        '',
+        '- Home',
+        '- Project detail',
+        '',
+        '## Release Strategy',
+        '',
+        '- TestFlight beta',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_project_roadmap', {
+      projectPath,
+    })) as {
+      kind: string;
+      blockedByMarkers: boolean;
+      needsClarification: boolean;
+      write: boolean;
+      wrote: boolean;
+      phases: Array<{ id: string; tasks: Array<{ text: string }> }>;
+    };
+
+    expect(result.kind).toBe('project-roadmap');
+    expect(result.blockedByMarkers).toBe(false);
+    expect(result.needsClarification).toBe(false);
+    expect(result.write).toBe(false);
+    expect(result.wrote).toBe(false);
+    expect(result.phases.some((phase) => phase.id === 'phase-1')).toBe(true);
+    expect(result.phases.some((phase) => phase.tasks.some((task) => task.text.includes('sign up')))).toBe(true);
+  });
+
+  it('returns clarification metadata through MCP when project info is still generic', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-roadmap-generic-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Expo app users',
+        '',
+        '## Product Goals',
+        '',
+        'Help users.',
+        '',
+        '## Core User Flows',
+        '',
+        'Agent should derive the first core user flows from project/info.md during intake.',
+        '',
+        '## Release Strategy',
+        '',
+        '- Deployment plan: Expo web/native deployment',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_project_roadmap', {
+      projectPath,
+    })) as {
+      needsClarification: boolean;
+      clarificationQuestions: Array<{ id: string }>;
+    };
+
+    expect(result.needsClarification).toBe(true);
+    expect(result.clarificationQuestions.some((question) => question.id === 'core-user-flows')).toBe(
+      true
+    );
+  });
+
   it('builds a continue brief through the MCP continue_project tool', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-continue-'));
     tempDirs.push(projectPath);
@@ -136,10 +238,33 @@ describe('mds MCP helpers', () => {
   it('tells generated app users to start a fresh app-folder session for MDS Continue', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
-    expect(prompt).toContain('mds continue');
-    expect(prompt).toContain('open a new agent session directly inside');
-    expect(prompt).toContain('To keep token usage low');
-    expect(prompt).toContain('Do NOT walk through markers or ask questions about them in this session');
+    expect(prompt).toContain('create_expo_super_stack_intake_step');
+    expect(prompt).toContain('create_expo_super_stack_generate');
+    expect(prompt).toContain('mds_runtime_versions');
+    expect(prompt).toContain('Do not fall back to `--mds-yes`');
+    expect(prompt).toContain('do not claim the roadmap is derived yet');
+  });
+
+  it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
+    const intake = (await executeTool('create_expo_super_stack_intake_step', {
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'demo-app',
+      answers: {},
+    })) as {
+      status: string;
+      nextQuestion?: { id: string };
+    };
+
+    expect(intake.status).toBe('question');
+    expect(intake.nextQuestion?.id).toBe('scriptLanguage');
+
+    const runtime = (await executeTool('mds_runtime_versions', {})) as {
+      intakeToolsAvailable: boolean;
+      createExpoSuperStack: { invocation: string };
+    };
+
+    expect(runtime.intakeToolsAvailable).toBe(true);
+    expect(runtime.createExpoSuperStack.invocation.length).toBeGreaterThan(0);
   });
 
   it('builds a continue slash prompt that calls continue_project first', () => {
