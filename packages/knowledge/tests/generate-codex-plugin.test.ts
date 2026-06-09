@@ -75,7 +75,7 @@ describe('generateCodexPluginBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
     expect(mcp.mcpServers['mr-djs-dev-suite']).toEqual({
       command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server@0.1.5'],
+      args: ['-y', '@mr.dj2u/mcp-server@0.1.6'],
     });
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));

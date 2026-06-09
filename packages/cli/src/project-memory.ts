@@ -119,7 +119,7 @@ const UNIWIND_DEV_DEPENDENCIES = {
 } as const;
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MDS_CLI_VERSION = '0.1.11';
+const MDS_CLI_VERSION = '0.1.12';
 const MDS_NPX_COMMAND = 'npx mds';
 const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   PACKAGE_ROOT,

@@ -23,7 +23,7 @@ Run generator + onboarding as one guided flow, keep agent-facing wording sourced
 
 - Keep startup conversation in plain language and summarize choices before execution.
 - Keep generation details in scripts/flags, but keep user-facing flow conversational.
-- Keep post-generation workflow phase-based using the generated `project/todo.md`.
+- Keep post-generation workflow phase-based using the generated `project/todo.md`, and derive that roadmap from normalized `project/info.md` before handoff.
 - Prefer shared knowledge content over duplicating long onboarding prose in plugin or MCP wrappers.
 
 ## Example fix

@@ -1610,7 +1610,7 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 function getMcpServerRuntimeVersion(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const packageJsonPath = path.resolve(moduleDir, '..', 'package.json');
-  return readPackageVersion(packageJsonPath, '0.1.5') ?? '0.1.5';
+  return readPackageVersion(packageJsonPath, '0.1.6') ?? '0.1.6';
 }
 
 function getMdsRuntimeVersions(): {

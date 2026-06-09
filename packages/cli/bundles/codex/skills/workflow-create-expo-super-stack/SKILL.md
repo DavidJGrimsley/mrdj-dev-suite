@@ -41,4 +41,5 @@ Create a new Expo app with the MDS Super Stack flow, using the published CESS CL
 ## Verification And Output
 
 - Confirm generated app has `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
+- Confirm `project/todo.md` includes the auto-derived roadmap generated from normalized `project/info.md`.
 - Output: generated app path, onboarding status, and the handoff to open a fresh agent session inside the new app folder and run `mds continue`.

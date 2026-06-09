@@ -573,7 +573,7 @@ describe('runOnboardCommand', () => {
     expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
     expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
-    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe('^0.1.11');
+    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe('^0.1.12');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
   });
 

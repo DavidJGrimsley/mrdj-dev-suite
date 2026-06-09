@@ -1464,7 +1464,6 @@ export async function repairExpoProjectIdentifiers(
     expo.scheme = nextScheme;
     changed = true;
   }
-  const shouldIncludeWeb = targetPlatforms.includes("web");
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
   const normalizedTargetPlatforms = Array.from(
     new Set(
