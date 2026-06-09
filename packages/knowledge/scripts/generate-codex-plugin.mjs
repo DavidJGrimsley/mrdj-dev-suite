@@ -456,7 +456,7 @@ function readPublishedMcpServerVersion() {
   );
   const raw = readFileSync(packageJsonPath, 'utf8');
   const parsed = JSON.parse(raw);
-  return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.6';
+  return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.7';
 }
 
 function isDirectRun() {

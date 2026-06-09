@@ -47,8 +47,10 @@ Two prompts and several callable MDS MCP tools ship with the server:
 - `create_expo_super_stack` — invoke from a **parent folder** (e.g.
   `F:\ReactNativeApps`) when the app folder does not exist yet. This is
   now a thin orchestration prompt: the real guided intake happens
-  through `create_expo_super_stack_intake_step`, generation happens
-  through `create_expo_super_stack_generate`, and diagnostics come from
+  through `create_expo_super_stack_extract_info` first when project
+  memory is available, then `create_expo_super_stack_intake_step` only
+  for missing or ambiguous answers, generation happens through
+  `create_expo_super_stack_generate`, and diagnostics come from
   `mds_runtime_versions`.
 - `onboard_new_expo_app` — invoke from **inside an existing Expo app
   folder** (a freshly generated one or a year-old project). Runs the
@@ -77,6 +79,10 @@ fills the section or deletes the marker line.
   agent asks for clarification only when the file is silent or unclear.
   A reference template URL is mentioned in the prompt; the agent can
   also inline the template on request.
+- **Shared extraction-first intake.** `create_expo_super_stack_extract_info`
+  parses existing project memory up front, derives app naming details,
+  preserves unmatched notes, and seeds the intake tool so the user is
+  not forced through redundant question-by-question discovery.
 - **Android TV alongside Apple TV.** The platform multi-select now
   includes Android TV. Android TV builds from the same Android target
   with leanback config in `app.json`; Apple TV is a separate tvOS build
@@ -91,8 +97,9 @@ fills the section or deletes the marker line.
   unavailable, the agent should stop and tell the user to refresh the
   plugin or MCP install instead of inventing `--mds-yes` defaults.
 - **Runtime version diagnostics.** `mds_runtime_versions` reports the
-  active MCP server version, CLI version, and the published
-  `create-expo-super-stack@latest` generation path in use.
+  active MCP server version, CLI version, concrete installed
+  `create-expo-super-stack` version, and the published generation path
+  in use.
 - **Credits while waiting.** When generation kicks off, the agent
   prints a recognition note for the upstream teams and individuals
   whose work fills the MDS knowledge base.

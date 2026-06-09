@@ -60,6 +60,7 @@ describe('mds MCP helpers', () => {
   it('lists skills with the Phase 8 list_skills alias', async () => {
     const tools = listTools();
     expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_extract_info')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_intake_step')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
     expect(tools.some((tool) => tool.name === 'generate_project_roadmap')).toBe(true);
@@ -238,11 +239,43 @@ describe('mds MCP helpers', () => {
   it('tells generated app users to start a fresh app-folder session for MDS Continue', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
+    expect(prompt).toContain('create_expo_super_stack_extract_info');
     expect(prompt).toContain('create_expo_super_stack_intake_step');
     expect(prompt).toContain('create_expo_super_stack_generate');
     expect(prompt).toContain('mds_runtime_versions');
     expect(prompt).toContain('Do not fall back to `--mds-yes`');
     expect(prompt).toContain('do not claim the roadmap is derived yet');
+  });
+
+  it('extracts intake answers from attached project info through MCP', async () => {
+    const extracted = (await executeTool('create_expo_super_stack_extract_info', {
+      parentDir: 'F:/ReactNativeApps',
+      infoMarkdown: [
+        '# Experiment Tracker Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Scientists',
+        '',
+        '## Core User Flows',
+        '',
+        '- Create an experiment',
+        '',
+        '## Platforms',
+        '',
+        '- Target platforms: ios',
+        '- First MVP platform: ios',
+        '- Expo Router app directory: `src/app`',
+        '- Web output: none',
+      ].join('\n'),
+    })) as {
+      derivedFolderSlug?: string;
+      prefilledAnswers: { audience?: string; targetPlatforms?: string[] };
+    };
+
+    expect(extracted.derivedFolderSlug).toBe('experiment-tracker');
+    expect(extracted.prefilledAnswers.audience).toBe('Scientists');
+    expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios']);
   });
 
   it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
@@ -260,11 +293,17 @@ describe('mds MCP helpers', () => {
 
     const runtime = (await executeTool('mds_runtime_versions', {})) as {
       intakeToolsAvailable: boolean;
-      createExpoSuperStack: { invocation: string };
+      cliVersion: string | null;
+      createExpoStackVersion: string | null;
+      createExpoSuperStack: { invocation: string; version: string | null };
+      warnings: string[];
     };
 
     expect(runtime.intakeToolsAvailable).toBe(true);
     expect(runtime.createExpoSuperStack.invocation.length).toBeGreaterThan(0);
+    expect(runtime).toHaveProperty('cliVersion');
+    expect(runtime.createExpoSuperStack.version).not.toBe('latest');
+    expect(Array.isArray(runtime.warnings)).toBe(true);
   });
 
   it('builds a continue slash prompt that calls continue_project first', () => {

@@ -1,6 +1,6 @@
 {
   "name": "mr-djs-dev-suite",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
   "author": {
     "name": "DJ Grimsley",

@@ -10,13 +10,15 @@ Create a new Expo app with the MDS Super Stack flow, using the published CESS CL
 ## Required MDS MCP Tool Flow
 
 1. Confirm the `mr-djs-dev-suite` MCP server is available.
-2. Drive intake with `create_expo_super_stack_intake_step`.
-3. Ask exactly one question per turn.
-4. Always show the returned default and options.
-5. Never invent or silently accept defaults on the user's behalf.
-6. When the intake tool returns `confirm`, summarize the returned `summaryLines` and ask the user to confirm.
-7. After explicit confirmation, set `answers.confirmed=true`, call the intake tool again, and proceed only when it returns `ready`.
-8. Then call `create_expo_super_stack_generate` with `confirmed: true`.
+2. If the user pasted or attached `info.md` / project memory, call `create_expo_super_stack_extract_info` first.
+3. Seed the returned answers into `create_expo_super_stack_intake_step` and use intake only for missing or ambiguous questions.
+4. Ask exactly one question per turn.
+5. Always show the returned default and options.
+6. Never invent or silently accept defaults on the user's behalf.
+7. If extraction found the app name, do not ask a second display-name question.
+8. When the intake tool returns `confirm`, summarize the returned `summaryLines` and ask the user to confirm.
+9. After explicit confirmation, set `answers.confirmed=true`, call the intake tool again, and proceed only when it returns `ready`.
+10. Then call `create_expo_super_stack_generate` with `confirmed: true`.
 
 ## Failure Behavior
 

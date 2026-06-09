@@ -32,6 +32,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 5**: CI/CD pipeline automation
 - **Phase 6**: Documentation and community support
 
+## [0.1.10] - 2026-06-09
+
+### Added
+- shared `info.md` extraction for Super Stack intake, including seeded answers, evidence tracking, preserved notes, and naming derivation
+- new `create_expo_super_stack_extract_info` MCP tool for extract-first guided generation
+- machine-readable MDS snapshot blocks in generated `project/info.md` so future apps can reuse prior onboarding decisions
+
+### Changed
+- Super Stack guided flow now extracts project memory first and asks follow-up questions only for missing or ambiguous fields
+- app naming now uses one normal app-name question when needed and derives the folder slug automatically
+- runtime version reporting now surfaces concrete installed package versions and warnings for stale or mismatched installs
+- generator flow now targets Expo SDK 56 explicitly and validates the final Expo dependency before finishing
+- regenerated Codex, Claude, and VS Code prompt assets so published guidance matches the extract-first flow
+
+### Fixed
+- redundant intake questions for audience and naming when those answers already exist in `info.md`
+- stale published MCP install target after the new release bump
+
 ## [0.1.9] - 2026-06-09
 
 ### Added

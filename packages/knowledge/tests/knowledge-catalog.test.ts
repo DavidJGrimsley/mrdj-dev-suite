@@ -58,6 +58,7 @@ describe('knowledge catalog expansion', () => {
     const prompt = await readPromptSpec('create-expo-super-stack');
 
     expect(prompt).not.toBeNull();
+    expect(prompt?.content).toContain('create_expo_super_stack_extract_info');
     expect(prompt?.content).toContain('create_expo_super_stack_intake_step');
     expect(prompt?.content).toContain('create_expo_super_stack_generate');
     expect(prompt?.content).toContain('mds_runtime_versions');

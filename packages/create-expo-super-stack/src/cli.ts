@@ -70,6 +70,7 @@ type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
 type OnboardWebOutput = "static" | "server" | "spa" | "none";
 type ExpoWebOutput = "single" | "static" | "server";
 const DEFAULT_PROJECT_NAME = "my-expo-app";
+export const EXPECTED_EXPO_SDK_MAJOR = 56;
 const STYLIST_SYNC_API_ROUTES = [
   "app/exposition/stylist-sync+api.ts",
   "src/app/exposition/stylist-sync+api.ts",
@@ -245,6 +246,8 @@ export async function main(): Promise<void> {
       "Skipped install and Expo dependency repair because create-expo-stack was run with --no-install.",
     );
   }
+
+  await assertExpectedExpoSdk(projectPath);
 
   console.log();
   const nextStepsCommands = [
@@ -630,7 +633,7 @@ async function promptForMissingProjectName(
   }
 
   const answer = await text({
-    message: "What do you want to name your Expo app?",
+    message: "What is the name of your app?",
     placeholder: DEFAULT_PROJECT_NAME,
     defaultValue: DEFAULT_PROJECT_NAME,
     validate: (value) => {
@@ -776,7 +779,7 @@ export async function runExpoProjectChecks(
     );
   } else {
     console.log(
-      "  Expo already uses the latest release channel; skipping expo@latest.",
+      `  Expo already targets SDK ${EXPECTED_EXPO_SDK_MAJOR}; skipping expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}.`,
     );
   }
   await runProjectCommand(
@@ -1819,27 +1822,27 @@ export function buildExpoLatestSdkCommand(
     case "pnpm":
       return {
         command: "pnpm",
-        args: ["--ignore-workspace", "exec", "expo", "install", "expo@latest"],
-        display: "pnpm --ignore-workspace exec expo install expo@latest",
+        args: ["--ignore-workspace", "exec", "expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
+        display: `pnpm --ignore-workspace exec expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
     case "yarn":
       return {
         command: "yarn",
-        args: ["expo", "install", "expo@latest"],
-        display: "yarn expo install expo@latest",
+        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
+        display: `yarn expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
       };
     case "bun":
       return {
         command: "bunx",
-        args: ["expo", "install", "expo@latest"],
-        display: "bunx expo install expo@latest",
+        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
+        display: `bunx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
       };
     case "npm":
       return {
         command: "npx",
-        args: ["expo", "install", "expo@latest"],
-        display: "npx expo install expo@latest",
+        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
+        display: `npx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
       };
   }
 }
@@ -1863,7 +1866,34 @@ export function shouldRunExpoLatestSdkCommandFromPackageJson(
   const version =
     readString(dependencies.expo) ?? readString(devDependencies.expo);
 
-  return version !== "latest";
+  return parseExpoSdkMajor(version) !== EXPECTED_EXPO_SDK_MAJOR;
+}
+
+export function parseExpoSdkMajor(version: string | undefined): number | null {
+  if (!version) {
+    return null;
+  }
+  const match = /(\d+)/u.exec(version);
+  return match ? Number.parseInt(match[1] ?? "", 10) : null;
+}
+
+export async function assertExpectedExpoSdk(projectPath: string): Promise<void> {
+  const packageJson = await readJson(path.join(projectPath, "package.json"));
+  const dependencies = isRecord(packageJson.dependencies)
+    ? packageJson.dependencies
+    : {};
+  const devDependencies = isRecord(packageJson.devDependencies)
+    ? packageJson.devDependencies
+    : {};
+  const version =
+    readString(dependencies.expo) ?? readString(devDependencies.expo);
+  const resolvedMajor = parseExpoSdkMajor(version);
+
+  if (resolvedMajor !== EXPECTED_EXPO_SDK_MAJOR) {
+    throw new Error(
+      `Generated project did not resolve to Expo SDK ${EXPECTED_EXPO_SDK_MAJOR}. Found expo dependency ${version ?? "missing"} in package.json.`,
+    );
+  }
 }
 
 export function buildExpoFontInstallCommand(
@@ -2204,6 +2234,8 @@ function buildOnboardArgv(
   parsed: ParsedArgs,
   easSelected?: boolean,
 ): OnboardArgv {
+  const generatorChoices = inferGeneratorChoices(parsed.createExpoStackArgs, easSelected);
+
   return {
     project: projectPath,
     yes: parsed.mds.yes,
@@ -2213,6 +2245,14 @@ function buildOnboardArgv(
     guidelinesTemplatePath: parsed.mds.guidelinesTemplatePath,
     easSelected,
     appName: parsed.mds.appName,
+    generatorScriptLanguage: generatorChoices.scriptLanguage,
+    generatorPackageManager: generatorChoices.packageManager,
+    generatorNavigationLibrary: generatorChoices.navigationLibrary,
+    generatorReactNavigationLayout: generatorChoices.reactNavigationLayout,
+    generatorStylingSystem: generatorChoices.stylingSystem,
+    generatorStateManagement: generatorChoices.stateManagement,
+    generatorAuthBackend: generatorChoices.authBackend,
+    generatorEasSetup: generatorChoices.easSetup,
     audience: parsed.mds.audience,
     coreFlows: parsed.mds.coreFlows,
     screens: parsed.mds.screens,
@@ -2234,6 +2274,55 @@ function buildOnboardArgv(
     expoUiUniversal: parsed.mds.expoUiUniversal,
     expoNativeTabs: parsed.mds.expoNativeTabs,
     easUses: parsed.mds.easUses,
+  };
+}
+
+function inferGeneratorChoices(
+  args: string[],
+  easSelected?: boolean,
+): {
+  scriptLanguage?: OnboardArgv["generatorScriptLanguage"];
+  packageManager?: OnboardArgv["generatorPackageManager"];
+  navigationLibrary?: OnboardArgv["generatorNavigationLibrary"];
+  reactNavigationLayout?: OnboardArgv["generatorReactNavigationLayout"];
+  stylingSystem?: OnboardArgv["generatorStylingSystem"];
+  stateManagement?: OnboardArgv["generatorStateManagement"];
+  authBackend?: OnboardArgv["generatorAuthBackend"];
+  easSetup?: boolean;
+} {
+  const hasFlag = (flag: string) => args.includes(flag);
+
+  return {
+    scriptLanguage: hasFlag("--javascript") ? "javascript" : "typescript",
+    packageManager: hasFlag("--pnpm")
+      ? "pnpm"
+      : hasFlag("--yarn")
+        ? "yarn"
+        : hasFlag("--bun")
+          ? "bun"
+          : "npm",
+    navigationLibrary: hasFlag("--react-navigation") ? "react-navigation" : "expo-router",
+    reactNavigationLayout: hasFlag("--tabs")
+      ? "tabs"
+      : hasFlag("--drawer+tabs")
+        ? "drawer"
+        : "stack",
+    stylingSystem: hasFlag("--nativewind")
+      ? "nativewind"
+      : hasFlag("--tamagui")
+        ? "tamagui"
+        : hasFlag("--restyle")
+          ? "restyle"
+          : hasFlag("--uniwind")
+            ? "uniwind"
+            : "stylesheet",
+    stateManagement: hasFlag("--zustand") ? "zustand" : "none",
+    authBackend: hasFlag("--supabase")
+      ? "supabase"
+      : hasFlag("--firebase")
+        ? "firebase"
+        : "none",
+    easSetup: easSelected,
   };
 }
 

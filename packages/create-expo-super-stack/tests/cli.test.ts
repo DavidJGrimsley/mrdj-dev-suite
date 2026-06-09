@@ -5,6 +5,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  EXPECTED_EXPO_SDK_MAJOR,
+  assertExpectedExpoSdk,
   buildAddDevDependencyCommand,
   buildExpoDoctorCommand,
   buildExpoFontInstallCommand,
@@ -25,6 +27,7 @@ import {
   resolveMissingWindowsTailwindOxideBinding,
   resolveProjectTarget,
   resolveWindowsTailwindOxidePackage,
+  parseExpoSdkMajor,
   shouldInstallExpoFontPeerFromPackageJson,
   shouldRunExpoLatestSdkCommandFromPackageJson,
   toExpoScheme,
@@ -68,7 +71,7 @@ describe("create-expo-super-stack CLI helpers", () => {
 
     expect(commands).toEqual([
       "npm install",
-      "npx expo install expo@latest",
+      `npx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
       "npx expo install --fix",
       "npx expo install expo-font",
       'npx prettier --write "**/*.{js,jsx,ts,tsx,json}"',
@@ -134,12 +137,17 @@ describe("create-expo-super-stack CLI helpers", () => {
     ).toBe(false);
   });
 
-  it("runs expo@latest whenever expo is pinned or missing", () => {
+  it("targets Expo SDK 56 whenever the package is missing or on the wrong major", () => {
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "~56.0.6" },
       }),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      shouldRunExpoLatestSdkCommandFromPackageJson({
+        dependencies: { expo: "^56.0.0" },
+      }),
+    ).toBe(false);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "~55.0.0" },
@@ -154,7 +162,13 @@ describe("create-expo-super-stack CLI helpers", () => {
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "latest" },
       }),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("parses Expo SDK majors from dependency ranges", () => {
+    expect(parseExpoSdkMajor("~56.0.6")).toBe(56);
+    expect(parseExpoSdkMajor("^55.0.0")).toBe(55);
+    expect(parseExpoSdkMajor("latest")).toBeNull();
   });
 
   it("does not execute main when imported by tests", () => {
@@ -254,6 +268,23 @@ describe("create-expo-super-stack CLI helpers", () => {
         "utf8",
       );
       expect(await detectEasSetup(projectPath, ["App"])).toBe(true);
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("fails loudly when the generated project does not target SDK 56", async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), "super-stack-sdk-check-"));
+    try {
+      await writeFile(
+        path.join(projectPath, "package.json"),
+        JSON.stringify({ dependencies: { expo: "~55.0.0" } }),
+        "utf8",
+      );
+
+      await expect(assertExpectedExpoSdk(projectPath)).rejects.toThrow(
+        `Expo SDK ${EXPECTED_EXPO_SDK_MAJOR}`,
+      );
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

@@ -110,9 +110,20 @@ export interface CessResolvedPlan {
   summaryLines: string[];
 }
 
+export interface CessExtractInfoResult {
+  prefilledAnswers: Partial<CessIntakeAnswers>;
+  derivedDisplayName?: string;
+  derivedFolderSlug?: string;
+  missingQuestionIds: string[];
+  ambiguousQuestionIds: string[];
+  evidence: Record<string, string[]>;
+  preservedNotes: string[];
+}
+
 interface CessQuestionContext {
   parentDir: string;
   appName: string;
+  appDisplayName: string;
   currentAnswers: Partial<CessIntakeAnswers>;
   resolvedAnswers: CessIntakeAnswers;
   onboardAnswers: OnboardAnswers;
@@ -129,6 +140,7 @@ interface CessQuestionDefinition {
 }
 
 const DEFAULT_PROJECT_NAME = 'my-expo-app';
+const DEFAULT_DISPLAY_APP_NAME = 'My Expo App';
 const STACK_DEFAULTS = {
   scriptLanguage: 'typescript' as const,
   packageManager: 'npm' as const,
@@ -149,9 +161,9 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
   },
   {
     id: 'appName',
-    prompt: 'What should the new Expo app folder be named?',
+    prompt: 'What is the name of your app?',
     kind: 'text',
-    defaultValue: (context) => context.appName,
+    defaultValue: (context) => context.appDisplayName,
   },
   {
     id: 'scriptLanguage',
@@ -240,12 +252,6 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
       { value: true, label: 'Yes' },
     ],
     defaultValue: () => STACK_DEFAULTS.easSetup,
-  },
-  {
-    id: 'displayAppName',
-    prompt: 'What display app name should MDS use in project memory?',
-    kind: 'text',
-    defaultValue: (context) => context.onboardAnswers.appName,
   },
   {
     id: 'audience',
@@ -489,6 +495,754 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
   },
 ];
 
+const CESS_SNAPSHOT_START = '<!-- MDS_CESS_SNAPSHOT_START -->';
+const CESS_SNAPSHOT_END = '<!-- MDS_CESS_SNAPSHOT_END -->';
+
+export function extractCessInfoFromMarkdown(input: {
+  infoMarkdown: string;
+  styleMarkdown?: string;
+  parentDir?: string;
+  appName?: string;
+  cwd?: string;
+}): CessExtractInfoResult {
+  const infoMarkdown = normalizeLineEndings(input.infoMarkdown);
+  const sections = parseMarkdownSections(infoMarkdown);
+  const evidence: Record<string, string[]> = {};
+  const prefilledAnswers: Partial<CessIntakeAnswers> = {};
+  const ambiguousQuestionIds = new Set<string>();
+  const usedSections = new Set<string>();
+  const explicitAppName = normalizeText(input.appName);
+  let derivedDisplayName = explicitAppName;
+  let derivedFolderSlug = explicitAppName ? slugifyAppName(explicitAppName) : undefined;
+
+  const recordEvidence = (key: string, note: string): void => {
+    evidence[key] = [...(evidence[key] ?? []), note];
+  };
+
+  const assignValue = (
+    id: keyof CessIntakeAnswers,
+    value: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string
+  ): void => {
+    const normalized = normalizeExtractedAnswerValue(id, value);
+    if (normalized === undefined) {
+      return;
+    }
+    if (ambiguousQuestionIds.has(id)) {
+      return;
+    }
+
+    const current = prefilledAnswers[id];
+    if (current !== undefined && !areAnswerValuesEquivalent(id, current, normalized)) {
+      delete prefilledAnswers[id];
+      ambiguousQuestionIds.add(id);
+      recordEvidence(id, `${note} (conflicts with earlier extracted value)`);
+      return;
+    }
+
+    prefilledAnswers[id] = normalized as never;
+    recordEvidence(id, note);
+  };
+
+  const snapshot = parseCessSnapshot(infoMarkdown);
+  if (snapshot) {
+    recordEvidence('snapshot', 'Parsed machine-readable MDS snapshot block.');
+    if (!derivedDisplayName) {
+      derivedDisplayName = normalizeText(snapshot.displayAppName);
+    }
+    if (!derivedFolderSlug) {
+      derivedFolderSlug = normalizeText(snapshot.folderSlug) ?? slugifyAppName(snapshot.displayAppName);
+    }
+    const snapshotAnswers = normalizeCessIntakeAnswers(snapshot.answers);
+    for (const [key, value] of Object.entries(snapshotAnswers)) {
+      assignValue(key as keyof CessIntakeAnswers, value as never, 'MDS snapshot');
+    }
+  }
+
+  const title = extractProjectTitle(infoMarkdown);
+  if (!derivedDisplayName && title) {
+    derivedDisplayName = title;
+    recordEvidence('appName', `Derived app name from title: ${title}`);
+  }
+  if (!derivedFolderSlug && derivedDisplayName) {
+    derivedFolderSlug = slugifyAppName(derivedDisplayName);
+  }
+
+  const targetUsers = sections.get('Target Users');
+  if (targetUsers) {
+    usedSections.add('Target Users');
+    assignValue('audience', normalizeSectionText(targetUsers), 'Target Users section');
+  } else {
+    const overview = sections.get('Overview');
+    const overviewAudience = extractAudienceFromOverview(overview);
+    if (overviewAudience) {
+      usedSections.add('Overview');
+      assignValue('audience', overviewAudience, 'Overview section');
+    }
+  }
+
+  const coreUserFlows = sections.get('Core User Flows');
+  if (coreUserFlows) {
+    usedSections.add('Core User Flows');
+    assignValue('coreFlows', normalizeListSection(coreUserFlows), 'Core User Flows section');
+  }
+
+  const mustIncludeScreens = sections.get('Must-Include Screens Or Flows');
+  if (mustIncludeScreens) {
+    usedSections.add('Must-Include Screens Or Flows');
+    assignValue('screens', normalizeListSection(mustIncludeScreens), 'Must-Include Screens Or Flows section');
+  }
+
+  const dataAndBackend = sections.get('Data And Backend');
+  if (dataAndBackend) {
+    usedSections.add('Data And Backend');
+    const inferredDataNeeds = inferDataNeedSelections(dataAndBackend);
+    if (inferredDataNeeds.length > 0) {
+      assignValue('dataNeedSelections', inferredDataNeeds, 'Data And Backend section');
+    }
+    const dataStart = inferDataStart(dataAndBackend);
+    if (dataStart) {
+      assignValue('dataStart', dataStart, 'Data And Backend section');
+    }
+    const authBackend = inferAuthBackend(dataAndBackend);
+    if (authBackend) {
+      assignValue('authBackend', authBackend, 'Data And Backend section');
+    }
+  }
+
+  const platforms = sections.get('Platforms');
+  if (platforms) {
+    usedSections.add('Platforms');
+    extractPlatformDecisions(platforms, assignValue);
+  }
+
+  const packageChoices = sections.get('Package Choices');
+  if (packageChoices) {
+    usedSections.add('Package Choices');
+    extractPackageChoices(packageChoices, assignValue);
+  }
+
+  const releaseStrategy = sections.get('Release Strategy');
+  if (releaseStrategy) {
+    usedSections.add('Release Strategy');
+    const deploymentTarget = extractBulletValue(releaseStrategy, 'Deployment plan');
+    if (deploymentTarget) {
+      assignValue('deploymentTarget', deploymentTarget, 'Release Strategy section');
+    }
+    const easUses = inferEasUses(extractBulletValue(releaseStrategy, 'EAS usage') ?? releaseStrategy);
+    if (easUses.length > 0) {
+      assignValue('easUses', easUses, 'Release Strategy section');
+      assignValue('easSetup', true, 'Release Strategy section');
+    }
+    const testToMain = parseBooleanValue(extractBulletValue(releaseStrategy, 'Test-to-main safeguards'));
+    if (typeof testToMain === 'boolean') {
+      assignValue('testToMainSafeguards', testToMain, 'Release Strategy section');
+    }
+  }
+
+  const techStackSection = sections.get('Tech Stack & MDS Onboarding');
+  if (techStackSection) {
+    usedSections.add('Tech Stack & MDS Onboarding');
+    extractTechStackDecisions(techStackSection, assignValue);
+  }
+
+  const onboardingDecisionsSection = sections.get('Onboarding Decisions');
+  if (onboardingDecisionsSection) {
+    usedSections.add('Onboarding Decisions');
+    extractOnboardingDecisionLines(onboardingDecisionsSection, assignValue);
+  }
+
+  if (derivedDisplayName) {
+    assignValue('displayAppName', derivedDisplayName, 'Derived app name');
+  }
+
+  const preservedNotes = [...sections.entries()]
+    .filter(([heading, body]) => !usedSections.has(heading) && normalizeSectionText(body))
+    .map(([heading, body]) => `## ${heading}\n\n${normalizeSectionText(body)}`);
+
+  const missingQuestionIds = validateCessGenerationReadiness({
+    parentDir: input.parentDir,
+    appName: derivedFolderSlug,
+    answers: prefilledAnswers,
+    cwd: input.cwd,
+  });
+
+  return {
+    prefilledAnswers,
+    derivedDisplayName,
+    derivedFolderSlug,
+    missingQuestionIds,
+    ambiguousQuestionIds: Array.from(ambiguousQuestionIds),
+    evidence,
+    preservedNotes,
+  };
+}
+
+function parseCessSnapshot(infoMarkdown: string):
+  | { displayAppName?: string; folderSlug?: string; answers?: Partial<CessIntakeAnswers> }
+  | null {
+  const match = new RegExp(
+    `${escapeRegExp(CESS_SNAPSHOT_START)}([\\s\\S]*?)${escapeRegExp(CESS_SNAPSHOT_END)}`,
+    'u'
+  ).exec(infoMarkdown);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  const rawBlock = match[1].trim();
+  const jsonMatch = /```json\s*([\s\S]*?)```/u.exec(rawBlock);
+  const jsonText = (jsonMatch?.[1] ?? rawBlock).trim();
+  if (!jsonText) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+    const answers =
+      typeof parsed.answers === 'object' && parsed.answers && !Array.isArray(parsed.answers)
+        ? (parsed.answers as Partial<CessIntakeAnswers>)
+        : undefined;
+
+    return {
+      displayAppName: normalizeText(parsed.displayAppName),
+      folderSlug: normalizeText(parsed.folderSlug),
+      answers,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function extractProjectTitle(infoMarkdown: string): string | undefined {
+  const match = /^#\s+(.+?)\s*$/mu.exec(infoMarkdown);
+  if (!match?.[1]) {
+    return undefined;
+  }
+  return normalizeProjectTitle(match[1]);
+}
+
+function parseMarkdownSections(markdown: string): Map<string, string> {
+  const sections = new Map<string, string>();
+  const matches = [...markdown.matchAll(/^##\s+(.+?)\s*$/gmu)];
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const next = matches[index + 1];
+    if (!match) {
+      continue;
+    }
+    const heading = match?.[1]?.trim();
+    if (!heading || match.index === undefined) {
+      continue;
+    }
+    const start = match.index + match[0].length;
+    const end = next?.index ?? markdown.length;
+    sections.set(heading, markdown.slice(start, end).trim());
+  }
+  return sections;
+}
+
+function extractAudienceFromOverview(overview: string | undefined): string | undefined {
+  const text = normalizeSectionText(overview);
+  if (!text) {
+    return undefined;
+  }
+  const match = /^Build an Expo app for\s+(.+?)[.]\s*$/iu.exec(text);
+  return normalizeText(match?.[1] ?? text);
+}
+
+function normalizeSectionText(value: string | undefined): string | undefined {
+  const normalized = normalizeLineEndings(value ?? '')
+    .replace(/<!--[\s\S]*?-->/gu, '')
+    .replace(/^\s*>/gmu, '')
+    .trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeListSection(value: string | undefined): string | undefined {
+  const text = normalizeSectionText(value);
+  if (!text) {
+    return undefined;
+  }
+
+  const bulletLines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*]\s+/u, ''))
+    .filter((line) => !line.startsWith('# TodoForContext'));
+
+  return bulletLines.length > 0 ? bulletLines.join('\n') : text;
+}
+
+function inferDataNeedSelections(value: string): string[] {
+  const normalized = value.toLowerCase();
+  const selected = new Set<string>();
+
+  for (const option of DATA_NEED_OPTIONS) {
+    if (normalized.includes(option.toLowerCase())) {
+      selected.add(option);
+    }
+  }
+
+  if (/\blocal\b|\bsqlite\b/u.test(normalized)) {
+    selected.add('Local UI/app state');
+  }
+  if (/\bauth\b|\buser account\b|\bsign in\b|\bsign-up\b|\bsign up\b/u.test(normalized)) {
+    selected.add('User accounts/authentication');
+  }
+  if (/\bdatabase\b|\bsupabase\b|\brecords\b/u.test(normalized)) {
+    selected.add('Backend database records');
+  }
+  if (/\bfile\b|\bimage\b|\bphoto\b|\bupload\b|\bstorage\b/u.test(normalized)) {
+    selected.add('File/image uploads or storage');
+  }
+  if (/\bapi\b|\bintegration\b/u.test(normalized)) {
+    selected.add('External APIs/integrations');
+  }
+  if (/\banalytics\b|\bevents\b/u.test(normalized)) {
+    selected.add('Analytics/events');
+  }
+  if (/\bpayments?\b|\bsubscription\b/u.test(normalized)) {
+    selected.add('Payments/subscriptions');
+  }
+  if (/\brealtime\b|\bcollaboration\b/u.test(normalized)) {
+    selected.add('Realtime/collaboration');
+  }
+  if (/\bpush\b|\bemail\b|\bnotification\b/u.test(normalized)) {
+    selected.add('Push/email notifications');
+  }
+  if (/\boffline\b|\bcache\b|\bsync\b/u.test(normalized)) {
+    selected.add('Offline sync/cache');
+  }
+  if (/\badmin\b|\bmoderation\b/u.test(normalized)) {
+    selected.add('Admin/moderation tools');
+  }
+
+  return Array.from(selected);
+}
+
+function inferDataStart(value: string): OnboardAnswers['dataStart'] | undefined {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('supabase')) {
+    return 'supabase';
+  }
+  if (normalized.includes('local dummy data') || normalized.includes('sqlite') || normalized.includes('local ui/app state')) {
+    return 'local';
+  }
+  return undefined;
+}
+
+function inferAuthBackend(value: string): CessAuthBackend | undefined {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('supabase')) {
+    return 'supabase';
+  }
+  if (normalized.includes('firebase')) {
+    return 'firebase';
+  }
+  return undefined;
+}
+
+function extractPlatformDecisions(
+  value: string,
+  assignValue: (
+    id: keyof CessIntakeAnswers,
+    nextValue: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string
+  ) => void
+): void {
+  const targetPlatforms = parsePlatformList(extractBulletValue(value, 'Target platforms'));
+  if (targetPlatforms.length > 0) {
+    assignValue('targetPlatforms', targetPlatforms, 'Platforms section');
+  }
+
+  const firstTargetPlatform = normalizeChoice(extractBulletValue(value, 'First MVP platform'), PLATFORM_OPTIONS);
+  if (firstTargetPlatform) {
+    assignValue('firstTargetPlatform', firstTargetPlatform, 'Platforms section');
+  }
+
+  const appDirectoryValue = extractBulletValue(value, 'Expo Router app directory');
+  if (appDirectoryValue?.includes('src/app')) {
+    assignValue('appDirectory', 'src', 'Platforms section');
+  } else if (appDirectoryValue?.includes('app')) {
+    assignValue('appDirectory', 'root', 'Platforms section');
+  }
+
+  const organization = extractBulletValue(value, 'Platform-specific organization') ?? '';
+  if (organization.toLowerCase().includes('folder')) {
+    assignValue('platformStrategy', 'folders', 'Platforms section');
+  } else if (organization.toLowerCase().includes('file')) {
+    assignValue('platformStrategy', 'files-only', 'Platforms section');
+  }
+
+  const layoutMode = extractBulletValue(value, 'Platform layout mode');
+  if (layoutMode?.toLowerCase().includes('platform-specific')) {
+    assignValue('platformLayouts', 'platform-specific', 'Platforms section');
+  } else if (layoutMode?.toLowerCase().includes('shared')) {
+    assignValue('platformLayouts', 'shared', 'Platforms section');
+  }
+
+  const webOutput = normalizeChoice(extractBulletValue(value, 'Web output'), ['static', 'server', 'spa', 'none'] as const);
+  if (webOutput) {
+    assignValue('webOutput', webOutput, 'Platforms section');
+  }
+
+  const deployedServer = (extractBulletValue(value, 'Deployed server') ?? '').toLowerCase();
+  if (deployedServer.includes('no deployed server') || deployedServer === 'none') {
+    assignValue('expoServerAdapter', 'none', 'Platforms section');
+    assignValue('customBackend', false, 'Platforms section');
+  } else if (deployedServer.includes('eas')) {
+    assignValue('expoServerAdapter', 'eas', 'Platforms section');
+  } else if (deployedServer.includes('express')) {
+    assignValue('expoServerAdapter', 'express', 'Platforms section');
+  } else if (deployedServer.includes('bun')) {
+    assignValue('expoServerAdapter', 'bun', 'Platforms section');
+  } else if (deployedServer.includes('custom')) {
+    assignValue('expoServerAdapter', 'other', 'Platforms section');
+    assignValue('customBackend', true, 'Platforms section');
+  }
+
+  const expoUi = parseBooleanValue(extractBulletValue(value, 'Expo UI'));
+  if (typeof expoUi === 'boolean') {
+    assignValue('usesExpoUi', expoUi, 'Platforms section');
+  }
+  const expoUiUniversal = parseBooleanValue(extractBulletValue(value, 'Expo UI Universal components'));
+  if (typeof expoUiUniversal === 'boolean') {
+    assignValue('usesExpoUiUniversalComponents', expoUiUniversal, 'Platforms section');
+  }
+  const expoNativeTabs = parseBooleanValue(extractBulletValue(value, 'Expo Native Tabs'));
+  if (typeof expoNativeTabs === 'boolean') {
+    assignValue('usesExpoNativeTabs', expoNativeTabs, 'Platforms section');
+  }
+}
+
+function extractPackageChoices(
+  value: string,
+  assignValue: (
+    id: keyof CessIntakeAnswers,
+    nextValue: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string
+  ) => void
+): void {
+  const entries = normalizeListSection(value)
+    ?.split('\n')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
+  for (const entry of entries) {
+    if (entry === 'uniwind') {
+      assignValue('stylingSystem', 'uniwind', 'Package Choices section');
+    } else if (entry === 'nativewind') {
+      assignValue('stylingSystem', 'nativewind', 'Package Choices section');
+    } else if (entry === 'tamagui') {
+      assignValue('stylingSystem', 'tamagui', 'Package Choices section');
+    } else if (entry === 'restyle') {
+      assignValue('stylingSystem', 'restyle', 'Package Choices section');
+    } else if (entry === 'supabase') {
+      assignValue('authBackend', 'supabase', 'Package Choices section');
+    } else if (entry === 'firebase') {
+      assignValue('authBackend', 'firebase', 'Package Choices section');
+    }
+  }
+}
+
+function extractTechStackDecisions(
+  value: string,
+  assignValue: (
+    id: keyof CessIntakeAnswers,
+    nextValue: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string
+  ) => void
+): void {
+  const language = normalizeChoice(extractKeyValue(value, 'Language'), ['typescript', 'javascript'] as const);
+  if (language) {
+    assignValue('scriptLanguage', language, 'Tech Stack & MDS Onboarding section');
+  }
+
+  const packageManager = normalizeChoice(extractKeyValue(value, 'Package manager'), ['npm', 'pnpm', 'yarn', 'bun'] as const);
+  if (packageManager) {
+    assignValue('packageManager', packageManager, 'Tech Stack & MDS Onboarding section');
+  }
+
+  const routing = (extractKeyValue(value, 'Routing') ?? '').toLowerCase();
+  if (routing.includes('react navigation')) {
+    assignValue('navigationLibrary', 'react-navigation', 'Tech Stack & MDS Onboarding section');
+    if (routing.includes('tabs')) {
+      assignValue('reactNavigationLayout', 'tabs', 'Tech Stack & MDS Onboarding section');
+    } else if (routing.includes('drawer')) {
+      assignValue('reactNavigationLayout', 'drawer', 'Tech Stack & MDS Onboarding section');
+    } else {
+      assignValue('reactNavigationLayout', 'stack', 'Tech Stack & MDS Onboarding section');
+    }
+  } else if (routing.includes('expo router')) {
+    assignValue('navigationLibrary', 'expo-router', 'Tech Stack & MDS Onboarding section');
+  }
+
+  const styling = (extractKeyValue(value, 'Styling') ?? '').toLowerCase();
+  if (styling.includes('uniwind')) {
+    assignValue('stylingSystem', 'uniwind', 'Tech Stack & MDS Onboarding section');
+  } else if (styling.includes('nativewind')) {
+    assignValue('stylingSystem', 'nativewind', 'Tech Stack & MDS Onboarding section');
+  } else if (styling.includes('tamagui')) {
+    assignValue('stylingSystem', 'tamagui', 'Tech Stack & MDS Onboarding section');
+  } else if (styling.includes('restyle')) {
+    assignValue('stylingSystem', 'restyle', 'Tech Stack & MDS Onboarding section');
+  } else if (styling.includes('stylesheet')) {
+    assignValue('stylingSystem', 'stylesheet', 'Tech Stack & MDS Onboarding section');
+  }
+
+  const stateManagement = (extractKeyValue(value, 'State management') ?? '').toLowerCase();
+  if (stateManagement.includes('zustand')) {
+    assignValue('stateManagement', 'zustand', 'Tech Stack & MDS Onboarding section');
+  } else if (stateManagement.includes('none')) {
+    assignValue('stateManagement', 'none', 'Tech Stack & MDS Onboarding section');
+  }
+
+  const auth = inferAuthBackend(extractKeyValue(value, 'Auth') ?? '');
+  if (auth) {
+    assignValue('authBackend', auth, 'Tech Stack & MDS Onboarding section');
+  }
+
+  const distribution = extractKeyValue(value, 'Distribution');
+  if (distribution) {
+    assignValue('deploymentTarget', distribution, 'Tech Stack & MDS Onboarding section');
+  }
+
+  const easUses = inferEasUses(extractKeyValue(value, 'EAS') ?? '');
+  if (easUses.length > 0) {
+    assignValue('easUses', easUses, 'Tech Stack & MDS Onboarding section');
+    assignValue('easSetup', true, 'Tech Stack & MDS Onboarding section');
+  }
+
+  extractOnboardingDecisionLines(value, assignValue);
+}
+
+function extractOnboardingDecisionLines(
+  value: string,
+  assignValue: (
+    id: keyof CessIntakeAnswers,
+    nextValue: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string
+  ) => void
+): void {
+  const lines = normalizeLineEndings(value)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const rawKeyValue = /^-\s+(.+?):\s+(.+)$/u.exec(line);
+    const key = normalizeText(rawKeyValue?.[1]);
+    const rawValue = normalizeText(rawKeyValue?.[2]);
+    if (!key || !rawValue) {
+      continue;
+    }
+
+    const loweredKey = key.toLowerCase();
+    if (loweredKey === 'advanced package setup') {
+      continue;
+    }
+    if (loweredKey === 'create expo starter components') {
+      assignValue('includeCreateExpoComponents', parseBooleanValue(rawValue), 'Onboarding decisions');
+    } else if (loweredKey === 'latest expo sdk preference') {
+      // Captured for human context only; SDK targeting is enforced by the generator.
+      continue;
+    } else if (loweredKey === 'expo ui') {
+      assignValue('usesExpoUi', parseBooleanValue(rawValue), 'Onboarding decisions');
+    } else if (loweredKey === 'expo ui universal components') {
+      assignValue('usesExpoUiUniversalComponents', parseBooleanValue(rawValue), 'Onboarding decisions');
+    } else if (loweredKey === 'expo native tabs') {
+      assignValue('usesExpoNativeTabs', parseBooleanValue(rawValue), 'Onboarding decisions');
+    } else if (loweredKey === 'target platforms') {
+      const targetPlatforms = parsePlatformList(rawValue);
+      if (targetPlatforms.length > 0) {
+        assignValue('targetPlatforms', targetPlatforms, 'Onboarding decisions');
+      }
+    } else if (loweredKey === 'first mvp platform') {
+      assignValue('firstTargetPlatform', normalizeChoice(rawValue, PLATFORM_OPTIONS), 'Onboarding decisions');
+    } else if (loweredKey === 'expo router app directory') {
+      assignValue('appDirectory', rawValue.includes('src/app') ? 'src' : 'root', 'Onboarding decisions');
+    } else if (loweredKey === 'platform-specific organization') {
+      assignValue(
+        'platformStrategy',
+        rawValue.toLowerCase().includes('folder') ? 'folders' : 'files-only',
+        'Onboarding decisions'
+      );
+    } else if (loweredKey === 'platform layout mode') {
+      assignValue(
+        'platformLayouts',
+        rawValue.toLowerCase().includes('platform-specific') ? 'platform-specific' : 'shared',
+        'Onboarding decisions'
+      );
+    } else if (loweredKey === 'web output') {
+      assignValue('webOutput', normalizeChoice(rawValue, ['static', 'server', 'spa', 'none'] as const), 'Onboarding decisions');
+    } else if (loweredKey === 'deployed server') {
+      extractPlatformDecisions(`- Deployed server: ${rawValue}`, assignValue);
+    } else if (loweredKey === 'eas usage') {
+      const easUses = inferEasUses(rawValue);
+      if (easUses.length > 0) {
+        assignValue('easUses', easUses, 'Onboarding decisions');
+        assignValue('easSetup', true, 'Onboarding decisions');
+      }
+    } else if (loweredKey === 'data start') {
+      assignValue('dataStart', inferDataStart(rawValue), 'Onboarding decisions');
+    } else if (loweredKey === 'test-to-main safeguards') {
+      assignValue('testToMainSafeguards', parseBooleanValue(rawValue), 'Onboarding decisions');
+    }
+  }
+}
+
+function extractBulletValue(value: string, label: string): string | undefined {
+  const match = new RegExp(`^-\\s+${escapeRegExp(label)}:\\s+(.+)$`, 'imu').exec(value);
+  return normalizeText(match?.[1]);
+}
+
+function extractKeyValue(value: string, label: string): string | undefined {
+  const match = new RegExp(`^-\\s+(?:\\*\\*)?${escapeRegExp(label)}(?:\\*\\*)?:\\s+(.+)$`, 'imu').exec(value);
+  return normalizeText(match?.[1]);
+}
+
+function inferEasUses(value: string): string[] {
+  const normalized = value.toLowerCase();
+  return EAS_USE_OPTIONS.filter((item) => normalized.includes(item.toLowerCase()));
+}
+
+function parsePlatformList(value: string | undefined): string[] {
+  const normalized = value
+    ?.split(',')
+    .map((item) => item.replace(/[`]/gu, '').trim().toLowerCase())
+    .filter(Boolean) ?? [];
+
+  return normalized
+    .map((item) => {
+      if (item === 'ios' || item === 'android' || item === 'web' || item === 'apple-tv' || item === 'android-tv') {
+        return item;
+      }
+      return item.replace(/\s+/gu, '-');
+    })
+    .filter((item): item is string => PLATFORM_OPTIONS.includes(item as (typeof PLATFORM_OPTIONS)[number]));
+}
+
+function parseBooleanValue(value: string | undefined): boolean | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (['yes', 'true', 'on'].includes(normalized)) {
+    return true;
+  }
+  if (['no', 'false', 'off'].includes(normalized)) {
+    return false;
+  }
+  return undefined;
+}
+
+function normalizeExtractedAnswerValue(
+  id: keyof CessIntakeAnswers,
+  value: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined
+): CessIntakeAnswers[keyof CessIntakeAnswers] | undefined {
+  switch (id) {
+    case 'confirmed':
+    case 'easSetup':
+    case 'customBackend':
+    case 'includeCreateExpoComponents':
+    case 'usesExpoUi':
+    case 'usesExpoUiUniversalComponents':
+    case 'usesExpoNativeTabs':
+    case 'guidelinesTemplate':
+    case 'testToMainSafeguards':
+    case 'saveDefaults':
+      return typeof value === 'boolean' ? value : undefined;
+    case 'dataNeedSelections':
+    case 'targetPlatforms':
+    case 'easUses':
+      return normalizeStringArray(value) ?? undefined;
+    case 'scriptLanguage':
+      return normalizeEnum(value, ['typescript', 'javascript']);
+    case 'packageManager':
+      return normalizeEnum(value, ['npm', 'pnpm', 'yarn', 'bun']);
+    case 'navigationLibrary':
+      return normalizeEnum(value, ['expo-router', 'react-navigation']);
+    case 'reactNavigationLayout':
+      return normalizeEnum(value, ['stack', 'tabs', 'drawer']);
+    case 'stylingSystem':
+      return normalizeEnum(value, ['uniwind', 'nativewind', 'tamagui', 'restyle', 'stylesheet']);
+    case 'stateManagement':
+      return normalizeEnum(value, ['zustand', 'none']);
+    case 'authBackend':
+      return normalizeEnum(value, ['none', 'supabase', 'firebase']);
+    case 'platformStrategy':
+      return normalizeEnum(value, ['folders', 'files-only']);
+    case 'appDirectory':
+      return normalizeEnum(value, ['src', 'root']);
+    case 'platformLayouts':
+      return normalizeEnum(value, ['shared', 'platform-specific']);
+    case 'webOutput':
+      return normalizeEnum(value, ['static', 'server', 'spa', 'none']);
+    case 'expoServerAdapter':
+      return normalizeEnum(value, ['eas', 'express', 'bun', 'other', 'none']);
+    case 'dataStart':
+      return normalizeEnum(value, ['local', 'supabase']);
+    case 'screens':
+      return normalizeOptionalDeferText(value);
+    default:
+      return normalizeText(value);
+  }
+}
+
+function areAnswerValuesEquivalent(
+  id: keyof CessIntakeAnswers,
+  left: CessIntakeAnswers[keyof CessIntakeAnswers],
+  right: CessIntakeAnswers[keyof CessIntakeAnswers]
+): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return JSON.stringify(normalizeStringArray(left) ?? []) === JSON.stringify(normalizeStringArray(right) ?? []);
+  }
+  if (typeof left === 'boolean' || typeof right === 'boolean') {
+    return left === right;
+  }
+  return normalizeExtractedAnswerValue(id, left) === normalizeExtractedAnswerValue(id, right);
+}
+
+function normalizeProjectTitle(value: string): string | undefined {
+  const trimmed = value.replace(/\s+project info$/iu, '').trim();
+  const normalized = normalizeText(trimmed);
+  return normalized ? displayNameFromProjectName(normalized) : undefined;
+}
+
+function normalizeLineEndings(value: string): string {
+  return value.replace(/\r\n/gu, '\n');
+}
+
+function slugifyAppName(value: string | undefined): string | undefined {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return undefined;
+  }
+  const slug = normalized
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, '');
+  return slug || DEFAULT_PROJECT_NAME;
+}
+
+function displayNameFromProjectName(value: string | undefined): string {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return DEFAULT_DISPLAY_APP_NAME;
+  }
+  if (normalized.includes(' ')) {
+    return normalized;
+  }
+  return normalized
+    .replace(/[-_]+/gu, ' ')
+    .replace(/\b\w/gu, (match) => match.toUpperCase());
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 export function buildCessIntakeStep(input: {
   parentDir?: string;
   appName?: string;
@@ -500,16 +1254,18 @@ export function buildCessIntakeStep(input: {
   const appNameProvided = normalizeText(input.appName);
   const parentDir = normalizeParentDir(input.parentDir, cwd);
   const appName = normalizeProjectName(input.appName);
+  const appDisplayName = displayNameFromProjectName(input.appName);
   const currentAnswers = normalizeCessIntakeAnswers(input.answers);
   const resolvedPlan = resolveCessPlan({
     parentDir,
-    appName,
+    appName: input.appName,
     answers: currentAnswers,
     cwd,
   });
   const context: CessQuestionContext = {
     parentDir,
     appName,
+    appDisplayName,
     currentAnswers,
     resolvedAnswers: resolvedPlan.answers,
     onboardAnswers: resolvedPlan.onboardAnswers,
@@ -579,11 +1335,18 @@ export function resolveCessPlan(input: {
   const cwd = input.cwd ? path.resolve(input.cwd) : process.cwd();
   const parentDir = normalizeParentDir(input.parentDir, cwd);
   const appName = normalizeProjectName(input.appName);
+  const appDisplayName = displayNameFromProjectName(input.appName);
   const projectPath = path.resolve(parentDir, appName);
   const currentAnswers = normalizeCessIntakeAnswers(input.answers);
   const onboardArgv = buildOnboardArgvFromCess(parentDir, appName, currentAnswers);
   const onboardPlan = defaultOnboardPlan(onboardArgv, projectPath);
-  const answers = buildResolvedCessAnswers(currentAnswers, parentDir, appName, onboardPlan.answers);
+  const answers = buildResolvedCessAnswers(
+    currentAnswers,
+    parentDir,
+    appName,
+    appDisplayName,
+    onboardPlan.answers
+  );
   const finalOnboardArgv = buildOnboardArgvFromCess(parentDir, appName, answers);
   const finalOnboardPlan = defaultOnboardPlan(finalOnboardArgv, projectPath);
   const createExpoStackFlags = buildCreateExpoStackFlags(answers);
@@ -625,6 +1388,7 @@ export function validateCessGenerationReadiness(input: {
     {
       parentDir,
       appName,
+      appDisplayName: displayNameFromProjectName(input.appName),
       currentAnswers,
       resolvedAnswers: resolvedPlan.answers,
       onboardAnswers: resolvedPlan.onboardAnswers,
@@ -863,7 +1627,7 @@ export function buildCessSummaryLines(
       : `web output: ${onboardAnswers.webOutput}, deployed server: ${onboardAnswers.deployedServer}`;
 
   return [
-    `app: ${appName} at ${parentDir}`,
+    `app: ${onboardAnswers.appName} (folder: ${appName}) at ${parentDir}`,
     `stack: ${stackLine}`,
     `audience: ${onboardAnswers.audience}`,
     `core flows: ${onboardAnswers.coreFlows}`,
@@ -877,6 +1641,7 @@ function buildResolvedCessAnswers(
   currentAnswers: Partial<CessIntakeAnswers>,
   parentDir: string,
   appName: string,
+  appDisplayName: string,
   onboardAnswers: OnboardAnswers
 ): CessIntakeAnswers {
   const targetPlatforms = currentAnswers.targetPlatforms ?? onboardAnswers.targetPlatforms;
@@ -894,7 +1659,7 @@ function buildResolvedCessAnswers(
     stateManagement: currentAnswers.stateManagement ?? STACK_DEFAULTS.stateManagement,
     authBackend: currentAnswers.authBackend ?? STACK_DEFAULTS.authBackend,
     easSetup: currentAnswers.easSetup ?? STACK_DEFAULTS.easSetup,
-    displayAppName: currentAnswers.displayAppName ?? onboardAnswers.appName ?? appName,
+    displayAppName: currentAnswers.displayAppName ?? appDisplayName ?? onboardAnswers.appName ?? appName,
     audience: currentAnswers.audience ?? onboardAnswers.audience,
     coreFlows: currentAnswers.coreFlows ?? onboardAnswers.coreFlows ?? AGENT_DERIVED_CORE_FLOWS,
     screens,
@@ -946,7 +1711,15 @@ function buildOnboardArgvFromCess(
   return {
     project: path.resolve(parentDir, appName),
     yes: true,
-    appName: normalizeText(answers.displayAppName) ?? appName,
+    appName: normalizeText(answers.displayAppName) ?? displayNameFromProjectName(appName),
+    generatorScriptLanguage: answers.scriptLanguage,
+    generatorPackageManager: answers.packageManager,
+    generatorNavigationLibrary: answers.navigationLibrary,
+    generatorReactNavigationLayout: answers.reactNavigationLayout,
+    generatorStylingSystem: answers.stylingSystem,
+    generatorStateManagement: answers.stateManagement,
+    generatorAuthBackend: answers.authBackend,
+    generatorEasSetup: answers.easSetup,
     audience: normalizeText(answers.audience),
     coreFlows: normalizeText(answers.coreFlows),
     screens,
@@ -1038,7 +1811,7 @@ function normalizeParentDir(parentDir: string | undefined, cwd: string): string 
 }
 
 function normalizeProjectName(appName: string | undefined): string {
-  return normalizeText(appName) ?? DEFAULT_PROJECT_NAME;
+  return slugifyAppName(appName) ?? DEFAULT_PROJECT_NAME;
 }
 
 function normalizeBoolean(value: unknown): boolean | undefined {
@@ -1047,6 +1820,10 @@ function normalizeBoolean(value: unknown): boolean | undefined {
 
 function normalizeEnum<T extends string>(value: unknown, choices: readonly T[]): T | undefined {
   return typeof value === 'string' && choices.includes(value as T) ? (value as T) : undefined;
+}
+
+function normalizeChoice<T extends string>(value: unknown, choices: readonly T[]): T | undefined {
+  return normalizeEnum(value, choices);
 }
 
 function normalizeText(value: unknown): string | undefined {

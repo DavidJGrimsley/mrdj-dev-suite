@@ -21,6 +21,14 @@ export interface OnboardArgv {
   guidelinesTemplatePath?: string;
   rich?: boolean;
   appName?: string;
+  generatorScriptLanguage?: 'typescript' | 'javascript';
+  generatorPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  generatorNavigationLibrary?: 'expo-router' | 'react-navigation';
+  generatorReactNavigationLayout?: 'stack' | 'tabs' | 'drawer';
+  generatorStylingSystem?: 'uniwind' | 'nativewind' | 'tamagui' | 'restyle' | 'stylesheet';
+  generatorStateManagement?: 'zustand' | 'none';
+  generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
+  generatorEasSetup?: boolean;
   audience?: string;
   coreFlows?: string;
   screens?: string;
@@ -546,6 +554,14 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
 
   return {
     appName: argv.appName ?? path.basename(projectPath),
+    generatorScriptLanguage: argv.generatorScriptLanguage,
+    generatorPackageManager: argv.generatorPackageManager,
+    generatorNavigationLibrary: argv.generatorNavigationLibrary,
+    generatorReactNavigationLayout: argv.generatorReactNavigationLayout,
+    generatorStylingSystem: argv.generatorStylingSystem,
+    generatorStateManagement: argv.generatorStateManagement,
+    generatorAuthBackend: argv.generatorAuthBackend,
+    generatorEasSetup: argv.generatorEasSetup,
     audience: argv.audience ?? 'Expo app users',
     coreFlows: argv.coreFlows ?? AGENT_DERIVED_CORE_FLOWS,
     screens: argv.screens?.trim() || undefined,

@@ -179,18 +179,18 @@ describe('renderCodexBlock', () => {
 describe('renderVscodeAddMcpCommand', () => {
   it('renders a shell-safe add-mcp command for the current platform', () => {
     const command = renderVscodeAddMcpCommand(
-      buildVscodeAddMcpPayload({ command: 'cmd', args: ['/c', 'npx', '-y', '@mr.dj2u/mcp-server@0.1.6'] })
+      buildVscodeAddMcpPayload({ command: 'cmd', args: ['/c', 'npx', '-y', '@mr.dj2u/mcp-server@0.1.7'] })
     );
 
     if (process.platform === 'win32') {
       expect(command).toBe(
-        `code --add-mcp '{"name":"mds","command":"cmd","args":["/c","npx","-y","@mr.dj2u/mcp-server@0.1.6"]}'`
+        `code --add-mcp '{"name":"mds","command":"cmd","args":["/c","npx","-y","@mr.dj2u/mcp-server@0.1.7"]}'`
       );
       return;
     }
 
     expect(command).toBe(
-      'code --add-mcp "{\\"name\\":\\"mds\\",\\"command\\":\\"cmd\\",\\"args\\":[\\"/c\\",\\"npx\\",\\"-y\\",\\"@mr.dj2u/mcp-server@0.1.6\\"]}"'
+      'code --add-mcp "{\\"name\\":\\"mds\\",\\"command\\":\\"cmd\\",\\"args\\":[\\"/c\\",\\"npx\\",\\"-y\\",\\"@mr.dj2u/mcp-server@0.1.7\\"]}"'
     );
   });
 });

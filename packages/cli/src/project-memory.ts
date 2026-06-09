@@ -15,6 +15,14 @@ export type ExpoServerAdapter = 'eas' | 'express' | 'bun' | 'other' | 'none';
 
 export interface OnboardAnswers {
   appName: string;
+  generatorScriptLanguage?: 'typescript' | 'javascript';
+  generatorPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
+  generatorNavigationLibrary?: 'expo-router' | 'react-navigation';
+  generatorReactNavigationLayout?: 'stack' | 'tabs' | 'drawer';
+  generatorStylingSystem?: 'uniwind' | 'nativewind' | 'tamagui' | 'restyle' | 'stylesheet';
+  generatorStateManagement?: 'zustand' | 'none';
+  generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
+  generatorEasSetup?: boolean;
   audience: string;
   coreFlows: string;
   screens?: string;
@@ -119,7 +127,7 @@ const UNIWIND_DEV_DEPENDENCIES = {
 } as const;
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MDS_CLI_VERSION = '0.1.12';
+const MDS_CLI_VERSION = '0.1.13';
 const MDS_NPX_COMMAND = 'npx mds';
 const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   PACKAGE_ROOT,
@@ -142,6 +150,8 @@ const EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH = path.join(
   'templates',
   'expo-sdk-56-screen-universal.template.tsx'
 );
+const CESS_SNAPSHOT_START = '<!-- MDS_CESS_SNAPSHOT_START -->';
+const CESS_SNAPSHOT_END = '<!-- MDS_CESS_SNAPSHOT_END -->';
 const INFO_HEADINGS = [
   'Overview',
   'Target Users',
@@ -700,12 +710,18 @@ export function renderInfo(
     '',
     '> Quick-reference stack summary for agents and collaborators. Fill in or correct any items marked below.',
     '',
+    CESS_SNAPSHOT_START,
+    '```json',
+    JSON.stringify(buildCessSnapshot(answers), null, 2),
+    '```',
+    CESS_SNAPSHOT_END,
+    '',
     `- **App:** ${answers.appName} â€” ${answers.audience}`,
-    '- **Language:** TypeScript',
-    '- **Package manager:** # TodoForContext(optional): pnpm / npm / yarn / bun',
-    `- **Routing:** Expo Router (${formatAppDirectory(answers.appDirectory)})`,
+    `- **Language:** ${formatGeneratorLanguage(answers.generatorScriptLanguage)}`,
+    `- **Package manager:** ${formatGeneratorPackageManager(answers.generatorPackageManager)}`,
+    `- **Routing:** ${formatGeneratorRouting(answers)}`,
     `- **Styling:** ${formatStyleStack(answers)}`,
-    '- **State management:** # TodoForContext(optional): Zustand / Jotai / React context / none',
+    `- **State management:** ${formatGeneratorStateManagement(answers.generatorStateManagement)}`,
     `- **Auth:** ${formatAuthSummary(answers)}`,
     `- **Data:** ${formatDataStart(answers.dataStart)}`,
     `- **Platforms:** ${answers.targetPlatforms.join(', ') || 'none selected'}, first MVP target: ${answers.firstTargetPlatform}`,
@@ -718,6 +734,7 @@ export function renderInfo(
     '',
     `- Advanced package setup: ${formatBoolean(answers.advancedPackageSetup)}`,
     `- Create Expo starter components: ${formatBoolean(answers.includeCreateExpoComponents)}`,
+    `- EAS starter selected during generation: ${formatBoolean(answers.generatorEasSetup ?? answers.easUses.length > 0)}`,
     `- MDS guidelines template: yes`,
     `- Expo UI: ${formatBoolean(answers.usesExpoUi)}`,
     `- Expo UI Universal components: ${formatBoolean(answers.usesExpoUiUniversalComponents)}`,
@@ -1398,6 +1415,88 @@ function formatCodeOrg(answers: OnboardAnswers): string {
     parts.push(`web: ${answers.webOutput}`);
   }
   return parts.join(', ');
+}
+
+function buildCessSnapshot(answers: OnboardAnswers): Record<string, unknown> {
+  return {
+    version: 1,
+    displayAppName: answers.appName,
+    folderSlug: toKebabCase(answers.appName),
+    answers: {
+      scriptLanguage: answers.generatorScriptLanguage,
+      packageManager: answers.generatorPackageManager,
+      navigationLibrary: answers.generatorNavigationLibrary,
+      reactNavigationLayout: answers.generatorReactNavigationLayout,
+      stylingSystem: answers.generatorStylingSystem,
+      stateManagement: answers.generatorStateManagement,
+      authBackend: answers.generatorAuthBackend,
+      easSetup: answers.generatorEasSetup,
+      displayAppName: answers.appName,
+      audience: answers.audience,
+      coreFlows: answers.coreFlows,
+      screens: answers.screens,
+      targetPlatforms: answers.targetPlatforms,
+      firstTargetPlatform: answers.firstTargetPlatform,
+      platformStrategy: answers.platformFileStrategy,
+      appDirectory: answers.appDirectory,
+      platformLayouts: answers.platformLayoutMode,
+      webOutput: answers.webOutput,
+      expoServerAdapter: answers.expoServerAdapter,
+      customBackend: answers.customBackend,
+      customBackendEntry: answers.customBackendEntry,
+      deploymentTarget: answers.deploymentTarget,
+      includeCreateExpoComponents: answers.includeCreateExpoComponents,
+      usesExpoUi: answers.usesExpoUi,
+      usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
+      usesExpoNativeTabs: answers.usesExpoNativeTabs,
+      easUses: answers.easUses,
+      guidelinesTemplate: true,
+      dataStart: answers.dataStart,
+      testToMainSafeguards: answers.testToMainSafeguards,
+    },
+  };
+}
+
+function formatGeneratorLanguage(value: OnboardAnswers['generatorScriptLanguage']): string {
+  return value === 'javascript' ? 'JavaScript' : value === 'typescript' ? 'TypeScript' : '# TodoForContext(optional): TypeScript / JavaScript';
+}
+
+function formatGeneratorPackageManager(value: OnboardAnswers['generatorPackageManager']): string {
+  return value ?? '# TodoForContext(optional): pnpm / npm / yarn / bun';
+}
+
+function formatGeneratorRouting(answers: OnboardAnswers): string {
+  if (answers.generatorNavigationLibrary === 'react-navigation') {
+    const layout =
+      answers.generatorReactNavigationLayout === 'tabs'
+        ? 'Tabs'
+        : answers.generatorReactNavigationLayout === 'drawer'
+          ? 'Drawer + Tabs'
+          : 'Stack';
+    return `React Navigation (${layout})`;
+  }
+  if (answers.generatorNavigationLibrary === 'expo-router') {
+    return `Expo Router (${formatAppDirectory(answers.appDirectory)})`;
+  }
+  return `# TodoForContext(optional): Expo Router / React Navigation (${formatAppDirectory(answers.appDirectory)})`;
+}
+
+function formatGeneratorStateManagement(value: OnboardAnswers['generatorStateManagement']): string {
+  if (value === 'zustand') {
+    return 'Zustand';
+  }
+  if (value === 'none') {
+    return 'None';
+  }
+  return '# TodoForContext(optional): Zustand / Jotai / React context / none';
+}
+
+function toKebabCase(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, '') || 'expo-app';
 }
 
 function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {
