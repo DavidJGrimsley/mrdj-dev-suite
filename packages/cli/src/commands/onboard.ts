@@ -7,7 +7,7 @@ import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } 
 import chalk from 'chalk';
 
 import { scaffoldProjectMemory } from '../project-memory.js';
-import { scanProjectTodoForContextMarkers } from '../roadmap.js';
+import { generateProjectRoadmap } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
@@ -119,7 +119,7 @@ export const TEST_TO_MAIN_EXPLANATION =
 export const SERVER_OUTPUT_EXPLANATION =
   'Expo Router API routes require Expo web output set to server. Static and SPA exports can still call Supabase, external APIs, serverless functions, or a separate custom backend, but they cannot host Expo Router API routes inside the static export.';
 export const AGENT_DERIVED_CORE_FLOWS =
-  'Agent should derive the first core user flows from project/info.md during intake.';
+  'Let the agent derive the first real core user flows later from the fully clarified `project/info.md`.';
 export const SUPER_STACK_ONBOARDING_INTRO = 'MDS Super Stack onboarding';
 export const SUPER_STACK_ONBOARDING_NOTE_TITLE = "Let's plan the app";
 export const SUPER_STACK_ONBOARDING_NOTE =
@@ -180,15 +180,24 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   }
   printOnboardingNextSteps();
 
-  const markerHits = await scanProjectTodoForContextMarkers(projectPath);
-  if (markerHits.length > 0) {
+  const roadmapStatus = await generateProjectRoadmap(projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
+  if (roadmapStatus.blockedByMarkers) {
     console.log();
     console.log(chalk.yellow('Roadmap note'));
     console.log(
-      'Unresolved `# TodoForContext(optional):` markers are still present in `project/`, so MDS intentionally left the scaffolded phase template in place.'
+      'Unresolved `# TodoForContext(optional):` markers are still present in `project/info.md`, so MDS intentionally left the scaffolded phase template in place.'
     );
     console.log(
-      'Resolve those markers first, then run `mds roadmap` or let your agent refresh `project/todo.md` from `project/info.md`.'
+      'Resolve those `project/info.md` markers first, then run `mds roadmap` or let your agent refresh `project/todo.md` from `project/info.md`.'
+    );
+  } else if (roadmapStatus.needsClarification) {
+    console.log();
+    console.log(chalk.yellow('Roadmap note'));
+    console.log(
+      'The project docs are still too generic for a high-confidence derived roadmap, so let your agent ask clarifying questions and then rerun `mds roadmap`.'
     );
   }
 }
@@ -218,7 +227,7 @@ export async function collectOnboardPlan(
   const coreFlows =
     argv.coreFlows ??
     (await askText(
-      'If you know it already, what should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. Press Enter to let the agent derive this later.',
+      'If you know it already, what should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. Press Enter to leave this for the roadmap pass after `project/info.md` is clarified.',
       seed.coreFlows
     ));
   const screens =
@@ -992,7 +1001,7 @@ function printOnboardingNextSteps(): void {
   console.log("2. Review styling in the 'Stylist' page and save theme tokens.");
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log(
-    '4. Resolve every # TodoForContext(optional): marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+    '4. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
   );
   console.log(
     '5. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'

@@ -40,13 +40,13 @@ type TopicKind =
   | 'widgets'
   | 'audio';
 
-const highlights: Array<{
+const highlights: {
   kind: TopicKind;
   title: string;
   packageName: string;
   body: string;
-  links: Array<{ label: string; href: string }>;
-}> = [
+  links: { label: string; href: string }[];
+}[] = [
   {
     kind: 'expo-ui',
     title: 'Expo UI is production-ready',

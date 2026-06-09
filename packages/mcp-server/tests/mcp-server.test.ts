@@ -129,6 +129,14 @@ describe('mds MCP helpers', () => {
       [
         '# Demo Project Info',
         '',
+        '## Target Users',
+        '',
+        'Freelancers managing client projects.',
+        '',
+        '## Product Goals',
+        '',
+        '- Help freelancers onboard clients faster.',
+        '',
         '## Core User Flows',
         '',
         '- sign up',
@@ -138,6 +146,10 @@ describe('mds MCP helpers', () => {
         '',
         '- Home',
         '- Project detail',
+        '',
+        '## Release Strategy',
+        '',
+        '- TestFlight beta',
       ].join('\n'),
       'utf8'
     );
@@ -146,6 +158,8 @@ describe('mds MCP helpers', () => {
       projectPath,
     })) as {
       kind: string;
+      blockedByMarkers: boolean;
+      needsClarification: boolean;
       write: boolean;
       wrote: boolean;
       phases: Array<{ id: string; tasks: Array<{ text: string }> }>;
@@ -153,10 +167,53 @@ describe('mds MCP helpers', () => {
 
     expect(result.kind).toBe('project-roadmap');
     expect(result.blockedByMarkers).toBe(false);
+    expect(result.needsClarification).toBe(false);
     expect(result.write).toBe(false);
     expect(result.wrote).toBe(false);
     expect(result.phases.some((phase) => phase.id === 'phase-1')).toBe(true);
     expect(result.phases.some((phase) => phase.tasks.some((task) => task.text.includes('sign up')))).toBe(true);
+  });
+
+  it('returns clarification metadata through MCP when project info is still generic', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-roadmap-generic-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Expo app users',
+        '',
+        '## Product Goals',
+        '',
+        'Help users.',
+        '',
+        '## Core User Flows',
+        '',
+        'Agent should derive the first core user flows from project/info.md during intake.',
+        '',
+        '## Release Strategy',
+        '',
+        '- Deployment plan: Expo web/native deployment',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_project_roadmap', {
+      projectPath,
+    })) as {
+      needsClarification: boolean;
+      clarificationQuestions: Array<{ id: string }>;
+    };
+
+    expect(result.needsClarification).toBe(true);
+    expect(result.clarificationQuestions.some((question) => question.id === 'core-user-flows')).toBe(
+      true
+    );
   });
 
   it('builds a continue brief through the MCP continue_project tool', async () => {

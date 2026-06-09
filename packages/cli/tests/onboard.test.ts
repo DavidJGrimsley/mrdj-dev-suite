@@ -77,16 +77,22 @@ describe('runOnboardCommand', () => {
       '# TodoForContext(optional): Add monetization notes'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '# TodoForContext(optional): Describe the first real end-to-end user flow the MVP should support.'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('Agent should derive the first core user flows from project/info.md during intake.');
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '## Team Context'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'Run `mds doctor --ci`'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'MDS_DERIVED_PHASE_0_START'
+      'After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'After all `# TodoForContext(optional):` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+      'MDS_DERIVED_PHASE_'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
@@ -198,7 +204,13 @@ describe('runOnboardCommand', () => {
         path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
         'utf8'
       )
-    ).resolves.not.toContain("from 'react-native-keyboard-controller'");
+    ).resolves.toContain("from 'react-native-keyboard-controller'");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain("require('react-native-keyboard-controller')");
     await expect(
       readFile(path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'), 'utf8')
     ).resolves.toContain('return null;');
@@ -435,10 +447,10 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       "Review styling in the 'Stylist' page"
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'MDS_DERIVED_PHASE_1_START'
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+      'MDS_DERIVED_PHASE_'
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
       'Apply Stylist synced theme tokens to production UI components and screens.'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(

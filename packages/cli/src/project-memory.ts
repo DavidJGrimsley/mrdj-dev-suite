@@ -6,7 +6,7 @@ import {
   renderGlobalCssThemeBlock,
   renderThemeTokensFile,
 } from './stylist-theme.js';
-import { generateProjectRoadmap, renderDerivedRoadmapPlaceholder } from './roadmap.js';
+import { generateProjectRoadmap } from './roadmap.js';
 
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
@@ -102,6 +102,7 @@ const STYLIST_DEPENDENCIES = {
 } as const;
 
 const STYLIST_DEV_DEPENDENCIES = {
+  '@types/node': '^25.9.1',
   tailwindcss: '^4.2.4',
 } as const;
 
@@ -607,6 +608,7 @@ export function renderInfo(
   existingInfo?: string | null
 ): string {
   const importedNotes = renderImportedNotes(existingInfo, INFO_HEADINGS);
+  const hasConcreteCoreFlows = !isGenericCoreFlowsText(answers.coreFlows);
   return [
     `# ${answers.appName} Project Info`,
     '',
@@ -628,11 +630,15 @@ export function renderInfo(
     '',
     '## Core Features',
     '',
-    `Derived from the first planned flows: ${answers.coreFlows}`,
+    hasConcreteCoreFlows
+      ? `Derived from the first planned flows: ${answers.coreFlows}`
+      : '# TodoForContext(optional): List the first core features the MVP should deliver.',
     '',
     '## Core User Flows',
     '',
-    answers.coreFlows,
+    hasConcreteCoreFlows
+      ? answers.coreFlows
+      : '# TodoForContext(optional): Describe the first real end-to-end user flow the MVP should support.',
     '',
     '## Must-Include Screens Or Flows',
     '',
@@ -682,12 +688,6 @@ export function renderInfo(
     '',
     '## Questions To Revisit',
     '',
-    ...(hasThinOnboardingAnswers(answers)
-      ? [
-          '- Replace generic onboarding defaults with app-specific decisions.',
-          '- Confirm the exact first user flow before production buildout starts.',
-        ]
-      : []),
     '',
     '## Resources',
     '',
@@ -730,7 +730,6 @@ export function renderInfo(
 }
 
 export function renderTodo(answers: OnboardAnswers): string {
-  const needsReview = hasThinOnboardingAnswers(answers);
   return [
     `# ${answers.appName} TODO`,
     '',
@@ -739,72 +738,38 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Browse exposition pages to understand included base packages.',
     "- [ ] Review styling in the 'Stylist' page.",
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
-    '- [ ] Decide whether to keep or defer `eject-stylist`; mark the decision explicitly.',
+    '- [ ] Run or defer `eject-stylist`; mark this todo done after ejection or deciding to defer (if you want to keep the stylist around for tinkering).',
     '- [ ] Run `mds eject exposition` and keep only the generated sections you want to retain.',
-    '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed. (There may be none of these if the agent was thorough in onboarding, but if there are any, they should be resolved before development starts.)',
-    '',
-    '- [x] Confirm app purpose, audience, and primary flows in `project/info.md`.',
+    '- [ ] Resolve every `# TodoForContext(optional):` marker in `project/info.md` by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
     '- [ ] Confirm visual direction in `project/style.md` after using the Stylist page.',
-    '- [ ] After all `# TodoForContext(optional):` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.',
+    '- [ ] After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.',
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
-    ...(needsReview
-      ? [
-          '- [ ] Replace generic onboarding placeholders with real app decisions before full implementation.',
-        ]
-      : []),
-    '',
-    renderDerivedRoadmapPlaceholder('phase-0'),
     '',
     '## Phase 1: App Shell And First Flow',
     '',
-    `- [ ] Build the MVP first for ${answers.firstTargetPlatform}.`,
-    `- [ ] Establish app shell, navigation, layouts, and route groups in ${formatAppDirectory(answers.appDirectory)}.`,
-    `- [ ] Use ${formatPlatformLayoutMode(answers.platformLayoutMode)} unless project memory is updated.`,
-    `- [ ] Implement the first core flow from project info: ${answers.coreFlows}.`,
-    '- [ ] Keep route files thin and move real UI into feature screens.',
-    '- [ ] Apply Stylist synced theme tokens to production UI components and screens.',
-    '',
-    renderDerivedRoadmapPlaceholder('phase-1'),
+    `- [ ] Establish the app shell and first implementation-ready route in ${formatAppDirectory(answers.appDirectory)}.`,
+    '- [ ] Implement the first concrete product flow from `project/info.md` and the roadmap.',
     '',
     '## Phase 2: Data Layer',
     '',
-    `- [ ] Start with ${formatDataStart(answers.dataStart)}.`,
-    ...(answers.dataStart === 'local'
-      ? [
-          '- [ ] Use the local Expo SQLite demo as the first adapter.',
-          '- [ ] Replace the local adapter with Supabase when the product needs synced/authenticated data.',
-        ]
-      : [
-          '- [ ] Create separate Supabase projects for test/staging and production.',
-          '- [ ] Wire publishable client keys through environment files, never service-role keys.',
-        ]),
-    '- [ ] Verify data requirements against `project/info.md` before adding tables or auth.',
-    '',
-    renderDerivedRoadmapPlaceholder('phase-2'),
+    `- [ ] Implement the initial data layer using ${formatDataStart(answers.dataStart)}.`,
+    ...(answers.dataStart === 'supabase'
+      ? ['- [ ] Create separate Supabase projects for test/staging and production.']
+      : []),
     '',
     '## Phase 3: Complete Product Flows',
     '',
     '- [ ] Build the remaining core flows from `project/info.md` phase by phase.',
-    '- [ ] Add shared state only when state crosses screens or features.',
-    '- [ ] Verify each selected platform after the MVP flow works.',
-    ...answers.targetPlatforms.map((platform) => `- [ ] Verify ${platform} behavior.`),
-    ...(answers.usesExpoUi ? ['- [ ] Add Expo UI examples where they improve native feel.'] : []),
-    ...(answers.usesExpoUiUniversalComponents
-      ? ['- [ ] Review the Expo UI Universal examples before replacing generated exposition code.']
-      : []),
-    ...(answers.usesExpoNativeTabs
-      ? ['- [ ] Prototype Expo Native Tabs for mobile navigation.']
+    ...(answers.targetPlatforms.length > 1
+      ? ['- [ ] Adapt the working MVP flow for the remaining target platforms after the primary flow is stable.']
       : []),
     ...(answers.easUses.length > 0
       ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`)
       : []),
     '',
-    renderDerivedRoadmapPlaceholder('phase-3'),
-    '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
-    '- [ ] Prune unused Software Mansion examples and remove unneeded packages.',
     '- [ ] Run `mds doctor --ci` and address errors.',
     ...(answers.testToMainSafeguards
       ? [
@@ -819,9 +784,6 @@ export function renderTodo(answers: OnboardAnswers): string {
     ...(answers.deployedServer !== 'none'
       ? [`- [ ] Plan deployed server work: ${formatServerChoice(answers.deployedServer)}.`]
       : []),
-    '- [ ] Add monorepo support after the MVP is stable.',
-    '',
-    renderDerivedRoadmapPlaceholder('phase-4'),
     '',
   ].join('\n');
 }
@@ -887,7 +849,7 @@ function renderThemeProvider(): string {
   return [
     "import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';",
     '',
-    "import stylistThemeTokens, { type StylistColorPalette, type StylistColorScheme, type StylistThemeTokens } from './tokens';",
+    "import defaultThemeTokens, { type StylistColorPalette, type StylistColorScheme, type StylistThemeTokens } from './tokens';",
     '',
     'export type AppThemeValue = StylistThemeTokens & {',
     '  activeScheme: StylistColorScheme;',
@@ -895,14 +857,14 @@ function renderThemeProvider(): string {
     '};',
     '',
     'const AppThemeContext = createContext<AppThemeValue>({',
-    '  ...stylistThemeTokens,',
-    '  activeScheme: stylistThemeTokens.colorSystem.previewScheme,',
-    '  activeColors: stylistThemeTokens.colors[stylistThemeTokens.colorSystem.previewScheme],',
+    '  ...defaultThemeTokens,',
+    '  activeScheme: defaultThemeTokens.colorSystem.previewScheme,',
+    '  activeColors: defaultThemeTokens.colors[defaultThemeTokens.colorSystem.previewScheme],',
     '});',
     'const AppThemeSetterContext = createContext<Dispatch<SetStateAction<StylistThemeTokens>> | null>(null);',
     '',
     'export function AppThemeProvider({ children }: { children: ReactNode }) {',
-    '  const [theme, setTheme] = useState<StylistThemeTokens>(stylistThemeTokens);',
+    '  const [theme, setTheme] = useState<StylistThemeTokens>(defaultThemeTokens);',
     '  const value = useMemo<AppThemeValue>(() => {',
     '    const activeScheme = theme.colorSystem.previewScheme;',
     '    return {',
@@ -1034,7 +996,7 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
     '',
     'If the user says `mds continue` or `MDS Continue`, first run `mds continue` from the app root if available. Use the MDS Continue brief to propose the next plan and wait for approval before editing files. If the command is unavailable, manually inspect markers, Doctor status, git status, and `project/todo.md` in that order.',
     '',
-    'Before any intake, planning, scaffolding, or phase work, scan every `project/` file for the marker `# TodoForContext(optional):`. If any are present, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero markers remain.',
+    'Before any intake, planning, scaffolding, or phase work, scan `project/info.md` for the marker `# TodoForContext(optional):`. If any remain, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero `project/info.md` markers remain.',
     '',
     'Then build from `project/todo.md` in phase order. Do not make changes that conflict with project memory. If the files are unclear or generic, update the project memory first or ask the user.',
     '',
@@ -1194,6 +1156,7 @@ async function ensurePackageJson(
     'post-create-check':
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
     'ci:verify': packageJson.scripts?.['ci:verify'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
+    test: packageJson.scripts?.test ?? 'npm run lint && npm run typecheck',
   };
 
   if (!manageUniwind) {
@@ -1258,12 +1221,10 @@ async function ensurePackageJson(
     };
   }
 
-  if (answers.targetPlatforms.includes('android')) {
-    packageJson.dependencies = {
-      ...ANDROID_NAVIGATION_BAR_DEPENDENCIES,
-      ...packageJson.dependencies,
-    };
-  }
+  packageJson.dependencies = {
+    ...ANDROID_NAVIGATION_BAR_DEPENDENCIES,
+    ...packageJson.dependencies,
+  };
 
   if (manageUniwind) {
     packageJson.dependencies = {
@@ -1443,7 +1404,6 @@ function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {
   const genericValues = new Set([
     'Expo app users',
     'Onboarding, primary app workflow, settings',
-    'Agent should derive the first core user flows from project/info.md during intake.',
     'Local state first; add backend only when needed',
     'Expo web/native deployment',
   ]);
@@ -1452,8 +1412,20 @@ function hasThinOnboardingAnswers(answers: OnboardAnswers): boolean {
     return true;
   }
 
-  return [answers.audience, answers.coreFlows, answers.dataNeeds, answers.deploymentTarget].some(
-    (value) => genericValues.has(value.trim())
+  return (
+    [answers.audience, answers.dataNeeds, answers.deploymentTarget].some((value) =>
+      genericValues.has(value.trim())
+    ) || isGenericCoreFlowsText(answers.coreFlows)
+  );
+}
+
+function isGenericCoreFlowsText(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    trimmed.length === 0 ||
+    trimmed ===
+      'Let the agent derive the first real core user flows later from the fully clarified `project/info.md`.' ||
+    trimmed === 'Agent should derive the first core user flows from project/info.md during intake.'
   );
 }
 
@@ -2048,7 +2020,7 @@ function renderStylistSyncApiRoute(): string {
     "import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';",
     "import path from 'node:path';",
     '',
-    "import stylistThemeTokens from '../../theme/tokens';",
+    "import defaultThemeTokens from '../../theme/tokens';",
     '',
     'interface SyncResponse {',
     '  projectPath: string;',
@@ -2100,7 +2072,7 @@ function renderStylistSyncApiRoute(): string {
     '',
     '  const themeFromJson = await readThemeJson(themePath);',
     '  const themeFromStyle = await readThemeFromStyleMarkdown(stylePath);',
-    '  const resolvedTheme = themeFromStyle ?? themeFromJson ?? stylistThemeTokens;',
+    '  const resolvedTheme = themeFromStyle ?? themeFromJson ?? defaultThemeTokens;',
     "  const themeSource = themeFromStyle ? 'style.md' : themeFromJson ? 'theme.json' : 'default';",
     '  const mismatchDetected =',
     '    Boolean(themeFromJson) &&',
@@ -2682,7 +2654,7 @@ function renderRichRootLayout(
     "import { GestureHandlerRootView } from 'react-native-gesture-handler';",
     "import { KeyboardProvider } from 'react-native-keyboard-controller';",
     "import { SafeAreaProvider } from 'react-native-safe-area-context';",
-    `import THEME_FONT_ASSETS from '${themeFontAssetsImport}';`,
+    `import themeFontAssets from '${themeFontAssetsImport}';`,
     `import { AppThemeProvider, useAppTheme } from '${themeProviderImport}';`,
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
@@ -2764,8 +2736,8 @@ function renderRichRootLayout(
     '}',
     '',
     'export default function Layout() {',
-    '  const hasFontAssets = Object.keys(THEME_FONT_ASSETS).length > 0;',
-    '  const [fontsLoaded, fontsError] = useFonts(THEME_FONT_ASSETS);',
+    '  const hasFontAssets = Object.keys(themeFontAssets).length > 0;',
+    '  const [fontsLoaded, fontsError] = useFonts(themeFontAssets);',
     '',
     '  if (hasFontAssets && !fontsLoaded && !fontsError) {',
     '    return null;',
@@ -2997,6 +2969,7 @@ function renderGestureCard(): string {
 function renderKeyboardForm(): string {
   return [
     "import { Keyboard, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';",
+    "import { KeyboardAwareScrollView, KeyboardToolbar } from 'react-native-keyboard-controller';",
     '',
     'export function KeyboardForm() {',
     '  if (Platform.OS === "web") {',
@@ -3007,14 +2980,6 @@ function renderKeyboardForm(): string {
     '      </ScrollView>',
     '    );',
     '  }',
-    '',
-    "  const keyboardController = require('react-native-keyboard-controller') as {",
-    '    KeyboardAwareScrollView: any;',
-    '    KeyboardToolbar: any;',
-    '  };',
-    '  const KeyboardAwareScrollView = keyboardController.KeyboardAwareScrollView;',
-    '  const KeyboardToolbar = keyboardController.KeyboardToolbar;',
-    '',
     '  return (',
     '    <>',
     '      <KeyboardAwareScrollView bottomOffset={72} contentContainerStyle={styles.form} style={styles.scroller}>',
@@ -3835,7 +3800,7 @@ function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationSh
     "import { appSnapshot } from '../../data/mock-app';",
     "import { useAppTheme } from '../../theme/provider';",
     '',
-    'const expositionLinks: Array<{ href: Href; title: string; body: string }> = [',
+    'const expositionLinks: { href: Href; title: string; body: string }[] = [',
     ...expositionLinks,
     '];',
     '',
@@ -5163,9 +5128,9 @@ function renderStylistScreen(answers: OnboardAnswers): string {
     "import ColorPicker, { HueSlider, Panel1, Preview, Swatches } from 'reanimated-color-picker';",
     '',
     "import { AnimatedPressable, ExpositionNotice } from '../../components/exposition';",
-    "import stylistThemeTokens from '../../theme/tokens';",
+    "import defaultThemeTokens from '../../theme/tokens';",
     '',
-    'type StylistTheme = typeof stylistThemeTokens;',
+    'type StylistTheme = typeof defaultThemeTokens;',
     "type ColorKey = keyof StylistTheme['colors'];",
     '',
     'const colorKeys: ColorKey[] = [',
@@ -5177,11 +5142,11 @@ function renderStylistScreen(answers: OnboardAnswers): string {
     "  'warning',",
     '];',
     '',
-    "const spacingKeys: Array<keyof StylistTheme['layout']['spacing']> = ['xs', 'sm', 'md', 'lg', 'xl'];",
+    "const spacingKeys: (keyof StylistTheme['layout']['spacing'])[] = ['xs', 'sm', 'md', 'lg', 'xl'];",
     "const NATIVE_SAVE_COMMAND = 'npm run stylist:sync:android';",
     '',
     'export default function StylistScreen() {',
-    '  const [theme, setTheme] = useState<StylistTheme>(stylistThemeTokens);',
+    '  const [theme, setTheme] = useState<StylistTheme>(defaultThemeTokens);',
     "  const [selectedColor, setSelectedColor] = useState<ColorKey>('primary');",
     "  const [saveMessage, setSaveMessage] = useState('');",
     "  const [nativeDraft, setNativeDraft] = useState('');",

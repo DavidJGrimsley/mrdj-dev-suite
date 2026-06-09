@@ -15,7 +15,6 @@ export interface DerivedRoadmapTask {
   phaseId: DerivedRoadmapPhaseId;
   text: string;
   source:
-    | 'review'
     | 'core-flow'
     | 'screen'
     | 'feature'
@@ -40,13 +39,33 @@ export interface RoadmapMarkerHit {
   text: string;
 }
 
+export interface RoadmapClarificationQuestion {
+  id: string;
+  section: InfoSectionKey | 'project';
+  prompt: string;
+  reason: string;
+}
+
+export interface RoadmapStatePhase {
+  derivedTaskKeys: string[];
+}
+
+export interface RoadmapState {
+  version: 1;
+  phases: Record<DerivedRoadmapPhaseId, RoadmapStatePhase>;
+}
+
 export interface ProjectRoadmapResult {
   kind: 'project-roadmap';
   projectPath: string;
   infoPath: string;
   todoPath: string;
+  roadmapStatePath: string;
   blockedByMarkers: boolean;
   markerHits: RoadmapMarkerHit[];
+  needsClarification: boolean;
+  clarificationQuestions: RoadmapClarificationQuestion[];
+  confidenceWarnings: string[];
   phases: DerivedRoadmapPhase[];
   warnings: string[];
   write: boolean;
@@ -58,6 +77,10 @@ export interface ProjectRoadmapResult {
 export interface GenerateProjectRoadmapOptions {
   write?: boolean;
   preserveStatus?: boolean;
+}
+
+interface MarkerScanOptions {
+  scope?: 'project' | 'info';
 }
 
 type InfoSectionKey =
@@ -84,9 +107,30 @@ interface PhaseSpec {
   heading: string;
 }
 
+interface PhaseRange {
+  phase: PhaseSpec;
+  start: number;
+  end: number;
+}
+
+interface MergeRoadmapResult {
+  todoContent: string;
+  preservedStatuses: number;
+}
+
+interface ConfidenceCheck {
+  warning: string;
+  question: RoadmapClarificationQuestion;
+}
+
 const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
+const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
+const ROADMAP_STATE_FILE = 'roadmap-state.json';
 export const ROADMAP_BLOCKED_MARKER_WARNING =
   'Roadmap generation is blocked until every `# TodoForContext(optional):` marker in `project/` is resolved. Fill the section underneath or delete the marker line first.';
+export const ROADMAP_CLARIFICATION_WARNING =
+  'Roadmap generation needs clarification because `project/info.md` still reads as too generic for high-confidence product planning.';
+
 const PHASE_SPECS: PhaseSpec[] = [
   {
     id: 'phase-0',
@@ -139,7 +183,7 @@ const SECTION_ALIASES: Record<InfoSectionKey, string[]> = {
     'data & backend',
   ],
   platforms: ['platforms', 'targets', 'platform targets'],
-  packageChoices: ['package choices', 'packages', 'stack choices', 'tech stack'],
+  packageChoices: ['package choices', 'packages', 'stack choices'],
   monetizationStrategy: ['monetization strategy', 'monetization'],
   teamContext: ['team context', 'team', 'stakeholders'],
   releaseStrategy: ['release strategy', 'release plan', 'deployment plan', 'distribution'],
@@ -234,6 +278,30 @@ const KEYWORD_TASKS: Array<{
   },
 ];
 
+const GENERIC_PATTERNS: Record<'audience' | 'coreFlows' | 'release' | 'productGoals', RegExp[]> = {
+  audience: [
+    /\bexpo app users\b/i,
+    /\btarget users?\b/i,
+    /\bgeneral users?\b/i,
+  ],
+  coreFlows: [
+    /\bagent should derive\b/i,
+    /\blet the agent derive\b/i,
+    /\bderive the first core user flows\b/i,
+    /\bdecide later\b/i,
+    /\btbd\b/i,
+  ],
+  release: [
+    /\bexpo web\/native deployment\b/i,
+    /\bnot planned yet\b/i,
+    /\bdecide later\b/i,
+  ],
+  productGoals: [
+    /\badd the business\/product outcomes\b/i,
+    /\bdecide later\b/i,
+  ],
+};
+
 export async function generateProjectRoadmap(
   projectPathInput = '.',
   options: GenerateProjectRoadmapOptions = {}
@@ -241,12 +309,15 @@ export async function generateProjectRoadmap(
   const projectPath = path.resolve(projectPathInput);
   const infoPath = path.join(projectPath, 'project', 'info.md');
   const todoPath = path.join(projectPath, 'project', 'todo.md');
+  const roadmapStatePath = path.join(projectPath, 'project', ROADMAP_STATE_FILE);
   const write = options.write ?? false;
   const preserveStatus = options.preserveStatus ?? true;
 
   const infoRaw = await readFile(infoPath, 'utf8');
-  const markerHits = await scanProjectTodoForContextMarkers(projectPath);
-  const existingTodo = (await pathExists(todoPath)) ? await readFile(todoPath, 'utf8') : renderTodoSkeleton(extractProjectName(infoRaw));
+  const existingTodo = (await pathExists(todoPath))
+    ? await readFile(todoPath, 'utf8')
+    : renderTodoSkeleton(extractProjectName(infoRaw));
+  const markerHits = await scanProjectTodoForContextMarkers(projectPath, { scope: 'info' });
 
   if (markerHits.length > 0) {
     return {
@@ -254,8 +325,12 @@ export async function generateProjectRoadmap(
       projectPath,
       infoPath,
       todoPath,
+      roadmapStatePath,
       blockedByMarkers: true,
       markerHits,
+      needsClarification: false,
+      clarificationQuestions: [],
+      confidenceWarnings: [],
       phases: [],
       warnings: [ROADMAP_BLOCKED_MARKER_WARNING],
       write,
@@ -266,21 +341,48 @@ export async function generateProjectRoadmap(
   }
 
   const sections = parseInfoSections(infoRaw);
-  const warnings: string[] = [];
-  const derivedPhases = deriveRoadmapPhases(sections, warnings);
-  const todoWithManagedBlocks = ensureManagedBlocks(existingTodo);
-
-  let nextTodo = todoWithManagedBlocks;
-  let preservedStatuses = 0;
-  for (const phase of derivedPhases) {
-    const phaseStatuses = preserveStatus ? readManagedTaskStatus(nextTodo, phase.id) : new Map<string, boolean>();
-    preservedStatuses += phase.tasks.filter((task) => phaseStatuses.get(normalizeTaskKey(task.text)) === true).length;
-    nextTodo = replaceManagedBlock(nextTodo, phase.id, phase.tasks, phaseStatuses);
+  const clarification = detectRoadmapClarificationNeeds(sections);
+  if (clarification.clarificationQuestions.length > 0) {
+    return {
+      kind: 'project-roadmap',
+      projectPath,
+      infoPath,
+      todoPath,
+      roadmapStatePath,
+      blockedByMarkers: false,
+      markerHits: [],
+      needsClarification: true,
+      clarificationQuestions: clarification.clarificationQuestions,
+      confidenceWarnings: clarification.confidenceWarnings,
+      phases: [],
+      warnings: [ROADMAP_CLARIFICATION_WARNING],
+      write,
+      wrote: false,
+      preservedStatuses: 0,
+      todoContent: ensureTrailingNewline(stripLegacyDerivedMarkers(existingTodo)),
+    };
   }
 
-  const wrote = write && normalizeLineEndings(nextTodo) !== normalizeLineEndings(existingTodo);
-  if (write && wrote) {
-    await writeFile(todoPath, ensureTrailingNewline(nextTodo), 'utf8');
+  const warnings: string[] = [];
+  const derivedPhases = deriveRoadmapPhases(sections, warnings);
+  const previousState =
+    (await readRoadmapState(roadmapStatePath)) ?? inferLegacyRoadmapState(existingTodo);
+  const nextState = buildRoadmapState(derivedPhases);
+  const merged = mergeRoadmapIntoTodo(existingTodo, derivedPhases, previousState, preserveStatus);
+  const nextTodo = merged.todoContent;
+  const todoChanged = normalizeLineEndings(nextTodo) !== normalizeLineEndings(existingTodo);
+  const previousStateJson = previousState ? JSON.stringify(previousState) : null;
+  const nextStateJson = JSON.stringify(nextState);
+  const stateChanged = previousStateJson !== nextStateJson;
+  const wrote = write && (todoChanged || stateChanged);
+
+  if (write) {
+    if (todoChanged) {
+      await writeFile(todoPath, nextTodo, 'utf8');
+    }
+    if (stateChanged) {
+      await writeFile(roadmapStatePath, `${JSON.stringify(nextState, null, 2)}\n`, 'utf8');
+    }
   }
 
   return {
@@ -288,14 +390,18 @@ export async function generateProjectRoadmap(
     projectPath,
     infoPath,
     todoPath,
+    roadmapStatePath,
     blockedByMarkers: false,
     markerHits: [],
+    needsClarification: false,
+    clarificationQuestions: [],
+    confidenceWarnings: [],
     phases: derivedPhases,
     warnings,
     write,
     wrote,
-    preservedStatuses,
-    todoContent: ensureTrailingNewline(nextTodo),
+    preservedStatuses: merged.preservedStatuses,
+    todoContent: nextTodo,
   };
 }
 
@@ -339,11 +445,16 @@ export function parseInfoSections(infoRaw: string): InfoSectionMap {
   return map;
 }
 
-export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[] = []): DerivedRoadmapPhase[] {
+export function deriveRoadmapPhases(
+  sections: InfoSectionMap,
+  warnings: string[] = []
+): DerivedRoadmapPhase[] {
   const phaseTasks = new Map<DerivedRoadmapPhaseId, DerivedRoadmapTask[]>(
     PHASE_SPECS.map((phase) => [phase.id, []])
   );
-  const seen = new Map<DerivedRoadmapPhaseId, Set<string>>(PHASE_SPECS.map((phase) => [phase.id, new Set<string>()]));
+  const seen = new Map<DerivedRoadmapPhaseId, Set<string>>(
+    PHASE_SPECS.map((phase) => [phase.id, new Set<string>()])
+  );
 
   const addTask = (
     phaseId: DerivedRoadmapPhaseId,
@@ -378,33 +489,13 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   const platformItems = extractSectionItems(sections.platforms?.content);
   const packageItems = extractSectionItems(sections.packageChoices?.content);
 
-  addTask(
-    'phase-0',
-    'Review the auto-derived roadmap tasks below against `project/info.md` and adjust the project docs if anything is inaccurate before implementation.',
-    'review'
-  );
-
-  if (screenItems.length > 0) {
-    addTask(
-      'phase-0',
-      `Confirm the roadmap covers the required screens and flows: ${formatTaskList(screenItems)}.`,
-      'screen'
-    );
-  }
-
-  if (questionItems.length > 0 || hasUnresolvedMarkers(sections)) {
-    addTask(
-      'phase-0',
-      'Resolve open product questions in `project/info.md` before deep implementation work begins.',
-      'open-question'
-    );
-  }
-
   const firstFlow = flowItems[0];
   if (firstFlow) {
     addTask('phase-1', `Implement the first core user flow: ${firstFlow}.`, 'core-flow');
   } else {
-    warnings.push('No concrete core flow was found in `project/info.md`; roadmap falls back to scaffold tasks for Phase 1.');
+    warnings.push(
+      'No concrete core flow was found in `project/info.md`; roadmap generation should be rerun after the app intent is clarified.'
+    );
   }
 
   const firstScreens = pickDistinct(screenItems, 3);
@@ -432,10 +523,14 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
       'data'
     );
   } else {
-    warnings.push('No concrete data/backend notes were found in `project/info.md`; Phase 2 will rely mostly on the scaffolded defaults.');
+    warnings.push(
+      'No concrete data/backend notes were found in `project/info.md`; data-layer work will rely on the scaffolded phase anchors until clarified.'
+    );
   }
 
-  const keywordSource = [dataItems, releaseItems, monetizationItems, packageItems, platformItems].flat().join(' ');
+  const keywordSource = [dataItems, releaseItems, monetizationItems, packageItems, platformItems]
+    .flat()
+    .join(' ');
   for (const task of KEYWORD_TASKS) {
     if (task.patterns.some((pattern) => pattern.test(keywordSource))) {
       addTask(task.phaseId, task.text, task.source);
@@ -446,7 +541,9 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   if (remainingFlows.length > 0) {
     addTask(
       'phase-3',
-      `Implement the remaining core flows from ` + '`project/info.md`' + `: ${formatTaskList(pickDistinct(remainingFlows, 4))}.`,
+      `Implement the remaining core flows from ` +
+        '`project/info.md`' +
+        `: ${formatTaskList(pickDistinct(remainingFlows, 4))}.`,
       'core-flow'
     );
   }
@@ -455,7 +552,9 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   if (remainingScreens.length > 0) {
     addTask(
       'phase-3',
-      `Add the remaining must-include screens or workflows: ${formatTaskList(pickDistinct(remainingScreens, 4))}.`,
+      `Add the remaining must-include screens or workflows: ${formatTaskList(
+        pickDistinct(remainingScreens, 4)
+      )}.`,
       'screen'
     );
   }
@@ -463,7 +562,9 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   if (monetizationItems.length > 0 && !isPlaceholderSection(sections.monetizationStrategy?.content)) {
     addTask(
       'phase-3',
-      `Translate the monetization or business model into product work: ${formatTaskList(pickDistinct(monetizationItems, 2))}.`,
+      `Translate the monetization or business model into product work: ${formatTaskList(
+        pickDistinct(monetizationItems, 2)
+      )}.`,
       'monetization'
     );
   }
@@ -472,7 +573,9 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   if (remainingPlatforms.length > 1) {
     addTask(
       'phase-3',
-      `Adapt the completed flows for the remaining target platforms: ${formatTaskList(remainingPlatforms)}.`,
+      `Adapt the completed flows for the remaining target platforms: ${formatTaskList(
+        remainingPlatforms
+      )}.`,
       'platform'
     );
   }
@@ -500,13 +603,13 @@ export function deriveRoadmapPhases(sections: InfoSectionMap, warnings: string[]
   }));
 }
 
-export function renderDerivedRoadmapPlaceholder(phaseId: DerivedRoadmapPhaseId): string {
-  const marker = markerName(phaseId);
-  return [`<!-- ${marker}_START -->`, `<!-- ${marker}_END -->`].join('\n');
+export function renderDerivedRoadmapPlaceholder(_phaseId: DerivedRoadmapPhaseId): string {
+  return '';
 }
 
 export async function scanProjectTodoForContextMarkers(
-  projectPathInput = '.'
+  projectPathInput = '.',
+  options: MarkerScanOptions = {}
 ): Promise<RoadmapMarkerHit[]> {
   const projectPath = path.resolve(projectPathInput);
   const projectDir = path.join(projectPath, 'project');
@@ -514,15 +617,22 @@ export async function scanProjectTodoForContextMarkers(
     return [];
   }
 
-  const entries = await readdir(projectDir, { withFileTypes: true });
-  const markdownFiles = entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
-    .map((entry) => entry.name)
-    .sort();
+  const markdownFiles =
+    options.scope === 'info'
+      ? ['info.md']
+      : (
+          await readdir(projectDir, { withFileTypes: true })
+        )
+          .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
+          .map((entry) => entry.name)
+          .sort();
   const hits: RoadmapMarkerHit[] = [];
 
   for (const file of markdownFiles) {
     const filePath = path.join(projectDir, file);
+    if (!(await pathExists(filePath))) {
+      continue;
+    }
     const contents = await readFile(filePath, 'utf8');
     const lines = contents.split(/\r?\n/);
     for (let index = 0; index < lines.length; index += 1) {
@@ -540,73 +650,296 @@ export async function scanProjectTodoForContextMarkers(
   return hits;
 }
 
-function ensureManagedBlocks(todoRaw: string): string {
-  let next = ensureTrailingNewline(todoRaw);
+function detectRoadmapClarificationNeeds(sections: InfoSectionMap): {
+  confidenceWarnings: string[];
+  clarificationQuestions: RoadmapClarificationQuestion[];
+} {
+  const checks: ConfidenceCheck[] = [];
 
-  for (const [index, phase] of [...PHASE_SPECS].reverse().entries()) {
-    const phaseIndex = PHASE_SPECS.length - 1 - index;
-    const startMarker = `<!-- ${markerName(phase.id)}_START -->`;
-    if (next.includes(startMarker)) {
-      continue;
-    }
-
-    const sectionIndex = next.indexOf(phase.heading);
-    if (sectionIndex === -1) {
-      continue;
-    }
-
-    const nextPhase = PHASE_SPECS[phaseIndex + 1];
-    const insertionIndex = nextPhase ? next.indexOf(nextPhase.heading, sectionIndex) : next.length;
-    const prefix = next.slice(0, insertionIndex).trimEnd();
-    const suffix = next.slice(insertionIndex).trimStart();
-    const block = renderDerivedRoadmapPlaceholder(phase.id);
-    next = suffix.length > 0 ? `${prefix}\n\n${block}\n\n${suffix}` : `${prefix}\n\n${block}\n`;
+  if (isMissingOrLowConfidenceSection(sections.targetUsers?.content, 'audience')) {
+    checks.push({
+      warning:
+        '`project/info.md` still has a generic target audience, so roadmap generation cannot tell who the first experience is really for.',
+      question: {
+        id: 'target-users',
+        section: 'targetUsers',
+        prompt: 'Who is the actual target user for this app, and what context are they in when they use it?',
+        reason: 'Target Users is still generic or placeholder-level.',
+      },
+    });
   }
 
-  return next;
+  if (isMissingOrLowConfidenceSection(sections.coreUserFlows?.content, 'coreFlows')) {
+    checks.push({
+      warning:
+        '`project/info.md` still lacks a concrete first user flow, so roadmap generation would be guessing at the MVP.',
+      question: {
+        id: 'core-user-flows',
+        section: 'coreUserFlows',
+        prompt: 'What is the first real end-to-end user flow this app should support?',
+        reason: 'Core User Flows is still generic or placeholder-level.',
+      },
+    });
+  }
+
+  if (isMissingOrLowConfidenceSection(sections.productGoals?.content, 'productGoals')) {
+    checks.push({
+      warning:
+        '`project/info.md` still does not say what success looks like, so roadmap priorities would be low-confidence.',
+      question: {
+        id: 'product-goals',
+        section: 'productGoals',
+        prompt: 'What business or product outcome would make the first version successful?',
+        reason: 'Product Goals is still generic or placeholder-level.',
+      },
+    });
+  }
+
+  if (isMissingOrLowConfidenceSection(sections.releaseStrategy?.content, 'release')) {
+    checks.push({
+      warning:
+        '`project/info.md` still has a generic release/distribution plan, so release-phase tasks would be mostly filler.',
+      question: {
+        id: 'release-strategy',
+        section: 'releaseStrategy',
+        prompt: 'How will the first version actually reach its users: internal demo, TestFlight, web deployment, store launch, or something else?',
+        reason: 'Release Strategy is still generic or placeholder-level.',
+      },
+    });
+  }
+
+  return {
+    confidenceWarnings: checks.map((check) => check.warning),
+    clarificationQuestions: checks.map((check) => check.question),
+  };
 }
 
-function replaceManagedBlock(
+function mergeRoadmapIntoTodo(
   todoRaw: string,
-  phaseId: DerivedRoadmapPhaseId,
-  tasks: DerivedRoadmapTask[],
-  existingStatus: Map<string, boolean>
-): string {
-  const marker = markerName(phaseId);
-  const startMarker = `<!-- ${marker}_START -->`;
-  const endMarker = `<!-- ${marker}_END -->`;
-  const body = tasks.map((task) => {
-    const checked = existingStatus.get(normalizeTaskKey(task.text)) === true;
+  derivedPhases: DerivedRoadmapPhase[],
+  previousState: RoadmapState | null,
+  preserveStatus: boolean
+): MergeRoadmapResult {
+  const next = ensureTodoHasPhaseHeadings(todoRaw);
+  const lines = normalizeLineEndings(next).split('\n');
+  const phaseRanges = getPhaseRanges(lines);
+  if (phaseRanges.length === 0) {
+    return {
+      todoContent: ensureTrailingNewline(next),
+      preservedStatuses: 0,
+    };
+  }
+
+  const output: string[] = trimTrailingBlankLines(lines.slice(0, phaseRanges[0]?.start ?? 0));
+  let preservedStatuses = 0;
+
+  for (const range of phaseRanges) {
+    const phaseTasks = derivedPhases.find((phase) => phase.id === range.phase.id)?.tasks ?? [];
+    const sectionLines = lines.slice(range.start + 1, range.end);
+    const previousDerivedKeys = new Set(previousState?.phases[range.phase.id]?.derivedTaskKeys ?? []);
+    const statusMap = preserveStatus ? readCheckboxStatus(sectionLines) : new Map<string, boolean>();
+    preservedStatuses += phaseTasks.filter((task) => statusMap.get(normalizeTaskKey(task.text)) === true).length;
+
+    const nextSection = rebuildPhaseSection(sectionLines, phaseTasks, previousDerivedKeys, statusMap);
+    if (output.length > 0) {
+      output.push('');
+    }
+    output.push(range.phase.heading, '');
+    output.push(...nextSection);
+  }
+
+  return {
+    todoContent: ensureTrailingNewline(output.join('\n')),
+    preservedStatuses,
+  };
+}
+
+function rebuildPhaseSection(
+  existingSectionLines: string[],
+  derivedTasks: DerivedRoadmapTask[],
+  previousDerivedKeys: Set<string>,
+  statusMap: Map<string, boolean>
+): string[] {
+  const preservedLines = trimBlankEdges(
+    existingSectionLines.filter((line) => {
+      if (isLegacyMarkerLine(line)) {
+        return false;
+      }
+
+      const checkbox = parseCheckbox(line);
+      if (!checkbox) {
+        return true;
+      }
+
+      return !previousDerivedKeys.has(normalizeTaskKey(checkbox.text));
+    })
+  );
+
+  const nextDerivedLines = derivedTasks.map((task) => {
+    const checked = statusMap.get(normalizeTaskKey(task.text)) === true;
     return `- [${checked ? 'x' : ' '}] ${task.text}`;
   });
-  const replacement = [startMarker, ...body, endMarker].join('\n');
-  const pattern = new RegExp(`<!-- ${marker}_START -->[\\s\\S]*?<!-- ${marker}_END -->`);
-  return todoRaw.replace(pattern, replacement);
+
+  if (preservedLines.length === 0) {
+    return nextDerivedLines;
+  }
+
+  if (nextDerivedLines.length === 0) {
+    return preservedLines;
+  }
+
+  return [...preservedLines, '', ...nextDerivedLines];
 }
 
-function readManagedTaskStatus(todoRaw: string, phaseId: DerivedRoadmapPhaseId): Map<string, boolean> {
-  const pattern = new RegExp(`<!-- ${markerName(phaseId)}_START -->([\\s\\S]*?)<!-- ${markerName(phaseId)}_END -->`);
-  const match = pattern.exec(todoRaw);
-  const status = new Map<string, boolean>();
-  const body = match?.[1];
-  if (!body) {
-    return status;
+function buildRoadmapState(phases: DerivedRoadmapPhase[]): RoadmapState {
+  return {
+    version: 1,
+    phases: {
+      'phase-0': {
+        derivedTaskKeys: phases
+          .find((phase) => phase.id === 'phase-0')
+          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
+      },
+      'phase-1': {
+        derivedTaskKeys: phases
+          .find((phase) => phase.id === 'phase-1')
+          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
+      },
+      'phase-2': {
+        derivedTaskKeys: phases
+          .find((phase) => phase.id === 'phase-2')
+          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
+      },
+      'phase-3': {
+        derivedTaskKeys: phases
+          .find((phase) => phase.id === 'phase-3')
+          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
+      },
+      'phase-4': {
+        derivedTaskKeys: phases
+          .find((phase) => phase.id === 'phase-4')
+          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
+      },
+    },
+  };
+}
+
+async function readRoadmapState(filePath: string): Promise<RoadmapState | null> {
+  if (!(await pathExists(filePath))) {
+    return null;
   }
 
-  for (const line of body.split(/\r?\n/u)) {
-    const todoMatch = /^-\s+\[(x| )\]\s+(.+?)\s*$/i.exec(line.trim());
-    const checkbox = todoMatch?.[1];
-    const taskText = todoMatch?.[2];
-    if (checkbox && taskText) {
-      status.set(normalizeTaskKey(taskText), checkbox.toLowerCase() === 'x');
+  try {
+    const parsed = JSON.parse(await readFile(filePath, 'utf8')) as RoadmapState;
+    if (parsed?.version !== 1 || typeof parsed.phases !== 'object' || parsed.phases === null) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function inferLegacyRoadmapState(todoRaw: string): RoadmapState | null {
+  if (!todoRaw.includes(LEGACY_MARKER_PREFIX)) {
+    return null;
+  }
+
+  const phases = Object.fromEntries(
+    PHASE_SPECS.map((phase) => [
+      phase.id,
+      {
+        derivedTaskKeys: readLegacyDerivedTaskKeys(todoRaw, phase.id),
+      },
+    ])
+  ) as Record<DerivedRoadmapPhaseId, RoadmapStatePhase>;
+
+  return {
+    version: 1,
+    phases,
+  };
+}
+
+function readLegacyDerivedTaskKeys(todoRaw: string, phaseId: DerivedRoadmapPhaseId): string[] {
+  const marker = `MDS_DERIVED_${phaseId.toUpperCase().replace(/-/g, '_')}`;
+  const pattern = new RegExp(`<!-- ${marker}_START -->([\\s\\S]*?)<!-- ${marker}_END -->`);
+  const match = pattern.exec(todoRaw);
+  if (!match?.[1]) {
+    return [];
+  }
+
+  return match[1]
+    .split(/\r?\n/u)
+    .map((line) => parseCheckbox(line)?.text)
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeTaskKey)
+    .filter(Boolean);
+}
+
+function ensureTodoHasPhaseHeadings(todoRaw: string): string {
+  let next = ensureTrailingNewline(stripLegacyDerivedMarkers(todoRaw));
+  for (const phase of PHASE_SPECS) {
+    if (!next.includes(phase.heading)) {
+      next = `${next.trimEnd()}\n\n${phase.heading}\n`;
     }
   }
+  return ensureTrailingNewline(next);
+}
 
+function getPhaseRanges(lines: string[]): PhaseRange[] {
+  const ranges: PhaseRange[] = [];
+  const headingIndexes = PHASE_SPECS.map((phase) => ({
+    phase,
+    index: lines.findIndex((line) => line.trim() === phase.heading),
+  })).filter((item) => item.index >= 0);
+
+  for (let index = 0; index < headingIndexes.length; index += 1) {
+    const current = headingIndexes[index];
+    const next = headingIndexes[index + 1];
+    if (!current) {
+      continue;
+    }
+    ranges.push({
+      phase: current.phase,
+      start: current.index,
+      end: next?.index ?? lines.length,
+    });
+  }
+
+  return ranges;
+}
+
+function readCheckboxStatus(lines: string[]): Map<string, boolean> {
+  const status = new Map<string, boolean>();
+  for (const line of lines) {
+    const checkbox = parseCheckbox(line);
+    if (!checkbox) {
+      continue;
+    }
+    status.set(normalizeTaskKey(checkbox.text), checkbox.checked);
+  }
   return status;
 }
 
-function markerName(phaseId: DerivedRoadmapPhaseId): string {
-  return `MDS_DERIVED_${phaseId.toUpperCase().replace(/-/g, '_')}`;
+function parseCheckbox(line: string): { checked: boolean; text: string } | null {
+  const match = /^-\s+\[(x| )\]\s+(.+?)\s*$/i.exec(line.trim());
+  if (!match?.[1] || !match[2]) {
+    return null;
+  }
+  return {
+    checked: match[1].toLowerCase() === 'x',
+    text: match[2],
+  };
+}
+
+function stripLegacyDerivedMarkers(todoRaw: string): string {
+  return normalizeLineEndings(todoRaw)
+    .replace(/<!-- MDS_DERIVED_PHASE_[^>]+_START -->\n?/g, '')
+    .replace(/<!-- MDS_DERIVED_PHASE_[^>]+_END -->\n?/g, '');
+}
+
+function isLegacyMarkerLine(line: string): boolean {
+  return line.trim().startsWith(LEGACY_MARKER_PREFIX);
 }
 
 function normalizeSectionHeading(value: string): InfoSectionKey | null {
@@ -667,9 +1000,16 @@ function extractPlatformTargets(platformItems: string[]): string[] {
     .map((item) => item.trim())
     .filter((item) =>
       ['web', 'ios', 'android', 'apple tv', 'android tv', 'tvos'].includes(normalizeTaskKey(item))
-    );
+    )
+    .map((item) => normalizeTaskKey(item))
+    .map((item) => {
+      if (item === 'tvos') {
+        return 'apple tv';
+      }
+      return item;
+    });
 
-  return uniqueItems(values.map((item) => item.toLowerCase()));
+  return uniqueItems(values);
 }
 
 function formatTaskList(items: string[]): string {
@@ -708,6 +1048,7 @@ function cleanTaskText(value: string): string {
   return value
     .replace(/^Derived from the first planned flows:\s*/i, '')
     .replace(/^Starting mode:\s*/i, '')
+    .replace(/^Deployment plan:\s*/i, '')
     .replace(/^-\s*/, '')
     .replace(/^`|`$/g, '')
     .replace(/\s+/g, ' ')
@@ -726,18 +1067,31 @@ function normalizeTaskKey(value: string): string {
     .trim();
 }
 
-function hasUnresolvedMarkers(sections: InfoSectionMap): boolean {
-  return Object.values(sections).some((entry) => entry?.content.includes(TODO_FOR_CONTEXT_MARKER));
+function isMissingOrLowConfidenceSection(
+  content: string | undefined,
+  kind: keyof typeof GENERIC_PATTERNS
+): boolean {
+  if (!content || isPlaceholderSection(content)) {
+    return true;
+  }
+
+  const normalized = normalizeTaskKey(content);
+  if (!normalized) {
+    return true;
+  }
+
+  return GENERIC_PATTERNS[kind].some((pattern) => pattern.test(content));
 }
 
 function isPlaceholderSection(content: string | undefined): boolean {
   if (!content) {
     return true;
   }
+
   const normalized = normalizeTaskKey(content);
   return (
     content.includes(TODO_FOR_CONTEXT_MARKER) ||
-    normalized.includes('add ') ||
+    normalized.startsWith('add ') ||
     normalized.includes('not planned yet') ||
     normalized.includes('agent should derive') ||
     normalized.includes('replace generic onboarding defaults')
@@ -759,25 +1113,25 @@ function renderTodoSkeleton(appName: string): string {
     '## Phase 0: Orientation And Planning',
     '',
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
-    '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
-    '',
-    renderDerivedRoadmapPlaceholder('phase-0'),
+    '- [ ] Resolve every `# TodoForContext(optional):` marker in `project/info.md` by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
+    '- [ ] Refresh the agent-derived roadmap from `project/info.md` and review it for accuracy before implementation.',
     '',
     '## Phase 1: App Shell And First Flow',
     '',
-    renderDerivedRoadmapPlaceholder('phase-1'),
+    '- [ ] Establish the app shell and first implementation-ready route for the MVP.',
+    '- [ ] Implement the first concrete product flow from `project/info.md` and the roadmap.',
     '',
     '## Phase 2: Data Layer',
     '',
-    renderDerivedRoadmapPlaceholder('phase-2'),
+    '- [ ] Implement the initial data layer and service boundaries needed for the MVP.',
     '',
     '## Phase 3: Complete Product Flows',
     '',
-    renderDerivedRoadmapPlaceholder('phase-3'),
+    '- [ ] Complete the remaining product flows needed for the MVP.',
     '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
-    renderDerivedRoadmapPlaceholder('phase-4'),
+    '- [ ] Run `mds doctor --ci` and address errors before release.',
     '',
   ].join('\n');
 }
@@ -797,6 +1151,26 @@ function isUnresolvedTodoForContextMarkerLine(line: string): boolean {
     trimmed.startsWith(`- ${TODO_FOR_CONTEXT_MARKER}`) ||
     trimmed.startsWith(`* ${TODO_FOR_CONTEXT_MARKER}`)
   );
+}
+
+function trimBlankEdges(lines: string[]): string[] {
+  let start = 0;
+  let end = lines.length;
+  while (start < end && (lines[start]?.trim() ?? '') === '') {
+    start += 1;
+  }
+  while (end > start && (lines[end - 1]?.trim() ?? '') === '') {
+    end -= 1;
+  }
+  return lines.slice(start, end);
+}
+
+function trimTrailingBlankLines(lines: string[]): string[] {
+  const next = [...lines];
+  while (next.length > 0 && (next[next.length - 1]?.trim() ?? '') === '') {
+    next.pop();
+  }
+  return next;
 }
 
 async function pathExists(filePath: string): Promise<boolean> {

@@ -203,12 +203,12 @@ describe('runStylistSyncCommand', () => {
     await expect(readFile(path.join(projectPath, 'src', 'theme', 'tokens.ts'), 'utf8')).resolves.toContain(
       'stylistThemeTokens'
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
       'Apply Stylist synced theme tokens to production UI components and screens.'
     );
   });
 
-  it('is idempotent and does not duplicate the theme todo task', async () => {
+  it('does not inject a stylist follow-up todo into later phases', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-idempotent-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
@@ -218,8 +218,7 @@ describe('runStylistSyncCommand', () => {
     await runStylistSyncCommand({ path: projectPath });
 
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
-    const hits = todo.match(/Apply Stylist synced theme tokens to production UI components and screens\./g) ?? [];
-    expect(hits).toHaveLength(1);
+    expect(todo).not.toContain('Apply Stylist synced theme tokens to production UI components and screens.');
   });
 
   it('fails validation for malformed token payloads', async () => {

@@ -15,7 +15,7 @@ import {
   validateCessGenerationReadiness,
 } from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
-import { generateProjectRoadmap, scanProjectTodoForContextMarkers } from '@mr.dj2u/cli/roadmap';
+import { generateProjectRoadmap } from '@mr.dj2u/cli/roadmap';
 import {
   getSkill,
   listKnowledgeResources,
@@ -817,6 +817,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '',
     'After generation succeeds, tell the user to open a fresh agent session inside the generated app folder and run `mds continue` there.',
     'If unresolved `# TodoForContext(optional):` markers remain in `project/`, do not claim the roadmap is derived yet. Tell the user to resolve those markers first, then refresh `project/todo.md` from `project/info.md`.',
+    'If the roadmap tool later returns `needsClarification: true`, the next agent session should ask the listed clarification questions one at a time before rerunning roadmap.',
   ].join('\n');
   /*
   const looksLikePath = (s: string) => s.includes('/') || s.includes('\\') || s.includes(':');
@@ -888,7 +889,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '',
     'Q3.2 — Who is this app for? Include user type, demographic, role, or context if known.',
     '',
-    'Q3.3 — What should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. (Press enter / say "defer" to let an agent derive this later from project/info.md.)',
+    'Q3.3 — What should users be able to do first? Examples: sign up, create a project, invite teammates, checkout. (Press enter / say "defer" to leave this for the roadmap pass after project/info.md is clarified.)',
     '',
     'Q3.3a — What screens do you know you will need in the app as of now? (Press enter / say "defer" to leave a TodoForContext marker.)',
     '',
@@ -1038,9 +1039,10 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '  1. Find the line "Onboarding next steps" in the generator output. Quote everything from that line to the end of stdout verbatim in a fenced code block. Do NOT quote the CREATED file list or anything before "Onboarding next steps".',
     '  2. Then tell the user (in plain text, not a code block):',
     '     "Your app is ready. To keep token usage low, open a new agent session directly inside the `<appName>` folder and run `mds continue` there."',
-    '  3. If TodoForContext markers exist in the new app\'s project/ files, add one line:',
-    '     "There are unresolved context markers in project/ — resolve them in your new session before starting implementation work."',
-    '  4. Do NOT walk through markers or ask questions about them in this session.',
+    '  3. If the tool result says `roadmap.blockedByMarkers` is true, add one line:',
+    '     "There are unresolved context markers in project/info.md — resolve them in your new session before starting implementation work."',
+    '  4. If the tool result says `roadmap.needsClarification` is true, add one line explaining that the project docs are still too generic for a high-confidence roadmap and that the next agent session should ask the listed clarification questions one at a time before rerunning roadmap.',
+    '  5. Do NOT walk through markers or ask roadmap clarification questions in this session.',
     '',
     'Rules:',
     '- Never run the generator inside an existing app folder. If you suspect you are inside one, stop and ask.',
@@ -1069,6 +1071,9 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     '   - After the user answers, write the answer into the file under the marker and delete the marker line. Then move to the next question.',
     '   - Do not offer "skip markers and implement anyway."',
     '4. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
+    '5. Before implementation planning, call `generate_project_roadmap`.',
+    '   - If it returns `needsClarification: true`, ask the listed clarification questions EXACTLY ONE AT A TIME, update `project/info.md`, and rerun `generate_project_roadmap` until it no longer needs clarification.',
+    '   - Only move into implementation planning after roadmap is not blocked and does not need clarification.',
   ].join('\n');
 }
 
@@ -1237,8 +1242,9 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '',
     'When confirmed, run silently via your shell tool. Do NOT print the command. Just say:',
     '  "Scaffolding project memory and rich boilerplate now. This takes a few seconds."',
-    'After onboarding completes, only describe `project/todo.md` as auto-derived if no unresolved `# TodoForContext(optional):` markers remain in `project/`.',
+    'After onboarding completes, only describe `project/todo.md` as auto-derived if no unresolved `# TodoForContext(optional):` markers remain in `project/info.md` and the roadmap tool does not return `needsClarification: true`.',
     'If markers remain, tell the developer the scaffolded phase template is intentional and that they should resolve the markers before refreshing the roadmap from `project/info.md`.',
+    'If roadmap returns `needsClarification: true`, ask the listed clarification questions one at a time, update `project/info.md`, and rerun roadmap before handing the project back.',
     '',
     '====== Flag map for `mds onboard` (use these EXACTLY) ======',
     '',
@@ -1641,11 +1647,7 @@ async function generateCreateExpoSuperStack(
   projectPath: string;
   summaryLines: string[];
   runtime: ReturnType<typeof getMdsRuntimeVersions>;
-  roadmap: {
-    blockedByMarkers: boolean;
-    markerCount: number;
-    markerHits: Awaited<ReturnType<typeof scanProjectTodoForContextMarkers>>;
-  };
+  roadmap: Awaited<ReturnType<typeof generateProjectRoadmap>>;
   stdoutTail: string;
   stderrTail: string;
 }> {
@@ -1681,18 +1683,17 @@ async function generateCreateExpoSuperStack(
   const invocation = resolveSuperStackInvocationSpec();
   const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
   const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
-  const roadmapMarkers = await scanProjectTodoForContextMarkers(plan.projectPath);
+  const roadmap = await generateProjectRoadmap(plan.projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
 
   return {
     status: 'generated',
     projectPath: plan.projectPath,
     summaryLines: plan.summaryLines,
     runtime: getMdsRuntimeVersions(),
-    roadmap: {
-      blockedByMarkers: roadmapMarkers.length > 0,
-      markerCount: roadmapMarkers.length,
-      markerHits: roadmapMarkers,
-    },
+    roadmap,
     stdoutTail: tailText(result.stdout, 60),
     stderrTail: tailText(result.stderr, 40),
   };

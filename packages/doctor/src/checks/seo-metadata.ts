@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { DoctorCheckResult } from '../types.js';
-import { findFiles, pathExists, readOptionalText, SOURCE_EXTENSIONS } from '../utils.js';
+import { findFiles, isRecord, pathExists, readOptionalText, SOURCE_EXTENSIONS } from '../utils.js';
 
 export async function checkSeoMetadata(projectPath: string): Promise<DoctorCheckResult> {
   const appDirs = [path.join(projectPath, 'app'), path.join(projectPath, 'src', 'app')];
@@ -11,6 +11,15 @@ export async function checkSeoMetadata(projectPath: string): Promise<DoctorCheck
       name: 'seo metadata',
       status: 'skip',
       message: 'No Expo Router app directory found.',
+    };
+  }
+
+  const targetsWeb = await projectTargetsWeb(projectPath);
+  if (!targetsWeb) {
+    return {
+      name: 'seo metadata',
+      status: 'skip',
+      message: 'Web is not a target platform for this app.',
     };
   }
 
@@ -51,3 +60,29 @@ export async function checkSeoMetadata(projectPath: string): Promise<DoctorCheck
   };
 }
 
+async function projectTargetsWeb(projectPath: string): Promise<boolean> {
+  const raw = await readOptionalText(path.join(projectPath, 'app.json'));
+  if (!raw) {
+    return true;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed)) {
+      return true;
+    }
+    const expo = isRecord(parsed.expo) ? parsed.expo : null;
+    if (!expo) {
+      return true;
+    }
+    const platforms = Array.isArray(expo.platforms)
+      ? expo.platforms.filter((item): item is string => typeof item === 'string')
+      : [];
+    if (platforms.length === 0) {
+      return true;
+    }
+    return platforms.includes('web');
+  } catch {
+    return true;
+  }
+}

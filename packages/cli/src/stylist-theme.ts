@@ -122,8 +122,6 @@ const RESTYLE_THEME_BLOCK_START = '// MDS_STYLIST_RESTYLE_THEME_START';
 const RESTYLE_THEME_BLOCK_END = '// MDS_STYLIST_RESTYLE_THEME_END';
 const TAMAGUI_THEME_BLOCK_START = '// MDS_STYLIST_TAMAGUI_THEME_START';
 const TAMAGUI_THEME_BLOCK_END = '// MDS_STYLIST_TAMAGUI_THEME_END';
-const TODO_THEME_TASK =
-  '- [ ] Apply Stylist synced theme tokens to production UI components and screens.';
 
 export const DEFAULT_STYLIST_THEME: StylistTheme = {
   version: 1,
@@ -1358,29 +1356,7 @@ function toRgbSpaceSeparated(hex: string): string {
 }
 
 function ensureThemeTodoTask(todo: string): string {
-  if (todo.includes(TODO_THEME_TASK)) {
-    return todo;
-  }
-
-  const lines = todo.split(/\r?\n/);
-  const phaseOneIndex = lines.findIndex((line) => /^##\s+Phase 1\b/i.test(line.trim()));
-  if (phaseOneIndex === -1) {
-    return `${todo.trimEnd()}\n${TODO_THEME_TASK}\n`;
-  }
-
-  const insertionIndex = findSectionEnd(lines, phaseOneIndex);
-  lines.splice(insertionIndex, 0, TODO_THEME_TASK);
-  return `${lines.join('\n').replace(/\s+$/, '')}\n`;
-}
-
-function findSectionEnd(lines: string[], startHeadingIndex: number): number {
-  for (let i = startHeadingIndex + 1; i < lines.length; i += 1) {
-    if (/^##\s+/.test(lines[i] ?? '')) {
-      return i;
-    }
-  }
-
-  return lines.length;
+  return todo;
 }
 
 function renderDefaultStyleMarkdown(): string {

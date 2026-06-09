@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { generateProjectRoadmap, parseInfoSections, renderDerivedRoadmapPlaceholder } from '../src/roadmap.js';
+import { generateProjectRoadmap, parseInfoSections } from '../src/roadmap.js';
 
 const tempDirs: string[] = [];
 
@@ -45,7 +45,7 @@ describe('project roadmap generation', () => {
     expect(sections.releaseStrategy?.content).toContain('TestFlight beta');
   });
 
-  it('creates a roadmap even when project/todo.md does not exist yet', async () => {
+  it('creates a roadmap and state file when project/todo.md does not exist yet', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
@@ -54,9 +54,17 @@ describe('project roadmap generation', () => {
       [
         '# Demo Project Info',
         '',
+        '## Target Users',
+        '',
+        'Freelancers managing client projects.',
+        '',
+        '## Product Goals',
+        '',
+        '- Help freelancers onboard clients faster.',
+        '',
         '## Core User Flows',
         '',
-        '- sign up',
+        '- sign up and create a workspace',
         '- create a project',
         '',
         '## Must-Include Screens Or Flows',
@@ -81,12 +89,14 @@ describe('project roadmap generation', () => {
       preserveStatus: true,
     });
 
+    expect(result.needsClarification).toBe(false);
     expect(result.wrote).toBe(true);
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
-    expect(todo).toContain('## Phase 0: Orientation And Planning');
+    const roadmapState = await readFile(path.join(projectPath, 'project', 'roadmap-state.json'), 'utf8');
     expect(todo).toContain('## Phase 1: App Shell And First Flow');
-    expect(todo).toContain('Implement the first core user flow: sign up.');
-    expect(todo).toContain('MDS_DERIVED_PHASE_0_START');
+    expect(todo).toContain('Implement the first core user flow: sign up and create a workspace.');
+    expect(todo).not.toContain('MDS_DERIVED_PHASE_');
+    expect(roadmapState).toContain('phase-1');
   });
 
   it('blocks roadmap generation while unresolved TodoForContext markers remain', async () => {
@@ -117,8 +127,6 @@ describe('project roadmap generation', () => {
         '',
         '- [ ] Resolve markers first.',
         '',
-        renderDerivedRoadmapPlaceholder('phase-0'),
-        '',
       ].join('\n'),
       'utf8'
     );
@@ -136,7 +144,98 @@ describe('project roadmap generation', () => {
     expect(todo).not.toContain('Implement the first core user flow: sign up.');
   });
 
-  it('preserves matching checkbox state and user-authored tasks on rerun', async () => {
+  it('does not block roadmap generation when only non-info project docs still have context markers', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-style-markers-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Scientists tracking lab experiments.',
+        '',
+        '## Product Goals',
+        '',
+        '- Keep experiment records organized.',
+        '',
+        '## Core User Flows',
+        '',
+        '- create an experiment',
+        '',
+        '## Release Strategy',
+        '',
+        '- App Store beta',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'style.md'),
+      [
+        '# Demo Style',
+        '',
+        '## Visual Direction',
+        '',
+        '# TodoForContext(optional): Add visual references later.',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await generateProjectRoadmap(projectPath, {
+      write: true,
+      preserveStatus: true,
+    });
+
+    expect(result.blockedByMarkers).toBe(false);
+    expect(result.needsClarification).toBe(false);
+    expect(result.phases.some((phase) => phase.tasks.some((task) => task.text.includes('create an experiment')))).toBe(
+      true
+    );
+  });
+
+  it('returns clarification questions instead of fake derived tasks for generic project info', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-generic-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Expo app users',
+        '',
+        '## Product Goals',
+        '',
+        'Help users.',
+        '',
+        '## Core User Flows',
+        '',
+        'Agent should derive the first core user flows from project/info.md during intake.',
+        '',
+        '## Release Strategy',
+        '',
+        '- Deployment plan: Expo web/native deployment',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await generateProjectRoadmap(projectPath, {
+      write: true,
+      preserveStatus: true,
+    });
+
+    expect(result.needsClarification).toBe(true);
+    expect(result.wrote).toBe(false);
+    expect(result.phases).toEqual([]);
+    expect(result.clarificationQuestions.map((question) => question.id)).toContain('core-user-flows');
+    expect(result.confidenceWarnings.length).toBeGreaterThan(0);
+  });
+
+  it('preserves matching checkbox state and user-authored tasks on rerun with roadmap state', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-rerun-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
@@ -145,15 +244,23 @@ describe('project roadmap generation', () => {
       [
         '# Demo Project Info',
         '',
+        '## Target Users',
+        '',
+        'Independent creators selling digital downloads.',
+        '',
+        '## Product Goals',
+        '',
+        '- Reduce checkout friction.',
+        '',
         '## Core User Flows',
         '',
         '- sign up',
-        '- create a project',
+        '- create a storefront',
         '',
         '## Must-Include Screens Or Flows',
         '',
         '- Home',
-        '- Project detail',
+        '- Storefront detail',
         '',
         '## Data And Backend',
         '',
@@ -175,31 +282,37 @@ describe('project roadmap generation', () => {
         '',
         '- [ ] Review `project/` files for accuracy.',
         '',
-        renderDerivedRoadmapPlaceholder('phase-0'),
-        '',
         '## Phase 1: App Shell And First Flow',
         '',
         '- [ ] Static phase task',
-        '',
-        '<!-- MDS_DERIVED_PHASE_1_START -->',
         '- [x] Implement the first core user flow: sign up.',
-        '<!-- MDS_DERIVED_PHASE_1_END -->',
-        '',
         '- [ ] User-authored note that should stay put.',
         '',
         '## Phase 2: Data Layer',
         '',
-        renderDerivedRoadmapPlaceholder('phase-2'),
-        '',
         '## Phase 3: Complete Product Flows',
-        '',
-        renderDerivedRoadmapPlaceholder('phase-3'),
         '',
         '## Phase 4: Polish, Safeguards, And Release',
         '',
-        renderDerivedRoadmapPlaceholder('phase-4'),
-        '',
       ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'roadmap-state.json'),
+      JSON.stringify(
+        {
+          version: 1,
+          phases: {
+            'phase-0': { derivedTaskKeys: [] },
+            'phase-1': { derivedTaskKeys: ['implement the first core user flow sign up'] },
+            'phase-2': { derivedTaskKeys: [] },
+            'phase-3': { derivedTaskKeys: [] },
+            'phase-4': { derivedTaskKeys: [] },
+          },
+        },
+        null,
+        2
+      ),
       'utf8'
     );
 
@@ -210,9 +323,11 @@ describe('project roadmap generation', () => {
 
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
     expect(result.preservedStatuses).toBeGreaterThan(0);
-    expect(result.blockedByMarkers).toBe(false);
     expect(todo).toContain('- [x] Implement the first core user flow: sign up.');
     expect(todo).toContain('User-authored note that should stay put.');
-    expect(todo).toContain('Validate the production web/server hosting path, environment ownership, and rollout checklist.');
+    expect(todo).toContain(
+      'Validate the production web/server hosting path, environment ownership, and rollout checklist.'
+    );
+    expect(todo).not.toContain('MDS_DERIVED_PHASE_');
   });
 });

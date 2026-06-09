@@ -21,7 +21,9 @@ import {
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
 import { scaffoldProjectMemory } from "@mr.dj2u/cli/project-memory";
-import { scanProjectTodoForContextMarkers } from "@mr.dj2u/cli/roadmap";
+import {
+  generateProjectRoadmap,
+} from "@mr.dj2u/cli/roadmap";
 
 import type { OnboardArgv } from "@mr.dj2u/cli/onboarding";
 
@@ -159,12 +161,12 @@ export async function main(): Promise<void> {
     : [];
   const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const typeSupportRepairs = await repairGeneratedTypeSupport(projectPath, {
-    needsNodeTypes:
-      plan.answers.targetPlatforms.includes("web") && hasStylistSyncRoute,
+    needsNodeTypes: hasStylistSyncRoute,
     needsUniwindTypes: plan.answers.defaults.includes("uniwind"),
   });
   const nativeWindUiPickerRepairs =
     await repairGeneratedNativeWindUiPicker(projectPath);
+  const eslintConfigRepairs = await repairGeneratedEslintConfig(projectPath);
 
   console.log();
   console.log("MDS onboarding complete.");
@@ -199,6 +201,9 @@ export async function main(): Promise<void> {
   for (const result of nativeWindUiPickerRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
   }
+  for (const result of eslintConfigRepairs) {
+    console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
   if (plan.saveDefaults) {
     const defaultsPath = savePersonalOnboardDefaults(plan.answers);
     if (defaultsPath) {
@@ -206,15 +211,24 @@ export async function main(): Promise<void> {
     }
   }
 
-  const roadmapMarkerHits = await scanProjectTodoForContextMarkers(projectPath);
-  if (roadmapMarkerHits.length > 0) {
+  const roadmapStatus = await generateProjectRoadmap(projectPath, {
+    write: false,
+    preserveStatus: true,
+  });
+  if (roadmapStatus.blockedByMarkers) {
     console.log();
     console.log("Roadmap note:");
     console.log(
-      "Unresolved # TodoForContext(optional): markers are still present in project/, so MDS intentionally left the scaffolded phase template in place.",
+      "Unresolved # TodoForContext(optional): markers are still present in project/info.md, so MDS intentionally left the scaffolded phase template in place.",
     );
     console.log(
-      "Resolve those markers first, then run `mds roadmap` or let your agent refresh project/todo.md from project/info.md.",
+      "Resolve those project/info.md markers first, then run `mds roadmap` or let your agent refresh project/todo.md from project/info.md.",
+    );
+  } else if (roadmapStatus.needsClarification) {
+    console.log();
+    console.log("Roadmap note:");
+    console.log(
+      "The project docs are still too generic for a high-confidence derived roadmap, so have your agent ask clarifying questions and then rerun `mds roadmap`.",
     );
   }
 
@@ -1387,6 +1401,22 @@ export async function repairGeneratedNativeWindUiPicker(
   return updatedPaths;
 }
 
+export async function repairGeneratedEslintConfig(projectPath: string): Promise<string[]> {
+  const eslintConfigPath = path.join(projectPath, "eslint.config.js");
+  const raw = await readOptionalText(eslintConfigPath);
+  if (!raw) {
+    return [];
+  }
+
+  const updated = raw.replace(/^\/\* eslint-env node \*\/\r?\n/, "");
+  if (updated === raw) {
+    return [];
+  }
+
+  await writeFile(eslintConfigPath, updated, "utf8");
+  return [eslintConfigPath];
+}
+
 export async function repairExpoProjectIdentifiers(
   projectPath: string,
   projectName: string,
@@ -1436,8 +1466,18 @@ export async function repairExpoProjectIdentifiers(
   }
   const shouldIncludeWeb = targetPlatforms.includes("web");
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
-  if (shouldIncludeWeb && !currentPlatforms.includes("web")) {
-    expo.platforms = [...currentPlatforms, "web"];
+  const normalizedTargetPlatforms = Array.from(
+    new Set(
+      targetPlatforms
+        .map((platform) => readString(platform) ?? platform)
+        .filter((platform): platform is string => Boolean(platform))
+    )
+  );
+  if (
+    normalizedTargetPlatforms.length > 0 &&
+    JSON.stringify(currentPlatforms) !== JSON.stringify(normalizedTargetPlatforms)
+  ) {
+    expo.platforms = normalizedTargetPlatforms;
     changed = true;
   }
   const shouldIncludeAndroid = targetPlatforms.includes("android");

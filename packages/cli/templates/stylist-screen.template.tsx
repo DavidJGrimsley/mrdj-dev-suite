@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedPressable } from '../../components/exposition';
 import { EMBEDDED_GOOGLE_FONTS } from './embedded-fonts';
-import stylistThemeTokens, {
+import defaultThemeTokens, {
   type StylistColorMode,
   type StylistColorPalette,
   type StylistColorScheme,
@@ -101,7 +101,9 @@ const paletteColorKeys: PaletteColorKey[] = [
 ];
 
 const semanticColorKeys: SemanticColorKey[] = ['primary', 'secondary', 'success', 'warning'];
-const spacingKeys: Array<keyof StylistThemeTokens['layout']['spacing']> = [
+const stylistThemeTokens = defaultThemeTokens;
+
+const spacingKeys: (keyof StylistThemeTokens['layout']['spacing'])[] = [
   'xs',
   'sm',
   'md',
@@ -109,15 +111,15 @@ const spacingKeys: Array<keyof StylistThemeTokens['layout']['spacing']> = [
   'xl',
 ];
 const schemeKeys: StylistColorScheme[] = ['light', 'dark'];
-const familyModeOptions: Array<{ label: string; value: StylistFamilyMode }> = [
+const familyModeOptions: { label: string; value: StylistFamilyMode }[] = [
   { label: '1 family', value: 'one' },
   { label: '2 families', value: 'two' },
 ];
-const colorModeOptions: Array<{ label: string; value: StylistColorMode }> = [
+const colorModeOptions: { label: string; value: StylistColorMode }[] = [
   { label: 'BG Color', value: 'bg' },
   { label: 'Automatic', value: 'automatic' },
 ];
-const colorInputModeOptions: Array<{ label: string; value: ColorInputMode }> = [
+const colorInputModeOptions: { label: string; value: ColorInputMode }[] = [
   { label: 'Color Picker', value: 'picker' },
   { label: 'Tailwind Families', value: 'families' },
 ];
@@ -151,11 +153,11 @@ const NATIVE_SAFE_FONTS = new Set([
   'notoserif',
   'noto sans',
 ]);
-const fontRoleFields: Array<{
+const fontRoleFields: {
   key: FontRoleKey;
   label: string;
   placeholder: string;
-}> = [
+}[] = [
   { key: 'fontDisplay', label: 'Display', placeholder: 'Display font family' },
   { key: 'fontTitle', label: 'Title', placeholder: 'Title font family' },
   {
@@ -951,6 +953,10 @@ export default function StylistScreen() {
     }).start();
   }
 
+  const publishEffectMessage = useEffectEvent((tone: SaveMessageTone, message: string) => {
+    publishSaveMessage(tone, message);
+  });
+
   function publishSyncMessage(message: string) {
     saveMessageKind.current = 'sync';
     publishSaveMessage('success', message);
@@ -970,13 +976,13 @@ export default function StylistScreen() {
     const restored = readWebSyncMessageSnapshot();
     if (restored) {
       saveMessageKind.current = 'sync';
-      publishSaveMessage('success', restored.message);
+      publishEffectMessage('success', restored.message);
       const elapsed = Date.now() - restored.timestamp;
       const remaining = Math.max(0, 3000 - elapsed);
       saveStatusTimeout.current = setTimeout(() => {
         saveMessageKind.current = 'status';
         clearWebSyncMessageSnapshot();
-        publishSaveMessage('info', 'Current theme files and preview are in sync.');
+        publishEffectMessage('info', 'Current theme files and preview are in sync.');
       }, remaining);
     }
 
@@ -1248,7 +1254,7 @@ export default function StylistScreen() {
           `${GOOGLE_FONTS_API_URL}?sort=popularity&key=${encodeURIComponent(apiKey)}`
         );
         const payload = (await response.json()) as {
-          items?: Array<{ family?: string }>;
+          items?: { family?: string }[];
           error?: { message?: string };
         };
         if (!response.ok) {
@@ -2581,7 +2587,7 @@ function ToggleRow(props: {
   label: string;
   infoText: string;
   value: string;
-  options: Array<{ label: string; value: string }>;
+  options: { label: string; value: string }[];
   onChange: (value: string) => void;
   onPressInfo: () => void;
 }) {
