@@ -1468,13 +1468,7 @@ export async function repairExpoProjectIdentifiers(
     changed = true;
   }
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
-  const normalizedTargetPlatforms = Array.from(
-    new Set(
-      targetPlatforms
-        .map((platform) => readString(platform) ?? platform)
-        .filter((platform): platform is string => Boolean(platform))
-    )
-  );
+  const normalizedTargetPlatforms = normalizeExpoConfigPlatforms(targetPlatforms);
   if (
     normalizedTargetPlatforms.length > 0 &&
     JSON.stringify(currentPlatforms) !== JSON.stringify(normalizedTargetPlatforms)
@@ -1589,6 +1583,36 @@ export async function repairExpoProjectIdentifiers(
 
   await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
   return [appJsonPath];
+}
+
+function normalizeExpoConfigPlatforms(
+  targetPlatforms: unknown[],
+): Array<"web" | "ios" | "android"> {
+  return Array.from(
+    new Set(
+      targetPlatforms
+        .map((platform) => normalizeExpoConfigPlatform(readString(platform) ?? platform))
+        .filter(
+          (platform): platform is "web" | "ios" | "android" =>
+            platform === "web" || platform === "ios" || platform === "android",
+        ),
+    ),
+  );
+}
+
+function normalizeExpoConfigPlatform(
+  platform: unknown,
+): "web" | "ios" | "android" | null {
+  if (platform === "web" || platform === "ios" || platform === "android") {
+    return platform;
+  }
+  if (platform === "apple-tv" || platform === "appletv" || platform === "tvos") {
+    return "ios";
+  }
+  if (platform === "android-tv" || platform === "androidtv") {
+    return "android";
+  }
+  return null;
 }
 
 export async function repairExpoWebOutputForStylistLifecycle(

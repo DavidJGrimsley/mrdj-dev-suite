@@ -71,6 +71,40 @@ describe('runDoctor', () => {
     expect(report.summary.warnings).toBe(3);
     expect(report.summary.score).toBe(85);
   });
+
+  it('errors on unsupported expo.platforms entries before expo doctor does', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'bad-platforms',
+      main: 'expo-router/entry',
+      dependencies: {
+        expo: '^56.0.0',
+        'expo-router': '^6.0.0',
+      },
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        typecheck: 'node -e "process.exit(0)"',
+        test: 'node -e "process.exit(0)"',
+        doctor: 'node -e "process.exit(0)"',
+        build: 'node -e "process.exit(0)"',
+      },
+    });
+    await writeProjectFile(projectPath, 'app.json', {
+      expo: {
+        platforms: ['web', 'ios', 'android', 'apple-tv', 'android-tv'],
+      },
+    });
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'expo configuration');
+
+    expect(check?.status).toBe('error');
+    expect(check?.details).toMatchObject({
+      errors: [
+        expect.stringContaining('apple-tv'),
+      ],
+    });
+  });
 });
 
 describe('todo-for-context check', () => {

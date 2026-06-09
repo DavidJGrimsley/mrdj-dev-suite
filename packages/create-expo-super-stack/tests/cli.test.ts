@@ -443,6 +443,47 @@ describe("create-expo-super-stack CLI helpers", () => {
     }
   });
 
+  it("maps TV targets to Expo-supported native platforms in app.json", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-tv-platforms-"),
+    );
+    try {
+      await mkdir(projectPath, { recursive: true });
+      await writeFile(
+        path.join(projectPath, "app.json"),
+        JSON.stringify({
+          expo: {
+            name: "Bandana Designer",
+            slug: "bandana-designer",
+            platforms: ["web", "ios", "android", "apple-tv", "android-tv"],
+          },
+        }),
+        "utf8",
+      );
+
+      await expect(
+        repairExpoProjectIdentifiers(projectPath, "Bandana Designer", [
+          "web",
+          "ios",
+          "android",
+          "apple-tv",
+          "android-tv",
+        ]),
+      ).resolves.toEqual([path.join(projectPath, "app.json")]);
+
+      const repaired = JSON.parse(
+        await readFile(path.join(projectPath, "app.json"), "utf8"),
+      ) as {
+        expo: {
+          platforms: string[];
+        };
+      };
+      expect(repaired.expo.platforms).toEqual(["web", "ios", "android"]);
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
   it("repairs moved src/app tab layout imports after app directory migration", async () => {
     const projectPath = await mkdtemp(
       path.join(os.tmpdir(), "super-stack-src-app-imports-"),

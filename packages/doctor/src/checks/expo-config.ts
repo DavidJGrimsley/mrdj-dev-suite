@@ -12,7 +12,19 @@ export async function checkExpoConfiguration(
     ...packageJson.devDependencies,
   };
   const hasExpoRouter = 'expo-router' in deps;
+  const errors: string[] = [];
   const warnings: string[] = [];
+  const appJson = await readAppJson(projectPath);
+  const platformList = readNestedStringArray(appJson, ['expo', 'platforms']);
+  const invalidPlatforms = platformList.filter((platform) => !['ios', 'android', 'web'].includes(platform));
+
+  if (invalidPlatforms.length > 0) {
+    errors.push(
+      `app.json contains unsupported expo.platforms entries: ${invalidPlatforms.join(
+        ', '
+      )}. Use only ios, android, and web in Expo config.`
+    );
+  }
 
   if (hasExpoRouter && packageJson.main !== 'expo-router/entry') {
     warnings.push('expo-router is installed but package.json main is not expo-router/entry.');
@@ -20,13 +32,20 @@ export async function checkExpoConfiguration(
 
   const apiRouteFiles = await findFiles(projectPath, (filePath) => filePath.endsWith('+api.ts'));
   if (apiRouteFiles.length > 0) {
-    const appJson = await readAppJson(projectPath);
-    const platformList = readNestedStringArray(appJson, ['expo', 'platforms']);
     const webOutput = readNestedString(appJson, ['expo', 'web', 'output']);
     const targetsWeb = platformList.length === 0 || platformList.includes('web');
     if (targetsWeb && webOutput !== 'server') {
       warnings.push('Expo API routes found, but app.json does not set expo.web.output to "server".');
     }
+  }
+
+  if (errors.length > 0) {
+    return {
+      name: 'expo configuration',
+      status: 'error',
+      message: 'Expo configuration has schema errors.',
+      details: { errors },
+    };
   }
 
   if (warnings.length > 0) {

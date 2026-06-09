@@ -556,4 +556,68 @@ describe('runStylistEjectCommand', () => {
     const info = await readFile(path.join(projectPath, 'project', 'info.md'), 'utf8');
     expect(info.toLowerCase()).not.toContain('stylist');
   });
+
+  it('maps TV targets from project info back to Expo-supported app platforms', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-eject-tv-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await writeFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'export {};', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'exposition', 'embedded-fonts.ts'), 'export {};', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist.tsx'), 'export {};', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'), 'export {};', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      '<Stack.Screen name="exposition/stylist" options={{ title: "Stylist" }} />\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+      "const links=[{href:'/exposition/stylist'}];\n",
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Info\n\n## Platforms\n\n- Target platforms: web, ios, android, apple-tv, android-tv\n- Web output: static\n\n- Review styling in the Stylist page\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        dependencies: {
+          'reanimated-color-picker': '^4.2.0',
+          uniwind: '^1.6.4',
+        },
+        scripts: {
+          'mds:stylist:sync': 'mds stylist sync .',
+          'mds:stylist:reconcile-output': 'mds stylist reconcile-output .',
+        },
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'stylist.config.json'),
+      JSON.stringify({ styleLibrary: 'uniwind', writePolicy: 'managed' }, null, 2),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          web: { output: 'server' },
+          platforms: ['web', 'ios', 'android', 'apple-tv', 'android-tv'],
+        },
+      }),
+      'utf8'
+    );
+
+    await runStylistEjectCommand({ path: projectPath, styleLibrary: 'uniwind' });
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: { platforms: string[] };
+    };
+    expect(appJson.expo.platforms).toEqual(['web', 'ios', 'android']);
+  });
 });

@@ -463,7 +463,11 @@ function normalizePlatform(value: string): string | null {
       return value;
     case 'apple-tv':
     case 'appletv':
-      return 'apple-tv';
+    case 'tvos':
+      return 'ios';
+    case 'android-tv':
+    case 'androidtv':
+      return 'android';
     default:
       return null;
   }

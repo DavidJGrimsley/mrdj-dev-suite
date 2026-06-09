@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 5**: CI/CD pipeline automation
 - **Phase 6**: Documentation and community support
 
+## [0.1.11] - 2026-06-09
+
+### Changed
+- release publish flow now includes `@mr.dj2u/doctor` before downstream packages that depend on it
+- bumped release chain for `@mr.dj2u/doctor`, `@mr.dj2u/cli`, and `create-expo-super-stack`
+
+### Fixed
+- Super Stack generator now maps TV target intent to Expo-supported `expo.platforms` values in generated `app.json`
+- Stylist platform reconciliation now keeps `expo.platforms` schema-safe when `project/info.md` includes TV targets
+- `mds doctor --fast` now flags unsupported `expo.platforms` entries before `expo-doctor` fails later
+
 ## [0.1.10] - 2026-06-09
 
 ### Added
