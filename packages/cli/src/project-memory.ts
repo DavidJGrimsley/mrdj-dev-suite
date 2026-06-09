@@ -6,6 +6,7 @@ import {
   renderGlobalCssThemeBlock,
   renderThemeTokensFile,
 } from './stylist-theme.js';
+import { generateProjectRoadmap, renderDerivedRoadmapPlaceholder } from './roadmap.js';
 
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
@@ -100,6 +101,10 @@ const STYLIST_DEPENDENCIES = {
   'reanimated-color-picker': '^4.2.0',
 } as const;
 
+const STYLIST_DEV_DEPENDENCIES = {
+  tailwindcss: '^4.2.4',
+} as const;
+
 const EXPO_UI_DEPENDENCIES = {
   '@expo/ui': '~56.0.14',
 } as const;
@@ -178,18 +183,38 @@ export async function scaffoldProjectMemory(
 
   const force = Boolean(options.force);
   const infoPath = path.join(projectDir, 'info.md');
+  const todoPath = path.join(projectDir, 'todo.md');
   const stylePath = path.join(projectDir, 'style.md');
   const existingInfo = await readOptionalText(infoPath);
   const existingStyle = await readOptionalText(stylePath);
   const guidelines = await resolveGuidelines(answers, options);
   const results = await Promise.all([
     writeProjectMemoryFile(infoPath, renderInfo(projectPath, answers, existingInfo), force, true),
-    writeIfAllowed(path.join(projectDir, 'todo.md'), renderTodo(answers), force),
+    writeIfAllowed(todoPath, renderTodo(answers), force),
     writeProjectMemoryFile(stylePath, renderStyle(answers, existingStyle), force, true),
     writeIfAllowed(path.join(projectDir, 'guidelines.md'), guidelines, force),
     writeIfAllowed(path.join(projectPath, 'AGENTS.md'), renderAgentInstructions(answers), force),
     writeIfAllowed(path.join(projectPath, 'CLAUDE.md'), renderClaudeMd(answers), force),
   ]);
+  const roadmapResult = await generateProjectRoadmap(projectPath, {
+    write: true,
+    preserveStatus: true,
+  });
+  const todoResultIndex = results.findIndex((result) => result.filePath === todoPath);
+  if (todoResultIndex >= 0) {
+    const todoResult = results[todoResultIndex];
+    if (todoResult) {
+      results[todoResultIndex] = {
+        filePath: todoResult.filePath,
+        wrote: todoResult.wrote || roadmapResult.wrote,
+      };
+    }
+  } else {
+    results.push({
+      filePath: todoPath,
+      wrote: roadmapResult.wrote,
+    });
+  }
 
   if (shouldGenerateIntakeAgentHandoff(answers, existingInfo, existingStyle)) {
     results.push(
@@ -720,6 +745,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     '- [x] Confirm app purpose, audience, and primary flows in `project/info.md`.',
     '- [ ] Confirm visual direction in `project/style.md` after using the Stylist page.',
+    '- [ ] After all `# TodoForContext(optional):` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.',
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
     ...(needsReview
@@ -727,6 +753,8 @@ export function renderTodo(answers: OnboardAnswers): string {
           '- [ ] Replace generic onboarding placeholders with real app decisions before full implementation.',
         ]
       : []),
+    '',
+    renderDerivedRoadmapPlaceholder('phase-0'),
     '',
     '## Phase 1: App Shell And First Flow',
     '',
@@ -736,6 +764,8 @@ export function renderTodo(answers: OnboardAnswers): string {
     `- [ ] Implement the first core flow from project info: ${answers.coreFlows}.`,
     '- [ ] Keep route files thin and move real UI into feature screens.',
     '- [ ] Apply Stylist synced theme tokens to production UI components and screens.',
+    '',
+    renderDerivedRoadmapPlaceholder('phase-1'),
     '',
     '## Phase 2: Data Layer',
     '',
@@ -750,6 +780,8 @@ export function renderTodo(answers: OnboardAnswers): string {
           '- [ ] Wire publishable client keys through environment files, never service-role keys.',
         ]),
     '- [ ] Verify data requirements against `project/info.md` before adding tables or auth.',
+    '',
+    renderDerivedRoadmapPlaceholder('phase-2'),
     '',
     '## Phase 3: Complete Product Flows',
     '',
@@ -768,6 +800,8 @@ export function renderTodo(answers: OnboardAnswers): string {
       ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`)
       : []),
     '',
+    renderDerivedRoadmapPlaceholder('phase-3'),
+    '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
     '- [ ] Prune unused Software Mansion examples and remove unneeded packages.',
@@ -775,6 +809,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
+          '- [ ] Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.',
           '- [ ] Add GitHub branch protection so PR checks pass before merging into `test` or `main`.',
         ]
       : ['- [ ] Decide on release safeguards before production work begins.']),
@@ -785,6 +820,8 @@ export function renderTodo(answers: OnboardAnswers): string {
       ? [`- [ ] Plan deployed server work: ${formatServerChoice(answers.deployedServer)}.`]
       : []),
     '- [ ] Add monorepo support after the MVP is stable.',
+    '',
+    renderDerivedRoadmapPlaceholder('phase-4'),
     '',
   ].join('\n');
 }
@@ -1245,6 +1282,7 @@ async function ensurePackageJson(
   }
 
   packageJson.devDependencies = {
+    ...STYLIST_DEV_DEPENDENCIES,
     ...packageJson.devDependencies,
     '@mr.dj2u/cli': packageJson.devDependencies?.['@mr.dj2u/cli'] ?? `^${MDS_CLI_VERSION}`,
   };
@@ -1527,12 +1565,19 @@ async function ensureGlobalCssImport(
 ): Promise<void> {
   const layoutPath = path.join(getExpoRouterAppDir(projectPath, appDirectory), '_layout.tsx');
   const appPath = path.join(projectPath, 'App.tsx');
+  const globalCssPath = path.join(projectPath, 'global.css');
+  const hasGlobalCss = await pathExists(globalCssPath);
   const layout = await readOptionalText(layoutPath);
   if (layout) {
-    const importStatement = renderGlobalCssImport(layoutPath, projectPath);
-    const updated = layout.match(/^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m)
-      ? layout.replace(/^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m, `${importStatement}\n`)
-      : `${importStatement}\n${layout}`;
+    const globalCssImportPattern = /^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m;
+    const updated = hasGlobalCss
+      ? layout.match(globalCssImportPattern)
+        ? layout.replace(
+            globalCssImportPattern,
+            `${renderGlobalCssImport(layoutPath, projectPath)}\n`
+          )
+        : `${renderGlobalCssImport(layoutPath, projectPath)}\n${layout}`
+      : layout.replace(globalCssImportPattern, '');
     if (updated !== layout) {
       await writeFile(layoutPath, updated, 'utf8');
     }
@@ -1540,8 +1585,21 @@ async function ensureGlobalCssImport(
   }
 
   const app = await readOptionalText(appPath);
-  if (app && !app.includes('global.css')) {
-    await writeFile(appPath, `import './global.css';\n${app}`, 'utf8');
+  if (!app) {
+    return;
+  }
+
+  const globalCssImportPattern = /^\s*import\s+['"][^'"]*global\.css['"];?\r?\n/m;
+  if (hasGlobalCss) {
+    if (!app.match(globalCssImportPattern)) {
+      await writeFile(appPath, `import './global.css';\n${app}`, 'utf8');
+    }
+    return;
+  }
+
+  const updated = app.replace(globalCssImportPattern, '');
+  if (updated !== app) {
+    await writeFile(appPath, updated, 'utf8');
   }
 }
 
@@ -2807,8 +2865,10 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '## GitHub Setup The User Still Needs To Do',
     '',
     '- Create `test` and `main` branches.',
+    '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
+    '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
     '',
   ].join('\n');
 }

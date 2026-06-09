@@ -15,6 +15,7 @@ import {
   validateCessGenerationReadiness,
 } from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
+import { generateProjectRoadmap, scanProjectTodoForContextMarkers } from '@mr.dj2u/cli/roadmap';
 import {
   getSkill,
   listKnowledgeResources,
@@ -211,6 +212,19 @@ export function listTools(): MCPTool[] {
       },
     },
     {
+      name: 'generate_project_roadmap',
+      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+          write: { type: 'boolean' },
+          preserveStatus: { type: 'boolean' },
+        },
+        required: ['projectPath'],
+      },
+    },
+    {
       name: 'generate_setup_tasks',
       description: 'Generate post-create onboarding setup tasks.',
       inputSchema: {
@@ -321,6 +335,16 @@ export async function executeTool(
         throw new Error('generate_deploy_checklist requires projectPath.');
       }
       return generateDeployChecklist(projectPath, input);
+    }
+    case 'generate_project_roadmap': {
+      const projectPath = readString(input.projectPath);
+      if (!projectPath) {
+        throw new Error('generate_project_roadmap requires projectPath.');
+      }
+      return generateProjectRoadmap(projectPath, {
+        write: input.write === true,
+        preserveStatus: typeof input.preserveStatus === 'boolean' ? input.preserveStatus : true,
+      });
     }
     case 'generate_setup_tasks': {
       return generateSetupTasks(readString(input.projectPath) ?? '.', readStringArray(input.defaults));
@@ -508,6 +532,26 @@ function registerTools(server: McpServer): void {
       },
     },
     async (input) => toolJson(await generateDeployChecklist(input.projectPath, input))
+  );
+
+  server.registerTool(
+    'generate_project_roadmap',
+    {
+      title: 'Generate Project Roadmap',
+      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      inputSchema: {
+        projectPath: z.string(),
+        write: z.boolean().optional(),
+        preserveStatus: z.boolean().optional(),
+      },
+    },
+    async (input) =>
+      toolJson(
+        await generateProjectRoadmap(input.projectPath, {
+          write: input.write,
+          preserveStatus: input.preserveStatus,
+        })
+      )
   );
 
   server.registerTool(
@@ -772,6 +816,7 @@ export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?
     '- Do not fall back to `--mds-yes` or direct CLI shortcuts unless the user explicitly asked for a fast non-interactive run.',
     '',
     'After generation succeeds, tell the user to open a fresh agent session inside the generated app folder and run `mds continue` there.',
+    'If unresolved `# TodoForContext(optional):` markers remain in `project/`, do not claim the roadmap is derived yet. Tell the user to resolve those markers first, then refresh `project/todo.md` from `project/info.md`.',
   ].join('\n');
   /*
   const looksLikePath = (s: string) => s.includes('/') || s.includes('\\') || s.includes(':');
@@ -1192,6 +1237,8 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '',
     'When confirmed, run silently via your shell tool. Do NOT print the command. Just say:',
     '  "Scaffolding project memory and rich boilerplate now. This takes a few seconds."',
+    'After onboarding completes, only describe `project/todo.md` as auto-derived if no unresolved `# TodoForContext(optional):` markers remain in `project/`.',
+    'If markers remain, tell the developer the scaffolded phase template is intentional and that they should resolve the markers before refreshing the roadmap from `project/info.md`.',
     '',
     '====== Flag map for `mds onboard` (use these EXACTLY) ======',
     '',
@@ -1594,6 +1641,11 @@ async function generateCreateExpoSuperStack(
   projectPath: string;
   summaryLines: string[];
   runtime: ReturnType<typeof getMdsRuntimeVersions>;
+  roadmap: {
+    blockedByMarkers: boolean;
+    markerCount: number;
+    markerHits: Awaited<ReturnType<typeof scanProjectTodoForContextMarkers>>;
+  };
   stdoutTail: string;
   stderrTail: string;
 }> {
@@ -1629,12 +1681,18 @@ async function generateCreateExpoSuperStack(
   const invocation = resolveSuperStackInvocationSpec();
   const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
   const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
+  const roadmapMarkers = await scanProjectTodoForContextMarkers(plan.projectPath);
 
   return {
     status: 'generated',
     projectPath: plan.projectPath,
     summaryLines: plan.summaryLines,
     runtime: getMdsRuntimeVersions(),
+    roadmap: {
+      blockedByMarkers: roadmapMarkers.length > 0,
+      markerCount: roadmapMarkers.length,
+      markerHits: roadmapMarkers,
+    },
     stdoutTail: tailText(result.stdout, 60),
     stderrTail: tailText(result.stderr, 40),
   };

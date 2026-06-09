@@ -7,6 +7,7 @@ import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } 
 import chalk from 'chalk';
 
 import { scaffoldProjectMemory } from '../project-memory.js';
+import { scanProjectTodoForContextMarkers } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
@@ -178,6 +179,18 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     }
   }
   printOnboardingNextSteps();
+
+  const markerHits = await scanProjectTodoForContextMarkers(projectPath);
+  if (markerHits.length > 0) {
+    console.log();
+    console.log(chalk.yellow('Roadmap note'));
+    console.log(
+      'Unresolved `# TodoForContext(optional):` markers are still present in `project/`, so MDS intentionally left the scaffolded phase template in place.'
+    );
+    console.log(
+      'Resolve those markers first, then run `mds roadmap` or let your agent refresh `project/todo.md` from `project/info.md`.'
+    );
+  }
 }
 
 export async function collectOnboardPlan(
@@ -980,6 +993,9 @@ function printOnboardingNextSteps(): void {
   console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log(
     '4. Resolve every # TodoForContext(optional): marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+  );
+  console.log(
+    '5. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }

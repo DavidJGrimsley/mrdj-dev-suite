@@ -82,6 +82,12 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'Run `mds doctor --ci`'
     );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'MDS_DERIVED_PHASE_0_START'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'After all `# TodoForContext(optional):` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
+    );
     await expect(
       readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
     ).resolves.toContain('golden source of truth');
@@ -430,7 +436,13 @@ describe('runOnboardCommand', () => {
       "Review styling in the 'Stylist' page"
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'MDS_DERIVED_PHASE_1_START'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'Apply Stylist synced theme tokens to production UI components and screens.'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
@@ -444,6 +456,12 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
     ).resolves.toContain('Test-To-Main Safeguards');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain('Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain('If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.');
     await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
       'clear-expo-start'
     );
@@ -797,7 +815,7 @@ describe('runOnboardCommand', () => {
       devDependencies: Record<string, string>;
     };
     expect(packageJson.dependencies.uniwind).toBeUndefined();
-    expect(packageJson.devDependencies.tailwindcss).toBeUndefined();
+    expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')

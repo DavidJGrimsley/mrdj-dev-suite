@@ -31,6 +31,10 @@
     "./continue": {
       "import": "./dist/continue.js",
       "types": "./dist/continue.d.ts"
+    },
+    "./roadmap": {
+      "import": "./dist/roadmap.js",
+      "types": "./dist/roadmap.d.ts"
     }
   },
   "main": "./dist/cli.js",

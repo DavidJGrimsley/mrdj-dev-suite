@@ -12,6 +12,7 @@ import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
+import { runRoadmapCommand } from './commands/roadmap.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
 import {
@@ -28,6 +29,7 @@ import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
+import type { RoadmapArgv } from './commands/roadmap.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
@@ -240,6 +242,25 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
+      }
+    )
+    .command(
+      'roadmap [path]',
+      'Derive or refresh project/todo.md from normalized project/info.md',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Onboarded app path',
+            type: 'string',
+            default: '.',
+          })
+          .option('json', {
+            describe: 'Print the structured roadmap result as JSON instead of writing project/todo.md',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runRoadmapCommand(argv as RoadmapArgv);
       }
     )
     .command(

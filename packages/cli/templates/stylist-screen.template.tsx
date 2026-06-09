@@ -12,6 +12,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   View,
 } from 'react-native';
 import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker';
@@ -815,7 +816,10 @@ function resolvePreviewFontFamily(fontFamily: string): string {
   return Platform.OS === 'web' ? makeFontCssFamily(fontFamily) : makeNativeFontFamily(fontFamily);
 }
 
-function resolvePreviewFontWeight(fontFamily: string, weight: string): string {
+function resolvePreviewFontWeight(
+  fontFamily: string,
+  weight: NonNullable<TextStyle['fontWeight']>
+): NonNullable<TextStyle['fontWeight']> {
   if (Platform.OS === 'web') {
     return weight;
   }

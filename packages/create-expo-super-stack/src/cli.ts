@@ -21,6 +21,7 @@ import {
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
 import { scaffoldProjectMemory } from "@mr.dj2u/cli/project-memory";
+import { scanProjectTodoForContextMarkers } from "@mr.dj2u/cli/roadmap";
 
 import type { OnboardArgv } from "@mr.dj2u/cli/onboarding";
 
@@ -205,6 +206,18 @@ export async function main(): Promise<void> {
     }
   }
 
+  const roadmapMarkerHits = await scanProjectTodoForContextMarkers(projectPath);
+  if (roadmapMarkerHits.length > 0) {
+    console.log();
+    console.log("Roadmap note:");
+    console.log(
+      "Unresolved # TodoForContext(optional): markers are still present in project/, so MDS intentionally left the scaffolded phase template in place.",
+    );
+    console.log(
+      "Resolve those markers first, then run `mds roadmap` or let your agent refresh project/todo.md from project/info.md.",
+    );
+  }
+
   const packageManager = await detectPackageManager(
     projectPath,
     parsed.createExpoStackArgs,
@@ -220,22 +233,22 @@ export async function main(): Promise<void> {
   }
 
   console.log();
-  console.log("Next steps:");
-  console.log(
-    `  cd ${quoteDisplayArg(path.relative(process.cwd(), projectPath) || ".")}`,
-  );
+  const nextStepsCommands = [
+    `cd ${quoteDisplayArg(path.relative(process.cwd(), projectPath) || ".")}`,
+  ];
   if (noInstallRequested || parsed.mds.skipExpoFix || parsed.mds.skipCreate) {
-    console.log(`  ${buildInstallCommand(packageManager).display}`);
+    nextStepsCommands.push(buildInstallCommand(packageManager).display);
     if (await shouldRunExpoLatestSdkCommand(projectPath)) {
-      console.log(`  ${buildExpoLatestSdkCommand(packageManager).display}`);
+      nextStepsCommands.push(buildExpoLatestSdkCommand(packageManager).display);
     }
-    console.log(`  ${buildExpoInstallFixCommand(packageManager).display}`);
+    nextStepsCommands.push(buildExpoInstallFixCommand(packageManager).display);
     if (await shouldInstallExpoFontPeer(projectPath)) {
-      console.log(`  ${buildExpoFontInstallCommand(packageManager).display}`);
+      nextStepsCommands.push(buildExpoFontInstallCommand(packageManager).display);
     }
-    console.log(`  ${buildExpoDoctorCommand(packageManager).display}`);
+    nextStepsCommands.push(buildExpoDoctorCommand(packageManager).display);
   }
-  console.log(`  ${buildRunScriptCommand(packageManager, "clear-expo-start")}`);
+  nextStepsCommands.push(buildRunScriptCommand(packageManager, "clear-expo-start"));
+  printCopyableCommands("Next steps", nextStepsCommands);
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
   console.log();
@@ -2113,6 +2126,38 @@ function quoteDisplayArg(value: string): string {
   }
 
   return value;
+}
+
+function printCopyableCommands(title: string, commands: string[]): void {
+  console.log(`${title} (copy this):`);
+  console.log(renderCommandBox(commands));
+}
+
+function renderCommandBox(commands: string[]): string {
+  const visibleCommands = commands.filter((command) => command.trim().length > 0);
+  if (visibleCommands.length === 0) {
+    return "";
+  }
+
+  const formattedCommands = visibleCommands.map((command) =>
+    colorizeCommand(`> ${command}`),
+  );
+
+  return ["┌", ...formattedCommands.map((command) => `│ ${command}`), "└"].join(
+    "\n",
+  );
+}
+
+function colorizeCommand(command: string): string {
+  if (!supportsAnsiColor()) {
+    return command;
+  }
+
+  return `\x1b[36m${command}\x1b[0m`;
+}
+
+function supportsAnsiColor(): boolean {
+  return process.stdout.isTTY === true && process.env.TERM !== "dumb";
 }
 
 function buildOnboardArgv(

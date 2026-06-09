@@ -62,6 +62,7 @@ describe('mds MCP helpers', () => {
     expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_intake_step')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'generate_project_roadmap')).toBe(true);
     expect(tools.some((tool) => tool.name === 'mds_runtime_versions')).toBe(true);
 
     const result = (await executeTool('list_skills', { query: 'deployment' })) as Array<{
@@ -118,6 +119,46 @@ describe('mds MCP helpers', () => {
     expect(result.checklist.some((item) => item.id === 'web-ssr-safety')).toBe(true);
   });
 
+  it('previews a derived project roadmap through MCP without writing by default', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-roadmap-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Core User Flows',
+        '',
+        '- sign up',
+        '- create a project',
+        '',
+        '## Must-Include Screens Or Flows',
+        '',
+        '- Home',
+        '- Project detail',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_project_roadmap', {
+      projectPath,
+    })) as {
+      kind: string;
+      write: boolean;
+      wrote: boolean;
+      phases: Array<{ id: string; tasks: Array<{ text: string }> }>;
+    };
+
+    expect(result.kind).toBe('project-roadmap');
+    expect(result.blockedByMarkers).toBe(false);
+    expect(result.write).toBe(false);
+    expect(result.wrote).toBe(false);
+    expect(result.phases.some((phase) => phase.id === 'phase-1')).toBe(true);
+    expect(result.phases.some((phase) => phase.tasks.some((task) => task.text.includes('sign up')))).toBe(true);
+  });
+
   it('builds a continue brief through the MCP continue_project tool', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-continue-'));
     tempDirs.push(projectPath);
@@ -144,6 +185,7 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('create_expo_super_stack_generate');
     expect(prompt).toContain('mds_runtime_versions');
     expect(prompt).toContain('Do not fall back to `--mds-yes`');
+    expect(prompt).toContain('do not claim the roadmap is derived yet');
   });
 
   it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
