@@ -183,7 +183,7 @@ User-scope MCP writes to:
 - Codex: `~/.codex/config.toml`
 - VS Code Copilot: `code --add-mcp` with server key `mds`
 
-The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server@0.1.2`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
+The merge preserves existing keys/blocks; only the `mr-djs-dev-suite` entry is added or replaced. By default the config invokes the published MCP server via `npx -y @mr.dj2u/mcp-server@0.1.6`. Pass `--server-path` while developing locally to point at `packages/mcp-server/dist/index.js` instead.
 
 ### Native Agent Bundles
 

@@ -1,6 +1,6 @@
 ---
 mode: "agent"
-description: "Run the MDS Push Merge Loop workflow with MCP-first diagnostics and CLI fallback."
+description: "Run the MDS Push Merge Loop workflow with callable MDS MCP diagnostics and explicit fallback rules."
 ---
 
 # /push-merge-loop

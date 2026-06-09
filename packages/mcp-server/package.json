@@ -1,6 +1,6 @@
 {
   "name": "@mr.dj2u/mcp-server",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "description": "MCP server for mds suite (Claude integration point)",
   "type": "module",
   "files": [
@@ -27,19 +27,19 @@
     "mds-mcp-server": "./dist/stdio.js"
   },
   "scripts": {
-    "build": "tsc",
-    "type-check": "tsc --noEmit",
+    "build": "pnpm --filter @mr.dj2u/cli build && tsc",
+    "type-check": "pnpm --filter @mr.dj2u/cli build && tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "vitest run --passWithNoTests",
+    "test": "pnpm --filter @mr.dj2u/cli build && vitest run --passWithNoTests",
     "prepack": "node ../../scripts/verify-publish-manifest.mjs .",
     "dev": "tsc --watch",
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },
   "dependencies": {
-    "@mr.dj2u/cli": "^0.1.1",
-    "@mr.dj2u/doctor": "^0.1.1",
-    "@mr.dj2u/knowledge": "^0.1.1",
+    "@mr.dj2u/cli": "^0.1.12",
+    "@mr.dj2u/doctor": "^0.1.2",
+    "@mr.dj2u/knowledge": "^0.1.3",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "zod": "^4.4.3"
   },

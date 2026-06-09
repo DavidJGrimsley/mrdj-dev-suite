@@ -37,7 +37,7 @@ export async function runKillPortCommand(argv: KillPortArgv): Promise<void> {
 
 export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
-  const autoPorts = await shouldIncludeServerPort(projectPath) ? [8081, 3000] : [8081];
+  const autoPorts = (await shouldIncludeServerPort(projectPath)) ? [8081, 3000] : [8081];
   const ports = normalizePorts(argv.ports ? argv.ports.split(',') : [], autoPorts);
 
   console.log(chalk.bold('mds clear-expo-start'));
@@ -61,6 +61,8 @@ export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promis
     console.log(chalk.gray('Skipping Expo start because --no-start was passed.'));
     return;
   }
+
+  await runProjectStartRepairs(projectPath);
 
   const command = buildExpoStartCommand(await detectPackageManager(projectPath));
   console.log(chalk.cyan(`Starting: ${command}`));
@@ -166,7 +168,12 @@ export function parseWindowsNetstatPids(stdout: string, port: number): number[] 
     const localAddress = parts[1] ?? '';
     const state = parts[3] ?? '';
     const pid = Number.parseInt(parts[4] ?? '', 10);
-    if (state === 'LISTENING' && localAddress.endsWith(`:${port}`) && Number.isInteger(pid) && pid > 0) {
+    if (
+      state === 'LISTENING' &&
+      localAddress.endsWith(`:${port}`) &&
+      Number.isInteger(pid) &&
+      pid > 0
+    ) {
       pids.add(pid);
     }
   }
@@ -187,9 +194,13 @@ export function parsePidLines(stdout: string): number[] {
 async function getProcessName(pid: number): Promise<string | undefined> {
   try {
     if (process.platform === 'win32') {
-      const { stdout } = await execFileAsync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
-        windowsHide: true,
-      });
+      const { stdout } = await execFileAsync(
+        'tasklist',
+        ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'],
+        {
+          windowsHide: true,
+        }
+      );
       const match = stdout.match(/^"([^"]+)"/);
       return match?.[1];
     }
@@ -207,7 +218,9 @@ async function getProcessName(pid: number): Promise<string | undefined> {
 async function killPid(pid: number): Promise<boolean> {
   try {
     if (process.platform === 'win32') {
-      await execFileAsync('taskkill', ['/PID', String(pid), '/F'], { windowsHide: true });
+      await execFileAsync('taskkill', ['/PID', String(pid), '/F'], {
+        windowsHide: true,
+      });
     } else {
       process.kill(pid, 'SIGKILL');
     }
@@ -236,6 +249,19 @@ async function clearExpoCaches(projectPath: string): Promise<void> {
   );
 }
 
+async function runProjectStartRepairs(projectPath: string): Promise<void> {
+  const nativeWindMetroPatch = path.join(projectPath, 'scripts', 'patch-nativewind-metro.cjs');
+  if (!(await fileExists(nativeWindMetroPatch))) {
+    return;
+  }
+
+  console.log(chalk.gray('Running project start repair: scripts/patch-nativewind-metro.cjs'));
+  await execFileAsync(process.execPath, [nativeWindMetroPatch], {
+    cwd: projectPath,
+    windowsHide: true,
+  });
+}
+
 async function shouldIncludeServerPort(projectPath: string): Promise<boolean> {
   const packageJson = await readJson(path.join(projectPath, 'package.json'));
   const scripts = isRecord(packageJson?.scripts) ? packageJson.scripts : {};
@@ -259,7 +285,10 @@ async function detectPackageManager(projectPath: string): Promise<PackageManager
   if (declared?.startsWith('bun@')) return 'bun';
   if (await fileExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
   if (await fileExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-  if (await fileExists(path.join(projectPath, 'bun.lockb')) || await fileExists(path.join(projectPath, 'bun.lock'))) {
+  if (
+    (await fileExists(path.join(projectPath, 'bun.lockb'))) ||
+    (await fileExists(path.join(projectPath, 'bun.lock')))
+  ) {
     return 'bun';
   }
   return 'npm';
@@ -317,7 +346,10 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-function readNestedString(value: Record<string, unknown> | null, keys: string[]): string | undefined {
+function readNestedString(
+  value: Record<string, unknown> | null,
+  keys: string[]
+): string | undefined {
   let current: unknown = value;
   for (const key of keys) {
     if (!isRecord(current)) {

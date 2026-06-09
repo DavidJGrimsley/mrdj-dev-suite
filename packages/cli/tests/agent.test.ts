@@ -67,7 +67,9 @@ describe('VS Code agent install', () => {
   it('supports user-scope dry-runs without mutating the home directory', async () => {
     const bundleRoot = await createBundle();
     const fakeHome = await createTempDir('mds-agent-home-');
+    const fakeAppData = await createTempDir('mds-agent-appdata-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    vi.stubEnv('APPDATA', fakeAppData);
 
     const result = await runAgentInstallCommand({
       client: 'vscode',
@@ -83,6 +85,29 @@ describe('VS Code agent install', () => {
       true
     );
     await expect(readFile(path.join(fakeHome, '.copilot', 'instructions.md'), 'utf8')).rejects.toThrow();
+    await expect(readFile(path.join(fakeAppData, 'Code', 'User', 'mcp.json'), 'utf8')).rejects.toThrow();
+  });
+
+  it('verifies user-scope VS Code installs only when the user MCP config is present', async () => {
+    const fakeHome = await createTempDir('mds-agent-home-');
+    const fakeAppData = await createTempDir('mds-agent-appdata-');
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    vi.stubEnv('APPDATA', fakeAppData);
+
+    await writeFileWithDirs(
+      path.join(fakeHome, '.copilot', 'instructions.md'),
+      '<!-- BEGIN MDS COPILOT INSTRUCTIONS -->\n# MDS\n<!-- END MDS COPILOT INSTRUCTIONS -->\n'
+    );
+    await writeFileWithDirs(path.join(fakeHome, '.copilot', 'agents', 'mds.agent.md'), '# Agent\n');
+    await writeFileWithDirs(path.join(fakeHome, '.copilot', 'skills', 'deployment', 'SKILL.md'), '# Skill\n');
+    await writeFileWithDirs(
+      path.join(fakeAppData, 'Code', 'User', 'mcp.json'),
+      JSON.stringify({ servers: { mds: { command: 'node', args: ['/abs/server.js'] } } }, null, 2)
+    );
+
+    const verify = await verifyVscodeAgentInstall(path.join(fakeHome, '.copilot'), 'user');
+    expect(verify.passed).toBe(true);
+    expect(verify.checks.some((check) => check.name === 'VS Code MCP config')).toBe(true);
   });
 });
 
@@ -335,7 +360,7 @@ async function createCodexBundle(): Promise<string> {
         mcpServers: {
           'mr-djs-dev-suite': {
             command: 'npx',
-            args: ['-y', '@mr.dj2u/mcp-server@0.1.2'],
+            args: ['-y', '@mr.dj2u/mcp-server@0.1.6'],
           },
         },
       },

@@ -66,7 +66,7 @@ truth and should not make changes that conflict with those files.
 Personal portfolio and project showcase for David J Grimsley.
 
 ## Core Stack
-- **Framework**: Expo SDK 55 + React Native 0.83
+- **Framework**: Expo SDK 56 + React Native 0.85
 - **Routing**: Expo Router (file-based)
 - **Styling**: Uniwind v1.2.6 + Tailwind v4
 - **State**: Zustand (atomic stores)

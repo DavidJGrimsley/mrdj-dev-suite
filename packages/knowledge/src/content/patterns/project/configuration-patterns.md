@@ -51,8 +51,8 @@ Configuration patterns establish consistent strategies for managing app configur
     
     "platforms": ["ios", "android", "web"],
     
-    "sdkVersion": "55.0.0",
-    "runtimeVersion": "55.0.0",
+    "sdkVersion": "56.0.0",
+    "runtimeVersion": "56.0.0",
     
     "web": {
       "output": "static",
@@ -178,7 +178,7 @@ export default ({ config }) => {
   "dependencies": {
     "react": "^19.0.0",
     "react-native": "^0.83.0",
-    "expo": "^55.0.0",
+    "expo": "^56.0.0",
     "expo-router": "^3.0.0",
     "zustand": "^4.4.0",
     "drizzle-orm": "^0.30.0",

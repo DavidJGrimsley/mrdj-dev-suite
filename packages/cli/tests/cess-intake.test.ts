@@ -1,0 +1,136 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  buildCessIntakeStep,
+  buildCreateExpoStackFlags,
+  buildCreateExpoSuperStackArgv,
+  resolveCessPlan,
+} from '../src/cess-intake.js';
+
+describe('CESS intake contract', () => {
+  it('asks for the parent directory before anything else when it is not provided', () => {
+    const step = buildCessIntakeStep({
+      appName: 'demo-app',
+      answers: {},
+      cwd: 'F:/ReactNativeApps',
+    });
+
+    expect(step.status).toBe('question');
+    expect(step.nextQuestion?.id).toBe('parentDir');
+    expect(step.defaultValue).toBe('F:\\ReactNativeApps');
+  });
+
+  it('reaches confirm and ready states without inventing missing answers', () => {
+    const answers = {
+      scriptLanguage: 'typescript',
+      packageManager: 'pnpm',
+      navigationLibrary: 'expo-router',
+      stylingSystem: 'uniwind',
+      stateManagement: 'zustand',
+      authBackend: 'supabase',
+      easSetup: true,
+      displayAppName: 'Demo App',
+      audience: 'Designers making hats',
+      coreFlows: 'Design a hat, preview it, and export the mockup',
+      screens: 'Home, Designer, Export',
+      dataNeedSelections: ['Local UI/app state', 'File/image uploads or storage'],
+      targetPlatforms: ['web', 'ios', 'android'],
+      firstTargetPlatform: 'ios',
+      platformStrategy: 'files-only',
+      appDirectory: 'src',
+      platformLayouts: 'shared',
+      webOutput: 'static',
+      customBackend: false,
+      deploymentTarget: 'TestFlight to friends',
+      includeCreateExpoComponents: false,
+      usesExpoUi: true,
+      usesExpoUiUniversalComponents: true,
+      usesExpoNativeTabs: true,
+      easUses: ['building mobile applications'],
+      guidelinesTemplate: false,
+      dataStart: 'local',
+      testToMainSafeguards: true,
+      saveDefaults: false,
+    } as const;
+
+    const confirmStep = buildCessIntakeStep({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'demo-app',
+      answers,
+    });
+
+    expect(confirmStep.status).toBe('confirm');
+    expect(confirmStep.summaryLines?.[0]).toContain('demo-app');
+
+    const readyStep = buildCessIntakeStep({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'demo-app',
+      answers: {
+        ...answers,
+        confirmed: true,
+      },
+    });
+
+    expect(readyStep.status).toBe('ready');
+    expect(readyStep.missingRequirements).toEqual([]);
+  });
+
+  it('builds create-expo-stack and mds flags from the shared contract', () => {
+    const plan = resolveCessPlan({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'demo-app',
+      answers: {
+        scriptLanguage: 'typescript',
+        packageManager: 'pnpm',
+        navigationLibrary: 'react-navigation',
+        reactNavigationLayout: 'tabs',
+        stylingSystem: 'uniwind',
+        stateManagement: 'zustand',
+        authBackend: 'firebase',
+        easSetup: false,
+        displayAppName: 'Demo App',
+        audience: 'People',
+        coreFlows: 'Sign in and design hats',
+        screens: 'Home, Profile',
+        dataNeedSelections: ['Local UI/app state', 'Analytics/events'],
+        targetPlatforms: ['web', 'ios'],
+        firstTargetPlatform: 'ios',
+        platformStrategy: 'folders',
+        appDirectory: 'src',
+        platformLayouts: 'shared',
+        webOutput: 'server',
+        expoServerAdapter: 'express',
+        customBackend: true,
+        customBackendEntry: 'server/index.js',
+        deploymentTarget: 'Internal preview',
+        includeCreateExpoComponents: true,
+        usesExpoUi: false,
+        usesExpoUiUniversalComponents: false,
+        usesExpoNativeTabs: false,
+        easUses: [],
+        guidelinesTemplate: false,
+        dataStart: 'supabase',
+        testToMainSafeguards: false,
+        saveDefaults: true,
+        confirmed: true,
+      },
+    });
+
+    expect(buildCreateExpoStackFlags(plan.answers)).toEqual([
+      '--typescript',
+      '--pnpm',
+      '--react-navigation',
+      '--tabs',
+      '--uniwind',
+      '--zustand',
+      '--firebase',
+    ]);
+
+    const argv = buildCreateExpoSuperStackArgv(plan);
+    expect(argv).toContain('--mds-no-guidelines-template');
+    expect(argv).toContain('--mds-no-expo-ui');
+    expect(argv).toContain('--mds-no-test-to-main');
+    expect(argv).toContain('--mds-save-defaults');
+    expect(argv).toContain('--mds-yes');
+  });
+});

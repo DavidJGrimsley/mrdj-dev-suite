@@ -8,22 +8,31 @@ import { fixDoctor, runDoctor } from '@mr.dj2u/doctor';
 import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
+import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
+import { runRoadmapCommand } from './commands/roadmap.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
+import {
+  runStylistEjectCommand,
+  runStylistSyncCommand,
+} from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
+import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
+import type { RoadmapArgv } from './commands/roadmap.js';
 import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
+import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
@@ -130,10 +139,6 @@ async function main(): Promise<void> {
             describe: 'Track whether starter create-expo-app components should be kept',
             type: 'boolean',
           })
-          .option('latest-expo-sdk', {
-            describe: 'Track whether the project should prefer the latest Expo SDK',
-            type: 'boolean',
-          })
           .option('platforms', {
             describe: 'Comma-separated target platforms: web, android, ios, apple-tv',
             type: 'string',
@@ -164,6 +169,10 @@ async function main(): Promise<void> {
           })
           .option('expo-ui', {
             describe: 'Track Expo UI usage for mobile targets',
+            type: 'boolean',
+          })
+          .option('expo-ui-universal', {
+            describe: 'Track Expo UI Universal component usage when Expo UI is selected',
             type: 'boolean',
           })
           .option('expo-native-tabs', {
@@ -236,6 +245,25 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'roadmap [path]',
+      'Derive or refresh project/todo.md from normalized project/info.md',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Onboarded app path',
+            type: 'string',
+            default: '.',
+          })
+          .option('json', {
+            describe: 'Print the structured roadmap result as JSON instead of writing project/todo.md',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runRoadmapCommand(argv as RoadmapArgv);
+      }
+    )
+    .command(
       'continue [path]',
       'Inspect an onboarded app and propose the next MDS session plan',
       (builder) =>
@@ -295,6 +323,162 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runClearExpoStartCommand(argv as ClearExpoStartArgv);
+      }
+    )
+    .command(
+      'stylist sync [path]',
+      'Sync canonical stylist tokens and style-library-specific outputs',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('input-file', {
+            describe: 'Path to a JSON theme payload',
+            type: 'string',
+          })
+          .option('input-json', {
+            describe: 'Inline JSON theme payload',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print sync result as JSON',
+            type: 'boolean',
+            default: false,
+          })
+          .option('style-library', {
+            describe: 'Style library adapter (auto-detected by default)',
+            choices: [
+              'auto',
+              'uniwind',
+              'nativewind',
+              'nativewindui',
+              'unistyles',
+              'restyle',
+              'tamagui',
+              'stylesheet',
+            ] as const,
+            default: 'auto' as const,
+          })
+          .option('write-policy', {
+            describe: 'How stylist manages style-library files',
+            choices: ['managed', 'overwrite'] as const,
+          }),
+      async (argv) => {
+        await runStylistSyncCommand(argv as StylistSyncArgv);
+      }
+    )
+    .command(
+      'eject [path]',
+      'Interactively eject generated exposition artifacts while keeping selected sections',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('keep', {
+            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            type: 'string',
+          })
+          .option('all', {
+            describe: 'Remove all generated sections and keep nothing',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runEjectExpositionCommand(argv as EjectExpositionArgv);
+      }
+    )
+    .command(
+      'eject exposition [path]',
+      'Eject generated exposition artifacts and keep only selected sections',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('keep', {
+            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            type: 'string',
+          })
+          .option('all', {
+            describe: 'Remove all generated sections and keep nothing',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runEjectExpositionCommand(argv as EjectExpositionArgv);
+      }
+    )
+    .command(
+      'eject stylist [path]',
+      'Sync theme tokens, remove Stylist UI/API artifacts, and restore project output/platform settings',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('style-library', {
+            describe: 'Style library adapter (auto-detected by default)',
+            choices: [
+              'auto',
+              'uniwind',
+              'nativewind',
+              'nativewindui',
+              'unistyles',
+              'restyle',
+              'tamagui',
+              'stylesheet',
+            ] as const,
+            default: 'auto' as const,
+          })
+          .option('write-policy', {
+            describe: 'How stylist manages style-library files',
+            choices: ['managed', 'overwrite'] as const,
+          })
+          .option('json', {
+            describe: 'Print eject result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runStylistEjectCommand(argv as StylistEjectArgv);
+      }
+    )
+    .command(
+      'stylist eject [path]',
+      false,
+      () => undefined,
+      async () => {
+        throw new Error('`mds stylist eject` was removed. Use `mds eject stylist [path]`.');
+      }
+    )
+    .command(
+      'stylist reconcile-output [path]',
+      false,
+      () => undefined,
+      async () => {
+        throw new Error(
+          '`mds stylist reconcile-output` was removed. Use `mds eject stylist [path]` or `mds eject exposition [path]`.'
+        );
       }
     )
     .command(

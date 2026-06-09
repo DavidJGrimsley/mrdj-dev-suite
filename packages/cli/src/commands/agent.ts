@@ -14,6 +14,7 @@ import {
   PUBLISHED_MCP_SERVER_ARGS,
   WINDOWS_PUBLISHED_MCP_SERVER_ARGS,
   renderCodexBlock,
+  resolveVscodeUserMcpConfigPath,
   resolveServerInvocation,
   stripExistingCodexBlock,
   writeJsonMcpConfig,
@@ -174,10 +175,12 @@ export async function verifyVscodeAgentInstall(
   const checks: AgentVerifyResult['checks'] = [];
 
   if (scope === 'user') {
+    const userMcpPath = resolveVscodeUserMcpConfigPath();
     const instructionsPath = path.join(target, 'instructions.md');
     const agentPath = path.join(target, 'agents', 'mds.agent.md');
     const skillsPath = path.join(target, 'skills');
 
+    checks.push(await checkVscodeMcp(userMcpPath));
     checks.push(await checkContainsMarker('copilot instructions', instructionsPath, INSTRUCTIONS_BEGIN));
     checks.push(await checkExists('MDS custom agent', agentPath));
     checks.push(await checkDirectoryContains('skill files', skillsPath, 'SKILL.md'));

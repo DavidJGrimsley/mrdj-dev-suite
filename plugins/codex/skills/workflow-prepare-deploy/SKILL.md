@@ -5,10 +5,11 @@ description: "Use when the user asks Mr. DJ's Dev Suite to run the Prepare Deplo
 
 # Codex Workflow Routing
 
-- This is a Mr. DJ's Dev Suite plugin workflow. Prefer the bundled MCP tools before terminal fallbacks.
-- When an MCP tool named in this workflow is available, call that tool directly instead of running app-local npm scripts.
+- This is a Mr. DJ's Dev Suite plugin workflow. Plugin skills and command markdown are guidance only.
+- Prefer callable MDS MCP tools exposed by `@mr.dj2u/mcp-server` when this workflow names them.
 - Do not use stale package names such as `@mrdj/cli`. The CLI package is `@mr.dj2u/cli`; the executable is `mds`.
-- If the MCP server is unavailable, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.
+- If a workflow specifically requires guided MDS MCP tools and they are unavailable, stop and tell the user to refresh or reinstall the MDS plugin/MCP server instead of inventing defaults.
+- For ordinary CLI workflows that do allow fallback, prefer `mds <command>` from PATH, then `npx -y -p @mr.dj2u/cli@latest mds <command>`.
 
 # /prepare-deploy
 

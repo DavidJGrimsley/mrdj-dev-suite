@@ -21,6 +21,7 @@ import {
   formatDataNeedsSelection,
   loadPersonalOnboardDefaults,
   getServerPrompt,
+  normalizePromptText,
   resolvePersonalOnboardDefaultsPath,
   runOnboardCommand,
   savePersonalOnboardDefaults,
@@ -43,7 +44,12 @@ describe('runOnboardCommand', () => {
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
-      JSON.stringify({ name: 'sample-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      JSON.stringify({
+        name: 'sample-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
       'utf8'
     );
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
@@ -71,26 +77,44 @@ describe('runOnboardCommand', () => {
       '# TodoForContext(optional): Add monetization notes'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '# TodoForContext(optional): Describe the first real end-to-end user flow the MVP should support.'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('Agent should derive the first core user flows from project/info.md during intake.');
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '## Team Context'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'Run `mds doctor --ci`'
     );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+      'MDS_DERIVED_PHASE_'
+    );
     await expect(
       readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
     ).resolves.toContain('golden source of truth');
-    await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
-      'Visual Direction'
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
-      '## Motion Tone'
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.toContain(
-      '## Style Questions To Revisit'
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')).resolves.not.toContain(
-      'Keep Expo Router route files thin'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')
+    ).resolves.toContain('Visual Direction');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')
+    ).resolves.toContain('## Motion Tone');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')
+    ).resolves.toContain('MDS_STYLIST_THEME_START');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')
+    ).resolves.toContain('## Style Questions To Revisit');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'theme.json'), 'utf8')
+    ).resolves.toContain('"version": 1');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'style.md'), 'utf8')
+    ).resolves.not.toContain('Keep Expo Router route files thin');
     await expect(readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')).resolves.toContain(
       'project/` folder is the source of truth'
     );
@@ -99,38 +123,324 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('Ask conversational follow-up questions');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
-    ).resolves.toContain('Rich boilerplate');
+    ).resolves.toContain('Onboarding preview');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'), 'utf8')
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.toContain('flexGrow: 1');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.toContain('justifyContent: "center"');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
     ).resolves.toContain('ExpositionNotice');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
-    ).resolves.toContain('ExpositionNotice');
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('reanimated-color-picker');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'embedded-fonts.ts'), 'utf8')
+    ).resolves.toContain('EMBEDDED_GOOGLE_FONTS');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Save Theme');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('saveMessageBanner');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('humanizeSaveError');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain("const NATIVE_SAVE_COMMAND = 'npm run stylist:sync:android'");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('npm run mds:stylist:sync -- --input-file');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'theme', 'tokens.ts'), 'utf8')
+    ).resolves.toContain('stylistThemeTokens');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8')
+    ).resolves.toContain('AppThemeProvider');
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'AppThemeProvider'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'RouterThemeBridge'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'GestureHandlerRootView'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'KeyboardProvider'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.toContain('useAppTheme');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('ExpositionNotice');
     await expect(
-      readFile(path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'), 'utf8')
-    ).resolves.toContain('temporary developer and client-research scaffolds');
+      readFile(
+        path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain("from 'react-native-keyboard-controller'");
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'), 'utf8')
+      readFile(
+        path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain("require('react-native-keyboard-controller')");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'), 'utf8')
+    ).resolves.toContain('return null;');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
     ).resolves.toContain('Stylist');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('useSetAppTheme');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('StylistCheck');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Expo SQLite');
-    await expect(readFile(path.join(projectPath, 'app', 'exposition', 'index.tsx'), 'utf8')).resolves.toContain(
-      'exposition-screen'
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'index.tsx'), 'utf8')
+    ).resolves.toContain('exposition-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'), 'utf8')
+    ).resolves.toContain('stylist-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'data.tsx'), 'utf8')
+    ).resolves.toContain('data-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'sdk-56.tsx'), 'utf8')
+    ).resolves.toContain('expo-sdk-56-screen');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Expo SDK 56 Exposition');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain(
+      "What's New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo"
     );
-    await expect(readFile(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'), 'utf8')).resolves.toContain(
-      'stylist-screen'
-    );
-    await expect(readFile(path.join(projectPath, 'app', 'exposition', 'data.tsx'), 'utf8')).resolves.toContain(
-      'data-screen'
-    );
-    await expect(readFile(path.join(projectPath, 'src', 'components', 'mds', 'index.ts'), 'utf8')).rejects.toThrow();
-    await expect(readFile(path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'), 'utf8')).resolves.toContain(
-      'AnimatedPressable'
-    );
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Everything new in Expo SDK 56 by Code with Beto');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('Live preview is active');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('SDK 56 overview article');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('chipRail');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Host, Column, Row, Collapsible, Button, Switch');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('and BottomSheet are all live here in one universal tree.');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain("label={isOpen ? 'Hide details' : 'Show details'}");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('styles.universalExampleBox');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('Real Expo UI subtree');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('textStyle={styles.textInputText}');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('https://docs.expo.dev/versions/latest/sdk/ui/universal/');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('ListItem.Supporting');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('Experimental');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('<BottomSheet');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('SoftwareMansionLogo');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Package Exposition');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Software Mansion - Reanimated');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain("paddingTop: Platform.OS === 'web' ? 92 : 20");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Software Mansion - Reanimated');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Kirill Zyusko - Keyboard Controller');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('reanimated-color-picker');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('@react-native-async-storage/async-storage');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('react-native-safe-area-context');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('tailwindcss/colors');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.toContain("'scripts', 'stylist-sync-android.mjs'");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.toContain('MDS_STYLIST_INPUT_FILE');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.not.toContain('pathToFileURL');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.not.toContain('await import(');
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain("path.join(projectRoot, 'project', 'theme.json')");
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain('createRequire');
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain("'managed'");
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.not.toContain('await import(');
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain("node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'");
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
+    ).resolves.toContain('syncStylistTheme');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'mds', 'index.ts'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'), 'utf8')
+    ).resolves.toContain('AnimatedPressable');
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'Phase 0: Orientation And Planning'
     );
@@ -138,17 +448,32 @@ describe('runOnboardCommand', () => {
       "Review styling in the 'Stylist' page"
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
-      'Next Steps After Onboarding'
+      'MDS_DERIVED_PHASE_'
     );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+      'Apply Stylist synced theme tokens to production UI components and screens.'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
+    ).resolves.not.toContain('Next Steps After Onboarding');
     await expect(readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')).resolves.toContain(
       'build from `project/todo.md` in phase order'
     );
-    await expect(readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')).resolves.toContain(
-      'MDS PR Checks'
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')).resolves.toContain(
-      'Test-To-Main Safeguards'
-    );
+    await expect(
+      readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
+    ).resolves.toContain('MDS PR Checks');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain('Test-To-Main Safeguards');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain('Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain('If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.');
     await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
       'clear-expo-start'
     );
@@ -158,15 +483,70 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'services', 'local-data.native.ts'), 'utf8')
     ).resolves.toContain('expo-sqlite');
-    await expect(readFile(path.join(projectPath, 'src', 'services', 'local-data.ts'), 'utf8')).resolves.not.toContain(
-      'expo-sqlite'
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'local-data.ts'), 'utf8')
+    ).resolves.not.toContain('expo-sqlite');
+    await expect(readFile(path.join(projectPath, 'app', 'index.tsx'), 'utf8')).resolves.toContain(
+      'home-screen'
     );
-    await expect(readFile(path.join(projectPath, 'app', 'index.tsx'), 'utf8')).resolves.toContain('home-screen');
-    await expect(readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')).resolves.toContain(
-      'settings-screen'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain('settings-screen');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Legal onboarding');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('Continue to home');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('LegalDocumentView');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Account setup');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Continue to home');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain("router.replace('/')");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'), 'utf8')
+    ).resolves.toContain('onboardingLegalDocuments.terms');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('/onboarding/account-setup');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'onboarding', 'agreement.tsx'), 'utf8')
+    ).resolves.toContain('agreement-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'onboarding', 'account-setup.tsx'), 'utf8')
+    ).resolves.toContain('account-setup-screen');
 
-    const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
@@ -175,24 +555,91 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['expo-doctor']).toBe('npx expo-doctor');
     expect(packageJson.scripts.typecheck).toBe('tsc --noEmit');
     expect(packageJson.scripts['build:web']).toBe('expo export --platform web');
-    expect(packageJson.scripts['post-create-check']).toBe('npx expo install --fix && npx expo-doctor');
-    expect(packageJson.scripts['ci:verify']).toBe('npx -y -p @mr.dj2u/cli@latest mds doctor --ci');
-    expect(packageJson.scripts['free-port']).toBe('npx -y -p @mr.dj2u/cli@latest mds free-port');
-    expect(packageJson.scripts['clear-expo-start']).toBe(
-      'npx -y -p @mr.dj2u/cli@latest mds clear-expo-start'
+    expect(packageJson.scripts['post-create-check']).toBe(
+      'npx expo install --fix && npx expo-doctor'
     );
-    expect(packageJson.dependencies['expo-sqlite']).toBe('~55.0.15');
+    expect(packageJson.scripts['ci:verify']).toBe('npx mds doctor --ci');
+    expect(packageJson.scripts['free-port']).toBe('npx mds free-port');
+    expect(packageJson.scripts['clear-expo-start']).toBe('npx mds clear-expo-start');
+    expect(packageJson.scripts['mds:stylist:sync']).toBe('npx mds stylist sync .');
+    expect(packageJson.scripts['mds:eject']).toBe('npx mds eject .');
+    expect(packageJson.scripts['mds:eject:exposition']).toBe('npx mds eject exposition .');
+    expect(packageJson.scripts['mds:eject:stylist']).toBe('npx mds eject stylist .');
+    expect(packageJson.scripts['stylist:sync:android']).toBe(
+      'node ./scripts/stylist-sync-android.mjs'
+    );
+    expect(packageJson.dependencies['expo-sqlite']).toBe('~56.0.4');
+    expect(packageJson.dependencies['@expo/ui']).toBe('~56.0.14');
+    expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
+    expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
+    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe('^0.1.12');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
+  });
+
+  it('adds react-native-css-interop Metro patch wiring for nativewind projects', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-nativewind-patch-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'nativewind-patch-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    const answers = sampleAnswers('Nativewind Patch App');
+    answers.appDirectory = 'src';
+    answers.defaults = ['project-docs', 'guidelines', 'doctor'];
+    await scaffoldProjectMemory(projectPath, answers, {
+      richBoilerplate: true,
+      manageUniwind: false,
+    });
+
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(packageJson.scripts.postinstall).toBe('node ./scripts/patch-nativewind-metro.cjs');
+    expect(packageJson.scripts.prestart).toBe('node ./scripts/patch-nativewind-metro.cjs');
+    expect(packageJson.scripts.preandroid).toBe('node ./scripts/patch-nativewind-metro.cjs');
+    expect(packageJson.scripts.preweb).toBe('node ./scripts/patch-nativewind-metro.cjs');
+    expect(packageJson.scripts['patch:nativewind-metro']).toBe(
+      'node ./scripts/patch-nativewind-metro.cjs'
+    );
+    expect(packageJson.devDependencies['patch-package']).toBeUndefined();
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'patch-nativewind-metro.cjs'), 'utf8')
+    ).resolves.toContain('changes: {');
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'patch-nativewind-metro.cjs'), 'utf8')
+    ).resolves.toContain('modifiedFiles: new Map');
   });
 
   it('normalizes existing project info and style while preserving imported notes', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-existing-memory-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'project'), { recursive: true });
-    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'memory-app' }), 'utf8');
-    await writeFile(path.join(projectPath, 'project', 'info.md'), '# Old Notes\n\nUsers are bowling league captains.\n', 'utf8');
-    await writeFile(path.join(projectPath, 'project', 'style.md'), '# Style Dump\n\nUse loud tournament energy.\n', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ name: 'memory-app' }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Old Notes\n\nUsers are bowling league captains.\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'style.md'),
+      '# Style Dump\n\nUse loud tournament energy.\n',
+      'utf8'
+    );
 
     await runOnboardCommand({
       project: projectPath,
@@ -218,9 +665,9 @@ describe('runOnboardCommand', () => {
     expect(style).toContain('## Imported Notes');
     expect(style).toContain('Use loud tournament energy.');
 
-    await expect(readFile(path.join(projectPath, 'project', 'intake-agent.md'), 'utf8')).resolves.toContain(
-      'Imported Notes'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'intake-agent.md'), 'utf8')
+    ).resolves.toContain('Imported Notes');
   });
 
   it('upgrades existing Tailwind 3 projects to the Uniwind Tailwind 4 peer', async () => {
@@ -232,7 +679,10 @@ describe('runOnboardCommand', () => {
         name: 'tailwind-app',
         scripts: {},
         dependencies: { nativewind: 'latest' },
-        devDependencies: { tailwindcss: '^3.4.0', 'prettier-plugin-tailwindcss': '^0.5.11' },
+        devDependencies: {
+          tailwindcss: '^3.4.0',
+          'prettier-plugin-tailwindcss': '^0.5.11',
+        },
       }),
       'utf8'
     );
@@ -289,7 +739,11 @@ describe('runOnboardCommand', () => {
       ].join('\n'),
       'utf8'
     );
-    await writeFile(path.join(projectPath, 'nativewind-env.d.ts'), '/// <reference types="nativewind/types" />\n', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'nativewind-env.d.ts'),
+      '/// <reference types="nativewind/types" />\n',
+      'utf8'
+    );
 
     await runOnboardCommand({
       project: projectPath,
@@ -298,7 +752,9 @@ describe('runOnboardCommand', () => {
       defaults: 'uniwind',
     });
 
-    const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     };
@@ -309,17 +765,20 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'metro.config.js'), 'utf8')).resolves.toContain(
       'withUniwindConfig'
     );
-    await expect(readFile(path.join(projectPath, 'babel.config.js'), 'utf8')).resolves.not.toContain(
-      'nativewind'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'babel.config.js'), 'utf8')
+    ).resolves.not.toContain('nativewind');
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
       "@import 'uniwind'"
     );
+    await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).resolves.toContain(
+      'MDS_STYLIST_THEME_START'
+    );
     await expect(readFile(path.join(projectPath, 'nativewind-env.d.ts'), 'utf8')).rejects.toThrow();
     await expect(readFile(path.join(projectPath, 'tailwind.config.js'), 'utf8')).rejects.toThrow();
-    await expect(readFile(path.join(projectPath, 'prettier.config.js'), 'utf8')).resolves.not.toContain(
-      'prettier-plugin-tailwindcss'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'prettier.config.js'), 'utf8')
+    ).resolves.not.toContain('prettier-plugin-tailwindcss');
   });
 
   it('can copy the bundled guidelines template', async () => {
@@ -347,7 +806,12 @@ describe('runOnboardCommand', () => {
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
-      JSON.stringify({ name: 'external-uniwind-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      JSON.stringify({
+        name: 'external-uniwind-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
       'utf8'
     );
 
@@ -356,16 +820,18 @@ describe('runOnboardCommand', () => {
       richBoilerplate: true,
     });
 
-    const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     };
     expect(packageJson.dependencies.uniwind).toBeUndefined();
-    expect(packageJson.devDependencies.tailwindcss).toBeUndefined();
+    expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
-    ).resolves.toContain('Rich boilerplate');
+    ).resolves.toContain('Onboarding preview');
   });
 
   it('can generate Expo Router exposition routes under src/app', async () => {
@@ -374,7 +840,12 @@ describe('runOnboardCommand', () => {
     await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
     await writeFile(
       path.join(projectPath, 'package.json'),
-      JSON.stringify({ name: 'src-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      JSON.stringify({
+        name: 'src-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
       'utf8'
     );
     await writeFile(
@@ -391,16 +862,18 @@ describe('runOnboardCommand', () => {
       platformLayouts: 'platform-specific',
     });
 
-    await expect(readFile(path.join(projectPath, 'src', 'app', 'exposition', 'index.tsx'), 'utf8')).resolves.toContain(
-      '../../features/exposition/exposition-screen'
+    await expect(
+      readFile(path.join(projectPath, 'src', 'app', 'exposition', 'index.tsx'), 'utf8')
+    ).resolves.toContain('../../features/exposition/exposition-screen');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8')
+    ).resolves.toContain("import '../../global.css';");
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '`src/app`'
     );
-    await expect(readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
-      "import '../../global.css';"
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain('`src/app`');
-    await expect(readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')).resolves.toContain(
-      'platform-specific layouts'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
+    ).resolves.toContain('platform-specific layouts');
   });
 
   it('preserves an existing tabs or drawer layout while replacing starter routes', async () => {
@@ -409,7 +882,12 @@ describe('runOnboardCommand', () => {
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
     await writeFile(
       path.join(projectPath, 'package.json'),
-      JSON.stringify({ name: 'tabs-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      JSON.stringify({
+        name: 'tabs-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
       'utf8'
     );
     await writeFile(
@@ -424,7 +902,11 @@ describe('runOnboardCommand', () => {
       ].join('\n'),
       'utf8'
     );
-    await writeFile(path.join(projectPath, 'app', 'details.tsx'), 'export default function Details() { return null; }\n', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'app', 'details.tsx'),
+      'export default function Details() { return null; }\n',
+      'utf8'
+    );
 
     await runOnboardCommand({
       project: projectPath,
@@ -436,11 +918,149 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
       'return <Tabs />'
     );
-    await expect(readFile(path.join(projectPath, 'app', 'index.tsx'), 'utf8')).resolves.toContain('home-screen');
-    await expect(readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')).resolves.toContain(
-      'settings-screen'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'index.tsx'), 'utf8')
+    ).resolves.toContain('home-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'exposition.tsx'), 'utf8')
+    ).resolves.toContain('exposition-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'two.tsx'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'stylist.tsx'), 'utf8')
+    ).resolves.toContain('stylist-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'data.tsx'), 'utf8')
+    ).resolves.toContain('data-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', 'sdk-56.tsx'), 'utf8')
+    ).resolves.toContain('expo-sdk-56-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('if (Platform.OS === "android")');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain("import { Tabs } from 'expo-router'");
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('Platform.OS');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain('<NativeTabs.Trigger name="exposition"');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain('<NativeTabs.Trigger.Label>Exposition</NativeTabs.Trigger.Label>');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain('<NativeTabs.Trigger name="sdk-56"');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('<NativeTabs.Trigger name="nativewindui">');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('Tab One');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.not.toContain("href: '/exposition'");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'index.tsx'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'stylist-sync+api.ts'), 'utf8')
+    ).resolves.toContain('runStylistSync');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain('settings-screen');
     await expect(readFile(path.join(projectPath, 'app', 'details.tsx'), 'utf8')).rejects.toThrow();
+  });
+
+  it('writes explicit drawer and tab labels for drawer + tabs layouts', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-drawer-tabs-layout-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app', '(drawer)', '(tabs)'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'drawer-tabs-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app', '_layout.tsx'),
+      [
+        "import { Drawer } from 'expo-router/drawer';",
+        '',
+        'export default function Layout() {',
+        '  return <Drawer />;',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app', '(drawer)', '_layout.tsx'),
+      [
+        "import { Drawer } from 'expo-router/drawer';",
+        '',
+        'export default function DrawerLayout() {',
+        '  return <Drawer />;',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'app', '(drawer)', '(tabs)', '_layout.tsx'),
+      [
+        "import { Tabs } from 'expo-router';",
+        '',
+        'export default function DrawerTabsLayout() {',
+        '  return <Tabs />;',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Drawer Tabs App',
+      createExpoComponents: false,
+    });
+
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain(
+      "name=\"(tabs)\" options={{ title: 'Exposition', drawerLabel: 'Exposition' }}"
+    );
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('if (Platform.OS === "android")');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain('<NativeTabs.Trigger name="sdk-56"');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.toContain('<NativeTabs.Trigger.Label>SDK 56</NativeTabs.Trigger.Label>');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', '_layout.tsx'), 'utf8')
+    ).resolves.not.toContain('<NativeTabs.Trigger name="nativewindui">');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', 'stylist.tsx'), 'utf8')
+    ).resolves.toContain('stylist-screen');
+    await expect(
+      readFile(path.join(projectPath, 'app', '(drawer)', '(tabs)', 'two.tsx'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.not.toContain("href: '/exposition'");
   });
 
   it('can generate Supabase data guidance and opt out of test-to-main workflow', async () => {
@@ -448,7 +1068,12 @@ describe('runOnboardCommand', () => {
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
-      JSON.stringify({ name: 'supabase-app', scripts: {}, dependencies: {}, devDependencies: {} }),
+      JSON.stringify({
+        name: 'supabase-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
       'utf8'
     );
 
@@ -460,15 +1085,17 @@ describe('runOnboardCommand', () => {
       testToMain: false,
     });
 
-    const packageJson = JSON.parse(await readFile(path.join(projectPath, 'package.json'), 'utf8')) as {
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
       dependencies: Record<string, string>;
     };
     expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.105.4');
     expect(packageJson.dependencies['@react-native-async-storage/async-storage']).toBe('2.2.0');
     expect(packageJson.dependencies['expo-sqlite']).toBeUndefined();
-    await expect(readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')).resolves.toContain(
-      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')
+    ).resolves.toContain('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Two Supabase projects');
@@ -477,8 +1104,79 @@ describe('runOnboardCommand', () => {
     ).rejects.toThrow();
   });
 
+  it('generates the NativeWindUI exposition route when NativeWindUI is selected', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-nativewindui-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'nativewindui-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'NativeWindUI App',
+      defaults: 'project-docs,uniwind,nativewindui',
+    });
+
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('NativeWindUI Exposition');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'), 'utf8')
+    ).resolves.toContain('nativewindui-screen');
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'AppThemeProvider'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'GestureHandlerRootView'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'KeyboardProvider'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      "name=\"exposition/nativewindui\""
+    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
+    ).resolves.toContain("href: '/exposition/nativewindui'");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ActivityIndicator.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('export function ActivityIndicator');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('export function ThemeToggle');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('lightLabel');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'utf8')
+    ).resolves.toContain("typeof style === 'function' ? style(state) : style");
+  });
+
   it('keeps prompt helpers explicit about defaults, explanations, and server wording', () => {
-    expect(validateRequiredInput('   ')).toBe('Please enter a value, or choose an option with a visible default.');
+    expect(validateRequiredInput('   ')).toBe(
+      'Please enter a value, or choose an option with a visible default.'
+    );
     expect(validateRequiredInput('   ', 'Visible default')).toBeUndefined();
     expect(validateRequiredInput('real answer')).toBeUndefined();
 
@@ -508,20 +1206,32 @@ describe('runOnboardCommand', () => {
       'We will plan first, especially for thin ideas. You can paste a research plan or existing project memory, and MDS will normalize it into canonical project files before generation.'
     );
     expect(SUPER_STACK_SUCCESS_MESSAGE).toContain(
-      "You did it! You and your app are set up for success by completing this extensive onboarding."
+      'You did it! You and your app are set up for success by completing this extensive onboarding.'
     );
   });
 
   it('uses the preferred Super Stack defaults', () => {
-    const plan = defaultOnboardPlan({ project: path.join(os.tmpdir(), 'default-app') });
+    const plan = defaultOnboardPlan({
+      project: path.join(os.tmpdir(), 'default-app'),
+    });
 
     expect(plan.answers.deployedServer).toBe('none');
-    expect(defaultOnboardPlan({ webOutput: 'server' }).answers.deployedServer).toBe('standard-expo');
-    expect(defaultOnboardPlan({ webOutput: 'static', deployedServer: 'standard-expo' }).answers.deployedServer).toBe('none');
-    expect(defaultOnboardPlan({ webOutput: 'static', deployedServer: 'custom' }).answers.deployedServer).toBe('custom');
+    expect(defaultOnboardPlan({ webOutput: 'server' }).answers.deployedServer).toBe(
+      'standard-expo'
+    );
+    expect(
+      defaultOnboardPlan({
+        webOutput: 'static',
+        deployedServer: 'standard-expo',
+      }).answers.deployedServer
+    ).toBe('none');
+    expect(
+      defaultOnboardPlan({ webOutput: 'static', deployedServer: 'custom' }).answers.deployedServer
+    ).toBe('custom');
     expect(plan.answers.includeCreateExpoComponents).toBe(false);
-    expect(plan.answers.useLatestExpoSdk).toBe(true);
     expect(plan.answers.usesExpoUi).toBe(true);
+    expect(plan.answers.usesExpoUiUniversalComponents).toBe(true);
+    expect(defaultOnboardPlan({ expoUi: false }).answers.usesExpoUiUniversalComponents).toBe(false);
     expect(plan.answers.usesExpoNativeTabs).toBe(true);
     expect(plan.answers.appDirectory).toBe('src');
     expect(plan.answers.platformLayoutMode).toBe('shared');
@@ -622,7 +1332,6 @@ describe('runOnboardCommand', () => {
           usesExpoUi: 'yes',
           usesExpoNativeTabs: false,
           includeCreateExpoComponents: true,
-          useLatestExpoSdk: false,
           dataStart: 'supabase',
           testToMainSafeguards: true,
           easUses: ['hosting web apps', null],
@@ -640,7 +1349,6 @@ describe('runOnboardCommand', () => {
         expoServerAdapter: 'express',
         usesExpoNativeTabs: false,
         includeCreateExpoComponents: true,
-        useLatestExpoSdk: false,
         dataStart: 'supabase',
         testToMainSafeguards: true,
         easUses: ['hosting web apps'],
@@ -670,6 +1378,16 @@ describe('runOnboardCommand', () => {
   });
 });
 
+describe('normalizePromptText', () => {
+  it('returns an empty string for undefined optional prompt answers', () => {
+    expect(normalizePromptText(undefined)).toBe('');
+  });
+
+  it('trims string prompt answers', () => {
+    expect(normalizePromptText('  Home, settings  ')).toBe('Home, settings');
+  });
+});
+
 function sampleAnswers(appName: string): OnboardAnswers {
   return {
     appName,
@@ -680,13 +1398,13 @@ function sampleAnswers(appName: string): OnboardAnswers {
     deploymentTarget: 'Expo web/native deployment',
     advancedPackageSetup: true,
     includeCreateExpoComponents: true,
-    useLatestExpoSdk: true,
     targetPlatforms: ['web', 'ios', 'android'],
     firstTargetPlatform: 'web',
     platformFileStrategy: 'files-only',
     webOutput: 'static',
     deployedServer: 'none',
     usesExpoUi: false,
+    usesExpoUiUniversalComponents: false,
     usesExpoNativeTabs: false,
     easUses: [],
     projectInfoReady: false,

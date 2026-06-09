@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* MDS_STYLIST_THEME_START */
+:root {
+  --color-background: #f2fbfc;
+  --color-surface: #e0f6f7;
+  --color-typography: #003a3c;
+  --color-primary: #00b6bb;
+  --color-secondary: #fb2c36;
+  --color-success: #737373;
+  --color-warning: #fe9a00;
+  --radius-md: 25px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --font-size-display: 32px;
+  --font-size-heading: 20px;
+  --font-size-body: 15px;
+  --font-size-caption: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #002425;
+    --color-surface: #003a3c;
+    --color-typography: #bdeced;
+    --color-primary: #00b6bb;
+    --color-secondary: #fb2c36;
+    --color-success: #737373;
+    --color-warning: #fe9a00;
+  }
+}
+
+.stylist-theme-root {
+  background-color: var(--color-background);
+  color: var(--color-typography);
+}
+/* MDS_STYLIST_THEME_END */
