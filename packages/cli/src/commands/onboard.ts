@@ -25,7 +25,7 @@ export interface OnboardArgv {
   generatorPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   generatorNavigationLibrary?: 'expo-router' | 'react-navigation';
   generatorReactNavigationLayout?: 'stack' | 'tabs' | 'drawer';
-  generatorStylingSystem?: 'uniwind' | 'nativewind' | 'tamagui' | 'restyle' | 'stylesheet';
+  generatorStylingSystem?: 'uniwind' | 'nativewind' | 'nativewindui' | 'tamagui' | 'restyle' | 'stylesheet';
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
   generatorEasSetup?: boolean;

@@ -46,12 +46,12 @@ Two prompts and several callable MDS MCP tools ship with the server:
 
 - `create_expo_super_stack` — invoke from a **parent folder** (e.g.
   `F:\ReactNativeApps`) when the app folder does not exist yet. This is
-  now a thin orchestration prompt: the real guided intake happens
-  through `create_expo_super_stack_extract_info` first when project
-  memory is available, then `create_expo_super_stack_intake_step` only
-  for missing or ambiguous answers, generation happens through
-  `create_expo_super_stack_generate`, and diagnostics come from
-  `mds_runtime_versions`.
+  now a thin orchestration prompt: `mds_runtime_versions` checks for
+  stale installs, `create_expo_super_stack_resolve_info` resolves
+  project memory in one call when `info.md` is available,
+  `create_expo_super_stack_intake_step` is only the manual fallback for
+  missing or ambiguous answers, and generation happens through
+  `create_expo_super_stack_generate`.
 - `onboard_new_expo_app` — invoke from **inside an existing Expo app
   folder** (a freshly generated one or a year-old project). Runs the
   intake → normalize → plan → scaffold flow.
@@ -79,10 +79,11 @@ fills the section or deletes the marker line.
   agent asks for clarification only when the file is silent or unclear.
   A reference template URL is mentioned in the prompt; the agent can
   also inline the template on request.
-- **Shared extraction-first intake.** `create_expo_super_stack_extract_info`
+- **Shared resolver-first intake.** `create_expo_super_stack_resolve_info`
   parses existing project memory up front, derives app naming details,
-  preserves unmatched notes, and seeds the intake tool so the user is
-  not forced through redundant question-by-question discovery.
+  merges explicit overrides, returns missing or ambiguous fields, and
+  produces a ready-to-pass generate payload so the user is not forced
+  through redundant question-by-question discovery.
 - **Android TV alongside Apple TV.** The platform multi-select now
   includes Android TV. Android TV builds from the same Android target
   with leanback config in `app.json`; Apple TV is a separate tvOS build

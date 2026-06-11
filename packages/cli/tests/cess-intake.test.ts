@@ -147,6 +147,118 @@ describe('CESS intake contract', () => {
     expect(extracted.ambiguousQuestionIds).toEqual([]);
   });
 
+  it('extracts complete CESS answers from the golden info template shape', () => {
+    const infoMarkdown = [
+      '# Experiment-Tracker Project Info',
+      '',
+      '## App Name',
+      'Experimental',
+      '',
+      '## Overview',
+      'Build an Expo app for Scientists and people learning how to conduct experiments.',
+      '',
+      '## Target Users',
+      'Scientists and people learning how to conduct experiments',
+      '',
+      '## Problem this app solves',
+      "There's no good way to track experiment data on the go.",
+      '',
+      '## First User Flow',
+      '- Create an experiment',
+      '',
+      '## Core Flows and Features',
+      '- Track multiple experiments, each with its own hypothesis, procedure, data collection, and results.',
+      '- View and edit existing experiments',
+      '- Add pictures and notes to experiments',
+      '',
+      '## Screens',
+      '- New (create new experiment)',
+      '- Track (list of past experiments)',
+      '- Settings',
+      '',
+      '## Platforms',
+      '- Target platforms: ios, android',
+      '- First MVP platform: ios',
+      '',
+      '# Tech Stack & CESS Onboarding',
+      '',
+      '- TypeScript: Yes',
+      '- Package Manager: npm',
+      '- Navigation: Expo Router',
+      '- Type of Navigation: Drawer + Tabs',
+      '- Expo Router app directory: `src/app`',
+      '- Platform-specific organization: platform-specific files only',
+      '- Platform layout mode: shared layouts',
+      '- Web output: none',
+      '',
+      '- Style Library: NativeWindUI',
+      '- Which NativeWindUI components: All',
+      '- Components from create-expo-app: Yes',
+      '- Expo UI: yes',
+      '- Expo UI Universal components: yes',
+      '- Expo Native Tabs: yes',
+      '',
+      '- Which Software Mansion packages: All',
+      '- State management library: None',
+      '- Auth: None',
+      '- Data Categories: Local UI/app state, image uploads',
+      '- Starting Data mode: local dummy data with Expo SQLite.',
+      '',
+      '- Internationalization: None',
+      '- Analytics: None',
+      '- EAS: Yes',
+      '- EAS Usage: Building mobile apps',
+      '- Deployed server: no deployed server planned',
+      '- Initial Deployment plan: App Store',
+      '',
+      '- Start with MDS project guidelines template: Yes',
+      '- Use test-to-main safeguards: Yes',
+    ].join('\n');
+
+    const extracted = extractCessInfoFromMarkdown({
+      infoMarkdown,
+      parentDir: 'F:/ReactNativeApps',
+    });
+
+    expect(extracted.derivedDisplayName).toBe('Experimental');
+    expect(extracted.derivedFolderSlug).toBe('experimental');
+    expect(extracted.prefilledAnswers.displayAppName).toBe('Experimental');
+    expect(extracted.prefilledAnswers.audience).toContain('Scientists');
+    expect(extracted.prefilledAnswers.coreFlows).toContain('Create an experiment');
+    expect(extracted.prefilledAnswers.screens).toContain('Track (list of past experiments)');
+    expect(extracted.prefilledAnswers.scriptLanguage).toBe('typescript');
+    expect(extracted.prefilledAnswers.packageManager).toBe('npm');
+    expect(extracted.prefilledAnswers.navigationLibrary).toBe('expo-router');
+    expect(extracted.prefilledAnswers.reactNavigationLayout).toBe('drawer');
+    expect(extracted.prefilledAnswers.appDirectory).toBe('src');
+    expect(extracted.prefilledAnswers.platformStrategy).toBe('files-only');
+    expect(extracted.prefilledAnswers.platformLayouts).toBe('shared');
+    expect(extracted.prefilledAnswers.webOutput).toBe('none');
+    expect(extracted.prefilledAnswers.stylingSystem).toBe('nativewindui');
+    expect(extracted.prefilledAnswers.includeCreateExpoComponents).toBe(true);
+    expect(extracted.prefilledAnswers.usesExpoUi).toBe(true);
+    expect(extracted.prefilledAnswers.usesExpoUiUniversalComponents).toBe(true);
+    expect(extracted.prefilledAnswers.usesExpoNativeTabs).toBe(true);
+    expect(extracted.prefilledAnswers.stateManagement).toBe('none');
+    expect(extracted.prefilledAnswers.authBackend).toBe('none');
+    expect(extracted.prefilledAnswers.dataNeedSelections).toEqual([
+      'Local UI/app state',
+      'File/image uploads or storage',
+    ]);
+    expect(extracted.prefilledAnswers.dataStart).toBe('local');
+    expect(extracted.prefilledAnswers.easSetup).toBe(true);
+    expect(extracted.prefilledAnswers.easUses).toEqual(['building mobile applications']);
+    expect(extracted.prefilledAnswers.expoServerAdapter).toBe('none');
+    expect(extracted.prefilledAnswers.customBackend).toBe(false);
+    expect(extracted.prefilledAnswers.deploymentTarget).toBe('App Store');
+    expect(extracted.prefilledAnswers.guidelinesTemplate).toBe(true);
+    expect(extracted.prefilledAnswers.testToMainSafeguards).toBe(true);
+    expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios', 'android']);
+    expect(extracted.prefilledAnswers.firstTargetPlatform).toBe('ios');
+    expect(extracted.missingQuestionIds).not.toContain('scriptLanguage');
+    expect(extracted.ambiguousQuestionIds).toEqual([]);
+  });
+
   it('prefers the machine-readable snapshot when generated info includes one', () => {
     const extracted = extractCessInfoFromMarkdown({
       infoMarkdown: [
@@ -187,6 +299,172 @@ describe('CESS intake contract', () => {
     expect(extracted.prefilledAnswers.navigationLibrary).toBe('expo-router');
     expect(extracted.prefilledAnswers.audience).toBe('Scientists');
     expect(extracted.derivedFolderSlug).toBe('demo-app');
+  });
+
+  it('uses visible project info over stale scaffold snapshot values', () => {
+    const infoMarkdown = [
+      '# Experiment-Tracker Project Info',
+      '',
+      '## Target Users',
+      '',
+      'Scientists and people learning how to conduct experiments',
+      '',
+      '## Core User Flows',
+      '',
+      '- Create an experiment',
+      '- View and edit existing experiments',
+      '',
+      '## Data And Backend',
+      '',
+      'Local UI/app state',
+      '',
+      'Starting mode: local dummy data with Expo SQLite.',
+      '',
+      '## Platforms',
+      '',
+      '- Target platforms: ios',
+      '- First MVP platform: ios',
+      '- Expo Router app directory: `src/app`',
+      '- Platform-specific organization: platform-specific files only',
+      '- Platform layout mode: shared layouts',
+      '- Web output: none',
+      '- Deployed server: no deployed server planned',
+      '- Expo UI: yes',
+      '- Expo Native Tabs: yes',
+      '',
+      '## Package Choices',
+      '',
+      '- project-docs',
+      '- guidelines',
+      '- uniwind',
+      '- doctor',
+      '- test-to-main',
+      '',
+      '## Release Strategy',
+      '',
+      '- Deployment plan: App Store',
+      '- EAS usage: building mobile applications',
+      '- Test-to-main safeguards: yes',
+      '',
+      '## Tech Stack & MDS Onboarding',
+      '',
+      '<!-- MDS_CESS_SNAPSHOT_START -->',
+      '```json',
+      JSON.stringify(
+        {
+          version: 1,
+          displayAppName: 'template',
+          folderSlug: 'template',
+          answers: {
+            displayAppName: 'template',
+            audience: 'Expo app users',
+            coreFlows:
+              'Let the agent derive the first real core user flows later from the fully clarified `project/info.md`.',
+            targetPlatforms: ['web', 'ios', 'android', 'apple-tv', 'android-tv'],
+            firstTargetPlatform: 'apple-tv',
+            platformStrategy: 'files-only',
+            appDirectory: 'src',
+            platformLayouts: 'platform-specific',
+            webOutput: 'server',
+            expoServerAdapter: 'eas',
+            customBackend: false,
+            customBackendEntry: 'server.js',
+            deploymentTarget: 'Expo web/native deployment',
+            includeCreateExpoComponents: true,
+            usesExpoUi: true,
+            usesExpoUiUniversalComponents: true,
+            usesExpoNativeTabs: true,
+            easUses: [],
+            guidelinesTemplate: true,
+            dataStart: 'local',
+            testToMainSafeguards: true,
+          },
+        },
+        null,
+        2,
+      ),
+      '```',
+      '<!-- MDS_CESS_SNAPSHOT_END -->',
+      '',
+      '- **App:** template — Expo app users',
+      '- **Platforms:** web, ios, android, apple-tv, android-tv, first MVP target: apple-tv',
+      '- **Code organization:** platform-specific files only, `src/app` routes, platform-specific layouts, web: server',
+      '- **Deployed server:** EAS hosting',
+      '- **Distribution:** Expo web/native deployment',
+      '- **EAS:** not planned yet',
+      '',
+      '## Onboarding Decisions',
+      '',
+      '- Create Expo starter components: no',
+      '- Target platforms: ios',
+      '- First MVP platform: ios',
+      '- Expo Router app directory: `src/app`',
+      '- Platform-specific organization: platform-specific files only',
+      '- Platform layout mode: shared layouts',
+      '- Web output: none',
+      '- Deployed server: no deployed server planned',
+      '- Expo UI: yes',
+      '- Expo Native Tabs: yes',
+      '- EAS usage: building mobile applications',
+      '- Data start: local dummy data with Expo SQLite',
+      '- Test-to-main safeguards: yes',
+    ].join('\n');
+
+    const extracted = extractCessInfoFromMarkdown({
+      infoMarkdown,
+      appName: 'Experiment-Tracker',
+      parentDir: 'F:/ReactNativeApps',
+    });
+
+    expect(extracted.derivedDisplayName).toBe('Experiment-Tracker');
+    expect(extracted.derivedFolderSlug).toBe('experiment-tracker');
+    expect(extracted.prefilledAnswers.displayAppName).toBe('Experiment-Tracker');
+    expect(extracted.prefilledAnswers.audience).toContain('Scientists');
+    expect(extracted.prefilledAnswers.coreFlows).toContain('Create an experiment');
+    expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios']);
+    expect(extracted.prefilledAnswers.firstTargetPlatform).toBe('ios');
+    expect(extracted.prefilledAnswers.platformLayouts).toBe('shared');
+    expect(extracted.prefilledAnswers.webOutput).toBe('none');
+    expect(extracted.prefilledAnswers.expoServerAdapter).toBe('none');
+    expect(extracted.prefilledAnswers.customBackend).toBe(false);
+    expect(extracted.prefilledAnswers.deploymentTarget).toBe('App Store');
+    expect(extracted.prefilledAnswers.includeCreateExpoComponents).toBe(false);
+    expect(extracted.ambiguousQuestionIds).toEqual([]);
+    expect(extracted.evidence.platformLayouts?.some((item) =>
+      item.startsWith('MDS snapshot ignored because ') &&
+      item.endsWith(' had a higher-priority value')
+    )).toBe(true);
+  });
+
+  it('marks real visible section conflicts as ambiguous', () => {
+    const extracted = extractCessInfoFromMarkdown({
+      parentDir: 'F:/ReactNativeApps',
+      infoMarkdown: [
+        '# Demo App Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Scientists',
+        '',
+        '## Core User Flows',
+        '',
+        '- Create an experiment',
+        '',
+        '## Platforms',
+        '',
+        '- Target platforms: ios',
+        '- First MVP platform: ios',
+        '- Expo Router app directory: `src/app`',
+        '- Web output: none',
+        '',
+        '## Onboarding Decisions',
+        '',
+        '- Target platforms: android',
+      ].join('\n'),
+    });
+
+    expect(extracted.prefilledAnswers.targetPlatforms).toBeUndefined();
+    expect(extracted.ambiguousQuestionIds).toContain('targetPlatforms');
   });
 
   it('reaches confirm and ready states without inventing missing answers', () => {
@@ -253,7 +531,7 @@ describe('CESS intake contract', () => {
         packageManager: 'pnpm',
         navigationLibrary: 'react-navigation',
         reactNavigationLayout: 'tabs',
-        stylingSystem: 'uniwind',
+        stylingSystem: 'nativewindui',
         stateManagement: 'zustand',
         authBackend: 'firebase',
         easSetup: false,
@@ -290,16 +568,33 @@ describe('CESS intake contract', () => {
       '--pnpm',
       '--react-navigation',
       '--tabs',
-      '--uniwind',
+      '--nativewindui',
       '--zustand',
       '--firebase',
     ]);
 
     const argv = buildCreateExpoSuperStackArgv(plan);
+    expect(plan.onboardAnswers.defaults).toContain('nativewindui');
+    expect(plan.onboardAnswers.defaults).not.toContain('uniwind');
     expect(argv).toContain('--mds-no-guidelines-template');
     expect(argv).toContain('--mds-no-expo-ui');
     expect(argv).toContain('--mds-no-test-to-main');
     expect(argv).toContain('--mds-save-defaults');
     expect(argv).toContain('--mds-yes');
+  });
+
+  it('records planned EAS intent without forwarding the interactive --eas generator flag', () => {
+    const flags = buildCreateExpoStackFlags({
+      scriptLanguage: 'typescript',
+      packageManager: 'npm',
+      navigationLibrary: 'expo-router',
+      reactNavigationLayout: 'stack',
+      stylingSystem: 'uniwind',
+      stateManagement: 'zustand',
+      authBackend: 'none',
+      easSetup: true,
+    });
+
+    expect(flags).not.toContain('--eas');
   });
 });

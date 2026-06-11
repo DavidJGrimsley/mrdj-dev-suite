@@ -58,10 +58,14 @@ describe('knowledge catalog expansion', () => {
     const prompt = await readPromptSpec('create-expo-super-stack');
 
     expect(prompt).not.toBeNull();
-    expect(prompt?.content).toContain('create_expo_super_stack_extract_info');
+    expect(prompt?.content).toContain('create_expo_super_stack_resolve_info');
     expect(prompt?.content).toContain('create_expo_super_stack_intake_step');
     expect(prompt?.content).toContain('create_expo_super_stack_generate');
     expect(prompt?.content).toContain('mds_runtime_versions');
+    expect(prompt?.content).toContain('Generating now. This typically takes 2-5 minutes.');
+    expect(prompt?.content).toContain("While we wait, let's shout out and recognize how this is working.");
     expect(prompt?.content).toContain('Do not fall back to `--mds-yes`');
+    expect(prompt?.content).not.toContain('warn if the MCP server, CLI, or wrapper looks stale');
+    expect(prompt?.content).not.toContain('falling back to npm exec');
   });
 });

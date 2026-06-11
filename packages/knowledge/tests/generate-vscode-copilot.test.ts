@@ -60,7 +60,7 @@ describe('generateVscodeCopilotBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { servers: Record<string, { command: string; args: string[] }> };
     expect(mcp.servers[VSCODE_MCP_SERVER_KEY]).toEqual({
       command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server@0.1.7'],
+      args: ['-y', '@mr.dj2u/mcp-server@0.1.9'],
     });
     const settingsRaw = await readFile(path.join(bundleRoot, '.vscode', 'settings.json'), 'utf8');
     const settings = JSON.parse(settingsRaw) as Record<string, unknown>;
@@ -68,6 +68,16 @@ describe('generateVscodeCopilotBundle', () => {
 
     const promptFiles = await readdir(path.join(bundleRoot, '.github', 'prompts'));
     expect(promptFiles).toContain('run-doctor.prompt.md');
+
+    const createSuperStackPrompt = await readFile(
+      path.join(bundleRoot, '.github', 'prompts', 'create-expo-super-stack.prompt.md'),
+      'utf8'
+    );
+    expect(createSuperStackPrompt).toContain('create_expo_super_stack_resolve_info');
+    expect(createSuperStackPrompt).toContain('Generating now. This typically takes 2-5 minutes.');
+    expect(createSuperStackPrompt).toContain("While we wait, let's shout out and recognize how this is working.");
+    expect(createSuperStackPrompt).not.toContain('warn if the MCP server, CLI, or wrapper looks stale');
+    expect(createSuperStackPrompt).not.toContain('falling back to npm exec');
 
     const skillRaw = await readFile(
       path.join(bundleRoot, '.github', 'skills', 'deployment', 'SKILL.md'),
@@ -89,7 +99,7 @@ describe('generateVscodeCopilotBundle', () => {
       servers: {
         mds: {
           command: 'npx',
-          args: ['-y', '@mr.dj2u/mcp-server@0.1.7'],
+          args: ['-y', '@mr.dj2u/mcp-server@0.1.9'],
         },
       },
     });

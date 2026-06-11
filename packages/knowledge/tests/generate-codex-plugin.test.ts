@@ -75,7 +75,7 @@ describe('generateCodexPluginBundle', () => {
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
     expect(mcp.mcpServers['mr-djs-dev-suite']).toEqual({
       command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server@0.1.7'],
+      args: ['-y', '@mr.dj2u/mcp-server@0.1.9'],
     });
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));
@@ -94,6 +94,16 @@ describe('generateCodexPluginBundle', () => {
 
     const commandEntries = await readdir(path.join(pluginRoot, 'commands'));
     expect(commandEntries.sort()).toEqual([...COMMAND_FILES].sort());
+
+    const createSuperStackCommand = await readFile(
+      path.join(pluginRoot, 'commands', 'create-expo-super-stack.md'),
+      'utf8'
+    );
+    expect(createSuperStackCommand).toContain('create_expo_super_stack_resolve_info');
+    expect(createSuperStackCommand).toContain('Generating now. This typically takes 2-5 minutes.');
+    expect(createSuperStackCommand).toContain("While we wait, let's shout out and recognize how this is working.");
+    expect(createSuperStackCommand).not.toContain('warn if the MCP server, CLI, or wrapper looks stale');
+    expect(createSuperStackCommand).not.toContain('falling back to npm exec');
 
     const marketplaceRaw = await readFile(
       path.join(repoRoot, '.agents', 'plugins', 'marketplace.json'),

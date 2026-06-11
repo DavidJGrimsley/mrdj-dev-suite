@@ -8,10 +8,12 @@ import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
   buildWrapUpPromptText,
+  classifyMcpServerRuntimeMode,
   executeTool,
   listTools,
   listResources,
   readResource,
+  resolveSuperStackInvocationSpec,
 } from '../src/index.js';
 
 const tempDirs: string[] = [];
@@ -62,6 +64,7 @@ describe('mds MCP helpers', () => {
     expect(tools.some((tool) => tool.name === 'list_skills')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_extract_info')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_intake_step')).toBe(true);
+    expect(tools.some((tool) => tool.name === 'create_expo_super_stack_resolve_info')).toBe(true);
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
     expect(tools.some((tool) => tool.name === 'generate_project_roadmap')).toBe(true);
     expect(tools.some((tool) => tool.name === 'mds_runtime_versions')).toBe(true);
@@ -239,12 +242,18 @@ describe('mds MCP helpers', () => {
   it('tells generated app users to start a fresh app-folder session for MDS Continue', () => {
     const prompt = buildCreateExpoSuperStackPromptText('F:/ReactNativeApps', 'demo-app');
 
-    expect(prompt).toContain('create_expo_super_stack_extract_info');
+    expect(prompt).toContain('create_expo_super_stack_resolve_info');
     expect(prompt).toContain('create_expo_super_stack_intake_step');
     expect(prompt).toContain('create_expo_super_stack_generate');
     expect(prompt).toContain('mds_runtime_versions');
+    expect(prompt).toContain('inspect the active runtime and invocation path');
+    expect(prompt).toContain('Generating now. This typically takes 2-5 minutes.');
+    expect(prompt).toContain("While we wait, let's shout out and recognize how this is working.");
+    expect(prompt).toContain('Warn only when `mds_runtime_versions.warnings` is non-empty');
     expect(prompt).toContain('Do not fall back to `--mds-yes`');
-    expect(prompt).toContain('do not claim the roadmap is derived yet');
+    expect(prompt).toContain('treat generation as a failure or partial scaffold');
+    expect(prompt).not.toContain('warn if the MCP server, CLI, or wrapper looks stale');
+    expect(prompt).not.toContain('falling back to npm exec');
   });
 
   it('extracts intake answers from attached project info through MCP', async () => {
@@ -278,6 +287,92 @@ describe('mds MCP helpers', () => {
     expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios']);
   });
 
+  it('resolves complete project info into a ready generate payload through MCP', async () => {
+    const resolved = (await executeTool('create_expo_super_stack_resolve_info', {
+      parentDir: 'F:/ReactNativeApps',
+      infoMarkdown: [
+        '# Experiment-Tracker Project Info',
+        '',
+        '## App Name',
+        'Experimental',
+        '',
+        '## Target Users',
+        'Scientists and people learning how to conduct experiments',
+        '',
+        '## First User Flow',
+        '- Create an experiment',
+        '',
+        '## Core Flows and Features',
+        '- Track experiments',
+        '',
+        '## Screens',
+        '- New',
+        '- Track',
+        '',
+        '## Platforms',
+        '- Target platforms: ios, android',
+        '- First MVP platform: ios',
+        '',
+        '# Tech Stack & CESS Onboarding',
+        '',
+        '- TypeScript: Yes',
+        '- Package Manager: npm',
+        '- Navigation: Expo Router',
+        '- Type of Navigation: Drawer + Tabs',
+        '- Expo Router app directory: src/app',
+        '- Platform-specific organization: platform-specific files only',
+        '- Platform layout mode: shared layouts',
+        '- Web output: none',
+        '- Style Library: NativeWindUI',
+        '- Components from create-expo-app: Yes',
+        '- Expo UI: Yes',
+        '- Expo UI Universal components: Yes',
+        '- Expo Native Tabs: Yes',
+        '- State management library: None',
+        '- Auth: None',
+        '- Data Categories: Local UI/app state / File/image uploads or storage',
+        '- Starting Data mode: local dummy data with Expo SQLite',
+        '- EAS: Yes',
+        '- EAS Usage: Building mobile apps',
+        '- Deployed server: no deployed server planned',
+        '- Initial Deployment plan: App Store',
+        '- Start with MDS project guidelines template: Yes',
+        '- Use test-to-main safeguards: Yes',
+      ].join('\n'),
+    })) as {
+      status: string;
+      appName?: string;
+      answers: { stylingSystem?: string; scriptLanguage?: string };
+      missingQuestionIds: string[];
+      ambiguousQuestionIds: string[];
+      generateInput?: { appName: string; confirmed: boolean; answers: Record<string, unknown> };
+    };
+
+    expect(resolved.status).toBe('confirm');
+    expect(resolved.appName).toBe('experimental');
+    expect(resolved.answers.scriptLanguage).toBe('typescript');
+    expect(resolved.answers.stylingSystem).toBe('nativewindui');
+    expect(resolved.missingQuestionIds).toEqual([]);
+    expect(resolved.ambiguousQuestionIds).toEqual([]);
+    expect(resolved.generateInput?.appName).toBe('experimental');
+    expect(resolved.generateInput?.confirmed).toBe(true);
+  });
+
+  it('rejects non-canonical create-expo-super-stack answer aliases', async () => {
+    await expect(
+      executeTool('create_expo_super_stack_generate', {
+        parentDir: 'F:/ReactNativeApps',
+        appName: 'demo-app',
+        confirmed: true,
+        answers: {
+          language: 'typescript',
+          routing: 'expo-router',
+          style: 'nativewindui',
+        },
+      })
+    ).rejects.toThrow('Unsupported Create Expo Super Stack answer keys');
+  });
+
   it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
     const intake = (await executeTool('create_expo_super_stack_intake_step', {
       parentDir: 'F:/ReactNativeApps',
@@ -293,6 +388,9 @@ describe('mds MCP helpers', () => {
 
     const runtime = (await executeTool('mds_runtime_versions', {})) as {
       intakeToolsAvailable: boolean;
+      runtimeMode: 'local-node' | 'published-npx';
+      versionVisibility: 'direct' | 'isolated';
+      versionVisibilityReason: string;
       cliVersion: string | null;
       createExpoStackVersion: string | null;
       createExpoSuperStack: { invocation: string; version: string | null };
@@ -301,9 +399,43 @@ describe('mds MCP helpers', () => {
 
     expect(runtime.intakeToolsAvailable).toBe(true);
     expect(runtime.createExpoSuperStack.invocation.length).toBeGreaterThan(0);
+    expect(runtime.runtimeMode).toBe('local-node');
+    expect(runtime.createExpoSuperStack.source).toBe('local-build');
+    expect(['direct', 'isolated']).toContain(runtime.versionVisibility);
+    expect(runtime.versionVisibilityReason.length).toBeGreaterThan(0);
     expect(runtime).toHaveProperty('cliVersion');
     expect(runtime.createExpoSuperStack.version).not.toBe('latest');
-    expect(Array.isArray(runtime.warnings)).toBe(true);
+    expect(runtime.warnings).toEqual([]);
+  });
+
+  it('prefers the local create-expo-super-stack build in repo-backed MCP sessions', () => {
+    const spec = resolveSuperStackInvocationSpec();
+    expect(spec.command).toBe(process.execPath);
+    expect(spec.args[0]?.replace(/\\/gu, '/')).toContain('/packages/create-expo-super-stack/dist/cli.js');
+    expect(spec.source).toBe('local-build');
+  });
+
+  it('prefers process.execPath plus npm-cli for published super-stack invocation', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'mds-npm-cli-'));
+    tempDirs.push(tempDir);
+    const fakeNpmCli = path.join(tempDir, 'npm-cli.js');
+    await writeFile(fakeNpmCli, '// fake npm cli\n', 'utf8');
+    const spec = resolveSuperStackInvocationSpec({
+      packageJsonPath:
+        'C:/Users/DJLeg/AppData/Local/npm-cache/_npx/abc123/node_modules/@mr.dj2u/mcp-server/package.json',
+      npmCliPath: fakeNpmCli,
+    });
+    expect(spec.command).toBe(process.execPath);
+    expect(spec.args[0]).toBe(fakeNpmCli);
+    expect(spec.source).toBe('npm-exec');
+  });
+
+  it('classifies published npx runtime paths as published sessions', () => {
+    expect(
+      classifyMcpServerRuntimeMode(
+        'C:/Users/DJLeg/AppData/Local/npm-cache/_npx/abc123/node_modules/@mr.dj2u/mcp-server/package.json'
+      )
+    ).toBe('published-npx');
   });
 
   it('builds a continue slash prompt that calls continue_project first', () => {

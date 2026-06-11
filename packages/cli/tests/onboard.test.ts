@@ -27,7 +27,7 @@ import {
   savePersonalOnboardDefaults,
   validateRequiredInput,
 } from '../src/commands/onboard.js';
-import { scaffoldProjectMemory } from '../src/project-memory.js';
+import { renderTodo, scaffoldProjectMemory } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
 
@@ -68,16 +68,28 @@ describe('runOnboardCommand', () => {
       '## Monetization Strategy'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
-      '<!-- MDS_CESS_SNAPSHOT_START -->'
+      '## App Name'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
-      '"version": 1'
+      '## Core Flows and Features'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
-      '## Must-Include Screens Or Flows'
+      '# Tech Stack & CESS Onboarding'
     );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('MDS_CESS_SNAPSHOT');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('MDS Onboarding Decisions');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('**App:**');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.not.toContain('**Platforms:**');
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
-      '# TodoForContext(optional): List any known screens or flows that must be included in planning and implementation.'
+      '# TodoForContext(optional): List any known screens that must be included in planning and implementation.'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '# TodoForContext(optional): Add monetization notes'
@@ -664,7 +676,8 @@ describe('runOnboardCommand', () => {
     expect(info).toContain('## Imported Notes');
     expect(info).toContain('Users are bowling league captains.');
     expect(info).toContain('## Monetization Strategy');
-    expect(info).toContain('## Must-Include Screens Or Flows');
+    expect(info).toContain('## Screens');
+    expect(info).toContain('# Tech Stack & CESS Onboarding');
 
     const style = await readFile(path.join(projectPath, 'project', 'style.md'), 'utf8');
     expect(style).toContain('## Brand/References');
@@ -1246,6 +1259,18 @@ describe('runOnboardCommand', () => {
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
     expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
+  });
+
+  it('adds a Phase 0 manual EAS setup step when EAS is planned', () => {
+    const todo = renderTodo(
+      defaultOnboardPlan({
+        project: path.join(os.tmpdir(), 'default-app'),
+        easSelected: true,
+        easUses: ['building mobile applications'],
+      }).answers
+    );
+
+    expect(todo).toContain('- [ ] Sign in and set up EAS in the terminal.');
   });
 
   it('derives defaults without requiring the old comma-separated interactive prompt', () => {

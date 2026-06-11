@@ -2331,15 +2331,17 @@ function inferGeneratorChoices(
       : hasFlag("--drawer+tabs")
         ? "drawer"
         : "stack",
-    stylingSystem: hasFlag("--nativewind")
-      ? "nativewind"
-      : hasFlag("--tamagui")
-        ? "tamagui"
-        : hasFlag("--restyle")
-          ? "restyle"
-          : hasFlag("--uniwind")
-            ? "uniwind"
-            : "stylesheet",
+    stylingSystem: hasFlag("--nativewindui")
+      ? "nativewindui"
+      : hasFlag("--nativewind")
+        ? "nativewind"
+        : hasFlag("--tamagui")
+          ? "tamagui"
+          : hasFlag("--restyle")
+            ? "restyle"
+            : hasFlag("--uniwind")
+              ? "uniwind"
+              : "stylesheet",
     stateManagement: hasFlag("--zustand") ? "zustand" : "none",
     authBackend: hasFlag("--supabase")
       ? "supabase"

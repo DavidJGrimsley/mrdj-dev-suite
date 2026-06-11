@@ -1,6 +1,6 @@
 {
   "name": "create-expo-super-stack",
-  "version": "0.1.11",
+  "version": "0.1.13",
   "description": "Opinionated MDS wrapper around create-expo-stack with rich Expo onboarding",
   "type": "module",
   "bin": {
@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
-    "@mr.dj2u/cli": "^0.1.14",
+    "@mr.dj2u/cli": "^0.1.17",
     "@mr.dj2u/create-expo-stack": "2.21.3-mrdj.1",
     "create-expo-stack": "^2.21.3"
   },

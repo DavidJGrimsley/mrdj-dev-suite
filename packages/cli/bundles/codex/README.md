@@ -31,7 +31,20 @@ mds agent install --client codex --scope user --dry-run
 
 After install, restart Codex so it picks up the local marketplace. Then type `@Mr. DJ's Dev Suite` in chat to get the install pop-up, hit Install, and use `@Mr. DJ's Dev Suite` in Codex Desktop or the Codex extension for VS Code.
 
-If Codex keeps using stale behavior after republish, refresh the local plugin cache, reinstall the MDS MCP server, then run `mds_runtime_versions` from the host surface to confirm which versions are active.
+If Codex keeps using stale behavior after reinstall, do a full cleanup and reinstall:
+
+1. Remove the installed local plugin copy for the scope you used:
+   - project scope: `<target>/plugins/mr-djs-dev-suite`
+   - user scope: `~/plugins/mr-djs-dev-suite`
+2. Remove the local Codex cache copy:
+   - `~/.codex/plugins/cache/mds-local/mr-djs-dev-suite`
+3. Reinstall:
+   - `mds agent install --client codex --scope project --target /path/to/your/expo-app`
+   - or `mds agent install --client codex --scope user`
+4. Run verify again:
+   - `mds agent verify --client codex --scope project --target /path/to/your/expo-app`
+   - or `mds agent verify --client codex --scope user`
+5. Restart Codex, then run `mds_runtime_versions` from the host surface to confirm which runtime is active.
 
 ## MCP-Only Fallback
 

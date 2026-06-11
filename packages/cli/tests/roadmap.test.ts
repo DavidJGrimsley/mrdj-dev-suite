@@ -94,9 +94,92 @@ describe('project roadmap generation', () => {
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
     const roadmapState = await readFile(path.join(projectPath, 'project', 'roadmap-state.json'), 'utf8');
     expect(todo).toContain('## Phase 1: App Shell And First Flow');
-    expect(todo).toContain('Implement the first core user flow: sign up and create a workspace.');
+    expect(todo).toContain('Implement the first core user flow: sign up and create a workspace');
     expect(todo).not.toContain('MDS_DERIVED_PHASE_');
     expect(roadmapState).toContain('phase-1');
+  });
+
+  it('restores rich super-stack planning tasks instead of a tiny generic todo', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-super-stack-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist.tsx'), 'export default null;\n', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Experimental Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Scientists and students tracking experiments on the go.',
+        '',
+        '## Product Goals',
+        '',
+        '- Capture hypotheses, procedures, results, notes, and photos quickly.',
+        '',
+        '## First User Flow',
+        '',
+        'Create a new experiment with a hypothesis, procedure, and notes, then save it locally.',
+        '',
+        '## Core Flows and Features',
+        '',
+        '- Create a new experiment.',
+        '- View and edit experiment details.',
+        '- Attach notes and images.',
+        '',
+        '## Screens',
+        '',
+        '- New',
+        '- Track',
+        '- Settings',
+        '',
+        '## Platforms',
+        '',
+        '- Target platforms: iOS, Android',
+        '- First MVP platform: iOS',
+        '- Routes live under `src/app`.',
+        '- Use shared layouts.',
+        '',
+        '## Monetization Strategy',
+        '',
+        'No monetization is planned for the MVP.',
+        '',
+        '## Release Strategy',
+        '',
+        '- Ship an iOS TestFlight beta first.',
+        '- Keep Android build-ready for follow-up.',
+        '',
+        '## Tech Stack & CESS Onboarding',
+        '',
+        '- Starting Data mode: local dummy data with Expo SQLite.',
+        '- EAS: Yes',
+        '- EAS Usage: building mobile applications, publishing mobile applications',
+        '- Web output: none',
+        '- Deployed server: no deployed server planned',
+        '- Use test-to-main safeguards: Yes',
+        '- Expo Router app directory: `src/app`',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await generateProjectRoadmap(projectPath, {
+      write: true,
+      preserveStatus: true,
+    });
+
+    const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
+    expect(result.needsClarification).toBe(false);
+    expect(todo).toContain('Browse exposition pages to understand the included starter flows');
+    expect(todo).toContain("Review styling in the 'Stylist' page");
+    expect(todo).toContain('Run or defer `eject-stylist`');
+    expect(todo).toContain('Run `mds eject exposition`');
+    expect(todo).toContain('Sign in and set up EAS in the terminal');
+    expect(todo).toContain('Establish the app shell and first implementation-ready route in src/app');
+    expect(todo).toContain('Implement the initial data layer using local dummy data with Expo SQLite');
+    expect(todo).toContain('Configure EAS for building mobile applications');
+    expect(todo).toContain('Follow `project/release-flow.md` for test-to-main development');
+    expect(todo).not.toContain('Validate the production web/server hosting path, environment ownership, and rollout checklist');
   });
 
   it('blocks roadmap generation while unresolved TodoForContext markers remain', async () => {
@@ -141,7 +224,7 @@ describe('project roadmap generation', () => {
     expect(result.phases).toEqual([]);
     expect(result.markerHits[0]?.file).toBe('project/info.md');
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
-    expect(todo).not.toContain('Implement the first core user flow: sign up.');
+    expect(todo).not.toContain('Implement the first core user flow: sign up');
   });
 
   it('does not block roadmap generation when only non-info project docs still have context markers', async () => {
@@ -235,6 +318,44 @@ describe('project roadmap generation', () => {
     expect(result.confidenceWarnings.length).toBeGreaterThan(0);
   });
 
+  it('accepts the new tech-stack deployment plan as release clarification input', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-techstack-release-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Demo Project Info',
+        '',
+        '## Target Users',
+        '',
+        'Field researchers logging observations from mobile devices.',
+        '',
+        '## Product Goals',
+        '',
+        '- Capture structured experiment notes quickly.',
+        '',
+        '## First User Flow',
+        '',
+        'Create a new experiment and save it locally.',
+        '',
+        '## Tech Stack & CESS Onboarding',
+        '',
+        '- Initial Deployment plan: Ship an iOS TestFlight beta, then prepare an App Store launch.',
+        '- EAS Usage: building mobile applications',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await generateProjectRoadmap(projectPath, {
+      write: true,
+      preserveStatus: true,
+    });
+
+    expect(result.needsClarification).toBe(false);
+    expect(result.clarificationQuestions).toEqual([]);
+  });
+
   it('preserves matching checkbox state and user-authored tasks on rerun with roadmap state', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-roadmap-rerun-'));
     tempDirs.push(projectPath);
@@ -323,10 +444,10 @@ describe('project roadmap generation', () => {
 
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
     expect(result.preservedStatuses).toBeGreaterThan(0);
-    expect(todo).toContain('- [x] Implement the first core user flow: sign up.');
+    expect(todo).toContain('- [x] Implement the first core user flow: sign up');
     expect(todo).toContain('User-authored note that should stay put.');
     expect(todo).toContain(
-      'Validate the production web/server hosting path, environment ownership, and rollout checklist.'
+      'Validate the production web/server hosting path, environment ownership, and rollout checklist'
     );
     expect(todo).not.toContain('MDS_DERIVED_PHASE_');
   });

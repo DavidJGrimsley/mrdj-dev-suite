@@ -15,6 +15,7 @@ export interface DerivedRoadmapTask {
   phaseId: DerivedRoadmapPhaseId;
   text: string;
   source:
+    | 'setup'
     | 'core-flow'
     | 'screen'
     | 'feature'
@@ -123,9 +124,26 @@ interface ConfidenceCheck {
   question: RoadmapClarificationQuestion;
 }
 
+interface RoadmapProjectContext {
+  appDirectory: 'src/app' | 'app' | null;
+  hasExposition: boolean;
+  hasStylist: boolean;
+}
+
 const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
 const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
 const ROADMAP_STATE_FILE = 'roadmap-state.json';
+const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
+  'review project files for accuracy and planning adjustments',
+  'resolve every todoforcontext optional marker in project info md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed',
+  'refresh the agent derived roadmap from project info md and review it for accuracy before implementation',
+  'establish the app shell and first implementation ready route for the mvp',
+  'implement the first concrete product flow from project info md and the roadmap',
+  'implement the initial data layer and service boundaries needed for the mvp',
+  'complete the remaining product flows needed for the mvp',
+  'run mds doctor ci and address errors before release',
+  'prepare store distribution packaging review notes and release validation for the chosen delivery path',
+]);
 export const ROADMAP_BLOCKED_MARKER_WARNING =
   'Roadmap generation is blocked until every `# TodoForContext(optional):` marker in `project/` is resolved. Fill the section underneath or delete the marker line first.';
 export const ROADMAP_CLARIFICATION_WARNING =
@@ -164,8 +182,8 @@ const SECTION_ALIASES: Record<InfoSectionKey, string[]> = {
   targetUsers: ['target users', 'users', 'audience', 'who this app is for'],
   productGoals: ['product goals', 'goals', 'business goals', 'success criteria'],
   nonGoals: ['non-goals', 'non goals', 'out of scope'],
-  coreFeatures: ['core features', 'features', 'feature list', 'main features'],
-  coreUserFlows: ['core user flows', 'user flows', 'flows', 'core flows', 'primary flows'],
+  coreFeatures: ['core features', 'core flows and features', 'features', 'feature list', 'main features'],
+  coreUserFlows: ['first user flow', 'core user flows', 'user flows', 'flows', 'core flows', 'primary flows'],
   mustIncludeScreensOrFlows: [
     'must-include screens or flows',
     'must include screens or flows',
@@ -187,9 +205,9 @@ const SECTION_ALIASES: Record<InfoSectionKey, string[]> = {
   monetizationStrategy: ['monetization strategy', 'monetization'],
   teamContext: ['team context', 'team', 'stakeholders'],
   releaseStrategy: ['release strategy', 'release plan', 'deployment plan', 'distribution'],
-  questionsToRevisit: ['questions to revisit', 'open questions', 'unknowns', 'risks'],
-  resources: ['resources', 'references', 'links'],
-  techStack: ['tech stack & mds onboarding', 'tech stack', 'mds onboarding'],
+  questionsToRevisit: ['questions to revisit', 'open questions', 'unknowns', 'risks', 'later scope & possibilities'],
+  resources: ['resources', 'references', 'links', 'research, notes, and references'],
+  techStack: ['tech stack & cess onboarding', 'tech stack & mds onboarding', 'tech stack', 'mds onboarding'],
 };
 
 const KEYWORD_TASKS: Array<{
@@ -317,6 +335,7 @@ export async function generateProjectRoadmap(
   const existingTodo = (await pathExists(todoPath))
     ? await readFile(todoPath, 'utf8')
     : renderTodoSkeleton(extractProjectName(infoRaw));
+  const roadmapContext = await inspectRoadmapProjectContext(projectPath);
   const markerHits = await scanProjectTodoForContextMarkers(projectPath, { scope: 'info' });
 
   if (markerHits.length > 0) {
@@ -364,7 +383,7 @@ export async function generateProjectRoadmap(
   }
 
   const warnings: string[] = [];
-  const derivedPhases = deriveRoadmapPhases(sections, warnings);
+  const derivedPhases = deriveRoadmapPhases(sections, warnings, roadmapContext);
   const previousState =
     (await readRoadmapState(roadmapStatePath)) ?? inferLegacyRoadmapState(existingTodo);
   const nextState = buildRoadmapState(derivedPhases);
@@ -428,10 +447,13 @@ export function parseInfoSections(infoRaw: string): InfoSectionMap {
   };
 
   for (const line of lines) {
-    const headingMatch = /^##\s+(.+?)\s*$/.exec(line);
-    if (headingMatch?.[1]) {
+    const headingMatch = /^(#{1,2})\s+(.+?)\s*$/.exec(line);
+    if (headingMatch?.[1] === '#' && !/tech stack/iu.test(headingMatch[2] ?? '')) {
+      continue;
+    }
+    if (headingMatch?.[2]) {
       flush();
-      currentHeading = headingMatch[1].trim();
+      currentHeading = headingMatch[2].trim();
       currentKey = normalizeSectionHeading(currentHeading);
       continue;
     }
@@ -447,7 +469,12 @@ export function parseInfoSections(infoRaw: string): InfoSectionMap {
 
 export function deriveRoadmapPhases(
   sections: InfoSectionMap,
-  warnings: string[] = []
+  warnings: string[] = [],
+  context: RoadmapProjectContext = {
+    appDirectory: null,
+    hasExposition: false,
+    hasStylist: false,
+  }
 ): DerivedRoadmapPhase[] {
   const phaseTasks = new Map<DerivedRoadmapPhaseId, DerivedRoadmapTask[]>(
     PHASE_SPECS.map((phase) => [phase.id, []])
@@ -482,12 +509,116 @@ export function deriveRoadmapPhases(
   const flowItems = extractSectionItems(sections.coreUserFlows?.content);
   const featureItems = extractSectionItems(sections.coreFeatures?.content);
   const screenItems = extractSectionItems(sections.mustIncludeScreensOrFlows?.content);
-  const dataItems = extractSectionItems(sections.dataAndBackend?.content);
-  const releaseItems = extractSectionItems(sections.releaseStrategy?.content);
+  const techStackItems = extractSectionItems(sections.techStack?.content);
   const monetizationItems = extractSectionItems(sections.monetizationStrategy?.content);
   const questionItems = extractSectionItems(sections.questionsToRevisit?.content);
   const platformItems = extractSectionItems(sections.platforms?.content);
-  const packageItems = extractSectionItems(sections.packageChoices?.content);
+  const packageItems = buildMeaningfulItemList([
+    ...extractSectionItems(sections.packageChoices?.content),
+    getLabeledSectionValue(sections.techStack?.content, 'Navigation'),
+    getLabeledSectionValue(sections.techStack?.content, 'Style Library'),
+    parseYesNoValue(getLabeledSectionValue(sections.techStack?.content, 'Expo UI')) === true
+      ? 'Expo UI'
+      : null,
+    parseYesNoValue(getLabeledSectionValue(sections.techStack?.content, 'Expo Native Tabs')) === true
+      ? 'Expo Native Tabs'
+      : null,
+    ...techStackItems.filter((item) => /software mansion/i.test(item)),
+  ]);
+  const techStackContent = sections.techStack?.content;
+  const startingDataMode = getLabeledSectionValue(techStackContent, 'Starting Data mode');
+  const easEnabled = parseYesNoValue(getLabeledSectionValue(techStackContent, 'EAS'));
+  const easUses = splitChoiceList(getLabeledSectionValue(techStackContent, 'EAS Usage'));
+  const testToMainSafeguards = parseYesNoValue(
+    getLabeledSectionValue(techStackContent, 'Use test-to-main safeguards')
+  );
+  const deployedServer = getLabeledSectionValue(techStackContent, 'Deployed server');
+  const webOutput = getLabeledSectionValue(techStackContent, 'Web output');
+  const routeDirectory = extractRouteDirectory(sections, context);
+  const firstTargetPlatform =
+    getLabeledSectionValue(sections.platforms?.content, 'First MVP platform') ??
+    getLabeledSectionValue(techStackContent, 'First MVP platform');
+  const dataItems = buildMeaningfulItemList([
+    ...extractSectionItems(sections.dataAndBackend?.content),
+    getLabeledSectionValue(techStackContent, 'Data Categories'),
+    startingDataMode,
+    toEnabledLabel(getLabeledSectionValue(techStackContent, 'Auth'), 'Auth'),
+    toEnabledLabel(getLabeledSectionValue(techStackContent, 'State management library'), 'State management'),
+  ]);
+  const releaseItems = buildMeaningfulItemList([
+    ...extractSectionItems(sections.releaseStrategy?.content),
+    getLabeledSectionValue(techStackContent, 'Initial Deployment plan'),
+    testToMainSafeguards === true ? 'test-to-main safeguards' : null,
+    shouldSkipServerReleaseTask(deployedServer, webOutput) ? null : deployedServer,
+    webOutput && normalizeTaskKey(webOutput) !== 'none' ? `web output: ${webOutput}` : null,
+  ]);
+  const effectiveMonetizationItems = isNoMonetizationPlan(sections.monetizationStrategy?.content)
+    ? []
+    : monetizationItems;
+
+  addTask('phase-0', 'Review `project/` files for accuracy and planning adjustments.', 'setup');
+  if (context.hasExposition) {
+    addTask(
+      'phase-0',
+      'Browse exposition pages to understand the included starter flows, package demos, and MDS scaffolding.',
+      'setup'
+    );
+    addTask(
+      'phase-0',
+      'Run `mds eject exposition` and keep only the generated sections you want to retain.',
+      'setup'
+    );
+    addTask(
+      'phase-0',
+      'Keep or prune included package examples after reviewing `/exposition`.',
+      'setup'
+    );
+    addTask(
+      'phase-0',
+      'Remove exposition pages before production once their lessons are absorbed.',
+      'setup'
+    );
+  }
+  if (context.hasStylist) {
+    addTask(
+      'phase-0',
+      "Review styling in the 'Stylist' page and pressure-test the starter theme before building product screens.",
+      'setup'
+    );
+    addTask(
+      'phase-0',
+      'Run or defer `eject-stylist`; mark this todo done after ejection or deciding to keep it longer for design iteration.',
+      'setup'
+    );
+  }
+  addTask(
+    'phase-0',
+    context.hasStylist
+      ? 'Confirm visual direction in `project/style.md` after reviewing the Stylist page.'
+      : 'Confirm the visual direction in `project/style.md` before implementation accelerates.',
+    'setup'
+  );
+  if (easEnabled === true || easUses.length > 0) {
+    addTask('phase-0', 'Sign in and set up EAS in the terminal.', 'setup');
+  }
+  addTask(
+    'phase-0',
+    'If `project/info.md` changes materially, rerun `mds roadmap` and review this plan before continuing implementation.',
+    'setup'
+  );
+
+  addTask(
+    'phase-1',
+    routeDirectory
+      ? `Establish the app shell and first implementation-ready route in ${routeDirectory}.`
+      : 'Establish the app shell and first implementation-ready route for the MVP.',
+    'screen'
+  );
+  addTask(
+    'phase-1',
+    'Implement the first concrete product flow from `project/info.md` and the roadmap.',
+    'core-flow'
+  );
 
   const firstFlow = flowItems[0];
   if (firstFlow) {
@@ -516,6 +647,19 @@ export function deriveRoadmapPhases(
     );
   }
 
+  if (startingDataMode) {
+    addTask('phase-2', `Implement the initial data layer using ${startingDataMode}.`, 'data');
+    if (/\bsupabase\b/i.test(startingDataMode)) {
+      addTask(
+        'phase-2',
+        'Create separate Supabase projects for test/staging and production before shared data work expands.',
+        'data'
+      );
+    }
+  } else {
+    addTask('phase-2', 'Implement the initial data layer and service boundaries needed for the MVP.', 'data');
+  }
+
   if (dataItems.length > 0) {
     addTask(
       'phase-2',
@@ -528,14 +672,22 @@ export function deriveRoadmapPhases(
     );
   }
 
-  const keywordSource = [dataItems, releaseItems, monetizationItems, packageItems, platformItems]
+  const keywordSource = [dataItems, releaseItems, effectiveMonetizationItems, packageItems, platformItems]
     .flat()
     .join(' ');
   for (const task of KEYWORD_TASKS) {
+    if (
+      task.text === 'Validate the production web/server hosting path, environment ownership, and rollout checklist.' &&
+      shouldSkipServerReleaseTask(deployedServer, webOutput)
+    ) {
+      continue;
+    }
     if (task.patterns.some((pattern) => pattern.test(keywordSource))) {
       addTask(task.phaseId, task.text, task.source);
     }
   }
+
+  addTask('phase-3', 'Build the remaining core flows from `project/info.md` phase by phase.', 'core-flow');
 
   const remainingFlows = flowItems.slice(1);
   if (remainingFlows.length > 0) {
@@ -559,27 +711,60 @@ export function deriveRoadmapPhases(
     );
   }
 
-  if (monetizationItems.length > 0 && !isPlaceholderSection(sections.monetizationStrategy?.content)) {
+  if (
+    effectiveMonetizationItems.length > 0 &&
+    !isPlaceholderSection(sections.monetizationStrategy?.content) &&
+    !isNoMonetizationPlan(sections.monetizationStrategy?.content)
+  ) {
     addTask(
       'phase-3',
       `Translate the monetization or business model into product work: ${formatTaskList(
-        pickDistinct(monetizationItems, 2)
+        pickDistinct(effectiveMonetizationItems, 2)
       )}.`,
       'monetization'
     );
   }
 
-  const remainingPlatforms = extractPlatformTargets(platformItems);
-  if (remainingPlatforms.length > 1) {
+  const targetPlatforms = extractPlatformTargets(platformItems);
+  const normalizedFirstTargetPlatform = normalizeTaskKey(firstTargetPlatform ?? '');
+  const remainingPlatforms = targetPlatforms.filter(
+    (platform) => normalizeTaskKey(platform) !== normalizedFirstTargetPlatform
+  );
+  if (remainingPlatforms.length > 0) {
     addTask(
       'phase-3',
-      `Adapt the completed flows for the remaining target platforms: ${formatTaskList(
+      `Adapt the working MVP flow for the remaining target platforms after the primary flow is stable: ${formatTaskList(
         remainingPlatforms
       )}.`,
       'platform'
     );
   }
+  for (const easUse of easUses) {
+    addTask('phase-3', `Configure EAS for ${easUse}.`, 'integration');
+  }
 
+  addTask('phase-4', 'Run `mds doctor --ci` and address errors.', 'release');
+  if (testToMainSafeguards === true) {
+    addTask('phase-4', 'Follow `project/release-flow.md` for test-to-main development.', 'release');
+    addTask(
+      'phase-4',
+      'Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.',
+      'release'
+    );
+    addTask(
+      'phase-4',
+      'Add GitHub branch protection so PR checks pass before merging into `test` or `main`.',
+      'release'
+    );
+  } else if (testToMainSafeguards === false) {
+    addTask('phase-4', 'Decide on release safeguards before production work begins.', 'release');
+  }
+  if (webOutput && normalizeTaskKey(webOutput) !== 'none') {
+    addTask('phase-4', `Confirm Expo web output mode: ${webOutput}.`, 'release');
+  }
+  if (deployedServer && !shouldSkipServerReleaseTask(deployedServer, webOutput)) {
+    addTask('phase-4', `Plan deployed server work: ${deployedServer}.`, 'release');
+  }
   if (releaseItems.length > 0) {
     addTask(
       'phase-4',
@@ -652,9 +837,16 @@ export async function scanProjectTodoForContextMarkers(
 
 function detectRoadmapClarificationNeeds(sections: InfoSectionMap): {
   confidenceWarnings: string[];
-  clarificationQuestions: RoadmapClarificationQuestion[];
+  clarificationQuestions: RoadmapClarificationQuestion[]; 
 } {
   const checks: ConfidenceCheck[] = [];
+  const releaseSignal = [
+    sections.releaseStrategy?.content,
+    getLabeledSectionValue(sections.techStack?.content, 'Initial Deployment plan'),
+    getLabeledSectionValue(sections.techStack?.content, 'EAS Usage'),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join('\n\n');
 
   if (isMissingOrLowConfidenceSection(sections.targetUsers?.content, 'audience')) {
     checks.push({
@@ -695,7 +887,7 @@ function detectRoadmapClarificationNeeds(sections: InfoSectionMap): {
     });
   }
 
-  if (isMissingOrLowConfidenceSection(sections.releaseStrategy?.content, 'release')) {
+  if (isMissingOrLowConfidenceSection(releaseSignal || undefined, 'release')) {
     checks.push({
       warning:
         '`project/info.md` still has a generic release/distribution plan, so release-phase tasks would be mostly filler.',
@@ -769,6 +961,10 @@ function rebuildPhaseSection(
       const checkbox = parseCheckbox(line);
       if (!checkbox) {
         return true;
+      }
+
+      if (LEGACY_SCAFFOLD_TASK_KEYS.has(normalizeTaskKey(checkbox.text))) {
+        return false;
       }
 
       return !previousDerivedKeys.has(normalizeTaskKey(checkbox.text));
@@ -1012,6 +1208,125 @@ function extractPlatformTargets(platformItems: string[]): string[] {
   return uniqueItems(values);
 }
 
+function getLabeledSectionValue(content: string | undefined, ...labels: string[]): string | null {
+  if (!content) {
+    return null;
+  }
+
+  const lines = normalizeLineEndings(content).split('\n');
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^\s*[-*]\s+/u, '').trim();
+    for (const label of labels) {
+      const match = new RegExp(`^${escapeRegExp(label)}\\s*:\\s*(.+)$`, 'i').exec(line);
+      if (match?.[1]) {
+        return cleanTaskText(match[1]);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractRouteDirectory(
+  sections: InfoSectionMap,
+  context: RoadmapProjectContext
+): 'src/app' | 'app' | null {
+  const labeled =
+    getLabeledSectionValue(sections.techStack?.content, 'Expo Router app directory') ??
+    getLabeledSectionValue(sections.platforms?.content, 'Expo Router app directory');
+  if (labeled) {
+    const normalized = normalizeTaskKey(labeled);
+    if (normalized === 'src app') {
+      return 'src/app';
+    }
+    if (normalized === 'app') {
+      return 'app';
+    }
+  }
+
+  const platformContent = normalizeLineEndings(sections.platforms?.content ?? '');
+  const routeMatch = /routes live under\s+`?(src\/app|app)`?/iu.exec(platformContent);
+  if (routeMatch?.[1]) {
+    return routeMatch[1] === 'src/app' ? 'src/app' : 'app';
+  }
+
+  return context.appDirectory;
+}
+
+function parseYesNoValue(value: string | null): boolean | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = normalizeTaskKey(value);
+  if (normalized === 'yes') {
+    return true;
+  }
+  if (normalized === 'no') {
+    return false;
+  }
+  return null;
+}
+
+function splitChoiceList(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return uniqueItems(
+    value
+      .split(/,|\band\b/iu)
+      .map((item) => cleanTaskText(item))
+      .filter(Boolean)
+  );
+}
+
+function buildMeaningfulItemList(items: Array<string | null | undefined>): string[] {
+  return uniqueItems(
+    items
+      .map((item) => cleanTaskText(item ?? ''))
+      .filter(Boolean)
+      .filter((item) => !isNoneLikeValue(item))
+  );
+}
+
+function toEnabledLabel(value: string | null, label: string): string | null {
+  if (!value || isNoneLikeValue(value)) {
+    return null;
+  }
+  return `${label}: ${value}`;
+}
+
+function shouldSkipServerReleaseTask(
+  deployedServer: string | null,
+  webOutput: string | null
+): boolean {
+  const normalizedServer = normalizeTaskKey(deployedServer ?? '');
+  const normalizedWebOutput = normalizeTaskKey(webOutput ?? '');
+  const hasExplicitNoServer =
+    normalizedServer === 'no deployed server planned' || normalizedServer === 'none';
+  const hasExplicitNoWeb = normalizedWebOutput === 'none';
+  return hasExplicitNoServer && hasExplicitNoWeb;
+}
+
+function isNoMonetizationPlan(content: string | undefined): boolean {
+  if (!content) {
+    return false;
+  }
+
+  return /\bno monetization\b/i.test(content) || /\bnot moneti[sz]ing\b/i.test(content);
+}
+
+function isNoneLikeValue(value: string): boolean {
+  const normalized = normalizeTaskKey(value);
+  return (
+    normalized === 'none' ||
+    normalized === 'no' ||
+    normalized === 'not planned yet' ||
+    normalized === 'no auth planned yet' ||
+    normalized === 'no deployed server planned'
+  );
+}
+
 function formatTaskList(items: string[]): string {
   const picked = pickDistinct(items, 4);
   if (picked.length === 0) {
@@ -1054,7 +1369,7 @@ function cleanTaskText(value: string): string {
     .replace(/\s+/g, ' ')
     .replace(/\s+\.$/, '.')
     .trim()
-    .replace(/[;,:-]+$/u, '')
+    .replace(/[;,:.-]+$/u, '')
     .trim();
 }
 
@@ -1065,6 +1380,10 @@ function normalizeTaskKey(value: string): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function isMissingOrLowConfidenceSection(
@@ -1112,28 +1431,34 @@ function renderTodoSkeleton(appName: string): string {
     '',
     '## Phase 0: Orientation And Planning',
     '',
-    '- [ ] Review `project/` files for accuracy and planning adjustments.',
-    '- [ ] Resolve every `# TodoForContext(optional):` marker in `project/info.md` by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
-    '- [ ] Refresh the agent-derived roadmap from `project/info.md` and review it for accuracy before implementation.',
-    '',
     '## Phase 1: App Shell And First Flow',
-    '',
-    '- [ ] Establish the app shell and first implementation-ready route for the MVP.',
-    '- [ ] Implement the first concrete product flow from `project/info.md` and the roadmap.',
     '',
     '## Phase 2: Data Layer',
     '',
-    '- [ ] Implement the initial data layer and service boundaries needed for the MVP.',
-    '',
     '## Phase 3: Complete Product Flows',
-    '',
-    '- [ ] Complete the remaining product flows needed for the MVP.',
     '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
-    '- [ ] Run `mds doctor --ci` and address errors before release.',
-    '',
   ].join('\n');
+}
+
+async function inspectRoadmapProjectContext(projectPath: string): Promise<RoadmapProjectContext> {
+  const srcAppDir = path.join(projectPath, 'src', 'app');
+  const rootAppDir = path.join(projectPath, 'app');
+  const srcExpositionDir = path.join(srcAppDir, 'exposition');
+  const rootExpositionDir = path.join(rootAppDir, 'exposition');
+  const srcStylistPath = path.join(srcExpositionDir, 'stylist.tsx');
+  const rootStylistPath = path.join(rootExpositionDir, 'stylist.tsx');
+  const hasSrcApp = await pathExists(srcAppDir);
+  const hasRootApp = await pathExists(rootAppDir);
+  const hasExposition = (await pathExists(srcExpositionDir)) || (await pathExists(rootExpositionDir));
+  const hasStylist = (await pathExists(srcStylistPath)) || (await pathExists(rootStylistPath));
+
+  return {
+    appDirectory: hasSrcApp ? 'src/app' : hasRootApp ? 'app' : null,
+    hasExposition,
+    hasStylist,
+  };
 }
 
 function ensureTrailingNewline(value: string): string {
