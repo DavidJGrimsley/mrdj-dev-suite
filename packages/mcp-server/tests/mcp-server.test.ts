@@ -1,7 +1,10 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -10,6 +13,7 @@ import {
   buildWrapUpPromptText,
   classifyMcpServerRuntimeMode,
   executeTool,
+  finalizeGeneratedSuperStackProject,
   listTools,
   listResources,
   readResource,
@@ -76,6 +80,35 @@ describe('mds MCP helpers', () => {
 
     expect(result.some((skill) => skill.id === 'deployment')).toBe(true);
     expect(result.every((skill) => skill.uri.startsWith('mds://skills/'))).toBe(true);
+  });
+
+  it('starts through the packaged mds-mcp-server entrypoint and exposes Super Stack tools', async () => {
+    const testDir = path.dirname(fileURLToPath(import.meta.url));
+    const mcpServerEntrypoint = path.resolve(testDir, '..', 'dist', 'stdio.js');
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [mcpServerEntrypoint],
+    });
+    const client = new Client(
+      {
+        name: 'mds-mcp-server-launcher-test',
+        version: '0.0.0',
+      },
+      {
+        capabilities: {},
+      }
+    );
+
+    try {
+      await client.connect(transport);
+      const tools = await client.listTools();
+      const toolNames = new Set(tools.tools.map((tool) => tool.name));
+      expect(toolNames.has('mds_runtime_versions')).toBe(true);
+      expect(toolNames.has('create_expo_super_stack_resolve_info')).toBe(true);
+      expect(toolNames.has('create_expo_super_stack_generate')).toBe(true);
+    } finally {
+      await client.close().catch(() => undefined);
+    }
   });
 
   it('generates a Doctor-backed refactor plan with related resources', async () => {
@@ -290,6 +323,7 @@ describe('mds MCP helpers', () => {
   it('resolves complete project info into a ready generate payload through MCP', async () => {
     const resolved = (await executeTool('create_expo_super_stack_resolve_info', {
       parentDir: 'F:/ReactNativeApps',
+      appName: 'experimental2',
       infoMarkdown: [
         '# Experiment-Tracker Project Info',
         '',
@@ -342,20 +376,110 @@ describe('mds MCP helpers', () => {
     })) as {
       status: string;
       appName?: string;
-      answers: { stylingSystem?: string; scriptLanguage?: string };
+      answers: { stylingSystem?: string; scriptLanguage?: string; displayAppName?: string };
       missingQuestionIds: string[];
       ambiguousQuestionIds: string[];
-      generateInput?: { appName: string; confirmed: boolean; answers: Record<string, unknown> };
+      generateInput?: {
+        appName: string;
+        confirmed: boolean;
+        answers: Record<string, unknown>;
+        canonicalProjectInfoMarkdown: string;
+      };
     };
 
     expect(resolved.status).toBe('confirm');
-    expect(resolved.appName).toBe('experimental');
+    expect(resolved.appName).toBe('experimental2');
+    expect(resolved.answers.displayAppName).toBe('Experimental');
     expect(resolved.answers.scriptLanguage).toBe('typescript');
     expect(resolved.answers.stylingSystem).toBe('nativewindui');
     expect(resolved.missingQuestionIds).toEqual([]);
     expect(resolved.ambiguousQuestionIds).toEqual([]);
-    expect(resolved.generateInput?.appName).toBe('experimental');
+    expect(resolved.generateInput?.appName).toBe('experimental2');
     expect(resolved.generateInput?.confirmed).toBe(true);
+    expect(resolved.generateInput?.answers.displayAppName).toBe('Experimental');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).toContain('## Core Flows and Features');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).toContain('Track experiments');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).toContain('- Initial Deployment plan: App Store');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).toContain('# Experimental Project Info');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).not.toContain('## Imported Notes');
+    expect(resolved.generateInput?.canonicalProjectInfoMarkdown).not.toContain('Source project:');
+  });
+
+  it('finalizes generated super-stack project memory from canonical info markdown', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-generate-finalize-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist.tsx'), 'export default null;\n', 'utf8');
+    await writeFile(path.join(projectPath, 'project', 'info.md'), '# Old Info\n', 'utf8');
+
+    const canonicalProjectInfoMarkdown = [
+      '# Experimental Project Info',
+      '',
+      '## App Name',
+      'Experimental',
+      '',
+      '## Target Users',
+      'Scientists and people learning how to conduct experiments',
+      '',
+      '## Product Goals',
+      'Provide a way for scientists to track and manage experiments effectively.',
+      '',
+      '## First User Flow',
+      'Create an experiment',
+      '',
+      '## Core Flows and Features',
+      '- Track experiments',
+      '- Add notes and images',
+      '',
+      '## Screens',
+      '- New',
+      '- Track',
+      '',
+      '# Tech Stack & CESS Onboarding',
+      '',
+      '- TypeScript: Yes',
+      '- Package Manager: npm',
+      '- Navigation: Expo Router',
+      '- Type of Navigation: Drawer + Tabs',
+      '- Expo Router app directory: src/app',
+      '- Platform-specific organization: platform-specific files only',
+      '- Platform layout mode: shared layouts',
+      '- Web output: none',
+      '- Style Library: NativeWindUI',
+      '- Components from create-expo-app: Yes',
+      '- Expo UI: Yes',
+      '- Expo UI Universal components: Yes',
+      '- Expo Native Tabs: Yes',
+      '- State management library: None',
+      '- Auth: None',
+      '- Data Categories: Local UI/app state, File/image uploads or storage',
+      '- Starting Data mode: local dummy data with Expo SQLite',
+      '- EAS: Yes',
+      '- EAS Usage: Building mobile apps',
+      '- Deployed server: no deployed server planned',
+      '- Initial Deployment plan: App Store',
+      '- Start with MDS project guidelines template: Yes',
+      '- Use test-to-main safeguards: Yes',
+      '',
+    ].join('\n');
+
+    const roadmap = await finalizeGeneratedSuperStackProject({
+      projectPath,
+      appDirectory: 'src',
+      canonicalProjectInfoMarkdown,
+    });
+
+    const info = await readFile(path.join(projectPath, 'project', 'info.md'), 'utf8');
+    const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
+    expect(info).toContain('Experimental Project Info');
+    expect(info).toContain('- Initial Deployment plan: App Store');
+    expect(roadmap.write).toBe(true);
+    expect(roadmap.wrote).toBe(true);
+    expect(roadmap.needsClarification).toBe(false);
+    expect(todo).toContain('Implement the first core user flow: Create an experiment');
+    expect(todo).toContain('Prepare store/distribution packaging, review notes, and release validation');
   });
 
   it('rejects non-canonical create-expo-super-stack answer aliases', async () => {

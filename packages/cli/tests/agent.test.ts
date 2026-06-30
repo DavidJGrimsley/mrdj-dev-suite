@@ -359,8 +359,8 @@ async function createCodexBundle(): Promise<string> {
       {
         mcpServers: {
           'mr-djs-dev-suite': {
-            command: 'npx',
-            args: ['-y', '@mr.dj2u/mcp-server@0.1.9'],
+            command: 'mds-mcp-server',
+            args: [],
           },
         },
       },

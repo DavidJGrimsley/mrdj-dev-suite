@@ -45,9 +45,17 @@ export interface CessIntakeAnswers {
   authBackend?: CessAuthBackend;
   easSetup?: boolean;
   displayAppName?: string;
+  overview?: string;
   audience?: string;
+  problemStatement?: string;
+  productGoals?: string;
+  nonGoals?: string;
   coreFlows?: string;
   screens?: string;
+  monetizationStrategy?: string;
+  teamContext?: string;
+  laterScope?: string;
+  researchNotes?: string;
   dataNeedSelections?: string[];
   dataNeedsOther?: string;
   targetPlatforms?: string[];
@@ -521,9 +529,9 @@ export function extractCessInfoFromMarkdown(input: {
   const assignedAnswerSources = new Map<keyof CessIntakeAnswers, { priority: number; note: string }>();
   const usedSections = new Set<string>();
   const explicitAppName = normalizeText(input.appName);
-  let derivedDisplayName = explicitAppName;
-  let derivedDisplayNamePriority = explicitAppName ? EXPLICIT_INPUT_PRIORITY : undefined;
-  let derivedDisplayNameNote = explicitAppName ? 'Explicit app name input' : undefined;
+  let derivedDisplayName: string | undefined;
+  let derivedDisplayNamePriority: number | undefined;
+  let derivedDisplayNameNote: string | undefined;
   let derivedFolderSlug = explicitAppName ? slugifyAppName(explicitAppName) : undefined;
 
   const recordEvidence = (key: string, note: string): void => {
@@ -591,13 +599,13 @@ export function extractCessInfoFromMarkdown(input: {
   }
 
   const appNameSection = getMarkdownSection(sections, 'App Name');
-  if (!derivedDisplayName && appNameSection) {
+  if (appNameSection) {
     const appNameFromSection = normalizeSectionText(appNameSection);
     if (appNameFromSection && !isGenericTextValue(appNameFromSection)) {
       derivedDisplayName = appNameFromSection;
       derivedDisplayNamePriority = VISIBLE_SECTION_PRIORITY;
       derivedDisplayNameNote = 'App Name section';
-      derivedFolderSlug = slugifyAppName(appNameFromSection);
+      derivedFolderSlug ??= slugifyAppName(appNameFromSection);
       recordEvidence('appName', `Derived app name from App Name section: ${appNameFromSection}`);
     }
     usedSections.add('App Name');
@@ -613,18 +621,44 @@ export function extractCessInfoFromMarkdown(input: {
   if (!derivedFolderSlug && derivedDisplayName) {
     derivedFolderSlug = slugifyAppName(derivedDisplayName);
   }
+  if (!derivedDisplayName && explicitAppName) {
+    derivedDisplayName = explicitAppName;
+    derivedDisplayNamePriority = EXPLICIT_INPUT_PRIORITY;
+    derivedDisplayNameNote = 'Explicit app name input';
+  }
 
   const targetUsers = getMarkdownSection(sections, 'Target Users');
+  const overview = getMarkdownSection(sections, 'Overview');
+  if (overview) {
+    usedSections.add('Overview');
+    assignValue('overview', normalizeSectionText(overview), 'Overview section', VISIBLE_SECTION_PRIORITY);
+  }
   if (targetUsers) {
     usedSections.add('Target Users');
     assignValue('audience', normalizeSectionText(targetUsers), 'Target Users section', VISIBLE_SECTION_PRIORITY);
   } else {
-    const overview = getMarkdownSection(sections, 'Overview');
     const overviewAudience = extractAudienceFromOverview(overview);
     if (overviewAudience) {
-      usedSections.add('Overview');
       assignValue('audience', overviewAudience, 'Overview section', VISIBLE_SECTION_PRIORITY);
     }
+  }
+
+  const problemStatement = getMarkdownSection(sections, 'Problem this app solves');
+  if (problemStatement) {
+    usedSections.add('Problem this app solves');
+    assignValue('problemStatement', normalizeSectionText(problemStatement), 'Problem this app solves section', VISIBLE_SECTION_PRIORITY);
+  }
+
+  const productGoals = getMarkdownSection(sections, 'Product Goals');
+  if (productGoals) {
+    usedSections.add('Product Goals');
+    assignValue('productGoals', normalizeSectionText(productGoals), 'Product Goals section', VISIBLE_SECTION_PRIORITY);
+  }
+
+  const nonGoals = getMarkdownSection(sections, 'Non-Goals', 'Non Goals');
+  if (nonGoals) {
+    usedSections.add(sections.has('Non-Goals') ? 'Non-Goals' : 'Non Goals');
+    assignValue('nonGoals', normalizeSectionText(nonGoals), 'Non-Goals section', VISIBLE_SECTION_PRIORITY);
   }
 
   const firstUserFlow = getMarkdownSection(sections, 'First User Flow');
@@ -675,6 +709,30 @@ export function extractCessInfoFromMarkdown(input: {
   if (platforms) {
     usedSections.add('Platforms');
     extractPlatformDecisions(platforms, assignValue, VISIBLE_SECTION_PRIORITY);
+  }
+
+  const monetizationStrategy = getMarkdownSection(sections, 'Monetization Strategy', 'Monetization');
+  if (monetizationStrategy) {
+    usedSections.add(sections.has('Monetization Strategy') ? 'Monetization Strategy' : 'Monetization');
+    assignValue('monetizationStrategy', normalizeSectionText(monetizationStrategy), 'Monetization Strategy section', VISIBLE_SECTION_PRIORITY);
+  }
+
+  const teamContext = getMarkdownSection(sections, 'Team Context');
+  if (teamContext) {
+    usedSections.add('Team Context');
+    assignValue('teamContext', normalizeSectionText(teamContext), 'Team Context section', VISIBLE_SECTION_PRIORITY);
+  }
+
+  const laterScope = getMarkdownSection(sections, 'Later Scope & Possibilities', 'Later Scope');
+  if (laterScope) {
+    usedSections.add(sections.has('Later Scope & Possibilities') ? 'Later Scope & Possibilities' : 'Later Scope');
+    assignValue('laterScope', normalizeSectionText(laterScope), 'Later Scope & Possibilities section', VISIBLE_SECTION_PRIORITY);
+  }
+
+  const researchNotes = getMarkdownSection(sections, 'Research, Notes, and References', 'Research Notes', 'References');
+  if (researchNotes) {
+    usedSections.add(sections.has('Research, Notes, and References') ? 'Research, Notes, and References' : sections.has('Research Notes') ? 'Research Notes' : 'References');
+    assignValue('researchNotes', normalizeSectionText(researchNotes), 'Research, Notes, and References section', VISIBLE_SECTION_PRIORITY);
   }
 
   const packageChoices = getMarkdownSection(sections, 'Package Choices');
@@ -1769,9 +1827,17 @@ export function normalizeCessIntakeAnswers(
   normalized.authBackend = normalizeEnum(answers.authBackend, ['none', 'supabase', 'firebase']);
   normalized.easSetup = normalizeBoolean(answers.easSetup);
   normalized.displayAppName = normalizeText(answers.displayAppName);
+  normalized.overview = normalizeText(answers.overview);
   normalized.audience = normalizeText(answers.audience);
+  normalized.problemStatement = normalizeText(answers.problemStatement);
+  normalized.productGoals = normalizeText(answers.productGoals);
+  normalized.nonGoals = normalizeText(answers.nonGoals);
   normalized.coreFlows = normalizeText(answers.coreFlows);
   normalized.screens = normalizeOptionalDeferText(answers.screens);
+  normalized.monetizationStrategy = normalizeText(answers.monetizationStrategy);
+  normalized.teamContext = normalizeText(answers.teamContext);
+  normalized.laterScope = normalizeText(answers.laterScope);
+  normalized.researchNotes = normalizeText(answers.researchNotes);
   normalized.dataNeedSelections = normalizeStringArray(answers.dataNeedSelections);
   normalized.dataNeedsOther = normalizeText(answers.dataNeedsOther);
   normalized.targetPlatforms = normalizePlatforms(answers.targetPlatforms);
@@ -1860,9 +1926,34 @@ export function buildMdsFlags(
 ): string[] {
   const flags = [
     `--mds-app-name=${quoteFlagValue(onboardAnswers.appName)}`,
+    ...(onboardAnswers.overview
+      ? [`--mds-overview=${quoteFlagValue(onboardAnswers.overview)}`]
+      : []),
     `--mds-audience=${quoteFlagValue(onboardAnswers.audience)}`,
+    ...(onboardAnswers.problemStatement
+      ? [`--mds-problem-statement=${quoteFlagValue(onboardAnswers.problemStatement)}`]
+      : []),
+    ...(onboardAnswers.productGoals
+      ? [`--mds-product-goals=${quoteFlagValue(onboardAnswers.productGoals)}`]
+      : []),
+    ...(onboardAnswers.nonGoals
+      ? [`--mds-non-goals=${quoteFlagValue(onboardAnswers.nonGoals)}`]
+      : []),
     `--mds-core-flows=${quoteFlagValue(onboardAnswers.coreFlows)}`,
+    ...(onboardAnswers.monetizationStrategy
+      ? [`--mds-monetization-strategy=${quoteFlagValue(onboardAnswers.monetizationStrategy)}`]
+      : []),
+    ...(onboardAnswers.teamContext
+      ? [`--mds-team-context=${quoteFlagValue(onboardAnswers.teamContext)}`]
+      : []),
+    ...(onboardAnswers.laterScope
+      ? [`--mds-later-scope=${quoteFlagValue(onboardAnswers.laterScope)}`]
+      : []),
+    ...(onboardAnswers.researchNotes
+      ? [`--mds-research-notes=${quoteFlagValue(onboardAnswers.researchNotes)}`]
+      : []),
     `--mds-data-needs=${quoteFlagValue(buildDataNeedsFlagValue(intakeAnswers))}`,
+    `--mds-deployment-target=${quoteFlagValue(onboardAnswers.deploymentTarget)}`,
     `--mds-platforms=${onboardAnswers.targetPlatforms.join(',')}`,
     `--mds-first-platform=${onboardAnswers.firstTargetPlatform}`,
     `--mds-platform-strategy=${onboardAnswers.platformFileStrategy}`,
@@ -1995,9 +2086,17 @@ function buildResolvedCessAnswers(
     authBackend: currentAnswers.authBackend ?? STACK_DEFAULTS.authBackend,
     easSetup: currentAnswers.easSetup ?? STACK_DEFAULTS.easSetup,
     displayAppName: currentAnswers.displayAppName ?? appDisplayName ?? onboardAnswers.appName ?? appName,
+    overview: currentAnswers.overview ?? onboardAnswers.overview,
     audience: currentAnswers.audience ?? onboardAnswers.audience,
+    problemStatement: currentAnswers.problemStatement ?? onboardAnswers.problemStatement,
+    productGoals: currentAnswers.productGoals ?? onboardAnswers.productGoals,
+    nonGoals: currentAnswers.nonGoals ?? onboardAnswers.nonGoals,
     coreFlows: currentAnswers.coreFlows ?? onboardAnswers.coreFlows ?? AGENT_DERIVED_CORE_FLOWS,
     screens,
+    monetizationStrategy: currentAnswers.monetizationStrategy ?? onboardAnswers.monetizationStrategy,
+    teamContext: currentAnswers.teamContext ?? onboardAnswers.teamContext,
+    laterScope: currentAnswers.laterScope ?? onboardAnswers.laterScope,
+    researchNotes: currentAnswers.researchNotes ?? onboardAnswers.researchNotes,
     dataNeedSelections: normalizeStringArray(currentAnswers.dataNeedSelections) ?? ['Local UI/app state'],
     dataNeedsOther: currentAnswers.dataNeedsOther,
     targetPlatforms,
@@ -2055,9 +2154,17 @@ function buildOnboardArgvFromCess(
     generatorStateManagement: answers.stateManagement,
     generatorAuthBackend: answers.authBackend,
     generatorEasSetup: answers.easSetup,
+    overview: normalizeText(answers.overview),
     audience: normalizeText(answers.audience),
+    problemStatement: normalizeText(answers.problemStatement),
+    productGoals: normalizeText(answers.productGoals),
+    nonGoals: normalizeText(answers.nonGoals),
     coreFlows: normalizeText(answers.coreFlows),
     screens,
+    monetizationStrategy: normalizeText(answers.monetizationStrategy),
+    teamContext: normalizeText(answers.teamContext),
+    laterScope: normalizeText(answers.laterScope),
+    researchNotes: normalizeText(answers.researchNotes),
     dataNeeds,
     deploymentTarget: normalizeText(answers.deploymentTarget),
     createExpoComponents: answers.includeCreateExpoComponents,
@@ -2314,7 +2421,10 @@ function formatStylingLabel(value: CessStylingSystem): string {
 }
 
 function quoteFlagValue(value: string): string {
-  return value;
+  return value
+    .replace(/\r?\n/gu, '; ')
+    .replace(/\s{2,}/gu, ' ')
+    .trim();
 }
 
 function dedupe(values: string[]): string[] {

@@ -329,6 +329,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] After editing the generated app for a while, we need to finally update the generator in create expo super stack. to do this, please review StylistCheck app (all of it's pages, components and such, not just the Stylist), possibly by creating a new app with the same command and diffing the files to update the updateGenerator.md. Then update the app generator per updateGenerator.md. 
 - [x] Ensure that create expo super stack is actually using the layout choice chosen during create expo stack. 
 - [ ] Set up CI for npm packages
+- [ ] Add tool to agent/mcp that recalls all components and packages that came with the template app and create-expo-app components so that they can be used later if the dev has a use for them but were ejected.
 ### Create Expo Super Stack
 - [ ] Remove question about using the latest expo sdk from onboarding CLI. We are only going to use latest. We can have a note about it in the very beginning.
 - [ ] Add light and dark mode to generated app in the way that create expo app does.
@@ -357,6 +358,7 @@ env:...
 › Using ~56.0.6 instead of ~56.0.8 for expo because this version was explicitly provided. Packages excluded from dependency validation should be listed in expo.install.exclude in package.json
 ```
 - [ ] Fix issue around 'On Node 24, that now emits [DEP0190] when you pass args with shell: true, because Node concatenates them for the shell instead of escaping them safely.
+- [ ] Integrate npx react-doctor@latest into the doctor workflow and/or as referenced here: https://www.linkedin.com/posts/lukebrandonfarrell_reactnative-reactscan-developertools-share-7473665720728403969-5xMg/?highlightedUpdateUrn=urn%3Ali%3Aactivity%3A7473665721806340097&origin=SOCIAL_SHARE&utm_source=share&utm_medium=member_desktop&rcm=ACoAADYlT3gBZq1-0LP97LSzLp7orFbYo1Rwzc8
 
 ## Future Goals
 - [ ] Consider adding agentic workflows for issues on github.

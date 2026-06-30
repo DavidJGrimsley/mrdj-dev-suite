@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
+import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -16,6 +17,7 @@ import {
   validateCessGenerationReadiness,
 } from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
+import { renderInfo } from '@mr.dj2u/cli/project-memory';
 import { generateProjectRoadmap } from '@mr.dj2u/cli/roadmap';
 import {
   getPromptSpec,
@@ -343,6 +345,7 @@ export function listTools(): MCPTool[] {
           parentDir: { type: 'string' },
           appName: { type: 'string' },
           answers: { type: 'object', additionalProperties: true },
+          canonicalProjectInfoMarkdown: { type: 'string' },
           confirmed: { type: 'boolean' },
         },
         required: ['confirmed'],
@@ -763,15 +766,17 @@ function registerTools(server: McpServer): void {
         parentDir: z.string().optional(),
         appName: z.string().optional(),
         answers: z.record(z.string(), z.unknown()).optional(),
+        canonicalProjectInfoMarkdown: z.string().optional(),
         confirmed: z.boolean(),
       },
     },
-    async ({ parentDir, appName, answers, confirmed }) =>
+    async ({ parentDir, appName, answers, canonicalProjectInfoMarkdown, confirmed }) =>
       toolJson(
         await generateCreateExpoSuperStack({
           parentDir,
           appName,
           answers,
+          canonicalProjectInfoMarkdown,
           confirmed,
         })
       )
@@ -1620,6 +1625,7 @@ function resolveCreateExpoSuperStackInfo(input: Record<string, unknown>): {
     parentDir: string;
     appName: string;
     answers: Record<string, unknown>;
+    canonicalProjectInfoMarkdown: string;
     confirmed: true;
   };
 } {
@@ -1649,13 +1655,22 @@ function resolveCreateExpoSuperStackInfo(input: Record<string, unknown>): {
     answers,
   });
   const canConfirm = Boolean(parentDir && appName) && missingQuestionIds.length === 0 && extracted.ambiguousQuestionIds.length === 0;
-  const summaryLines = canConfirm
+  const resolvedPlan = canConfirm
     ? resolveCessPlan({
         parentDir,
         appName,
         answers,
-      }).summaryLines
-    : [];
+      })
+    : null;
+  const summaryLines = resolvedPlan?.summaryLines ?? [];
+  const canonicalProjectInfoMarkdown =
+    resolvedPlan && parentDir && appName
+      ? buildCanonicalProjectInfoMarkdown({
+          projectPath: path.resolve(parentDir, appName),
+          sourceInfoMarkdown: infoMarkdown,
+          plan: resolvedPlan,
+        })
+      : undefined;
 
   return {
     status: canConfirm ? 'confirm' : 'needs-input',
@@ -1668,13 +1683,14 @@ function resolveCreateExpoSuperStackInfo(input: Record<string, unknown>): {
     extracted,
     runtime: getMdsRuntimeVersions(),
     generateInput: canConfirm
-      ? {
-          parentDir: parentDir as string,
-          appName: appName as string,
-          answers,
-          confirmed: true,
-        }
-      : undefined,
+        ? {
+            parentDir: parentDir as string,
+            appName: appName as string,
+            answers,
+            canonicalProjectInfoMarkdown: canonicalProjectInfoMarkdown as string,
+            confirmed: true,
+          }
+        : undefined,
   };
 }
 
@@ -1734,6 +1750,7 @@ async function generateCreateExpoSuperStack(
       confirmed: true,
     },
   });
+  const canonicalProjectInfoMarkdown = readString(input.canonicalProjectInfoMarkdown);
   const invocation = resolveSuperStackInvocationSpec();
   const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
   const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
@@ -1753,9 +1770,10 @@ async function generateCreateExpoSuperStack(
       ].join('\n')
     );
   }
-  const roadmap = await generateProjectRoadmap(plan.projectPath, {
-    write: false,
-    preserveStatus: true,
+  const roadmap = await finalizeGeneratedSuperStackProject({
+    projectPath: plan.projectPath,
+    appDirectory: plan.onboardAnswers.appDirectory,
+    canonicalProjectInfoMarkdown,
   });
 
   return {
@@ -1767,6 +1785,37 @@ async function generateCreateExpoSuperStack(
     stdoutTail: tailText(result.stdout, 60),
     stderrTail: tailText(result.stderr, 40),
   };
+}
+
+function buildCanonicalProjectInfoMarkdown(input: {
+  projectPath: string;
+  sourceInfoMarkdown: string;
+  plan: ReturnType<typeof resolveCessPlan>;
+}): string {
+  return ensureTrailingNewline(
+    renderInfo(input.projectPath, input.plan.onboardAnswers, input.sourceInfoMarkdown, {
+      preserveImportedNotes: false,
+    })
+  );
+}
+
+export async function finalizeGeneratedSuperStackProject(input: {
+  projectPath: string;
+  appDirectory: 'src' | 'root';
+  canonicalProjectInfoMarkdown?: string;
+}): Promise<Awaited<ReturnType<typeof generateProjectRoadmap>>> {
+  if (input.canonicalProjectInfoMarkdown) {
+    await writeFile(
+      path.join(input.projectPath, 'project', 'info.md'),
+      ensureTrailingNewline(input.canonicalProjectInfoMarkdown),
+      'utf8'
+    );
+  }
+
+  return await generateProjectRoadmap(input.projectPath, {
+    write: true,
+    preserveStatus: true,
+  });
 }
 
 async function runCommandCapture(
@@ -1812,6 +1861,10 @@ function tailText(value: string, lines: number): string {
     .filter(Boolean)
     .slice(-lines)
     .join('\n');
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith('\n') ? value : `${value}\n`;
 }
 
 function findMissingSuperStackArtifacts(

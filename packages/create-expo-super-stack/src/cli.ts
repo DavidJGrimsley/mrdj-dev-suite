@@ -33,9 +33,17 @@ export interface ParsedArgs {
   helpRequested: boolean;
   mds: {
     appName?: string;
+    overview?: string;
     audience?: string;
+    problemStatement?: string;
+    productGoals?: string;
+    nonGoals?: string;
     coreFlows?: string;
     screens?: string;
+    monetizationStrategy?: string;
+    teamContext?: string;
+    laterScope?: string;
+    researchNotes?: string;
     dataNeeds?: string;
     dataStart?: "local" | "supabase";
     deploymentTarget?: string;
@@ -71,17 +79,52 @@ type OnboardWebOutput = "static" | "server" | "spa" | "none";
 type ExpoWebOutput = "single" | "static" | "server";
 const DEFAULT_PROJECT_NAME = "my-expo-app";
 export const EXPECTED_EXPO_SDK_MAJOR = 56;
+export const EXPECTED_EXPO_PACKAGE_SPEC = "expo@latest";
 const STYLIST_SYNC_API_ROUTES = [
   "app/exposition/stylist-sync+api.ts",
   "src/app/exposition/stylist-sync+api.ts",
 ] as const;
 
-interface CommandSpec {
+export interface CommandSpec {
   command: string;
   args: string[];
   display: string;
   shell?: boolean;
   env?: Record<string, string>;
+}
+
+export function prepareCommandForSpawn(
+  spec: CommandSpec,
+  {
+    platform = process.platform,
+    comSpec = process.env.ComSpec,
+  }: { platform?: typeof process.platform; comSpec?: string | undefined } = {},
+): CommandSpec {
+  if (platform !== "win32" || spec.shell === false) {
+    return { ...spec, shell: spec.shell ?? false };
+  }
+
+  return {
+    ...spec,
+    command: comSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", buildWindowsShellCommand(spec.command, spec.args)],
+    shell: false,
+  };
+}
+
+function buildWindowsShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(quoteWindowsShellArg).join(" ");
+}
+
+function quoteWindowsShellArg(value: string): string {
+  if (value.length === 0) {
+    return '""';
+  }
+  const escaped = value.replace(/(["^&|<>])/g, "^$1");
+  if (/^[A-Za-z0-9_./:@+=,-]+$/u.test(escaped)) {
+    return escaped;
+  }
+  return `"${escaped}"`;
 }
 
 export async function main(): Promise<void> {
@@ -154,12 +197,10 @@ export async function main(): Promise<void> {
     projectName,
     plan.answers.targetPlatforms,
   );
-  const stylistWebOutputRepairs = plan.answers.targetPlatforms.includes("web")
-    ? await repairExpoWebOutputForStylistLifecycle(
-        projectPath,
-        plan.answers.webOutput,
-      )
-    : [];
+  const stylistWebOutputRepairs = await repairExpoWebOutputForStylistLifecycle(
+    projectPath,
+    plan.answers.webOutput,
+  );
   const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const typeSupportRepairs = await repairGeneratedTypeSupport(projectPath, {
     needsNodeTypes: hasStylistSyncRoute,
@@ -397,8 +438,28 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg.startsWith("--mds-overview=")) {
+      mds.overview = arg.slice("--mds-overview=".length);
+      continue;
+    }
+
     if (arg.startsWith("--mds-audience=")) {
       mds.audience = arg.slice("--mds-audience=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-problem-statement=")) {
+      mds.problemStatement = arg.slice("--mds-problem-statement=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-product-goals=")) {
+      mds.productGoals = arg.slice("--mds-product-goals=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-non-goals=")) {
+      mds.nonGoals = arg.slice("--mds-non-goals=".length);
       continue;
     }
 
@@ -409,6 +470,26 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg.startsWith("--mds-screens=")) {
       mds.screens = arg.slice("--mds-screens=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-monetization-strategy=")) {
+      mds.monetizationStrategy = arg.slice("--mds-monetization-strategy=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-team-context=")) {
+      mds.teamContext = arg.slice("--mds-team-context=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-later-scope=")) {
+      mds.laterScope = arg.slice("--mds-later-scope=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-research-notes=")) {
+      mds.researchNotes = arg.slice("--mds-research-notes=".length);
       continue;
     }
 
@@ -684,9 +765,13 @@ async function runCreateExpoStack(
   const command = await resolveCreateExpoStackCommand(overrideBin);
   console.log(`Using create-expo-stack command: ${command.display}`);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command.command, [...command.args, ...args], {
+    const spawnSpec = prepareCommandForSpawn({
+      ...command,
+      args: [...command.args, ...args],
+    });
+    const child = spawn(spawnSpec.command, spawnSpec.args, {
       cwd,
-      shell: command.shell ?? process.platform === "win32",
+      shell: spawnSpec.shell ?? false,
       stdio: "inherit",
       windowsHide: true,
     });
@@ -779,7 +864,7 @@ export async function runExpoProjectChecks(
     );
   } else {
     console.log(
-      `  Expo already targets SDK ${EXPECTED_EXPO_SDK_MAJOR}; skipping expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}.`,
+      `  Expo dependency already targets SDK ${EXPECTED_EXPO_SDK_MAJOR} updates; skipping expo install ${EXPECTED_EXPO_PACKAGE_SPEC}.`,
     );
   }
   await runProjectCommand(
@@ -805,9 +890,10 @@ async function runProjectCommand(
 ): Promise<void> {
   console.log(`  ${spec.display}`);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(spec.command, spec.args, {
+    const spawnSpec = prepareCommandForSpawn(spec);
+    const child = spawn(spawnSpec.command, spawnSpec.args, {
       cwd: projectPath,
-      shell: spec.shell ?? process.platform === "win32",
+      shell: spawnSpec.shell ?? false,
       stdio: "inherit",
       env: spec.env ? { ...process.env, ...spec.env } : process.env,
       windowsHide: true,
@@ -974,8 +1060,13 @@ async function ensureLocalCreateExpoStackBuild(
 
 async function commandExists(command: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn(command, ["--version"], {
-      shell: process.platform === "win32",
+    const spec = prepareCommandForSpawn({
+      command,
+      args: ["--version"],
+      display: `${command} --version`,
+    });
+    const child = spawn(spec.command, spec.args, {
+      shell: spec.shell ?? false,
       stdio: "ignore",
       windowsHide: true,
     });
@@ -1469,11 +1560,16 @@ export async function repairExpoProjectIdentifiers(
   }
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
   const normalizedTargetPlatforms = normalizeExpoConfigPlatforms(targetPlatforms);
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  const desiredPlatforms =
+    hasStylistSyncRoute && normalizedTargetPlatforms.length > 0
+      ? ensurePlatformIncluded(normalizedTargetPlatforms, "web")
+      : normalizedTargetPlatforms;
   if (
-    normalizedTargetPlatforms.length > 0 &&
-    JSON.stringify(currentPlatforms) !== JSON.stringify(normalizedTargetPlatforms)
+    desiredPlatforms.length > 0 &&
+    JSON.stringify(currentPlatforms) !== JSON.stringify(desiredPlatforms)
   ) {
-    expo.platforms = normalizedTargetPlatforms;
+    expo.platforms = desiredPlatforms;
     changed = true;
   }
   const shouldIncludeAndroid = targetPlatforms.includes("android");
@@ -1638,6 +1734,17 @@ export async function repairExpoWebOutputForStylistLifecycle(
     return [];
   }
 
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  let changed = false;
+  if (hasStylistSyncRoute && Array.isArray(expo.platforms)) {
+    const platforms = expo.platforms
+      .map((platform) => readString(platform))
+      .filter((platform): platform is string => Boolean(platform));
+    if (!platforms.includes("web")) {
+      expo.platforms = ensurePlatformIncluded(platforms, "web");
+      changed = true;
+    }
+  }
   const hasWebPlatform =
     !Array.isArray(expo.platforms) ||
     expo.platforms.some((platform) => readString(platform) === "web");
@@ -1645,7 +1752,6 @@ export async function repairExpoWebOutputForStylistLifecycle(
     return [];
   }
 
-  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const preferred = normalizeExpoWebOutput(preferredWebOutput);
   const desiredOutput: ExpoWebOutput = hasStylistSyncRoute
     ? "server"
@@ -1653,17 +1759,23 @@ export async function repairExpoWebOutputForStylistLifecycle(
 
   const webConfig = isRecord(expo.web) ? expo.web : {};
   const currentOutput = readString(webConfig.output);
-  if (currentOutput === desiredOutput) {
+  if (currentOutput === desiredOutput && !changed) {
     return [];
   }
 
-  expo.web = {
-    ...webConfig,
-    output: desiredOutput,
-  };
+  if (currentOutput !== desiredOutput) {
+    expo.web = {
+      ...webConfig,
+      output: desiredOutput,
+    };
+  }
 
   await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
   return [appJsonPath];
+}
+
+function ensurePlatformIncluded<T extends string>(platforms: T[], platform: T): T[] {
+  return platforms.includes(platform) ? platforms : [...platforms, platform];
 }
 
 async function hasStylistSyncApiRoute(projectPath: string): Promise<boolean> {
@@ -1846,27 +1958,27 @@ export function buildExpoLatestSdkCommand(
     case "pnpm":
       return {
         command: "pnpm",
-        args: ["--ignore-workspace", "exec", "expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
-        display: `pnpm --ignore-workspace exec expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
+        args: ["--ignore-workspace", "exec", "expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        display: `pnpm --ignore-workspace exec expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
     case "yarn":
       return {
         command: "yarn",
-        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
-        display: `yarn expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
+        args: ["expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        display: `yarn expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
       };
     case "bun":
       return {
         command: "bunx",
-        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
-        display: `bunx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
+        args: ["expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        display: `bunx expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
       };
     case "npm":
       return {
         command: "npx",
-        args: ["expo", "install", `expo@^${EXPECTED_EXPO_SDK_MAJOR}`],
-        display: `npx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
+        args: ["expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        display: `npx expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
       };
   }
 }
@@ -1890,7 +2002,19 @@ export function shouldRunExpoLatestSdkCommandFromPackageJson(
   const version =
     readString(dependencies.expo) ?? readString(devDependencies.expo);
 
-  return parseExpoSdkMajor(version) !== EXPECTED_EXPO_SDK_MAJOR;
+  if (!version) {
+    return true;
+  }
+
+  if (version.trim().toLowerCase() === "latest") {
+    return false;
+  }
+
+  if (parseExpoSdkMajor(version) !== EXPECTED_EXPO_SDK_MAJOR) {
+    return true;
+  }
+
+  return isPinnedExpoSdkRange(version);
 }
 
 export function parseExpoSdkMajor(version: string | undefined): number | null {
@@ -1899,6 +2023,11 @@ export function parseExpoSdkMajor(version: string | undefined): number | null {
   }
   const match = /(\d+)/u.exec(version);
   return match ? Number.parseInt(match[1] ?? "", 10) : null;
+}
+
+function isPinnedExpoSdkRange(version: string): boolean {
+  const trimmed = version.trim();
+  return trimmed.startsWith("~") || /^\d/u.test(trimmed);
 }
 
 export async function assertExpectedExpoSdk(projectPath: string): Promise<void> {
@@ -2277,9 +2406,17 @@ function buildOnboardArgv(
     generatorStateManagement: generatorChoices.stateManagement,
     generatorAuthBackend: generatorChoices.authBackend,
     generatorEasSetup: generatorChoices.easSetup,
+    overview: parsed.mds.overview,
     audience: parsed.mds.audience,
+    problemStatement: parsed.mds.problemStatement,
+    productGoals: parsed.mds.productGoals,
+    nonGoals: parsed.mds.nonGoals,
     coreFlows: parsed.mds.coreFlows,
     screens: parsed.mds.screens,
+    monetizationStrategy: parsed.mds.monetizationStrategy,
+    teamContext: parsed.mds.teamContext,
+    laterScope: parsed.mds.laterScope,
+    researchNotes: parsed.mds.researchNotes,
     dataNeeds: parsed.mds.dataNeeds,
     dataStart: parsed.mds.dataStart,
     deploymentTarget: parsed.mds.deploymentTarget,

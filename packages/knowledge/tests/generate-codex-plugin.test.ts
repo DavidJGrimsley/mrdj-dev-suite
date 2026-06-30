@@ -74,9 +74,11 @@ describe('generateCodexPluginBundle', () => {
     const mcpRaw = await readFile(path.join(pluginRoot, '.mcp.json'), 'utf8');
     const mcp = JSON.parse(mcpRaw) as { mcpServers: Record<string, { command: string; args: string[] }> };
     expect(mcp.mcpServers['mr-djs-dev-suite']).toEqual({
-      command: 'npx',
-      args: ['-y', '@mr.dj2u/mcp-server@0.1.9'],
+      command: 'mds-mcp-server',
+      args: [],
     });
+    expect(mcpRaw).not.toContain('npx');
+    expect(mcpRaw).not.toContain('@mr.dj2u/mcp-server@latest');
 
     const skillsDirEntries = await readdir(path.join(pluginRoot, 'skills'));
     expect(skillsDirEntries.sort()).toEqual(['alpha-skill', ...workflowSkillIds, 'zeta-skill'].sort());

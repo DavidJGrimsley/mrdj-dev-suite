@@ -4,15 +4,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import chalk from 'chalk';
 
 import { runDoctor } from '@mr.dj2u/doctor';
 import { readKnowledgeResource } from '@mr.dj2u/knowledge';
 import { buildContinueSessionBrief } from '../continue.js';
 import {
+  ensurePublishedMcpServerRuntimeForInstall,
   installVscodeUserMcp,
-  PUBLISHED_MCP_SERVER_ARGS,
-  WINDOWS_PUBLISHED_MCP_SERVER_ARGS,
+  MDS_MCP_SERVER_BIN,
+  WINDOWS_MDS_MCP_SERVER_ARGS,
+  WINDOWS_MDS_MCP_SERVER_COMMAND,
   renderCodexBlock,
   resolveVscodeUserMcpConfigPath,
   resolveServerInvocation,
@@ -66,6 +70,12 @@ const CODEX_PLUGIN_NAME = 'mr-djs-dev-suite';
 const CODEX_PLUGIN_SOURCE_PATH = `./plugins/${CODEX_PLUGIN_NAME}`;
 const CODEX_MARKETPLACE_NAME = 'mds-local';
 const CODEX_PLUGIN_CONFIG_ID = `${CODEX_PLUGIN_NAME}@${CODEX_MARKETPLACE_NAME}`;
+const REQUIRED_MCP_TOOL_NAMES = [
+  'mds_runtime_versions',
+  'create_expo_super_stack_resolve_info',
+  'create_expo_super_stack_generate',
+];
+const MCP_RUNTIME_VERIFY_TIMEOUT_MS = 15000;
 const BUNDLED_PLUGIN_DIRS: Record<AgentClient, string> = {
   vscode: 'vscode-copilot',
   claude: 'claude-code',
@@ -103,6 +113,14 @@ export async function runAgentInstallCommand(argv: AgentArgv): Promise<AgentInst
   console.log(chalk.dim(`bundle: ${bundleRoot}`));
   console.log();
 
+  await ensurePublishedMcpServerRuntimeForInstall(
+    {
+      serverPath: argv.serverPath,
+      command: argv.command,
+    },
+    dryRun
+  );
+
   if (client === 'vscode') {
     return await installVscodeAgent(argv, scope, dryRun, bundleRoot, server, writtenPaths);
   }
@@ -116,7 +134,7 @@ export async function runAgentInstallCommand(argv: AgentArgv): Promise<AgentInst
 
 export async function runAgentVerifyCommand(argv: AgentArgv): Promise<AgentVerifyResult> {
   const client = argv.client ?? 'vscode';
-  const result = await resolveAgentVerifyResult(client, argv);
+  const result = await withMcpRuntimeVerification(await resolveAgentVerifyResult(client, argv));
 
   console.log(chalk.bold('mds agent verify'));
   console.log(chalk.dim(`client: ${client}`));
@@ -151,6 +169,137 @@ async function resolveAgentVerifyResult(client: AgentClient, argv: AgentArgv): P
   const userTarget = resolveAgentVerifyTarget(client, 'user', argv.target);
   const userResult = await verifyAgentInstall(client, userTarget, 'user');
   return userResult.passed ? userResult : projectResult;
+}
+
+async function withMcpRuntimeVerification(result: AgentVerifyResult): Promise<AgentVerifyResult> {
+  const server = await readConfiguredMcpServer(result);
+  if (!server || !shouldVerifyMcpRuntime(server)) {
+    return result;
+  }
+
+  const runtimeCheck = await checkMcpRuntimeTools(server);
+  const checks = [...result.checks, runtimeCheck];
+  return {
+    ...result,
+    passed: result.passed && runtimeCheck.status === 'pass',
+    checks,
+  };
+}
+
+async function readConfiguredMcpServer(result: AgentVerifyResult): Promise<ReturnType<typeof resolveServerInvocation> | null> {
+  if (result.client === 'codex') {
+    return await readJsonMcpServer(path.join(result.target, 'plugins', CODEX_PLUGIN_NAME, '.mcp.json'), 'mcpServers', MDS_SERVER_KEY);
+  }
+
+  if (result.client === 'vscode') {
+    const filePath =
+      result.scope === 'user' ? resolveVscodeUserMcpConfigPath() : path.join(result.target, '.vscode', 'mcp.json');
+    return await readJsonMcpServer(filePath, 'servers', 'mds');
+  }
+
+  const filePath = result.scope === 'user' ? path.join(path.dirname(result.target), '.claude.json') : path.join(result.target, '.mcp.json');
+  return await readJsonMcpServer(filePath, 'mcpServers', MDS_SERVER_KEY);
+}
+
+async function readJsonMcpServer(
+  filePath: string,
+  containerKey: 'mcpServers' | 'servers',
+  serverKey: string
+): Promise<ReturnType<typeof resolveServerInvocation> | null> {
+  const raw = await readTextIfExists(filePath);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const container = isRecord(parsed[containerKey]) ? parsed[containerKey] : null;
+    const server = isRecord(container?.[serverKey]) ? container[serverKey] : null;
+    const command = typeof server?.command === 'string' ? server.command : null;
+    const args = Array.isArray(server?.args) ? server.args.filter((arg): arg is string => typeof arg === 'string') : [];
+    return command ? { command, args } : null;
+  } catch {
+    return null;
+  }
+}
+
+function shouldVerifyMcpRuntime(server: ReturnType<typeof resolveServerInvocation>): boolean {
+  if (server.command === MDS_MCP_SERVER_BIN && server.args.length === 0) {
+    return true;
+  }
+
+  return (
+    (server.command === WINDOWS_MDS_MCP_SERVER_COMMAND || server.command === 'cmd.exe') &&
+    server.args.length === WINDOWS_MDS_MCP_SERVER_ARGS.length &&
+    server.args.every((arg, index) => arg === WINDOWS_MDS_MCP_SERVER_ARGS[index])
+  );
+}
+
+async function checkMcpRuntimeTools(
+  server: ReturnType<typeof resolveServerInvocation>
+): Promise<AgentVerifyResult['checks'][number]> {
+  const display = [server.command, ...server.args].join(' ');
+  let closeClient: (() => Promise<void>) | undefined;
+
+  try {
+    const result = await withTimeout(async () => {
+      const transport = new StdioClientTransport({
+        command: server.command,
+        args: server.args,
+      });
+      const client = new Client(
+        {
+          name: 'mds-agent-verify',
+          version: '0.0.0',
+        },
+        {
+          capabilities: {},
+        }
+      );
+      closeClient = () => client.close();
+      await client.connect(transport);
+      return await client.listTools();
+    }, MCP_RUNTIME_VERIFY_TIMEOUT_MS);
+
+    const toolNames = new Set(result.tools.map((tool) => tool.name));
+    const missing = REQUIRED_MCP_TOOL_NAMES.filter((toolName) => !toolNames.has(toolName));
+    return {
+      name: 'MCP runtime tools',
+      status: missing.length === 0 ? 'pass' : 'fail',
+      path: display,
+      message:
+        missing.length === 0
+          ? `MCP server started and exposed required Super Stack tools.`
+          : `MCP server started, but missing required tools: ${missing.join(', ')}.`,
+    };
+  } catch (error) {
+    return {
+      name: 'MCP runtime tools',
+      status: 'fail',
+      path: display,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    await closeClient?.().catch(() => undefined);
+  }
+}
+
+async function withTimeout<T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`MCP runtime did not respond within ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export async function verifyAgentInstall(
@@ -841,12 +990,13 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
 
   try {
     const parsed = JSON.parse(raw) as { servers?: Record<string, unknown> };
-    if (parsed.servers?.mds) {
+    const server = isRecord(parsed.servers?.mds) ? parsed.servers.mds : null;
+    if (isValidMdsMcpServerInvocation(server)) {
       return {
         name: 'VS Code MCP config',
         status: 'pass',
         path: filePath,
-        message: 'mds server is configured.',
+        message: 'mds server invocation is valid.',
       };
     }
   } catch {
@@ -862,7 +1012,7 @@ async function checkVscodeMcp(filePath: string): Promise<AgentVerifyResult['chec
     name: 'VS Code MCP config',
     status: 'fail',
     path: filePath,
-    message: 'mds server is missing from the servers object.',
+    message: 'mds server is missing or uses an invalid invocation.',
   };
 }
 
@@ -879,12 +1029,13 @@ async function checkJsonMcp(name: string, filePath: string): Promise<AgentVerify
 
   try {
     const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
-    if (parsed.mcpServers?.[MDS_SERVER_KEY]) {
+    const server = isRecord(parsed.mcpServers?.[MDS_SERVER_KEY]) ? parsed.mcpServers[MDS_SERVER_KEY] : null;
+    if (isValidMdsMcpServerInvocation(server)) {
       return {
         name,
         status: 'pass',
         path: filePath,
-        message: `${MDS_SERVER_KEY} server is configured.`,
+        message: `${MDS_SERVER_KEY} server invocation is valid.`,
       };
     }
   } catch {
@@ -900,7 +1051,7 @@ async function checkJsonMcp(name: string, filePath: string): Promise<AgentVerify
     name,
     status: 'fail',
     path: filePath,
-    message: `${MDS_SERVER_KEY} server is missing from mcpServers.`,
+    message: `${MDS_SERVER_KEY} server is missing or uses an invalid invocation.`,
   };
 }
 
@@ -950,7 +1101,7 @@ async function checkCodexPluginMcpConfig(filePath: string): Promise<AgentVerifyR
   try {
     const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
     const server = isRecord(parsed.mcpServers?.[MDS_SERVER_KEY]) ? parsed.mcpServers[MDS_SERVER_KEY] : null;
-    const valid = isValidCodexMcpServerInvocation(server);
+    const valid = isValidMdsMcpServerInvocation(server);
 
     return {
       name: 'Codex plugin MCP config',
@@ -958,7 +1109,7 @@ async function checkCodexPluginMcpConfig(filePath: string): Promise<AgentVerifyR
       path: filePath,
       message: valid
         ? 'mr-djs-dev-suite MCP server invocation is valid.'
-        : `mr-djs-dev-suite MCP server must use \`npx ${PUBLISHED_MCP_SERVER_ARGS.join(' ')}\` or a local node server path.`,
+        : `mr-djs-dev-suite MCP server must use the installed \`${MDS_MCP_SERVER_BIN}\` command or an explicit local node server path.`,
     };
   } catch {
     return {
@@ -970,7 +1121,7 @@ async function checkCodexPluginMcpConfig(filePath: string): Promise<AgentVerifyR
   }
 }
 
-function isValidCodexMcpServerInvocation(server: Record<string, unknown> | null): boolean {
+function isValidMdsMcpServerInvocation(server: Record<string, unknown> | null): boolean {
   const command = typeof server?.command === 'string' ? server.command : '';
   const args = Array.isArray(server?.args) ? server.args : [];
 
@@ -978,14 +1129,14 @@ function isValidCodexMcpServerInvocation(server: Record<string, unknown> | null)
     return args.length > 0 && args.every((arg) => typeof arg === 'string');
   }
 
-  if (command === 'npx') {
-    return args.length === PUBLISHED_MCP_SERVER_ARGS.length && args.every((arg, index) => arg === PUBLISHED_MCP_SERVER_ARGS[index]);
+  if (command === MDS_MCP_SERVER_BIN) {
+    return args.length === 0;
   }
 
-  if (command === 'cmd' || command === 'cmd.exe') {
+  if (command === WINDOWS_MDS_MCP_SERVER_COMMAND || command === 'cmd.exe') {
     return (
-      args.length === WINDOWS_PUBLISHED_MCP_SERVER_ARGS.length &&
-      args.every((arg, index) => arg === WINDOWS_PUBLISHED_MCP_SERVER_ARGS[index])
+      args.length === WINDOWS_MDS_MCP_SERVER_ARGS.length &&
+      args.every((arg, index) => arg === WINDOWS_MDS_MCP_SERVER_ARGS[index])
     );
   }
 

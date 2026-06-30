@@ -6,11 +6,7 @@ import { readFileSync } from 'node:fs';
 export const PLUGIN_ID = 'mr-djs-dev-suite';
 export const PLUGIN_DIRECTORY = path.join('plugins', 'codex');
 export const MCP_SERVER_KEY = 'mr-djs-dev-suite';
-export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = readPublishedMcpServerVersion();
-export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
-export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
-export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];
+export const MDS_MCP_SERVER_BIN = 'mds-mcp-server';
 
 export const COMMAND_FILES = [
   'review-expo-project.md',
@@ -205,8 +201,8 @@ export function buildMcpConfig() {
   return {
     mcpServers: {
       [MCP_SERVER_KEY]: {
-        command: 'npx',
-        args: PUBLISHED_MCP_SERVER_ARGS,
+        command: MDS_MCP_SERVER_BIN,
+        args: [],
       },
     },
   };
@@ -457,19 +453,6 @@ async function readWorkspaceVersion(repoRoot) {
   const raw = await readFile(packageJsonPath, 'utf8');
   const parsed = JSON.parse(raw);
   return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.0';
-}
-
-function readPublishedMcpServerVersion() {
-  const packageJsonPath = path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-    'mcp-server',
-    'package.json'
-  );
-  const raw = readFileSync(packageJsonPath, 'utf8');
-  const parsed = JSON.parse(raw);
-  return typeof parsed.version === 'string' && parsed.version.length > 0 ? parsed.version : '0.1.8';
 }
 
 function isDirectRun() {

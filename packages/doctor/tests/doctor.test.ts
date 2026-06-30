@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { checkSeoMetadata, checkStylingDependencies } from '../src/checks/index.js';
 import { runDoctor, scanFile } from '../src/index.js';
 
 const tempDirs: string[] = [];
@@ -155,6 +156,50 @@ describe('todo-for-context check', () => {
         expect.objectContaining({ file: 'project/info.md', line: 5 }),
       ],
     });
+  });
+});
+
+describe('styling stack check', () => {
+  it('accepts NativeWind as an intentional styling choice', () => {
+    const result = checkStylingDependencies({
+      dependencies: {
+        nativewind: 'latest',
+      },
+    });
+
+    expect(result.status).toBe('pass');
+    expect(result.message).toBe('NativeWind detected.');
+  });
+});
+
+describe('seo metadata check', () => {
+  it('skips SEO warnings when web is only enabled for MDS tooling', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Native App Info',
+        '',
+        '## Platforms',
+        '',
+        '- Target platforms: ios, android',
+        '- Web output: none',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeProjectFile(projectPath, 'app.json', {
+      expo: {
+        platforms: ['ios', 'android', 'web'],
+        web: { output: 'server' },
+      },
+    });
+
+    const result = await checkSeoMetadata(projectPath);
+
+    expect(result.status).toBe('skip');
+    expect(result.message).toBe('Web is not a target platform for this app.');
   });
 });
 

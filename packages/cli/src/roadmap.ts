@@ -134,16 +134,62 @@ const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
 const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
 const ROADMAP_STATE_FILE = 'roadmap-state.json';
 const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
+  'browse exposition pages to understand included base packages',
+  'review styling in the stylist page',
   'review project files for accuracy and planning adjustments',
+  'run or defer eject stylist mark this todo done after ejection or deciding to defer if you want to keep the stylist around for tinkering',
+  'run mds eject exposition and keep only the generated sections you want to retain',
+  'sign in and set up eas in the terminal',
   'resolve every todoforcontext optional marker in project info md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed',
+  'confirm visual direction in project style md after using the stylist page',
+  'after the project info md markers are resolved refresh the agent derived roadmap from project info md and review it for accuracy',
   'refresh the agent derived roadmap from project info md and review it for accuracy before implementation',
+  'keep or prune included package examples after reviewing exposition',
+  'remove exposition pages before production once their lessons are absorbed',
+  'establish the app shell and first implementation ready route in src app',
   'establish the app shell and first implementation ready route for the mvp',
   'implement the first concrete product flow from project info md and the roadmap',
+  'implement the initial data layer using local dummy data with expo sqlite',
   'implement the initial data layer and service boundaries needed for the mvp',
+  'build the remaining core flows from project info md phase by phase',
+  'adapt the working mvp flow for the remaining target platforms after the primary flow is stable',
+  'configure eas for building mobile applications',
+  'configure eas for publishing mobile applications',
   'complete the remaining product flows needed for the mvp',
+  'run mds doctor ci and address errors',
   'run mds doctor ci and address errors before release',
+  'follow project release flow md for test to main development',
+  'complete the one time github repo setup from project release flow md so test and main are protected correctly',
+  'add github branch protection so pr checks pass before merging into test or main',
   'prepare store distribution packaging review notes and release validation for the chosen delivery path',
 ]);
+const GENERATED_SCAFFOLD_TASK_PATTERNS = [
+  /^browse exposition pages to understand included base packages$/,
+  /^review styling in the stylist page$/,
+  /^run or defer eject stylist mark this todo done after ejection or deciding to defer/,
+  /^run mds eject exposition and keep only the generated sections/,
+  /^sign in and set up eas in the terminal$/,
+  /^resolve every todoforcontext optional marker/,
+  /^confirm visual direction in project style md after using the stylist page$/,
+  /^after the project info md markers are resolved refresh/,
+  /^refresh the agent derived roadmap from project info md/,
+  /^keep or prune included package examples after reviewing exposition$/,
+  /^remove exposition pages before production/,
+  /^establish the app shell and first implementation ready route in src app$/,
+  /^establish the app shell and first implementation ready route for the mvp$/,
+  /^implement the first concrete product flow from project info md and the roadmap$/,
+  /^implement the initial data layer using local dummy data with expo sqlite$/,
+  /^implement the initial data layer and service boundaries needed for the mvp$/,
+  /^build the remaining core flows from project info md phase by phase$/,
+  /^adapt the working mvp flow for the remaining target platforms after the primary flow is stable$/,
+  /^configure eas for building mobile applications$/,
+  /^configure eas for publishing mobile applications$/,
+  /^run mds doctor ci and address errors$/,
+  /^follow project release flow md for test to main development$/,
+  /^complete the one time github repo setup from project release flow md/,
+  /^add github branch protection so pr checks pass before merging into test or main$/,
+  /^prepare store distribution packaging review notes and release validation/,
+];
 export const ROADMAP_BLOCKED_MARKER_WARNING =
   'Roadmap generation is blocked until every `# TodoForContext(optional):` marker in `project/` is resolved. Fill the section underneath or delete the marker line first.';
 export const ROADMAP_CLARIFICATION_WARNING =
@@ -614,16 +660,15 @@ export function deriveRoadmapPhases(
       : 'Establish the app shell and first implementation-ready route for the MVP.',
     'screen'
   );
-  addTask(
-    'phase-1',
-    'Implement the first concrete product flow from `project/info.md` and the roadmap.',
-    'core-flow'
-  );
-
   const firstFlow = flowItems[0];
   if (firstFlow) {
     addTask('phase-1', `Implement the first core user flow: ${firstFlow}.`, 'core-flow');
   } else {
+    addTask(
+      'phase-1',
+      'Implement the first concrete product flow from `project/info.md` and the roadmap.',
+      'core-flow'
+    );
     warnings.push(
       'No concrete core flow was found in `project/info.md`; roadmap generation should be rerun after the app intent is clarified.'
     );
@@ -687,8 +732,6 @@ export function deriveRoadmapPhases(
     }
   }
 
-  addTask('phase-3', 'Build the remaining core flows from `project/info.md` phase by phase.', 'core-flow');
-
   const remainingFlows = flowItems.slice(1);
   if (remainingFlows.length > 0) {
     addTask(
@@ -698,6 +741,8 @@ export function deriveRoadmapPhases(
         `: ${formatTaskList(pickDistinct(remainingFlows, 4))}.`,
       'core-flow'
     );
+  } else if (flowItems.length === 0) {
+    addTask('phase-3', 'Build the remaining core flows from `project/info.md` phase by phase.', 'core-flow');
   }
 
   const remainingScreens = screenItems.slice(firstScreens.length);
@@ -963,7 +1008,7 @@ function rebuildPhaseSection(
         return true;
       }
 
-      if (LEGACY_SCAFFOLD_TASK_KEYS.has(normalizeTaskKey(checkbox.text))) {
+      if (isGeneratedScaffoldTaskKey(normalizeTaskKey(checkbox.text))) {
         return false;
       }
 
@@ -985,6 +1030,10 @@ function rebuildPhaseSection(
   }
 
   return [...preservedLines, '', ...nextDerivedLines];
+}
+
+function isGeneratedScaffoldTaskKey(key: string): boolean {
+  return LEGACY_SCAFFOLD_TASK_KEYS.has(key) || GENERATED_SCAFFOLD_TASK_PATTERNS.some((pattern) => pattern.test(key));
 }
 
 function buildRoadmapState(phases: DerivedRoadmapPhase[]): RoadmapState {

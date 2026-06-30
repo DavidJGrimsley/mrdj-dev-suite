@@ -29,9 +29,17 @@ export interface OnboardArgv {
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
   generatorEasSetup?: boolean;
+  overview?: string;
   audience?: string;
+  problemStatement?: string;
+  productGoals?: string;
+  nonGoals?: string;
   coreFlows?: string;
   screens?: string;
+  monetizationStrategy?: string;
+  teamContext?: string;
+  laterScope?: string;
+  researchNotes?: string;
   dataNeeds?: string;
   deploymentTarget?: string;
   defaults?: string | string[];
@@ -562,9 +570,17 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     generatorStateManagement: argv.generatorStateManagement,
     generatorAuthBackend: argv.generatorAuthBackend,
     generatorEasSetup: argv.generatorEasSetup,
+    overview: argv.overview,
     audience: argv.audience ?? 'Expo app users',
+    problemStatement: argv.problemStatement,
+    productGoals: argv.productGoals,
+    nonGoals: argv.nonGoals,
     coreFlows: argv.coreFlows ?? AGENT_DERIVED_CORE_FLOWS,
     screens: argv.screens?.trim() || undefined,
+    monetizationStrategy: argv.monetizationStrategy,
+    teamContext: argv.teamContext,
+    laterScope: argv.laterScope,
+    researchNotes: argv.researchNotes,
     dataNeeds: argv.dataNeeds ?? 'Local state first; add backend only when needed',
     deploymentTarget: argv.deploymentTarget ?? 'Expo web/native deployment',
     advancedPackageSetup: argv.advancedSetup ?? true,

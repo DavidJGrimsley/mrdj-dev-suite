@@ -19,8 +19,8 @@ export function checkStylingDependencies(packageJson: PackageJson): DoctorCheckR
   if (hasNativeWind && !hasUniwind) {
     return {
       name: 'styling stack',
-      status: 'warn',
-      message: 'NativeWind detected. MDS suite defaults new projects to Uniwind.',
+      status: 'pass',
+      message: 'NativeWind detected.',
     };
   }
 

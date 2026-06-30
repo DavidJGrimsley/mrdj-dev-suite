@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   MCP_SERVER_KEY,
-  PUBLISHED_MCP_SERVER_ARGS,
+  MDS_MCP_SERVER_BIN,
   buildCommandFiles,
   generateCodexPluginBundleFromKnowledge,
 } from './generate-codex-plugin.mjs';
@@ -215,8 +215,8 @@ function buildClaudeMcpConfig() {
   return {
     mcpServers: {
       [MCP_SERVER_KEY]: {
-        command: 'npx',
-        args: PUBLISHED_MCP_SERVER_ARGS,
+        command: MDS_MCP_SERVER_BIN,
+        args: [],
       },
     },
   };

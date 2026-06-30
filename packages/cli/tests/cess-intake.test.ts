@@ -71,14 +71,46 @@ describe('CESS intake contract', () => {
     const infoMarkdown = [
       '# Experiment-Tracker Project Info',
       '',
+      '## Overview',
+      '',
+      'Build an Expo app for Scientists and people learning how to conduct experiments.',
+      '',
       '## Target Users',
       '',
       'Scientists and people learning how to conduct experiments',
+      '',
+      '## Problem this app solves',
+      '',
+      "There's no good way to track experiment data on the go.",
+      '',
+      '## Product Goals',
+      '',
+      'Provide a way for scientists to track and manage experiments effectively.',
+      '',
+      '## Non-Goals',
+      '',
+      'Ways to actually conduct experiments, analyze data, or collaborate with other scientists.',
       '',
       '## Core User Flows',
       '',
       '- Create an experiment',
       '- View and edit existing experiments',
+      '',
+      '## Monetization Strategy',
+      '',
+      'No monetization planned for the MVP.',
+      '',
+      '## Team Context',
+      '',
+      'Solo dev',
+      '',
+      '## Later Scope & Possibilities',
+      '',
+      'Voice notes transcribed into text for hands free documenting.',
+      '',
+      '## Research, Notes, and References',
+      '',
+      'There are a lot of science students wanting to conduct experiments.',
       '',
       '## Data And Backend',
       '',
@@ -259,6 +291,26 @@ describe('CESS intake contract', () => {
     expect(extracted.ambiguousQuestionIds).toEqual([]);
   });
 
+  it('uses explicit appName input as the folder slug without overriding visible App Name', () => {
+    const extracted = extractCessInfoFromMarkdown({
+      appName: 'experimental2',
+      parentDir: 'F:/ReactNativeApps',
+      infoMarkdown: [
+        '# Experiment-Tracker Project Info',
+        '',
+        '## App Name',
+        'Experimental',
+        '',
+        '## Target Users',
+        'Scientists',
+      ].join('\n'),
+    });
+
+    expect(extracted.derivedDisplayName).toBe('Experimental');
+    expect(extracted.derivedFolderSlug).toBe('experimental2');
+    expect(extracted.prefilledAnswers.displayAppName).toBe('Experimental');
+  });
+
   it('prefers the machine-readable snapshot when generated info includes one', () => {
     const extracted = extractCessInfoFromMarkdown({
       infoMarkdown: [
@@ -305,14 +357,46 @@ describe('CESS intake contract', () => {
     const infoMarkdown = [
       '# Experiment-Tracker Project Info',
       '',
+      '## Overview',
+      '',
+      'Build an Expo app for Scientists and people learning how to conduct experiments.',
+      '',
       '## Target Users',
       '',
       'Scientists and people learning how to conduct experiments',
+      '',
+      '## Problem this app solves',
+      '',
+      "There's no good way to track experiment data on the go.",
+      '',
+      '## Product Goals',
+      '',
+      'Provide a way for scientists to track and manage experiments effectively.',
+      '',
+      '## Non-Goals',
+      '',
+      'Ways to actually conduct experiments, analyze data, or collaborate with other scientists.',
       '',
       '## Core User Flows',
       '',
       '- Create an experiment',
       '- View and edit existing experiments',
+      '',
+      '## Monetization Strategy',
+      '',
+      'No monetization planned for the MVP.',
+      '',
+      '## Team Context',
+      '',
+      'Solo dev',
+      '',
+      '## Later Scope & Possibilities',
+      '',
+      'Voice notes transcribed into text for hands free documenting.',
+      '',
+      '## Research, Notes, and References',
+      '',
+      'There are a lot of science students wanting to conduct experiments.',
       '',
       '## Data And Backend',
       '',
@@ -416,11 +500,19 @@ describe('CESS intake contract', () => {
       parentDir: 'F:/ReactNativeApps',
     });
 
-    expect(extracted.derivedDisplayName).toBe('Experiment-Tracker');
+    expect(extracted.derivedDisplayName).toBe('Experiment Tracker');
     expect(extracted.derivedFolderSlug).toBe('experiment-tracker');
-    expect(extracted.prefilledAnswers.displayAppName).toBe('Experiment-Tracker');
+    expect(extracted.prefilledAnswers.displayAppName).toBe('Experiment Tracker');
+    expect(extracted.prefilledAnswers.overview).toContain('Build an Expo app');
     expect(extracted.prefilledAnswers.audience).toContain('Scientists');
+    expect(extracted.prefilledAnswers.problemStatement).toContain('track experiment data');
+    expect(extracted.prefilledAnswers.productGoals).toContain('track and manage');
+    expect(extracted.prefilledAnswers.nonGoals).toContain('actually conduct experiments');
     expect(extracted.prefilledAnswers.coreFlows).toContain('Create an experiment');
+    expect(extracted.prefilledAnswers.monetizationStrategy).toContain('No monetization planned');
+    expect(extracted.prefilledAnswers.teamContext).toBe('Solo dev');
+    expect(extracted.prefilledAnswers.laterScope).toContain('Voice notes');
+    expect(extracted.prefilledAnswers.researchNotes).toContain('science students');
     expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios']);
     expect(extracted.prefilledAnswers.firstTargetPlatform).toBe('ios');
     expect(extracted.prefilledAnswers.platformLayouts).toBe('shared');
@@ -536,9 +628,17 @@ describe('CESS intake contract', () => {
         authBackend: 'firebase',
         easSetup: false,
         displayAppName: 'Demo App',
+        overview: 'Demo overview\nwith a second line',
         audience: 'People',
-        coreFlows: 'Sign in and design hats',
-        screens: 'Home, Profile',
+        problemStatement: 'People need a better hat workflow.',
+        productGoals: 'Make hat design calmer.',
+        nonGoals: 'Do not build manufacturing.',
+        coreFlows: 'Sign in and design hats\nPreview the finished design',
+        screens: 'Home\nProfile',
+        monetizationStrategy: 'Internal tool first.',
+        teamContext: 'Solo designer.',
+        laterScope: 'Marketplace later.',
+        researchNotes: 'Customer notes live in Drive.',
         dataNeedSelections: ['Local UI/app state', 'Analytics/events'],
         targetPlatforms: ['web', 'ios'],
         firstTargetPlatform: 'ios',
@@ -581,6 +681,18 @@ describe('CESS intake contract', () => {
     expect(argv).toContain('--mds-no-test-to-main');
     expect(argv).toContain('--mds-save-defaults');
     expect(argv).toContain('--mds-yes');
+    expect(argv).toContain('--mds-overview=Demo overview; with a second line');
+    expect(argv).toContain('--mds-problem-statement=People need a better hat workflow.');
+    expect(argv).toContain('--mds-product-goals=Make hat design calmer.');
+    expect(argv).toContain('--mds-non-goals=Do not build manufacturing.');
+    expect(argv).toContain('--mds-core-flows=Sign in and design hats; Preview the finished design');
+    expect(argv).toContain('--mds-screens=Home; Profile');
+    expect(argv).toContain('--mds-monetization-strategy=Internal tool first.');
+    expect(argv).toContain('--mds-team-context=Solo designer.');
+    expect(argv).toContain('--mds-later-scope=Marketplace later.');
+    expect(argv).toContain('--mds-research-notes=Customer notes live in Drive.');
+    expect(argv).toContain('--mds-deployment-target=Internal preview');
+    expect(argv.every((arg) => !arg.includes('\n') && !arg.includes('\r'))).toBe(true);
   });
 
   it('records planned EAS intent without forwarding the interactive --eas generator flag', () => {

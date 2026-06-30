@@ -203,12 +203,44 @@ async function main(): Promise<void> {
             describe: 'Who the app serves',
             type: 'string',
           })
+          .option('overview', {
+            describe: 'Product overview for project/info.md',
+            type: 'string',
+          })
+          .option('problem-statement', {
+            describe: 'Problem statement for project/info.md',
+            type: 'string',
+          })
+          .option('product-goals', {
+            describe: 'Product goals for project/info.md',
+            type: 'string',
+          })
+          .option('non-goals', {
+            describe: 'Non-goals for project/info.md',
+            type: 'string',
+          })
           .option('core-flows', {
             describe: 'Primary user flows',
             type: 'string',
           })
           .option('screens', {
             describe: 'Known screens that must be included in planning/implementation',
+            type: 'string',
+          })
+          .option('monetization-strategy', {
+            describe: 'Monetization notes for project/info.md',
+            type: 'string',
+          })
+          .option('team-context', {
+            describe: 'Team context for project/info.md',
+            type: 'string',
+          })
+          .option('later-scope', {
+            describe: 'Later-scope ideas for project/info.md',
+            type: 'string',
+          })
+          .option('research-notes', {
+            describe: 'Research and references for project/info.md',
             type: 'string',
           })
           .option('data-needs', {
@@ -502,11 +534,11 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('server-path', {
-            describe: 'Absolute path to the built MCP server entry (overrides auto-detect)',
+            describe: 'Absolute path to a built MCP server entry (explicit local development override)',
             type: 'string',
           })
           .option('command', {
-            describe: 'Full command to launch the server (overrides server-path and npx fallback)',
+            describe: 'Full command to launch the server (explicit local development override)',
             type: 'string',
           })
           .option('dry-run', {
@@ -542,11 +574,11 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('server-path', {
-            describe: 'Absolute path to the built MCP server entry (overrides auto-detect)',
+            describe: 'Absolute path to a built MCP server entry (explicit local development override)',
             type: 'string',
           })
           .option('command', {
-            describe: 'Full command to launch the server (overrides server-path and npx fallback)',
+            describe: 'Full command to launch the server (explicit local development override)',
             type: 'string',
           })
           .option('bundle-path', {

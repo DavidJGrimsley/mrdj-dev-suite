@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EXPECTED_EXPO_SDK_MAJOR,
+  EXPECTED_EXPO_PACKAGE_SPEC,
   assertExpectedExpoSdk,
   buildAddDevDependencyCommand,
   buildExpoDoctorCommand,
@@ -17,6 +18,7 @@ import {
   detectEasSetup,
   isCliEntryPoint,
   parseArgs,
+  prepareCommandForSpawn,
   prepareCreateExpoStackArgsForWrapper,
   repairGeneratedNativeWindUiPicker,
   repairExpoProjectIdentifiers,
@@ -71,7 +73,7 @@ describe("create-expo-super-stack CLI helpers", () => {
 
     expect(commands).toEqual([
       "npm install",
-      `npx expo install expo@^${EXPECTED_EXPO_SDK_MAJOR}`,
+      `npx expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
       "npx expo install --fix",
       "npx expo install expo-font",
       'npx prettier --write "**/*.{js,jsx,ts,tsx,json}"',
@@ -137,12 +139,17 @@ describe("create-expo-super-stack CLI helpers", () => {
     ).toBe(false);
   });
 
-  it("targets Expo SDK 56 whenever the package is missing or on the wrong major", () => {
+  it("repairs Expo when the package is missing, pinned to a patch, or on the wrong major", () => {
+    expect(
+      shouldRunExpoLatestSdkCommandFromPackageJson({
+        dependencies: { expo: "~56.0.4" },
+      }),
+    ).toBe(true);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "~56.0.6" },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "^56.0.0" },
@@ -162,7 +169,22 @@ describe("create-expo-super-stack CLI helpers", () => {
       shouldRunExpoLatestSdkCommandFromPackageJson({
         dependencies: { expo: "latest" },
       }),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("wraps Windows shell commands without using child_process shell mode", () => {
+    const spec = prepareCommandForSpawn(
+      {
+        command: "npx",
+        args: ["expo", "install", "expo@latest"],
+        display: "npx expo install expo@latest",
+      },
+      { platform: "win32", comSpec: "C:\\Windows\\System32\\cmd.exe" },
+    );
+
+    expect(spec.command).toBe("C:\\Windows\\System32\\cmd.exe");
+    expect(spec.args).toEqual(["/d", "/s", "/c", "npx expo install expo@latest"]);
+    expect(spec.shell).toBe(false);
   });
 
   it("parses Expo SDK majors from dependency ranges", () => {
@@ -226,6 +248,29 @@ describe("create-expo-super-stack CLI helpers", () => {
 
     expect(resolved.projectName).toBe("folder-name");
     expect(resolved.mds.appName).toBe("Display Name");
+  });
+
+  it("parses product-memory MDS flags for generated project/info.md", () => {
+    const parsed = parseArgs([
+      "folder-name",
+      "--mds-overview=Build a focused app.",
+      "--mds-problem-statement=The old workflow is slow.",
+      "--mds-product-goals=Help users finish faster.",
+      "--mds-non-goals=No collaboration in MVP.",
+      "--mds-monetization-strategy=No monetization planned.",
+      "--mds-team-context=Solo dev.",
+      "--mds-later-scope=Sync later.",
+      "--mds-research-notes=Interview notes.",
+    ]);
+
+    expect(parsed.mds.overview).toBe("Build a focused app.");
+    expect(parsed.mds.problemStatement).toBe("The old workflow is slow.");
+    expect(parsed.mds.productGoals).toBe("Help users finish faster.");
+    expect(parsed.mds.nonGoals).toBe("No collaboration in MVP.");
+    expect(parsed.mds.monetizationStrategy).toBe("No monetization planned.");
+    expect(parsed.mds.teamContext).toBe("Solo dev.");
+    expect(parsed.mds.laterScope).toBe("Sync later.");
+    expect(parsed.mds.researchNotes).toBe("Interview notes.");
   });
 
   it("rejects conflicting create-expo-stack auth provider flags", () => {
@@ -479,6 +524,57 @@ describe("create-expo-super-stack CLI helpers", () => {
         };
       };
       expect(repaired.expo.platforms).toEqual(["web", "ios", "android"]);
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps web enabled while the Stylist sync API route exists for native-target apps", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-stylist-web-platform-"),
+    );
+    try {
+      await mkdir(path.join(projectPath, "src", "app", "exposition"), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(projectPath, "src", "app", "exposition", "stylist-sync+api.ts"),
+        "export {};",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "app.json"),
+        JSON.stringify({
+          expo: {
+            name: "Experimental",
+            slug: "experimental",
+            platforms: ["ios", "android"],
+            web: { output: "static" },
+          },
+        }),
+        "utf8",
+      );
+
+      await expect(
+        repairExpoProjectIdentifiers(projectPath, "experimental", [
+          "ios",
+          "android",
+        ]),
+      ).resolves.toEqual([path.join(projectPath, "app.json")]);
+      await expect(
+        repairExpoWebOutputForStylistLifecycle(projectPath, "none"),
+      ).resolves.toEqual([path.join(projectPath, "app.json")]);
+
+      const repaired = JSON.parse(
+        await readFile(path.join(projectPath, "app.json"), "utf8"),
+      ) as {
+        expo: {
+          platforms: string[];
+          web: { output: string };
+        };
+      };
+      expect(repaired.expo.platforms).toEqual(["ios", "android", "web"]);
+      expect(repaired.expo.web.output).toBe("server");
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }
@@ -916,6 +1012,54 @@ describe("create-expo-super-stack CLI helpers", () => {
       ) as {
         expo: { web: { output: string } };
       };
+      expect(repaired.expo.web.output).toBe("server");
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("adds web before forcing server output while stylist sync API route exists", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-stylist-add-web-"),
+    );
+    try {
+      await mkdir(path.join(projectPath, "src", "app", "exposition"), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(
+          projectPath,
+          "src",
+          "app",
+          "exposition",
+          "stylist-sync+api.ts",
+        ),
+        "export {};",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "app.json"),
+        JSON.stringify({
+          expo: {
+            web: {
+              output: "static",
+            },
+            platforms: ["ios", "android"],
+          },
+        }),
+        "utf8",
+      );
+
+      await expect(
+        repairExpoWebOutputForStylistLifecycle(projectPath, "static"),
+      ).resolves.toEqual([path.join(projectPath, "app.json")]);
+
+      const repaired = JSON.parse(
+        await readFile(path.join(projectPath, "app.json"), "utf8"),
+      ) as {
+        expo: { platforms: string[]; web: { output: string } };
+      };
+      expect(repaired.expo.platforms).toEqual(["ios", "android", "web"]);
       expect(repaired.expo.web.output).toBe("server");
     } finally {
       await rm(projectPath, { recursive: true, force: true });

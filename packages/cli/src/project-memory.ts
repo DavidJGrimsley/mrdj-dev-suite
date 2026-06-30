@@ -1,4 +1,5 @@
 ﻿import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -23,9 +24,17 @@ export interface OnboardAnswers {
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
   generatorEasSetup?: boolean;
+  overview?: string;
   audience: string;
+  problemStatement?: string;
+  productGoals?: string;
+  nonGoals?: string;
   coreFlows: string;
   screens?: string;
+  monetizationStrategy?: string;
+  teamContext?: string;
+  laterScope?: string;
+  researchNotes?: string;
   dataNeeds: string;
   deploymentTarget: string;
   advancedPackageSetup: boolean;
@@ -62,6 +71,10 @@ export interface ProjectScaffoldOptions {
 export interface WriteResult {
   filePath: string;
   wrote: boolean;
+}
+
+export interface RenderInfoOptions {
+  preserveImportedNotes?: boolean;
 }
 
 interface PackageJson {
@@ -127,7 +140,8 @@ const UNIWIND_DEV_DEPENDENCIES = {
 } as const;
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MDS_CLI_VERSION = '0.1.14';
+const require = createRequire(import.meta.url);
+const MDS_CLI_VERSION = readOwnPackageVersion();
 const MDS_NPX_COMMAND = 'npx mds';
 const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   PACKAGE_ROOT,
@@ -150,6 +164,19 @@ const EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH = path.join(
   'templates',
   'expo-sdk-56-screen-universal.template.tsx'
 );
+
+function readOwnPackageVersion(): string {
+  try {
+    const packageJson = require('../package.json') as { version?: unknown };
+    if (typeof packageJson.version === 'string' && packageJson.version.trim()) {
+      return packageJson.version;
+    }
+  } catch {
+    // Keep generated apps installable even in local harnesses without package metadata.
+  }
+  return '0.1.20';
+}
+
 const INFO_HEADINGS = [
   'App Name',
   'Overview',
@@ -611,9 +638,12 @@ export async function scaffoldRichBoilerplate(
 export function renderInfo(
   projectPath: string,
   answers: OnboardAnswers,
-  existingInfo?: string | null
+  existingInfo?: string | null,
+  options: RenderInfoOptions = {}
 ): string {
-  const importedNotes = renderImportedNotes(existingInfo, INFO_HEADINGS);
+  void projectPath;
+  const importedNotes =
+    options.preserveImportedNotes === false ? [] : renderImportedNotes(existingInfo, INFO_HEADINGS);
   const hasConcreteCoreFlows = !isGenericCoreFlowsText(answers.coreFlows);
   const firstFlow = hasConcreteCoreFlows
     ? extractFirstNonEmptyLine(answers.coreFlows)
@@ -626,22 +656,25 @@ export function renderInfo(
     '',
     '## Overview',
     '',
-    `Build an Expo app for ${answers.audience}.`,
+    answers.overview?.trim() || `Build an Expo app for ${answers.audience}.`,
     '',
     '## Target Users',
     '',
     answers.audience,
     '',
     '## Problem this app solves',
-    '# TodoForContext(optional): Explain the user problem or pain this app exists to solve.',
+    answers.problemStatement?.trim() ||
+      '# TodoForContext(optional): Explain the user problem or pain this app exists to solve.',
     '',
     '## Product Goals',
     '',
-    '# TodoForContext(optional): Add the business/product outcomes that would make this app successful.',
+    answers.productGoals?.trim() ||
+      '# TodoForContext(optional): Add the business/product outcomes that would make this app successful.',
     '',
     '## Non-Goals',
     '',
-    '# TodoForContext(optional): Add anything this app should intentionally avoid for the MVP.',
+    answers.nonGoals?.trim() ||
+      '# TodoForContext(optional): Add anything this app should intentionally avoid for the MVP.',
     '',
     '## First User Flow',
     '',
@@ -650,13 +683,13 @@ export function renderInfo(
     '## Core Flows and Features',
     '',
     hasConcreteCoreFlows
-      ? answers.coreFlows
+      ? formatMarkdownListBlock(answers.coreFlows)
       : '# TodoForContext(optional): List the first core flows and features the MVP should deliver.',
     '',
     '## Screens',
     '',
     answers.screens?.trim()
-      ? answers.screens
+      ? formatMarkdownListBlock(answers.screens)
       : '# TodoForContext(optional): List any known screens that must be included in planning and implementation.',
     '',
     '## Platforms',
@@ -666,20 +699,23 @@ export function renderInfo(
     '',
     '## Monetization Strategy',
     '',
-    '# TodoForContext(optional): Add monetization notes when relevant. Include pricing, subscriptions, ads, sponsorship, lead-gen, internal ROI, or note that monetization is not planned.',
+    answers.monetizationStrategy?.trim() ||
+      '# TodoForContext(optional): Add monetization notes when relevant. Include pricing, subscriptions, ads, sponsorship, lead-gen, internal ROI, or note that monetization is not planned.',
     '',
     '## Team Context',
     '',
-    '# TodoForContext(optional): Add team size, roles, delegated responsibilities, stakeholders, and client contacts if useful.',
+    answers.teamContext?.trim() ||
+      '# TodoForContext(optional): Add team size, roles, delegated responsibilities, stakeholders, and client contacts if useful.',
     '',
     '## Later Scope & Possibilities',
     '',
-    '# TodoForContext(optional): Add future ideas or enhancements outside the first MVP.',
+    answers.laterScope?.trim() ||
+      '# TodoForContext(optional): Add future ideas or enhancements outside the first MVP.',
     '',
     '## Research, Notes, and References',
     '',
-    `- Source project: ${projectPath}`,
-    '- # TodoForContext(optional): Add designs, repos, docs, client notes, analytics, credentials process, or research links.',
+    answers.researchNotes?.trim() ||
+      '- # TodoForContext(optional): Add designs, repos, docs, client notes, analytics, credentials process, or research links.',
     '',
     ...importedNotes,
     '',
@@ -1342,6 +1378,14 @@ function extractFirstNonEmptyLine(value: string): string {
       .map((line) => line.replace(/^[-*]\s+/u, '').trim())
       .find(Boolean) ?? value.trim()
   );
+}
+
+function formatMarkdownListBlock(value: string): string {
+  const items = value
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/^[-*]\s+/u, '').trim())
+    .filter(Boolean);
+  return items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : value.trim();
 }
 
 function formatYesNo(value: boolean): string {

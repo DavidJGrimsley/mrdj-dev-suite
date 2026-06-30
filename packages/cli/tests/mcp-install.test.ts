@@ -8,11 +8,13 @@ import {
   buildVscodeAddMcpPayload,
   renderCodexBlock,
   renderVscodeAddMcpCommand,
+  resolveNpmInstallInvocation,
   resolveServerInvocation,
   runMcpInstallCommand,
   stripExistingCodexBlock,
-  WINDOWS_PUBLISHED_MCP_SERVER_ARGS,
-  PUBLISHED_MCP_SERVER_ARGS,
+  MDS_MCP_SERVER_BIN,
+  WINDOWS_MDS_MCP_SERVER_ARGS,
+  WINDOWS_MDS_MCP_SERVER_COMMAND,
 } from '../src/commands/mcp-install.js';
 
 const tempDirs: string[] = [];
@@ -38,11 +40,32 @@ describe('resolveServerInvocation', () => {
     });
   });
 
-  it('falls back to npx when no path is provided and the server is not resolvable', () => {
+  it('uses the installed MDS MCP server command by default', () => {
     expect(resolveServerInvocation({})).toEqual({
-      command: process.platform === 'win32' ? 'cmd' : 'npx',
-      args: process.platform === 'win32' ? WINDOWS_PUBLISHED_MCP_SERVER_ARGS : PUBLISHED_MCP_SERVER_ARGS,
+      command: process.platform === 'win32' ? WINDOWS_MDS_MCP_SERVER_COMMAND : MDS_MCP_SERVER_BIN,
+      args: process.platform === 'win32' ? WINDOWS_MDS_MCP_SERVER_ARGS : [],
     });
+  });
+
+  it('does not emit local repo paths or npx for the default server', () => {
+    const server = resolveServerInvocation({});
+    const serialized = `${server.command} ${server.args.join(' ')}`;
+    expect(serialized).not.toContain('npx');
+    expect(serialized).not.toContain('mrdj-dev-suite');
+    expect(serialized).not.toContain('packages');
+  });
+});
+
+describe('resolveNpmInstallInvocation', () => {
+  it('builds a global install command without spawning npm.cmd directly on Windows', () => {
+    const invocation = resolveNpmInstallInvocation('@mr.dj2u/mcp-server@latest');
+
+    expect(invocation.args).toContain('install');
+    expect(invocation.args).toContain('-g');
+    expect(invocation.args).toContain('@mr.dj2u/mcp-server@latest');
+    if (process.platform === 'win32') {
+      expect(invocation.command.toLowerCase()).not.toBe('npm.cmd');
+    }
   });
 });
 
@@ -178,20 +201,14 @@ describe('renderCodexBlock', () => {
 
 describe('renderVscodeAddMcpCommand', () => {
   it('renders a shell-safe add-mcp command for the current platform', () => {
-    const command = renderVscodeAddMcpCommand(
-      buildVscodeAddMcpPayload({ command: 'cmd', args: ['/c', 'npx', '-y', '@mr.dj2u/mcp-server@0.1.9'] })
-    );
+    const command = renderVscodeAddMcpCommand(buildVscodeAddMcpPayload({ command: 'mds-mcp-server', args: [] }));
 
     if (process.platform === 'win32') {
-      expect(command).toBe(
-        `code --add-mcp '{"name":"mds","command":"cmd","args":["/c","npx","-y","@mr.dj2u/mcp-server@0.1.9"]}'`
-      );
+      expect(command).toBe(`code --add-mcp '{"name":"mds","command":"mds-mcp-server","args":[]}'`);
       return;
     }
 
-    expect(command).toBe(
-      'code --add-mcp "{\\"name\\":\\"mds\\",\\"command\\":\\"cmd\\",\\"args\\":[\\"/c\\",\\"npx\\",\\"-y\\",\\"@mr.dj2u/mcp-server@0.1.9\\"]}"'
-    );
+    expect(command).toBe('code --add-mcp "{\\"name\\":\\"mds\\",\\"command\\":\\"mds-mcp-server\\",\\"args\\":[]}"');
   });
 });
 

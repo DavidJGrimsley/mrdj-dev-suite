@@ -591,7 +591,10 @@ describe('runOnboardCommand', () => {
     expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
     expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
-    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe('^0.1.14');
+    const cliPackageJson = JSON.parse(await readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as {
+      version: string;
+    };
+    expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe(`^${cliPackageJson.version}`);
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
   });
 

@@ -1,7 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 
@@ -22,14 +24,19 @@ export interface ResolvedServer {
   args: string[];
 }
 
+export interface ResolvedCommand {
+  command: string;
+  args: string[];
+}
+
 export const SERVER_KEY = 'mr-djs-dev-suite';
 export const VSCODE_SERVER_KEY = 'mds';
 export const PUBLISHED_MCP_SERVER_PACKAGE = '@mr.dj2u/mcp-server';
-export const PUBLISHED_MCP_SERVER_VERSION = '0.1.9';
+export const PUBLISHED_MCP_SERVER_VERSION = 'latest';
 export const PUBLISHED_MCP_SERVER_SPEC = `${PUBLISHED_MCP_SERVER_PACKAGE}@${PUBLISHED_MCP_SERVER_VERSION}`;
-export const PUBLISHED_MCP_SERVER_BIN = 'mds-mcp-server';
-export const PUBLISHED_MCP_SERVER_ARGS = ['-y', PUBLISHED_MCP_SERVER_SPEC];
-export const WINDOWS_PUBLISHED_MCP_SERVER_ARGS = ['/c', 'npx', ...PUBLISHED_MCP_SERVER_ARGS];
+export const MDS_MCP_SERVER_BIN = 'mds-mcp-server';
+export const WINDOWS_MDS_MCP_SERVER_COMMAND = 'cmd';
+export const WINDOWS_MDS_MCP_SERVER_ARGS = ['/c', `${MDS_MCP_SERVER_BIN}.cmd`];
 
 export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> {
   const client = argv.client ?? 'claude';
@@ -42,6 +49,8 @@ export async function runMcpInstallCommand(argv: McpInstallArgv): Promise<void> 
   console.log(chalk.dim(`scope:  ${scope}`));
   console.log(chalk.dim(`command: ${server.command} ${server.args.join(' ')}`));
   console.log();
+
+  await ensurePublishedMcpServerRuntimeForInstall(argv, dryRun);
 
   if (scope === 'user') {
     await installUserScope(client, server, dryRun);
@@ -110,7 +119,7 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
     return { command, args };
   }
 
-  const serverPath = argv.serverPath ?? findLocalServerEntry();
+  const serverPath = argv.serverPath;
   if (serverPath) {
     return { command: 'node', args: [serverPath] };
   }
@@ -120,19 +129,121 @@ export function resolveServerInvocation(argv: McpInstallArgv): ResolvedServer {
 
 export function resolvePublishedServerInvocation(): ResolvedServer {
   if (process.platform === 'win32') {
-    return { command: 'cmd', args: WINDOWS_PUBLISHED_MCP_SERVER_ARGS };
+    return { command: WINDOWS_MDS_MCP_SERVER_COMMAND, args: WINDOWS_MDS_MCP_SERVER_ARGS };
   }
 
-  return { command: 'npx', args: PUBLISHED_MCP_SERVER_ARGS };
+  return { command: MDS_MCP_SERVER_BIN, args: [] };
 }
 
-function findLocalServerEntry(): string | undefined {
+export async function ensurePublishedMcpServerRuntimeForInstall(
+  argv: Pick<McpInstallArgv, 'command' | 'serverPath'>,
+  dryRun: boolean
+): Promise<void> {
+  if (argv.command || argv.serverPath) {
+    return;
+  }
+
+  if (dryRun) {
+    console.log(chalk.dim(`would ensure MCP runtime package ${PUBLISHED_MCP_SERVER_SPEC} is installed globally`));
+    console.log();
+    return;
+  }
+
+  console.log(chalk.dim(`ensuring MCP runtime package ${PUBLISHED_MCP_SERVER_SPEC} is installed globally...`));
+  const npmInstall = resolveNpmInstallInvocation(PUBLISHED_MCP_SERVER_SPEC);
+  await runCommand(npmInstall.command, npmInstall.args);
+  console.log(chalk.green(`MCP runtime ready: ${MDS_MCP_SERVER_BIN}`));
+  console.log();
+}
+
+export function resolveNpmInstallInvocation(packageSpec: string): ResolvedCommand {
+  const npmCliPath = resolveNpmCliPath();
+  if (npmCliPath) {
+    return {
+      command: process.execPath,
+      args: [npmCliPath, 'install', '-g', '--no-audit', '--no-fund', packageSpec],
+    };
+  }
+
+  if (process.platform === 'win32') {
+    return {
+      command: process.env.ComSpec ?? 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npm', 'install', '-g', '--no-audit', '--no-fund', packageSpec],
+    };
+  }
+
+  return {
+    command: 'npm',
+    args: ['install', '-g', '--no-audit', '--no-fund', packageSpec],
+  };
+}
+
+function resolveNpmCliPath(): string | null {
+  const npmExecPath = process.env.npm_execpath;
+  if (npmExecPath && isJavaScriptFile(npmExecPath) && existsSync(npmExecPath)) {
+    return npmExecPath;
+  }
+
   try {
     const require = createRequire(import.meta.url);
-    return require.resolve('@mr.dj2u/mcp-server');
+    const resolved = require.resolve('npm/bin/npm-cli.js');
+    if (existsSync(resolved)) {
+      return resolved;
+    }
   } catch {
-    return undefined;
+    // npm is not always resolvable from globally installed packages.
   }
+
+  const nodeDir = path.dirname(process.execPath);
+  const candidates =
+    process.platform === 'win32'
+      ? [path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js')]
+      : [
+          path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+          path.resolve(nodeDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+        ];
+
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function isJavaScriptFile(filePath: string): boolean {
+  return /\.(?:c?js|mjs)$/iu.test(filePath);
+}
+
+async function runCommand(command: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        if (stdout.trim()) {
+          console.log(chalk.dim(stdout.trim()));
+        }
+        return resolve();
+      }
+
+      reject(
+        new Error(
+          [
+            `Failed to install ${PUBLISHED_MCP_SERVER_SPEC} with ${command}.`,
+            stderr.trim() || stdout.trim() || `exit code ${code ?? 'unknown'}`,
+          ].join('\n')
+        )
+      );
+    });
+  });
 }
 
 export async function writeMcpJsonToProject(targetDir: string): Promise<void> {

@@ -61,6 +61,11 @@ export async function checkSeoMetadata(projectPath: string): Promise<DoctorCheck
 }
 
 async function projectTargetsWeb(projectPath: string): Promise<boolean> {
+  const projectInfoTargetsWeb = await readProjectInfoWebTarget(projectPath);
+  if (typeof projectInfoTargetsWeb === 'boolean') {
+    return projectInfoTargetsWeb;
+  }
+
   const raw = await readOptionalText(path.join(projectPath, 'app.json'));
   if (!raw) {
     return true;
@@ -85,4 +90,21 @@ async function projectTargetsWeb(projectPath: string): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+async function readProjectInfoWebTarget(projectPath: string): Promise<boolean | null> {
+  const infoRaw = await readOptionalText(path.join(projectPath, 'project', 'info.md'));
+  if (!infoRaw) {
+    return null;
+  }
+
+  const targetPlatformsMatch = infoRaw.match(/-\s*Target platforms:\s*([^\n\r]+)/i);
+  if (!targetPlatformsMatch?.[1]) {
+    return null;
+  }
+
+  return targetPlatformsMatch[1]
+    .split(/,|\band\b/iu)
+    .map((item) => item.trim().toLowerCase())
+    .includes('web');
 }
