@@ -1525,7 +1525,8 @@ function nextStepForCheck(check: DoctorCheckResult): string {
     text.includes('motion') ||
     text.includes('parallax') ||
     text.includes('reanimated') ||
-    text.includes('scroll-linked')
+    text.includes('scroll-linked') ||
+    text.includes('lottie')
   ) {
     return 'Classify the motion first, simplify repeated or scroll-linked work where needed, then verify the release-build behavior on the affected screen.';
   }

@@ -23,6 +23,9 @@ export async function checkAnimationPerformance(projectPath: string): Promise<Do
   let scannedAnimatedFiles = 0;
 
   for (const filePath of sourceFiles) {
+    if (findings.length >= 50) {
+      break;
+    }
     const contents = await readOptionalText(filePath);
     if (!contents || !ANIMATION_SIGNAL_RE.test(contents)) {
       continue;
