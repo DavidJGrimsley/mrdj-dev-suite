@@ -1,7 +1,12 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { scanFileAppArchitecture, scanFileEnvHygiene, scanFileSsrSafety } from './checks/index.js';
+import {
+  scanFileAnimationPerformance,
+  scanFileAppArchitecture,
+  scanFileEnvHygiene,
+  scanFileSsrSafety,
+} from './checks/index.js';
 import { createReport } from './reporter.js';
 import type { DoctorReport, ScanFileOptions } from './types.js';
 import { pathExists } from './utils.js';
@@ -27,6 +32,7 @@ export async function scanFile(
     scanFileEnvHygiene(projectPath, resolvedFilePath),
     scanFileSsrSafety(projectPath, resolvedFilePath),
     scanFileAppArchitecture(projectPath, resolvedFilePath),
+    scanFileAnimationPerformance(projectPath, resolvedFilePath),
   ]);
 
   return createReport(projectPath, 'fast', checks);

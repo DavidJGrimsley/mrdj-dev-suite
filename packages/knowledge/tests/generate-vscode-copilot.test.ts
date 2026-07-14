@@ -71,6 +71,12 @@ describe('generateVscodeCopilotBundle', () => {
     const promptFiles = await readdir(path.join(bundleRoot, '.github', 'prompts'));
     expect(promptFiles).toContain('run-doctor.prompt.md');
 
+    const agentRaw = await readFile(path.join(bundleRoot, '.github', 'agents', 'mds.agent.md'), 'utf8');
+    expect(agentRaw).toContain('## Motion Routing');
+    expect(agentRaw).toContain('animation-motion');
+    expect(agentRaw).toContain('animation-performance');
+    expect(agentRaw).toContain('review_motion');
+
     const createSuperStackPrompt = await readFile(
       path.join(bundleRoot, '.github', 'prompts', 'create-expo-super-stack.prompt.md'),
       'utf8'

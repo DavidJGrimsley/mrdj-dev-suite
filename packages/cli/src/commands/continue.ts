@@ -75,6 +75,33 @@ export interface ContinueSessionBrief {
 const PLAN_MODE_KICKOFF_STEP =
   'Start this session in Plan mode: define success criteria, scope, risks, and acceptance checks before editing code.';
 
+const MOTION_INTENT_KEYWORDS = [
+  'animation',
+  'animations',
+  'motion',
+  'smooth',
+  'smoothness',
+  'jank',
+  'janky',
+  'stutter',
+  'stuttering',
+  'choppy',
+  'laggy',
+  'reanimated',
+  'lottie',
+  'layout transition',
+  'lineartransition',
+  'fadein',
+  'fadeout',
+  'parallax',
+  'scroll-linked',
+  'scroll linked',
+  'layered scroll',
+  'hero motion',
+  'depth effect',
+  'pinned scene',
+] as const;
+
 interface PackageJsonSubset {
   packageManager?: string;
   scripts?: Record<string, string>;
@@ -227,16 +254,12 @@ export function chooseRecommendation(input: {
   }
 
   if (input.nextTodo) {
+    const todoContext = `${input.nextTodo.section} ${input.nextTodo.text}`;
     return {
       priority: 'todo',
       title: `Continue ${input.nextTodo.section}: ${input.nextTodo.text}`,
       requiresApproval: true,
-      plan: [
-        PLAN_MODE_KICKOFF_STEP,
-        'Read project memory for the current phase and confirm the intended outcome.',
-        'Implement the earliest unchecked todo item only after the user approves this plan.',
-        'Run focused verification, then update project/todo.md if the task is complete.',
-      ],
+      plan: matchesMotionIntent(todoContext) ? buildMotionTodoPlan() : buildGenericTodoPlan(),
     };
   }
 
@@ -324,6 +347,34 @@ function renderPlan(recommendation: ContinueRecommendation): string[] {
     '',
     'Plan approval required. Autopilot is intentionally reserved for a future command or flag.',
   ];
+}
+
+function buildGenericTodoPlan(): string[] {
+  return [
+    PLAN_MODE_KICKOFF_STEP,
+    'Read project memory for the current phase and confirm the intended outcome.',
+    'Implement the earliest unchecked todo item only after the user approves this plan.',
+    'Run focused verification, then update project/todo.md if the task is complete.',
+  ];
+}
+
+function buildMotionTodoPlan(): string[] {
+  return [
+    PLAN_MODE_KICKOFF_STEP,
+    'Read project memory for the current phase and confirm the intended outcome.',
+    'Call `get_skill` with `id: "animation-motion"` before broad motion edits.',
+    'Call `get_guide` with `id: "animation-performance"` before choosing libraries or rewrite scope.',
+    'Call `generate_refactor_plan` with `focus: "animation"` before broad motion refactors.',
+    'Classify the affected motion as one-shot, layout, gesture-driven, list-heavy, loading, or parallax/scroll-linked before editing.',
+    'Use `/review-motion` when the task is primarily an audit, inventory, or motion classification request rather than a narrow fix.',
+    'Implement the earliest unchecked todo item only after the user approves this plan.',
+    'Run focused verification, then update project/todo.md if the task is complete.',
+  ];
+}
+
+function matchesMotionIntent(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return MOTION_INTENT_KEYWORDS.some((keyword) => normalized.includes(keyword));
 }
 
 function isPhase0Section(section: string): boolean {

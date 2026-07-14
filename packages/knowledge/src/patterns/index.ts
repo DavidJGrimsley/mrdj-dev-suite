@@ -1,6 +1,7 @@
 export type PatternCategory =
   | 'routing'
   | 'api'
+  | 'animation'
   | 'styling'
   | 'state'
   | 'database'
@@ -63,6 +64,24 @@ export const PATTERN_METADATA = [
     sourceRepos: ['DJsPortfolio', 'PokePages'],
     resourcePath: 'patterns/api/error-handling.md',
     keywords: ['error handling', 'validation', 'status codes', 'api'],
+  },
+  {
+    id: 'animation-motion-selection',
+    name: 'Motion Implementation Selection',
+    description:
+      'Choose between platform transitions, Reanimated, Lottie, and parallax/scroll-linked motion based on UX intent and performance budget.',
+    category: 'animation',
+    sourceRepos: ['time2pay', 'quantum-jam-2025-choose-your-own-adventure', 'Expo blog'],
+    resourcePath: 'patterns/animation/animation-motion-selection.md',
+    keywords: [
+      'animation',
+      'motion',
+      'parallax',
+      'scroll-linked',
+      'reanimated',
+      'lottie',
+      'hero motion',
+    ],
   },
   {
     id: 'styling-uniwind-setup',

@@ -83,7 +83,17 @@ const GUIDE_RESOURCES = [
     name: 'Animation Performance Guide',
     description: 'Practical React Native animation performance guidance from Expo/App & Flow benchmarks.',
     resourcePath: 'guides/animation-performance.md',
-    keywords: ['animation', 'performance', 'reanimated', 'lists'],
+    keywords: [
+      'animation',
+      'performance',
+      'reanimated',
+      'lists',
+      'parallax',
+      'scroll',
+      'scroll-linked',
+      'hero motion',
+      'layered motion',
+    ],
     sourceRepos: ['Expo blog', 'App & Flow'],
   },
   {
@@ -128,6 +138,23 @@ const RULE_RESOURCES = [
 ] as const;
 
 const SKILL_RESOURCES = [
+  {
+    id: 'animation-motion',
+    name: 'Animation Motion Skill',
+    description:
+      'Instructions for classifying motion work, choosing the right animation implementation, and smoothing janky interactions.',
+    resourcePath: 'skills/animation-motion.md',
+    keywords: [
+      'animation',
+      'motion',
+      'smoothness',
+      'jank',
+      'reanimated',
+      'parallax',
+      'scroll-linked',
+      'lottie',
+    ],
+  },
   {
     id: 'expo-router-architecture',
     name: 'Expo Router Architecture Skill',

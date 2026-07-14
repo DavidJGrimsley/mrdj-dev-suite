@@ -866,6 +866,31 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    'review_motion',
+    {
+      title: 'Review Motion',
+      description:
+        'Inventory project motion, classify animation types, and recommend smoother implementations with MDS guidance.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        focusPath: z.string().optional(),
+        mode: z.enum(['fast', 'ci', 'full']).optional(),
+      },
+    },
+    ({ projectPath, focusPath, mode }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildReviewMotionPromptText(projectPath, focusPath, mode),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'wrap_up_release',
     {
       title: 'Wrap Up Release',
@@ -985,6 +1010,27 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     '5. Before implementation planning, call `generate_project_roadmap`.',
     '   - If it returns `needsClarification: true`, ask the listed clarification questions EXACTLY ONE AT A TIME, update `project/info.md`, and rerun `generate_project_roadmap` until it no longer needs clarification.',
     '   - Only move into implementation planning after roadmap is not blocked and does not need clarification.',
+  ].join('\n');
+}
+
+export function buildReviewMotionPromptText(
+  projectPath?: string,
+  focusPath?: string,
+  mode?: DoctorMode | string
+): string {
+  const target = projectPath ?? 'the current Expo project';
+  const resolvedMode = normalizeMode(typeof mode === 'string' ? mode : undefined);
+  const focusLine = focusPath?.trim()
+    ? `Start by inspecting motion in \`${focusPath.trim()}\`, then widen to surrounding screens only if needed.`
+    : 'If the developer named a route, screen, or component in the conversation, inspect that motion first before broad project feedback.';
+  const canonicalPrompt = readCanonicalPromptMarkdown('review-motion').trim();
+
+  return [
+    `Review motion for the Expo project at ${target}.`,
+    `Use Doctor mode \`${resolvedMode}\` for the project scan unless the developer asks for a deeper pass.`,
+    focusLine,
+    '',
+    canonicalPrompt,
   ].join('\n');
 }
 
@@ -1434,6 +1480,18 @@ function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
   const text = `${check.name} ${check.message}`.toLowerCase();
   const resources = new Set<string>(['mds://skills/debugging']);
 
+  if (
+    text.includes('animation') ||
+    text.includes('motion') ||
+    text.includes('parallax') ||
+    text.includes('reanimated') ||
+    text.includes('scroll-linked') ||
+    text.includes('lottie')
+  ) {
+    resources.add('mds://skills/animation-motion');
+    resources.add('mds://guides/animation-performance');
+    resources.add('mds://patterns/animation-motion-selection');
+  }
   if (text.includes('env') || text.includes('secret') || text.includes('public')) {
     resources.add('mds://rules/env-hygiene');
     resources.add('mds://skills/env-vars');
@@ -1462,6 +1520,15 @@ function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
 
 function nextStepForCheck(check: DoctorCheckResult): string {
   const text = `${check.name} ${check.message}`.toLowerCase();
+  if (
+    text.includes('animation') ||
+    text.includes('motion') ||
+    text.includes('parallax') ||
+    text.includes('reanimated') ||
+    text.includes('scroll-linked')
+  ) {
+    return 'Classify the motion first, simplify repeated or scroll-linked work where needed, then verify the release-build behavior on the affected screen.';
+  }
   if (text.includes('env') || text.includes('secret')) {
     return 'Separate public client config from private server secrets, then rerun the affected file/project scan.';
   }

@@ -1,6 +1,7 @@
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -8,6 +9,7 @@ import { checkSeoMetadata, checkStylingDependencies } from '../src/checks/index.
 import { runDoctor, scanFile } from '../src/index.js';
 
 const tempDirs: string[] = [];
+const FIXTURE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
@@ -216,6 +218,143 @@ describe('scanFile', () => {
     expect(report.summary.errors).toBe(1);
     expect(report.checks.find((check) => check.name === 'env hygiene')?.status).toBe('error');
   });
+
+  it('skips animation warnings for files without animation-heavy code', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, 'src', 'app', 'settings.tsx');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, 'export default function Settings() { return null; }\n', 'utf8');
+
+    const report = await scanFile(filePath, { projectPath });
+
+    expect(report.checks.find((check) => check.name === 'animation performance')?.status).toBe(
+      'skip'
+    );
+  });
+});
+
+describe('animation performance check', () => {
+  it('ships generic motion fixtures for all supported motion classes', async () => {
+    const fixtureReadme = await readFixture('motion/README.md');
+    const fixtureFiles = await readdir(path.join(FIXTURE_ROOT, 'motion'));
+
+    expect(fixtureReadme).toContain('A fixture is a small, repeatable sample input used in tests.');
+    expect(fixtureFiles).toEqual(
+      expect.arrayContaining([
+        'marketing-hero-parallax.tsx',
+        'marketing-hero-parallax-noted.tsx',
+        'dense-animated-list.tsx',
+        'simple-route-fades.tsx',
+        'expanding-panel.tsx',
+        'draggable-sheet.tsx',
+        'branded-loader.tsx',
+      ])
+    );
+  });
+
+  it('skips or passes when the app has no animation-heavy source', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'plain-project',
+      scripts: {},
+    });
+    await writeFile(path.join(projectPath, 'src.tsx'), 'export const App = () => null;\n', 'utf8');
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status === 'skip' || check?.status === 'pass').toBe(true);
+  });
+
+  it('warns on repeated animated list items without a motion note', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'animated-list',
+      scripts: {},
+    });
+    await writeFixtureFile(
+      projectPath,
+      'src/components/animated-list.tsx',
+      'motion/dense-animated-list.tsx'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.details).toMatchObject({
+      findings: [expect.stringContaining('repeated animated rows or cards')],
+    });
+  });
+
+  it('warns on dense parallax interpolation layers without a note', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'parallax-screen',
+      scripts: {},
+    });
+    await writeFixtureFile(
+      projectPath,
+      'src/components/landing-motion.tsx',
+      'motion/marketing-hero-parallax.tsx'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.details).toMatchObject({
+      findings: [expect.stringContaining('dense parallax or scroll-linked layers')],
+    });
+  });
+
+  it('avoids the warning when a borderline file has an explicit motion note', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'noted-parallax',
+      scripts: {},
+    });
+    await writeFixtureFile(
+      projectPath,
+      'src/components/noted-motion.tsx',
+      'motion/marketing-hero-parallax-noted.tsx'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status).toBe('pass');
+  });
+
+  it('passes on small one-shot route fades', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'route-fades',
+      scripts: {},
+    });
+    await writeFixtureFile(projectPath, 'src/app/welcome.tsx', 'motion/simple-route-fades.tsx');
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status).toBe('pass');
+  });
+
+  it('passes on isolated gesture, layout, and loading fixtures', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'motion-samples',
+      scripts: {},
+    });
+    await writeFixtureFile(projectPath, 'src/components/draggable-sheet.tsx', 'motion/draggable-sheet.tsx');
+    await writeFixtureFile(projectPath, 'src/components/expanding-panel.tsx', 'motion/expanding-panel.tsx');
+    await writeFixtureFile(projectPath, 'src/components/branded-loader.tsx', 'motion/branded-loader.tsx');
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'animation performance');
+
+    expect(check?.status).toBe('pass');
+  });
 });
 
 async function createTempProject(): Promise<string> {
@@ -234,4 +373,18 @@ async function writeProjectFile(
   value: Record<string, unknown>
 ): Promise<void> {
   await writeFile(path.join(projectPath, fileName), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function writeFixtureFile(
+  projectPath: string,
+  relativePath: string,
+  fixtureRelativePath: string
+): Promise<void> {
+  const filePath = path.join(projectPath, relativePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, await readFixture(fixtureRelativePath), 'utf8');
+}
+
+async function readFixture(fixtureRelativePath: string): Promise<string> {
+  return readFile(path.join(FIXTURE_ROOT, fixtureRelativePath), 'utf8');
 }

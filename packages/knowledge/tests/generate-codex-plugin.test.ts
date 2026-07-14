@@ -94,6 +94,14 @@ describe('generateCodexPluginBundle', () => {
     expect(workflowDoctorRaw).toContain('MDS Routing Guardrails');
     expect(workflowDoctorRaw).not.toContain('Codex Routing Guardrails');
 
+    const workflowMotionRaw = await readFile(
+      path.join(pluginRoot, 'skills', 'workflow-review-motion', 'SKILL.md'),
+      'utf8'
+    );
+    expect(workflowMotionRaw).toContain('MDS Review Motion');
+    expect(workflowMotionRaw).toContain('animation-motion');
+    expect(workflowMotionRaw).toContain('animation-performance');
+
     const commandEntries = await readdir(path.join(pluginRoot, 'commands'));
     expect(commandEntries.sort()).toEqual([...COMMAND_FILES].sort());
 
@@ -106,6 +114,14 @@ describe('generateCodexPluginBundle', () => {
     expect(createSuperStackCommand).toContain("While we wait, let's shout out and recognize how this is working.");
     expect(createSuperStackCommand).not.toContain('warn if the MCP server, CLI, or wrapper looks stale');
     expect(createSuperStackCommand).not.toContain('falling back to npm exec');
+
+    const reviewMotionCommand = await readFile(
+      path.join(pluginRoot, 'commands', 'review-motion.md'),
+      'utf8'
+    );
+    expect(reviewMotionCommand).toContain('get_skill');
+    expect(reviewMotionCommand).toContain('get_guide');
+    expect(reviewMotionCommand).toContain('parallax');
 
     const marketplaceRaw = await readFile(
       path.join(repoRoot, '.agents', 'plugins', 'marketplace.json'),

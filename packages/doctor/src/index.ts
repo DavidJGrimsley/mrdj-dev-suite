@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import {
   checkAppArchitecture,
+  checkAnimationPerformance,
   checkEnvHygiene,
   checkExpoConfiguration,
   checkGitignoreEnv,
@@ -67,6 +68,7 @@ export async function runDoctor(
   checks.push(await checkExpoConfiguration(packageJson, resolvedProjectPath));
   checks.push(await checkEnvHygiene(resolvedProjectPath));
   checks.push(await checkAppArchitecture(resolvedProjectPath));
+  checks.push(await checkAnimationPerformance(resolvedProjectPath));
   checks.push(await checkSeoMetadata(resolvedProjectPath));
 
   if (options.runScripts !== false) {

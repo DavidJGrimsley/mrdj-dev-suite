@@ -1,4 +1,8 @@
 export { checkAppArchitecture, scanFileAppArchitecture } from './app-architecture.js';
+export {
+  checkAnimationPerformance,
+  scanFileAnimationPerformance,
+} from './animation-performance.js';
 export { checkEnvHygiene, scanFileEnvHygiene } from './env-hygiene.js';
 export { runEslintCheck } from './eslint.js';
 export { checkExpoConfiguration } from './expo-config.js';
