@@ -1,8 +1,8 @@
 {
   "name": "mr-djs-dev-suite",
   "displayName": "Mr. DJ's Dev Suite",
-  "version": "0.1.24",
-  "description": "Expo review, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code, backed by callable MDS MCP tools.",
+  "version": "0.1.25",
+  "description": "Expo review, motion audits, Doctor, onboarding, deployment readiness, and project continuation workflows for Claude Code, backed by callable MDS MCP tools.",
   "author": {
     "name": "DJ Grimsley",
     "url": "https://davidjgrimsley.com"

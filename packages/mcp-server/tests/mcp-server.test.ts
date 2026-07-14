@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
+  buildReviewMotionPromptText,
   buildWrapUpPromptText,
   classifyMcpServerRuntimeMode,
   executeTool,
@@ -32,6 +33,9 @@ describe('mds MCP helpers', () => {
     const resources = await listResources();
 
     expect(resources.some((resource) => resource.uri === 'mds://guides/animation-performance')).toBe(
+      true
+    );
+    expect(resources.some((resource) => resource.uri === 'mds://skills/animation-motion')).toBe(
       true
     );
     expect(resources.some((resource) => resource.uri === 'mds://reference/mcp-sdk-transport')).toBe(
@@ -103,9 +107,12 @@ describe('mds MCP helpers', () => {
       await client.connect(transport);
       const tools = await client.listTools();
       const toolNames = new Set(tools.tools.map((tool) => tool.name));
+      const prompts = await client.listPrompts();
+      const promptNames = new Set(prompts.prompts.map((prompt) => prompt.name));
       expect(toolNames.has('mds_runtime_versions')).toBe(true);
       expect(toolNames.has('create_expo_super_stack_resolve_info')).toBe(true);
       expect(toolNames.has('create_expo_super_stack_generate')).toBe(true);
+      expect(promptNames.has('review_motion')).toBe(true);
     } finally {
       await client.close().catch(() => undefined);
     }
@@ -131,6 +138,46 @@ describe('mds MCP helpers', () => {
     expect(result.kind).toBe('refactor-plan');
     expect(result.priorities.some((item) => item.check === 'env hygiene')).toBe(true);
     expect(result.priorities[0]?.relatedResources).toContain('mds://rules/env-hygiene');
+  });
+
+  it('routes animation warnings to motion skill, guide, and pattern resources', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-motion-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'components'), { recursive: true });
+    await writeFile(path.join(projectPath, 'package.json'), JSON.stringify({ name: 'demo', scripts: {} }), 'utf8');
+    await writeFile(
+      path.join(projectPath, 'src', 'components', 'landing-motion.tsx'),
+      [
+        "import { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, interpolate } from 'react-native-reanimated';",
+        'export function LandingMotion() {',
+        '  const scrollY = useSharedValue(0);',
+        '  const onScroll = useAnimatedScrollHandler(() => {});',
+        '  const heroLayer = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(scrollY.value, [0, 100], [0, -20]) }] }));',
+        '  const midLayer = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(scrollY.value, [0, 100], [0, -12]) }] }));',
+        '  const backLayer = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(scrollY.value, [0, 100], [0, -8]) }] }));',
+        '  const pinnedLayer = useAnimatedStyle(() => ({ opacity: interpolate(scrollY.value, [0, 100], [1, 0]) }));',
+        '  const depthLayer = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(scrollY.value, [0, 100], [1, 1.05]) }] }));',
+        '  return { onScroll, heroLayer, midLayer, backLayer, pinnedLayer, depthLayer, mode: "parallax layered hero pinned depth scroll-linked" };',
+        '}',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_refactor_plan', {
+      projectPath,
+      mode: 'fast',
+      runScripts: false,
+      focus: 'animation',
+    })) as {
+      priorities: Array<{ check: string; relatedResources: string[]; nextStep: string }>;
+    };
+
+    const animationPriority = result.priorities.find((item) => item.check === 'animation performance');
+    expect(animationPriority).toBeDefined();
+    expect(animationPriority?.relatedResources).toContain('mds://skills/animation-motion');
+    expect(animationPriority?.relatedResources).toContain('mds://guides/animation-performance');
+    expect(animationPriority?.relatedResources).toContain('mds://patterns/animation-motion-selection');
+    expect(animationPriority?.nextStep).toContain('Classify the motion first');
   });
 
   it('generates a target-aware deployment checklist', async () => {
@@ -570,6 +617,21 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
     expect(prompt).toContain('Ask EXACTLY ONE question per message');
     expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
+  });
+
+  it('builds a motion review prompt that requires the motion skill and guide', () => {
+    const prompt = buildReviewMotionPromptText(
+      'F:/ReactNativeApps/time2pay',
+      'src/components/landing/landing-page.tsx',
+      'fast'
+    );
+
+    expect(prompt).toContain('review-motion');
+    expect(prompt).toContain('doctor_scan_project');
+    expect(prompt).toContain('doctor_scan_file');
+    expect(prompt).toContain('animation-motion');
+    expect(prompt).toContain('animation-performance');
+    expect(prompt).toContain('parallax or scroll-linked motion');
   });
 
   it('builds a wrap-up prompt with doctor, file-confirmation, and merge guardrails', () => {

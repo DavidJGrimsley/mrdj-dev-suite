@@ -61,6 +61,23 @@ const PROMPT_SPECS: PromptSpec[] = [
     claudeCommandFile: 'review-expo-project.md',
   },
   {
+    id: 'review-motion',
+    slug: 'review-motion',
+    title: 'Review Motion',
+    description: 'Inventory app motion, classify animation types, and recommend smoother implementations.',
+    resourcePath: 'prompts/review-motion.md',
+    keywords: ['animation', 'motion', 'smooth', 'parallax', 'reanimated'],
+    surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
+    codexCommandFile: 'review-motion.md',
+    claudeCommandFile: 'review-motion.md',
+    mcpPromptName: 'review_motion',
+    mcpArgs: [
+      { name: 'projectPath', description: 'Path to the Expo project being reviewed.' },
+      { name: 'focusPath', description: 'Optional screen, route, or component path to inspect first.' },
+      { name: 'mode', description: 'Doctor mode override: fast, ci, or full.' },
+    ],
+  },
+  {
     id: 'prepare-deploy',
     slug: 'prepare-deploy',
     title: 'Prepare Deploy',

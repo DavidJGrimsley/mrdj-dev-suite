@@ -1,7 +1,7 @@
 {
   "name": "mr-djs-dev-suite",
-  "version": "0.1.24",
-  "description": "MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.",
+  "version": "0.1.25",
+  "description": "MDS Expo development workflows for motion review, onboarding, deployment readiness, and project continuation.",
   "author": {
     "name": "DJ Grimsley",
     "url": "https://davidjgrimsley.com"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Mr. DJ's Dev Suite",
-    "shortDescription": "Expo review, doctor, onboarding, and deploy workflows powered by MDS MCP tools",
-    "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.",
+    "shortDescription": "Expo review, motion, doctor, onboarding, and deploy workflows powered by MDS MCP tools",
+    "longDescription": "Generate and use MDS skills plus command playbooks for Expo project review, motion audits, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.",
     "developerName": "MDS",
     "category": "Coding",
     "capabilities": [
@@ -33,6 +33,7 @@
     "websiteURL": "https://github.com/DavidJGrimsley/mrdj-dev-suite",
     "defaultPrompt": [
       "Review my Expo project and give me the next safe implementation steps.",
+      "Review the animations in my app and tell me what should be parallax, Reanimated, or simpler motion.",
       "Run a deployment-readiness check with Doctor and fix blockers first.",
       "Continue the next task from my project/todo.md using MDS phase order."
     ],

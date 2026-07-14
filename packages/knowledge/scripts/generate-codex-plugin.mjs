@@ -10,6 +10,7 @@ export const MDS_MCP_SERVER_BIN = 'mds-mcp-server';
 
 export const COMMAND_FILES = [
   'review-expo-project.md',
+  'review-motion.md',
   'run-doctor.md',
   'prepare-deploy.md',
   'fix-seo.md',
@@ -23,6 +24,8 @@ export const COMMAND_FILES = [
 export const CODEX_WORKFLOW_SKILL_PREFIX = 'workflow-';
 
 const WORKFLOW_SKILL_DESCRIPTIONS = {
+  'review-motion.md':
+    "Use when the user asks Mr. DJ's Dev Suite to review animation smoothness, diagnose jank, classify motion, or inspect parallax and scroll-linked scenes.",
   'run-doctor.md':
     "Use when the user asks Mr. DJ's Dev Suite to run Doctor, run a health check, run CI checks, diagnose project status, or explain MDS Doctor findings.",
   'continue-development.md':
@@ -159,7 +162,7 @@ export function buildPluginManifest(options) {
     name: PLUGIN_ID,
     version: options.version,
     description:
-      'MDS Expo development workflows for review, onboarding, deployment readiness, and project continuation.',
+      'MDS Expo development workflows for motion review, onboarding, deployment readiness, and project continuation.',
     author: {
       name: 'DJ Grimsley',
       url: 'https://davidjgrimsley.com',
@@ -179,15 +182,16 @@ export function buildPluginManifest(options) {
     mcpServers: './.mcp.json',
     interface: {
       displayName: "Mr. DJ's Dev Suite",
-      shortDescription: 'Expo review, doctor, onboarding, and deploy workflows powered by MDS MCP tools',
+      shortDescription: 'Expo review, motion, doctor, onboarding, and deploy workflows powered by MDS MCP tools',
       longDescription:
-        'Generate and use MDS skills plus command playbooks for Expo project review, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.',
+        'Generate and use MDS skills plus command playbooks for Expo project review, motion audits, onboarding, deployment prep, SEO fixes, and phase-based continuation, with callable MDS MCP tools for runtime behavior.',
       developerName: 'MDS',
       category: 'Coding',
       capabilities: ['Interactive', 'Read', 'Write'],
       websiteURL: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
       defaultPrompt: [
         'Review my Expo project and give me the next safe implementation steps.',
+        'Review the animations in my app and tell me what should be parallax, Reanimated, or simpler motion.',
         'Run a deployment-readiness check with Doctor and fix blockers first.',
         'Continue the next task from my project/todo.md using MDS phase order.',
       ],

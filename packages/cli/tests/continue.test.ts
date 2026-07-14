@@ -130,6 +130,51 @@ describe('MDS Continue', () => {
     expect(brief.recommendation.priority).toBe('todo');
     expect(brief.nextTodo?.section).toBe('Phase 1: App Shell');
     expect(brief.nextTodo?.text).toBe('Build the app shell.');
+    expect(brief.recommendation.plan.join('\n')).not.toContain('animation-motion');
+  });
+
+  it('routes motion todos into the animation skill, guide, and refactor plan flow', async () => {
+    const projectPath = await createOnboardedProject({
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 2: Polish',
+        '',
+        '- [ ] Fix jarring animations throughout the app.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+    const plan = brief.recommendation.plan.join('\n');
+
+    expect(brief.recommendation.priority).toBe('todo');
+    expect(plan).toContain('animation-motion');
+    expect(plan).toContain('animation-performance');
+    expect(plan).toContain('generate_refactor_plan');
+    expect(plan).toContain('focus: "animation"');
+    expect(plan).toContain('parallax/scroll-linked');
+  });
+
+  it('mentions parallax explicitly when the next todo is parallax-focused', async () => {
+    const projectPath = await createOnboardedProject({
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 3: Landing Motion',
+        '',
+        '- [ ] Make the parallax hero smoother on web and mobile.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+    const plan = brief.recommendation.plan.join('\n');
+
+    expect(brief.recommendation.priority).toBe('todo');
+    expect(brief.nextTodo?.text).toContain('parallax hero');
+    expect(plan).toContain('parallax/scroll-linked');
+    expect(plan).toContain('/review-motion');
   });
 
   it('prints JSON for agent/tool usage', async () => {

@@ -1,8 +1,9 @@
 ---
 name: mds
-description: Use for Mr. DJ's Dev Suite Expo project work: Doctor scans, project review, onboarding, deployment readiness, and phase-based continuation.
+description: Use for Mr. DJ's Dev Suite Expo project work: Doctor scans, motion review, project review, onboarding, deployment readiness, and phase-based continuation.
 model: inherit
 skills:
+  - animation-motion
   - deployment
   - debugging
   - continue-development
@@ -25,6 +26,13 @@ You are the Mr. DJ's Dev Suite agent for Expo projects. Treat callable MDS MCP t
 - Use `generate_refactor_plan` before moving architecture across folders.
 - Use `generate_deploy_checklist` before release or client handoff.
 - Use `list_skills`, `get_skill`, and `get_guide` before giving MDS-specific guidance.
+
+## Motion Routing
+
+- If the user asks about animation, motion, smoothness, jank, Reanimated, Lottie, parallax, scroll-linked motion, layered scroll, hero motion, depth effects, pinned scenes, or layout transitions, pull `get_skill` with `id: "animation-motion"` and `get_guide` with `id: "animation-performance"` before broad motion edits.
+- Use `review_motion` or `/review-motion` for motion audits, inventories, and classification requests.
+- Use direct `get_skill` plus `get_guide` before focused motion fixes.
+- Prefer the MDS motion classification flow before broad refactors; do not rely on generic framework guidance first for motion tasks.
 
 ## Guardrails
 
