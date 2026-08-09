@@ -21,7 +21,7 @@
     "type-check": "turbo run type-check",
     "typecheck": "pnpm type-check",
     "test": "turbo run test",
-    "ci": "pnpm type-check && pnpm lint && pnpm test && pnpm build",
+    "ci": "pnpm type-check && pnpm lint && pnpm build && pnpm test",
     "ci:repo": "pnpm run ci",
     "check:publish-manifests": "node scripts/verify-publish-manifest.mjs",
     "clean": "turbo run clean && node -e \"const fs=require('node:fs'); for (const p of ['node_modules','dist']) fs.rmSync(p,{recursive:true,force:true});\"",
