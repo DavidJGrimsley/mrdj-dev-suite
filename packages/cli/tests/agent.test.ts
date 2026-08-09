@@ -11,6 +11,7 @@ import {
   verifyCodexAgentInstall,
   verifyVscodeAgentInstall,
 } from '../src/commands/agent.js';
+import { resolveVscodeUserMcpConfigPath } from '../src/commands/mcp-install.js';
 
 const tempDirs: string[] = [];
 
@@ -70,6 +71,7 @@ describe('VS Code agent install', () => {
     const fakeAppData = await createTempDir('mds-agent-appdata-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
     vi.stubEnv('APPDATA', fakeAppData);
+    const fakeMcpPath = resolveVscodeUserMcpConfigPath();
 
     const result = await runAgentInstallCommand({
       client: 'vscode',
@@ -85,7 +87,7 @@ describe('VS Code agent install', () => {
       true
     );
     await expect(readFile(path.join(fakeHome, '.copilot', 'instructions.md'), 'utf8')).rejects.toThrow();
-    await expect(readFile(path.join(fakeAppData, 'Code', 'User', 'mcp.json'), 'utf8')).rejects.toThrow();
+    await expect(readFile(fakeMcpPath, 'utf8')).rejects.toThrow();
   });
 
   it('verifies user-scope VS Code installs only when the user MCP config is present', async () => {
@@ -93,6 +95,7 @@ describe('VS Code agent install', () => {
     const fakeAppData = await createTempDir('mds-agent-appdata-');
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
     vi.stubEnv('APPDATA', fakeAppData);
+    const fakeMcpPath = resolveVscodeUserMcpConfigPath();
 
     await writeFileWithDirs(
       path.join(fakeHome, '.copilot', 'instructions.md'),
@@ -101,7 +104,7 @@ describe('VS Code agent install', () => {
     await writeFileWithDirs(path.join(fakeHome, '.copilot', 'agents', 'mds.agent.md'), '# Agent\n');
     await writeFileWithDirs(path.join(fakeHome, '.copilot', 'skills', 'deployment', 'SKILL.md'), '# Skill\n');
     await writeFileWithDirs(
-      path.join(fakeAppData, 'Code', 'User', 'mcp.json'),
+      fakeMcpPath,
       JSON.stringify({ servers: { mds: { command: 'node', args: ['/abs/server.js'] } } }, null, 2)
     );
 

@@ -3,6 +3,11 @@
   "version": "0.1.18",
   "description": "Opinionated MDS wrapper around create-expo-stack with rich Expo onboarding",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidJGrimsley/mrdj-dev-suite.git",
+    "directory": "packages/create-expo-super-stack"
+  },
   "bin": {
     "create-expo-super-stack": "dist/cli.js"
   },
@@ -45,5 +50,8 @@
     "react-native"
   ],
   "author": "DJ",
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

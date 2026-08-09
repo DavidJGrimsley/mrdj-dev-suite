@@ -268,6 +268,21 @@ export async function scan(
 
 ## Release Process
 
+Current release automation uses Changesets plus npm trusted publishing.
+
+```bash
+pnpm changeset
+pnpm check:publish-manifests
+pnpm ci:repo
+```
+
+- Add a changeset whenever a publishable package changes.
+- `.github/workflows/release.yml` creates or updates a release PR when changesets are present on `main`.
+- Merging that release PR publishes the pending package versions to npm through trusted publishing.
+- Configure npm trusted publishers for each public package in this repo against `DavidJGrimsley/mrdj-dev-suite` and the workflow file `release.yml`.
+
+The older manual version-bump notes below are kept for history and are no longer the primary release path.
+
 ### Version Bumping
 ```bash
 # Update version in package.json

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import path from 'node:path';
 
 import {
   buildCessIntakeStep,
@@ -18,7 +19,7 @@ describe('CESS intake contract', () => {
 
     expect(step.status).toBe('question');
     expect(step.nextQuestion?.id).toBe('parentDir');
-    expect(step.defaultValue).toBe('F:\\ReactNativeApps');
+    expect(step.defaultValue).toBe(path.resolve('F:/ReactNativeApps'));
   });
 
   it('asks for the app name in natural language and derives a slugged folder name', () => {
