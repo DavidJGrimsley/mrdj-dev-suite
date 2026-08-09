@@ -3,6 +3,11 @@
   "version": "0.1.6",
   "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidJGrimsley/mrdj-dev-suite.git",
+    "directory": "packages/doctor"
+  },
   "bin": {
     "mds-doctor": "dist/cli.js"
   },

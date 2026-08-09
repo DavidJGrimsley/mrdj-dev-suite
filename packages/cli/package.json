@@ -3,6 +3,11 @@
   "version": "0.1.25",
   "description": "CLI entry point for mds commands (doctor, onboard, test-and-iterate)",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidJGrimsley/mrdj-dev-suite.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "mds": "dist/cli.js"
   },
