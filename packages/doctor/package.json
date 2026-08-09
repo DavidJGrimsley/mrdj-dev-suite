@@ -1,6 +1,6 @@
 {
   "name": "@mr.dj2u/doctor",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Production Doctor: multi-check engine for Expo apps (lint, tsc, expo doctor, architecture)",
   "type": "module",
   "repository": {
