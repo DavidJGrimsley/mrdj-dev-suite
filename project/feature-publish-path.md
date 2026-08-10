@@ -137,7 +137,7 @@ Review the generated versions and changelog text. Confirm that the intended pack
 Merging the release PR triggers the `Release` workflow again. With no pending changesets, the workflow runs:
 
 ```powershell
-pnpm changeset publish
+pnpm run publish:mds
 ```
 
 The workflow authenticates to npm using the GitHub Actions OIDC identity and the trusted publisher connection configured for each npm package. It publishes only package versions that do not already exist on npm, then creates Git tags for the published versions.
@@ -207,7 +207,7 @@ npm publish --access public --tag bootstrap
 Pop-Location
 ```
 
-Only run the targeted `npm publish` from the new package directory. Use the `bootstrap` dist-tag for this first registry entry so the placeholder `0.0.0` version does not become the package's `latest` release. Do not run `pnpm changeset publish` locally; that would publish every unpublished changed package and bypass the normal release workflow.
+Only run the targeted `npm publish` from the new package directory. Use the `bootstrap` dist-tag for this first registry entry so the placeholder `0.0.0` version does not become the package's `latest` release. Do not run `pnpm run publish:mds` locally; that would publish every unpublished changed package and bypass the normal release workflow.
 
 After the first publish, configure trusted publishing for that package on npm:
 
@@ -236,7 +236,7 @@ When an agent is asked to publish a feature:
 - Inspect the affected package before choosing the changeset.
 - Add a changeset for every affected public package.
 - Do not manually bump package versions on the feature branch.
-- Do not run `pnpm changeset publish` locally as a substitute for the release workflow.
+- Do not run `pnpm run publish:mds` locally as a substitute for the release workflow.
 - Run `pnpm check:publish-manifests`, `pnpm ci:repo`, and `mds doctor --fast` before committing.
 - Stage only files belonging to the feature; preserve unrelated worktree changes.
 - Explain that npm publishing happens only after the automated release PR is merged.
