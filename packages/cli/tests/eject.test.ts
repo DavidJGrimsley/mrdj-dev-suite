@@ -35,6 +35,8 @@ describe('runEjectExpositionCommand', () => {
     await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
     await mkdir(path.join(projectPath, 'src', 'components', 'exposition'), { recursive: true });
     await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'data'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'services'), { recursive: true });
 
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'), 'export {};\n', 'utf8');
@@ -48,6 +50,9 @@ describe('runEjectExpositionCommand', () => {
     await writeFile(path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'data', 'mock-app.ts'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'services', 'local-data.ts'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'services', 'local-data.native.ts'), 'export {};\n', 'utf8');
 
     await writeFile(path.join(projectPath, 'src', 'app', 'onboarding.tsx'), 'export {};\n', 'utf8');
     await mkdir(path.join(projectPath, 'src', 'app', 'onboarding'), { recursive: true });
@@ -104,6 +109,9 @@ describe('runEjectExpositionCommand', () => {
     await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'))).resolves.toBeUndefined();
     await expect(access(path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'))).resolves.toBeUndefined();
     await expect(access(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'data', 'mock-app.ts'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'services', 'local-data.ts'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'services', 'local-data.native.ts'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'))).rejects.toThrow();
 
@@ -128,5 +136,46 @@ describe('runEjectExpositionCommand', () => {
 
     const home = await readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8');
     expect(home).not.toContain('/exposition/stylist');
+  });
+
+  it('keeps settings dependencies and removes root-level exposition files', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-root-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'components', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'components', 'swmansion'), { recursive: true });
+    await mkdir(path.join(projectPath, 'features', 'settings'), { recursive: true });
+    await mkdir(path.join(projectPath, 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'app', 'exposition'), { recursive: true });
+    await writeFile(path.join(projectPath, 'components', 'swmansion', 'keyboard-form.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'components', 'swmansion', 'animated-pressable.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'features', 'settings', 'settings-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'features', 'exposition', 'stylist-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'app', 'settings.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'), 'export {};\n', 'utf8');
+
+    await runEjectExpositionCommand({ path: projectPath, keep: 'settings' });
+
+    await expect(access(path.join(projectPath, 'features', 'settings', 'settings-screen.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'components', 'swmansion', 'keyboard-form.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'components', 'swmansion', 'animated-pressable.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'features', 'exposition', 'stylist-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'))).rejects.toThrow();
+  });
+
+  it('removes NativeWindUI routes and screen but keeps shared primitives', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-nativewindui-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'components', 'nativewindui'), { recursive: true });
+    await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'nativewindui.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'export {};\n', 'utf8');
+
+    await runEjectExpositionCommand({ path: projectPath, all: true });
+
+    await expect(access(path.join(projectPath, 'src', 'app', 'exposition', 'nativewindui.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'))).resolves.toBeUndefined();
   });
 });

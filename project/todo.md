@@ -319,7 +319,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Enhance `mds continue` and the Continue workflow so new phase kickoff strongly prefers Plan mode before implementation.
 - [x] Update Super Stack/onboarding intake to recommend planning first for thin ideas, accept pasted research/project-memory files, and normalize into canonical `project/info.md` + `project/style.md` before generation.
 - [x] Save personal defaults globally for future app generation.
-- [x] Keep `/push-merge-loop` as the shipped PR iteration primitive (Doctor -> push/PR -> poll/fix -> merge handling).
+- [x] Keep `/push-merge-loop` as the shipped PR iteration primitive (Doctor -> push/PR -> poll/fix -> merge handling); map legacy `ship-test-loop` requests to it.
 - [x] Add `/wrap-up` prompt for post-testing release preflight: mark completed todo items, run `mds doctor --ci`, review `git status`, and confirm intentionally omitted files before publish flow.
 - [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
 - [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
@@ -329,7 +329,30 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] After editing the generated app for a while, we need to finally update the generator in create expo super stack. to do this, please review StylistCheck app (all of it's pages, components and such, not just the Stylist), possibly by creating a new app with the same command and diffing the files to update the updateGenerator.md. Then update the app generator per updateGenerator.md. 
 - [x] Ensure that create expo super stack is actually using the layout choice chosen during create expo stack. 
 - [x] Set up CI for npm packages
-- [ ] Add tool to agent/mcp that recalls all components and packages that came with the template app and create-expo-app components so that they can be used later if the dev has a use for them but were ejected.
+
+## MDS Library
+
+> Sequencing note: this is an explicitly approved standalone `component-library` branch and does not change the active Doctor phase or mark its remaining work complete.
+
+- [x] Add tool to agent/mcp that recalls all components and packages that came with the template app and create-expo-app components so that they can be used later if the dev has a use for them but were ejected. This will be the groundwork for the Component library widget of the MDS/II IDE. - See temp/Dual-Screen IDE Design.
+
+### MDS Library v1: Registry, Discovery, and Safe Restore
+
+- [x] Add the publishable `@mr.dj2u/library-registry` package with typed, searchable metadata and bundled source-copy assets.
+- [x] Seed the registry only with completed MDS, create-expo-app, and create-expo-stack assets that are already generated today and have redistribution-friendly provenance.
+- [x] Add `mds library list`, `show`, and conflict-safe `add` workflows with compatibility and dependency planning.
+- [x] Add matching MCP search, get, plan-add, and confirmed add tools.
+- [x] Make MDS generation and exposition ejection consume the shared registry inventory.
+- [x] Validate packaged assets, focused restore behavior, repository CI, and MDS Doctor before release.
+
+### MDS Library Later Roadmap
+
+- [ ] Add the redesigned onboarding flow to MDS Library from its dedicated feature branch.
+- [ ] Add completed sign-in and sign-up screens/flows from the dedicated auth branch; do not treat the current account-setup placeholder as auth.
+- [ ] Add npm-package-backed Library entries and decide which advanced MDS components should graduate into runtime packages.
+- [ ] Design reviewed contributor submissions, attribution, licensing, governance, signup-fee, nonprofit, and potential payout policies without granting repository write access by default.
+- [ ] Connect the I^2 IDE MDS Library widget to the shared registry APIs, including previews and project compatibility state.
+
 ### Create Expo Super Stack
 - [ ] Remove question about using the latest expo sdk from onboarding CLI. We are only going to use latest. We can have a note about it in the very beginning.
 - [ ] Add light and dark mode to generated app in the way that create expo app does.

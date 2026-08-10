@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/library-registry" },
     { "path": "./packages/cli" },
     { "path": "./packages/create-expo-super-stack" },
     { "path": "./packages/doctor" },

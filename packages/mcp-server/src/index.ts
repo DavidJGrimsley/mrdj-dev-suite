@@ -17,6 +17,7 @@ import {
   validateCessGenerationReadiness,
 } from '@mr.dj2u/cli/cess-intake';
 import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
+import { applyLibraryAdd, inspectLibraryProject, planLibraryAdd } from '@mr.dj2u/cli/library';
 import { renderInfo } from '@mr.dj2u/cli/project-memory';
 import { generateProjectRoadmap } from '@mr.dj2u/cli/roadmap';
 import {
@@ -25,10 +26,12 @@ import {
   listKnowledgeResources,
   readKnowledgeResource,
 } from '@mr.dj2u/knowledge';
+import { getLibraryItem, resolveLibraryItem, searchLibraryItems } from '@mr.dj2u/library-registry';
 
 import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 import type { KnowledgeKind } from '@mr.dj2u/knowledge';
+import type { LibraryItemKind, LibrarySourceName } from '@mr.dj2u/library-registry';
 
 interface SuperStackInvocationSpec {
   command: string;
@@ -352,6 +355,73 @@ export function listTools(): MCPTool[] {
       },
     },
     {
+      name: 'library_search',
+      description:
+        'Search the MDS Library catalog, optionally filtering against an Expo project compatibility context.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          kind: {
+            type: 'string',
+            enum: ['component', 'animation', 'screen', 'flow', 'integration'],
+          },
+          source: {
+            type: 'string',
+            enum: ['mds', 'create-expo-app', 'create-expo-stack', 'nativewindui', 'swmansion'],
+          },
+          tags: { type: 'array', items: { type: 'string' } },
+          categories: { type: 'array', items: { type: 'string' } },
+          projectPath: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'library_get',
+      description:
+        'Get one MDS Library item and, when a project path is supplied, its resolved compatibility details.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          projectPath: { type: 'string' },
+          variant: { type: 'string' },
+        },
+        required: ['id'],
+      },
+    },
+    {
+      name: 'library_plan_add',
+      description:
+        'Preflight copying an editable MDS Library item into a project and return its confirmation plan hash plus placement guidance. Before applying any library item, ask the developer where or how they want it used unless they already specified a target screen, route, component slot, provider boundary, or setup location.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          projectPath: { type: 'string' },
+          variant: { type: 'string' },
+        },
+        required: ['id', 'projectPath'],
+      },
+    },
+    {
+      name: 'library_add',
+      description:
+        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          projectPath: { type: 'string' },
+          variant: { type: 'string' },
+          planHash: { type: 'string' },
+          confirmed: { type: 'boolean', const: true },
+          installDependencies: { type: 'boolean' },
+        },
+        required: ['id', 'projectPath', 'planHash', 'confirmed'],
+      },
+    },
+    {
       name: 'mds_runtime_versions',
       description:
         'Report the active MDS MCP server, CLI, and create-expo-super-stack runtime versions and sources.',
@@ -461,6 +531,18 @@ export async function executeTool(
     }
     case 'create_expo_super_stack_generate': {
       return generateCreateExpoSuperStack(input);
+    }
+    case 'library_search': {
+      return searchMdsLibrary(input);
+    }
+    case 'library_get': {
+      return getMdsLibraryItem(input);
+    }
+    case 'library_plan_add': {
+      return planMdsLibraryAdd(input);
+    }
+    case 'library_add': {
+      return addMdsLibraryItem(input);
     }
     case 'mds_runtime_versions': {
       return getMdsRuntimeVersions();
@@ -780,6 +862,74 @@ function registerTools(server: McpServer): void {
           confirmed,
         })
       )
+  );
+
+  server.registerTool(
+    'library_search',
+    {
+      title: 'Search MDS Library',
+      description:
+        'Search the MDS Library catalog, optionally filtering against an Expo project compatibility context.',
+      inputSchema: {
+        query: z.string().optional(),
+        kind: z.enum(['component', 'animation', 'screen', 'flow', 'integration']).optional(),
+        source: z
+          .enum(['mds', 'create-expo-app', 'create-expo-stack', 'nativewindui', 'swmansion'])
+          .optional(),
+        tags: z.array(z.string()).optional(),
+        categories: z.array(z.string()).optional(),
+        projectPath: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await searchMdsLibrary(input))
+  );
+
+  server.registerTool(
+    'library_get',
+    {
+      title: 'Get MDS Library Item',
+      description:
+        'Get one MDS Library item and, when a project path is supplied, its resolved compatibility details.',
+      inputSchema: {
+        id: z.string(),
+        projectPath: z.string().optional(),
+        variant: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await getMdsLibraryItem(input))
+  );
+
+  server.registerTool(
+    'library_plan_add',
+    {
+      title: 'Plan MDS Library Add',
+      description:
+        'Preflight copying an editable MDS Library item into a project and return its confirmation plan hash plus placement guidance. Before applying any library item, ask the developer where or how they want it used unless they already specified a target screen, route, component slot, provider boundary, or setup location.',
+      inputSchema: {
+        id: z.string(),
+        projectPath: z.string(),
+        variant: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await planMdsLibraryAdd(input))
+  );
+
+  server.registerTool(
+    'library_add',
+    {
+      title: 'Add MDS Library Item',
+      description:
+        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
+      inputSchema: {
+        id: z.string(),
+        projectPath: z.string(),
+        variant: z.string().optional(),
+        planHash: z.string(),
+        confirmed: z.literal(true),
+        installDependencies: z.boolean().optional(),
+      },
+    },
+    async (input) => toolJson(await addMdsLibraryItem(input))
   );
 
   server.registerTool(
@@ -1558,6 +1708,117 @@ function normalizeDeployTarget(value: string | undefined): 'web' | 'ios' | 'andr
     : 'all';
 }
 
+async function searchMdsLibrary(input: Record<string, unknown>): Promise<unknown> {
+  const projectPath = readString(input.projectPath);
+  const compatibilityContext = projectPath ? await inspectLibraryProject(projectPath) : undefined;
+  const tags = readStringArray(input.tags);
+  const categories = readStringArray(input.categories);
+
+  return searchLibraryItems(readString(input.query) ?? '', {
+    kind: normalizeLibraryItemKind(readString(input.kind)),
+    source: normalizeLibrarySource(readString(input.source)),
+    tags: tags.length > 0 ? tags : undefined,
+    categories: categories.length > 0 ? categories : undefined,
+    compatibleWith: compatibilityContext,
+  });
+}
+
+async function getMdsLibraryItem(input: Record<string, unknown>): Promise<unknown> {
+  const id = readString(input.id);
+  if (!id) {
+    throw new Error('library_get requires id.');
+  }
+  if (!getLibraryItem(id)) {
+    throw new Error(`Unknown library item: ${id}`);
+  }
+
+  const projectPath = readString(input.projectPath);
+  const compatibilityContext = projectPath ? await inspectLibraryProject(projectPath) : undefined;
+  return resolveLibraryItem(id, compatibilityContext, {
+    variant: readString(input.variant),
+  });
+}
+
+async function planMdsLibraryAdd(input: Record<string, unknown>): Promise<unknown> {
+  const id = readString(input.id);
+  const projectPath = readString(input.projectPath);
+  if (!id) {
+    throw new Error('library_plan_add requires id.');
+  }
+  if (!projectPath) {
+    throw new Error('library_plan_add requires projectPath.');
+  }
+
+  return planLibraryAdd(projectPath, id, {
+    variant: readString(input.variant),
+  });
+}
+
+async function addMdsLibraryItem(input: Record<string, unknown>): Promise<unknown> {
+  const id = readString(input.id);
+  const projectPath = readString(input.projectPath);
+  const planHash = readString(input.planHash);
+  if (!id) {
+    throw new Error('library_add requires id.');
+  }
+  if (!projectPath) {
+    throw new Error('library_add requires projectPath.');
+  }
+  if (input.confirmed !== true) {
+    throw new Error('library_add requires confirmed=true after the user approves the add plan.');
+  }
+  if (!planHash) {
+    throw new Error('library_add requires the planHash returned by library_plan_add.');
+  }
+
+  const variant = readString(input.variant);
+  const currentPlan = await planLibraryAdd(projectPath, id, { variant });
+  if (currentPlan.planHash !== planHash) {
+    throw new Error(
+      'library_add rejected a stale planHash. Run library_plan_add again and confirm the unchanged plan.'
+    );
+  }
+
+  return applyLibraryAdd(projectPath, id, {
+    variant,
+    planHash,
+    confirmed: true,
+    installDependencies: readBoolean(input.installDependencies),
+  });
+}
+
+function normalizeLibraryItemKind(value: string | undefined): LibraryItemKind | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === 'component' ||
+    value === 'animation' ||
+    value === 'screen' ||
+    value === 'flow' ||
+    value === 'integration'
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported MDS Library item kind: ${value}`);
+}
+
+function normalizeLibrarySource(value: string | undefined): LibrarySourceName | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === 'mds' ||
+    value === 'create-expo-app' ||
+    value === 'create-expo-stack' ||
+    value === 'nativewindui' ||
+    value === 'swmansion'
+  ) {
+    return value;
+  }
+  throw new Error(`Unsupported MDS Library source: ${value}`);
+}
+
 function normalizeMode(value: string | undefined): DoctorMode {
   return value === 'ci' || value === 'full' || value === 'fast' ? value : 'fast';
 }
@@ -2050,4 +2311,3 @@ if (isDirectRun()) {
     process.exit(1);
   });
 }
-

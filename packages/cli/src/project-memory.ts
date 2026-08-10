@@ -1,13 +1,18 @@
-﻿import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_STYLIST_THEME,
   renderGlobalCssThemeBlock,
-  renderThemeTokensFile,
 } from './stylist-theme.js';
+import {
+  loadLibraryTextAssets,
+  requireLibraryTextAsset,
+} from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
+
+import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
 
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
@@ -95,8 +100,57 @@ interface NavigationShell {
   layout: NavigationLayout;
 }
 
+interface GeneratedLibraryRouteAssets {
+  onboarding?: ReadonlyMap<string, string>;
+  settings?: ReadonlyMap<string, string>;
+  stylist?: ReadonlyMap<string, string>;
+  expoSdk56?: ReadonlyMap<string, string>;
+}
+
+function buildGeneratedLibraryContext(
+  answers: OnboardAnswers,
+  navigationShell: NavigationShell,
+  manageUniwind: boolean
+): LibraryProjectContext {
+  const platformSet = new Set<'android' | 'ios' | 'web'>();
+  for (const platform of answers.targetPlatforms) {
+    if (platform === 'web') {
+      platformSet.add('web');
+    } else if (platform === 'android' || platform === 'android-tv') {
+      platformSet.add('android');
+    } else if (platform === 'ios' || platform === 'apple-tv') {
+      platformSet.add('ios');
+    }
+  }
+
+  const generatedStyling = answers.generatorStylingSystem;
+  const styling: LibraryStyling = generatedStyling
+    ? generatedStyling === 'stylesheet'
+      ? 'stylesheet'
+      : generatedStyling
+    : answers.defaults.includes('nativewindui')
+      ? 'nativewindui'
+      : manageUniwind
+        ? 'uniwind'
+        : 'stylesheet';
+
+  return {
+    projectName: answers.appName,
+    expoSdk: 56,
+    styling,
+    appDirectory: answers.appDirectory === 'src' ? 'src/app' : 'app',
+    navigation: navigationShell.library,
+    navigationLayout:
+      navigationShell.layout === 'drawer + tabs' ? 'drawer+tabs' : navigationShell.layout,
+    platforms: [...platformSet],
+    aliases: { '@': './src' },
+    componentsDirectory: 'src/components',
+    featuresDirectory: 'src/features',
+  };
+}
+
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
-  'react-native-gesture-handler': '~2.30.0',
+  'react-native-gesture-handler': '~2.31.1',
   'react-native-reanimated': '4.3.1',
   'react-native-screens': '~4.25.2',
   'react-native-svg': '15.15.4',
@@ -148,21 +202,6 @@ const DEFAULT_GUIDELINES_TEMPLATE_PATH = path.join(
   'templates',
   'project',
   'guidelines.md'
-);
-const STYLIST_SCREEN_TEMPLATE_PATH = path.join(
-  PACKAGE_ROOT,
-  'templates',
-  'stylist-screen.template.tsx'
-);
-const EMBEDDED_FONTS_TEMPLATE_PATH = path.join(
-  PACKAGE_ROOT,
-  'templates',
-  'embedded-fonts.template.ts'
-);
-const EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH = path.join(
-  PACKAGE_ROOT,
-  'templates',
-  'expo-sdk-56-screen-universal.template.tsx'
 );
 
 function readOwnPackageVersion(): string {
@@ -281,21 +320,44 @@ export async function scaffoldRichBoilerplate(
   const needsNativeWindMetroPatch = !options.manageUniwind;
   const navigationShell = await detectNavigationShell(projectPath);
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
-  const stylistScreenTemplate = (
-    await loadTemplateWithFallback(STYLIST_SCREEN_TEMPLATE_PATH, renderStylistScreen(answers))
-  )
-    .split('__MDS_APP_NAME__')
-    .join(answers.appName);
-  const embeddedFontsTemplate = await loadTemplateWithFallback(
-    EMBEDDED_FONTS_TEMPLATE_PATH,
-    renderEmbeddedFonts()
+  const libraryContext = buildGeneratedLibraryContext(
+    answers,
+    navigationShell,
+    options.manageUniwind
   );
-  const expoSdk56ScreenTemplate = answers.usesExpoUiUniversalComponents
-    ? await loadTemplateWithFallback(
-        EXPO_SDK_56_SCREEN_UNIVERSAL_TEMPLATE_PATH,
-        renderExpoSdk56Screen(answers)
+  const [themeAssets, expositionComponentAssets, stylistSyncAssets] = await Promise.all([
+    loadLibraryTextAssets('mds/theme-support', libraryContext),
+    loadLibraryTextAssets('mds/exposition-components', libraryContext),
+    loadLibraryTextAssets('mds/stylist-sync-support', libraryContext),
+  ]);
+  const routerLibraryAssets =
+    navigationShell.library === 'expo-router'
+      ? await Promise.all([
+          loadLibraryTextAssets('mds/onboarding-preview', libraryContext),
+          loadLibraryTextAssets('mds/settings', libraryContext),
+          loadLibraryTextAssets('mds/stylist', libraryContext),
+          ...(answers.usesExpoUiUniversalComponents
+            ? [loadLibraryTextAssets('mds/expo-sdk-56', libraryContext)]
+            : []),
+        ])
+      : [];
+  const [onboardingAssets, settingsAssets, stylistAssets, expoSdk56Assets] =
+    routerLibraryAssets;
+  const nativeWindUiAssets = includeNativeWindUiExposition
+    ? await loadLibraryTextAssets(
+        'nativewindui/exposition',
+        navigationShell.library === 'react-navigation'
+          ? { ...libraryContext, navigation: 'expo-router' }
+          : libraryContext
       )
-    : renderExpoSdk56Screen(answers);
+    : undefined;
+  const libraryAssetOrFallback = (
+    itemId: string,
+    assets: ReadonlyMap<string, string> | undefined,
+    destination: string,
+    fallback: () => string
+  ): string =>
+    assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback();
 
   await mkdir(path.join(projectPath, 'src', 'features', 'home'), {
     recursive: true,
@@ -313,6 +375,9 @@ export async function scaffoldRichBoilerplate(
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'components', 'exposition'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'components', 'swmansion'), {
     recursive: true,
   });
   if (includeNativeWindUiExposition) {
@@ -333,7 +398,11 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'),
-      renderStylistSyncAndroidScript(),
+      requireLibraryTextAsset(
+        'mds/stylist-sync-support',
+        stylistSyncAssets,
+        'scripts/stylist-sync-android.mjs'
+      ),
       force
     ),
     ...(needsNativeWindMetroPatch
@@ -347,17 +416,17 @@ export async function scaffoldRichBoilerplate(
       : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'tokens.ts'),
-      renderThemeTokensFile(DEFAULT_STYLIST_THEME),
+      requireLibraryTextAsset('mds/theme-support', themeAssets, 'src/theme/tokens.ts'),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'font-assets.ts'),
-      renderThemeFontAssetsFile(),
+      requireLibraryTextAsset('mds/theme-support', themeAssets, 'src/theme/font-assets.ts'),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'theme', 'provider.tsx'),
-      renderThemeProvider(),
+      requireLibraryTextAsset('mds/theme-support', themeAssets, 'src/theme/provider.tsx'),
       force
     ),
     await writeIfAllowed(
@@ -370,49 +439,51 @@ export async function scaffoldRichBoilerplate(
       renderLocalDataService(answers),
       force
     ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'animated-pressable.tsx'),
-      renderAnimatedPressable(),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'gesture-card.tsx'),
-      renderGestureCard(),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
-      renderKeyboardForm(),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'svg-mark.tsx'),
-      renderSvgMark(),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'software-mansion-logo.tsx'),
-      renderSoftwareMansionLogo(),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'components', 'exposition', 'screens-card.tsx'),
-      renderScreensCard(),
-      force
-    ),
+    ...(await Promise.all(
+      [
+        'animated-pressable.tsx',
+        'gesture-card.tsx',
+        'keyboard-form.tsx',
+        'svg-mark.tsx',
+        'software-mansion-logo.tsx',
+        'screens-card.tsx',
+      ].map((fileName) =>
+        writeIfAllowed(
+          path.join(projectPath, 'src', 'components', 'swmansion', fileName),
+          requireLibraryTextAsset(
+            'mds/exposition-components',
+            expositionComponentAssets,
+            `src/components/swmansion/${fileName}`
+          ),
+          force
+        )
+      )
+    )),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'),
-      renderExpositionNotice(),
+      requireLibraryTextAsset(
+        'mds/exposition-components',
+        expositionComponentAssets,
+        'src/components/exposition/notice.tsx'
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'components', 'exposition', 'package-card.tsx'),
-      renderPackageCard(),
+      requireLibraryTextAsset(
+        'mds/exposition-components',
+        expositionComponentAssets,
+        'src/components/exposition/package-card.tsx'
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'),
-      renderExpositionComponentIndex(),
+      requireLibraryTextAsset(
+        'mds/exposition-components',
+        expositionComponentAssets,
+        'src/components/exposition/index.ts'
+      ),
       force
     ),
     await writeIfAllowed(
@@ -422,27 +493,52 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
-      renderOnboardingScreen(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/onboarding-screen.tsx',
+        renderOnboardingScreen
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
-      renderAgreementScreen(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/agreement-screen.tsx',
+        renderAgreementScreen
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'),
-      renderTermsScreen(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/terms-screen.tsx',
+        renderTermsScreen
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
-      renderAccountSetupScreen(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/account-setup-screen.tsx',
+        renderAccountSetupScreen
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'onboarding', 'legal-documents.ts'),
-      renderLegalDocuments(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/legal-documents.ts',
+        renderLegalDocuments
+      ),
       force
     ),
     await writeIfAllowed(
@@ -454,12 +550,22 @@ export async function scaffoldRichBoilerplate(
         'components',
         'legal-document-view.tsx'
       ),
-      renderLegalDocumentView(),
+      libraryAssetOrFallback(
+        'mds/onboarding-preview',
+        onboardingAssets,
+        'src/features/onboarding/components/legal-document-view.tsx',
+        renderLegalDocumentView
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
-      renderSettingsScreen(),
+      libraryAssetOrFallback(
+        'mds/settings',
+        settingsAssets,
+        'src/features/settings/settings-screen.tsx',
+        renderSettingsScreen
+      ),
       force
     ),
     await writeIfAllowed(
@@ -469,12 +575,22 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'embedded-fonts.ts'),
-      embeddedFontsTemplate,
+      libraryAssetOrFallback(
+        'mds/stylist',
+        stylistAssets,
+        'src/features/exposition/embedded-fonts.ts',
+        renderEmbeddedFonts
+      ),
       force
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
-      stylistScreenTemplate,
+      libraryAssetOrFallback(
+        'mds/stylist',
+        stylistAssets,
+        'src/features/exposition/stylist-screen.tsx',
+        () => renderStylistScreen(answers)
+      ),
       force
     ),
     await writeIfAllowed(
@@ -484,69 +600,42 @@ export async function scaffoldRichBoilerplate(
     ),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
-      expoSdk56ScreenTemplate,
+      libraryAssetOrFallback(
+        'mds/expo-sdk-56',
+        expoSdk56Assets,
+        'src/features/exposition/expo-sdk-56-screen.tsx',
+        () => renderExpoSdk56Screen(answers)
+      ),
       force
     )
   );
 
   if (includeNativeWindUiExposition) {
-    results.push(
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
-        renderNativeWindUiScreen(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'ActivityIndicator.tsx'),
-        renderNativeWindUiActivityIndicator(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Avatar.tsx'),
-        renderNativeWindUiAvatar(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'),
-        renderNativeWindUiButton(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'DatePicker.tsx'),
-        renderNativeWindUiDatePicker(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Picker.tsx'),
-        renderNativeWindUiPicker(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'ProgressIndicator.tsx'),
-        renderNativeWindUiProgressIndicator(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Slider.tsx'),
-        renderNativeWindUiSlider(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Text.tsx'),
-        renderNativeWindUiText(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
-        renderNativeWindUiThemeToggle(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'components', 'nativewindui', 'Toggle.tsx'),
-        renderNativeWindUiToggle(),
-        force
-      )
-    );
+    if (nativeWindUiAssets) {
+      const generatedNativeWindUiAssets = [...nativeWindUiAssets].filter(([destination]) =>
+        destination === 'src/features/exposition/nativewindui-screen.tsx' ||
+        destination.startsWith('src/components/nativewindui/') ||
+        destination.startsWith('src/lib/') ||
+        destination === 'src/theme/colors.ts' ||
+        destination === 'src/theme/with-opacity.ts' ||
+        destination === 'src/theme/index.ts'
+      );
+      results.push(
+        ...(await Promise.all(
+          generatedNativeWindUiAssets.map(([destination, contents]) =>
+            writeIfAllowed(path.join(projectPath, ...destination.split('/')), contents, force)
+          )
+        ))
+      );
+    } else {
+      results.push(
+        await writeIfAllowed(
+          path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
+          renderNativeWindUiScreen(),
+          force
+        )
+      );
+    }
   } else {
     await removeOptionalFile(
       path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx')
@@ -571,7 +660,19 @@ export async function scaffoldRichBoilerplate(
     const shouldWriteRootLayout =
       routeForce && (await canWriteRichRootLayout(path.join(appDir, '_layout.tsx')));
     results.push(
-      ...(await scaffoldNavigationRoutes(projectPath, appDir, navigationShell, answers, routeForce))
+      ...(await scaffoldNavigationRoutes(
+        projectPath,
+        appDir,
+        navigationShell,
+        answers,
+        routeForce,
+        {
+          onboarding: onboardingAssets,
+          settings: settingsAssets,
+          stylist: stylistAssets,
+          expoSdk56: expoSdk56Assets,
+        }
+      ))
     );
 
     if (shouldWriteRootLayout) {
@@ -871,67 +972,6 @@ export function renderStyle(answers: OnboardAnswers, existingStyle?: string | nu
     '<!-- MDS_STYLIST_THEME_END -->',
     '',
     ...importedNotes,
-    '',
-  ].join('\n');
-}
-
-function renderThemeProvider(): string {
-  return [
-    "import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';",
-    '',
-    "import defaultThemeTokens, { type StylistColorPalette, type StylistColorScheme, type StylistThemeTokens } from './tokens';",
-    '',
-    'export type AppThemeValue = StylistThemeTokens & {',
-    '  activeScheme: StylistColorScheme;',
-    '  activeColors: StylistColorPalette;',
-    '};',
-    '',
-    'const AppThemeContext = createContext<AppThemeValue>({',
-    '  ...defaultThemeTokens,',
-    '  activeScheme: defaultThemeTokens.colorSystem.previewScheme,',
-    '  activeColors: defaultThemeTokens.colors[defaultThemeTokens.colorSystem.previewScheme],',
-    '});',
-    'const AppThemeSetterContext = createContext<Dispatch<SetStateAction<StylistThemeTokens>> | null>(null);',
-    '',
-    'export function AppThemeProvider({ children }: { children: ReactNode }) {',
-    '  const [theme, setTheme] = useState<StylistThemeTokens>(defaultThemeTokens);',
-    '  const value = useMemo<AppThemeValue>(() => {',
-    '    const activeScheme = theme.colorSystem.previewScheme;',
-    '    return {',
-    '      ...theme,',
-    '      activeScheme,',
-    '      activeColors: theme.colors[activeScheme],',
-    '    };',
-    '  }, [theme]);',
-    '',
-    '  return (',
-    '    <AppThemeSetterContext.Provider value={setTheme}>',
-    '      <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>',
-    '    </AppThemeSetterContext.Provider>',
-    '  );',
-    '}',
-    '',
-    'export function useAppTheme() {',
-    '  return useContext(AppThemeContext);',
-    '}',
-    '',
-    'export function useSetAppTheme() {',
-    '  const setTheme = useContext(AppThemeSetterContext);',
-    '  if (!setTheme) {',
-    "    throw new Error('useSetAppTheme must be used inside AppThemeProvider.');",
-    '  }',
-    '  return setTheme;',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function renderThemeFontAssetsFile(): string {
-  return [
-    'export const THEME_FONT_ASSETS: Record<string, number> = {',
-    '};',
-    '',
-    'export default THEME_FONT_ASSETS;',
     '',
   ].join('\n');
 }
@@ -1635,7 +1675,8 @@ async function scaffoldNavigationRoutes(
   appDir: string,
   navigationShell: NavigationShell,
   answers: OnboardAnswers,
-  routeForce: boolean
+  routeForce: boolean,
+  libraryAssets: GeneratedLibraryRouteAssets = {}
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
   const homeScreen = path.join(projectPath, 'src', 'features', 'home', 'home-screen');
@@ -1688,6 +1729,14 @@ async function scaffoldNavigationRoutes(
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const shouldWriteExpositionRouteWrappers =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
+  const appDirectory = path.relative(projectPath, appDir).split(path.sep).join('/');
+  const routeAssetOrFallback = (
+    itemId: string,
+    assets: ReadonlyMap<string, string> | undefined,
+    destination: string,
+    fallback: () => string
+  ): string =>
+    assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback();
 
   const rootExpositionDir = path.join(appDir, 'exposition');
   const onboardingDir = path.join(appDir, 'onboarding');
@@ -1697,32 +1746,62 @@ async function scaffoldNavigationRoutes(
   results.push(
     await writeIfAllowed(
       path.join(appDir, 'onboarding.tsx'),
-      renderRouteExport(appDir, onboardingScreen),
+      routeAssetOrFallback(
+        'mds/onboarding-preview',
+        libraryAssets.onboarding,
+        `${appDirectory}/onboarding.tsx`,
+        () => renderRouteExport(appDir, onboardingScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
       path.join(onboardingDir, 'agreement.tsx'),
-      renderRouteExport(onboardingDir, agreementScreen),
+      routeAssetOrFallback(
+        'mds/onboarding-preview',
+        libraryAssets.onboarding,
+        `${appDirectory}/onboarding/agreement.tsx`,
+        () => renderRouteExport(onboardingDir, agreementScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
       path.join(onboardingDir, 'terms.tsx'),
-      renderRouteExport(onboardingDir, termsScreen),
+      routeAssetOrFallback(
+        'mds/onboarding-preview',
+        libraryAssets.onboarding,
+        `${appDirectory}/onboarding/terms.tsx`,
+        () => renderRouteExport(onboardingDir, termsScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
       path.join(onboardingDir, 'account-setup.tsx'),
-      renderRouteExport(onboardingDir, accountSetupScreen),
+      routeAssetOrFallback(
+        'mds/onboarding-preview',
+        libraryAssets.onboarding,
+        `${appDirectory}/onboarding/account-setup.tsx`,
+        () => renderRouteExport(onboardingDir, accountSetupScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
       path.join(appDir, 'settings.tsx'),
-      renderRouteExport(appDir, settingsScreen),
+      routeAssetOrFallback(
+        'mds/settings',
+        libraryAssets.settings,
+        `${appDirectory}/settings.tsx`,
+        () => renderRouteExport(appDir, settingsScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
       path.join(rootExpositionDir, 'stylist-sync+api.ts'),
-      renderStylistSyncApiRoute(),
+      routeAssetOrFallback(
+        'mds/stylist',
+        libraryAssets.stylist,
+        `${appDirectory}/exposition/stylist-sync+api.ts`,
+        renderStylistSyncApiRoute
+      ),
       routeForce
     )
   );
@@ -1735,7 +1814,12 @@ async function scaffoldNavigationRoutes(
       ),
       await writeIfAllowed(
         path.join(rootExpositionDir, 'stylist.tsx'),
-        renderRouteExport(rootExpositionDir, stylistScreen),
+        routeAssetOrFallback(
+          'mds/stylist',
+          libraryAssets.stylist,
+          `${appDirectory}/exposition/stylist.tsx`,
+          () => renderRouteExport(rootExpositionDir, stylistScreen)
+        ),
         routeForce
       ),
       await writeIfAllowed(
@@ -1745,7 +1829,12 @@ async function scaffoldNavigationRoutes(
       ),
       await writeIfAllowed(
         path.join(rootExpositionDir, 'sdk-56.tsx'),
-        renderRouteExport(rootExpositionDir, expoSdk56Screen),
+        routeAssetOrFallback(
+          'mds/expo-sdk-56',
+          libraryAssets.expoSdk56,
+          `${appDirectory}/exposition/sdk-56.tsx`,
+          () => renderRouteExport(rootExpositionDir, expoSdk56Screen)
+        ),
         routeForce
       )
     );
@@ -1805,7 +1894,12 @@ async function scaffoldNavigationRoutes(
       ),
       await writeIfAllowed(
         path.join(tabsDir, 'stylist.tsx'),
-        renderRouteExport(tabsDir, stylistScreen),
+        routeAssetOrFallback(
+          'mds/stylist',
+          libraryAssets.stylist,
+          `${appDirectory}/(tabs)/stylist.tsx`,
+          () => renderRouteExport(tabsDir, stylistScreen)
+        ),
         routeForce
       ),
       await writeIfAllowed(
@@ -1815,7 +1909,12 @@ async function scaffoldNavigationRoutes(
       ),
       await writeIfAllowed(
         path.join(tabsDir, 'sdk-56.tsx'),
-        renderRouteExport(tabsDir, expoSdk56Screen),
+        routeAssetOrFallback(
+          'mds/expo-sdk-56',
+          libraryAssets.expoSdk56,
+          `${appDirectory}/(tabs)/sdk-56.tsx`,
+          () => renderRouteExport(tabsDir, expoSdk56Screen)
+        ),
         routeForce
       )
     );
@@ -1842,7 +1941,12 @@ async function scaffoldNavigationRoutes(
     ),
     await writeIfAllowed(
       path.join(drawerTabsDir, 'stylist.tsx'),
-      renderRouteExport(drawerTabsDir, stylistScreen),
+      routeAssetOrFallback(
+        'mds/stylist',
+        libraryAssets.stylist,
+        `${appDirectory}/(drawer)/(tabs)/stylist.tsx`,
+        () => renderRouteExport(drawerTabsDir, stylistScreen)
+      ),
       routeForce
     ),
     await writeIfAllowed(
@@ -1852,7 +1956,12 @@ async function scaffoldNavigationRoutes(
     ),
     await writeIfAllowed(
       path.join(drawerTabsDir, 'sdk-56.tsx'),
-      renderRouteExport(drawerTabsDir, expoSdk56Screen),
+      routeAssetOrFallback(
+        'mds/expo-sdk-56',
+        libraryAssets.expoSdk56,
+        `${appDirectory}/(drawer)/(tabs)/sdk-56.tsx`,
+        () => renderRouteExport(drawerTabsDir, expoSdk56Screen)
+      ),
       routeForce
     )
   );
@@ -1924,11 +2033,6 @@ function detectNavigationFromCesConfig(raw: string | null): NavigationShell | nu
   }
 }
 
-async function loadTemplateWithFallback(templatePath: string, fallback: string): Promise<string> {
-  const template = await readOptionalText(templatePath);
-  return template ?? fallback;
-}
-
 function ensureNativeWindMetroPostinstall(existing: string | undefined): string {
   const command = 'node ./scripts/patch-nativewind-metro.cjs';
   const trimmed = existing?.trim();
@@ -1942,51 +2046,6 @@ function ensureNativeWindMetroPostinstall(existing: string | undefined): string 
     return command;
   }
   return `${trimmed} && ${command}`;
-}
-
-function renderStylistSyncAndroidScript(): string {
-  return [
-    '#!/usr/bin/env node',
-    "import { existsSync } from 'node:fs';",
-    "import { readFile } from 'node:fs/promises';",
-    "import { createRequire } from 'node:module';",
-    "import path from 'node:path';",
-    "import { fileURLToPath } from 'node:url';",
-    '',
-    "const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');",
-    'const moduleCandidates = [',
-    "  path.resolve(projectRoot, '..', '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
-    "  path.resolve(projectRoot, '..', 'packages', 'cli', 'dist', 'stylist-theme.js'),",
-    "  path.resolve(projectRoot, 'packages', 'cli', 'dist', 'stylist-theme.js'),",
-    "  path.resolve(projectRoot, 'node_modules', '@mr.dj2u', 'cli', 'dist', 'stylist-theme.js'),",
-    '];',
-    '',
-    'try {',
-    '  const modulePath = moduleCandidates.find((candidate) => existsSync(candidate));',
-    '  if (!modulePath) {',
-    "    console.error('Could not find @mr.dj2u/cli stylist sync module. Run npm install, then retry.');",
-    '    process.exit(1);',
-    '  }',
-    '  const require = createRequire(import.meta.url);',
-    "  const inputFile = process.env.MDS_STYLIST_INPUT_FILE",
-    '    ? path.resolve(projectRoot, process.env.MDS_STYLIST_INPUT_FILE)',
-    "    : path.join(projectRoot, 'project', 'theme.json');",
-    "  const styleLibrary = process.env.MDS_STYLIST_STYLE_LIBRARY || 'auto';",
-    '  const writePolicy =',
-    "    process.env.MDS_STYLIST_WRITE_POLICY === 'overwrite' ? 'overwrite' : 'managed';",
-    "  const theme = JSON.parse(await readFile(inputFile, 'utf8'));",
-    '  const loaded = require(modulePath);',
-    '  const result = await loaded.syncStylistTheme(projectRoot, theme, {',
-    '    styleLibrary,',
-    '    writePolicy,',
-    '  });',
-    '  console.log(JSON.stringify(result, null, 2));',
-    '} catch (error) {',
-    '  console.error(error instanceof Error ? error.message : String(error));',
-    '  process.exit(1);',
-    '}',
-    '',
-  ].join('\n');
 }
 
 function renderNativeWindMetroPatchScript(): string {
@@ -2886,801 +2945,6 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
     '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
-    '',
-  ].join('\n');
-}
-
-function renderAnimatedPressable(): string {
-  return [
-    "import type { ReactNode } from 'react';",
-    "import { Pressable, StyleSheet, Text } from 'react-native';",
-    "import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';",
-    '',
-    'const AnimatedPressableBase = Animated.createAnimatedComponent(Pressable);',
-    '',
-    'interface AnimatedPressableProps {',
-    '  backgroundColor?: string;',
-    '  children?: ReactNode;',
-    '  label?: string;',
-    '  onPress?: () => void;',
-    '  textColor?: string;',
-    '}',
-    '',
-    'export function AnimatedPressable({',
-    "  backgroundColor = '#111827',",
-    '  children,',
-    "  label = 'Reanimated press demo',",
-    '  onPress,',
-    "  textColor = '#ffffff',",
-    '}: AnimatedPressableProps) {',
-    '  const pressed = useSharedValue(0);',
-    '  const animatedStyle = useAnimatedStyle(() => ({',
-    '    transform: [{ scale: withTiming(pressed.value ? 0.97 : 1, { duration: 120 }) }],',
-    '  }));',
-    '',
-    '  return (',
-    '    <AnimatedPressableBase',
-    '      onPress={onPress}',
-    '      onPressIn={() => {',
-    '        pressed.value = 1;',
-    '      }}',
-    '      onPressOut={() => {',
-    '        pressed.value = 0;',
-    '      }}',
-    '      style={[styles.button, { backgroundColor }, animatedStyle]}',
-    '    >',
-    '      {children ?? <Text style={[styles.label, { color: textColor }]}>{label}</Text>}',
-    '    </AnimatedPressableBase>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  button: {',
-    "    backgroundColor: '#111827',",
-    '    borderRadius: 10,',
-    '    paddingHorizontal: 16,',
-    '    paddingVertical: 12,',
-    '  },',
-    '  label: {',
-    '    fontSize: 15,',
-    '    fontWeight: "700",',
-    '    textAlign: "center",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderGestureCard(): string {
-  return [
-    "import { StyleSheet, Text } from 'react-native';",
-    "import { Gesture, GestureDetector } from 'react-native-gesture-handler';",
-    "import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';",
-    '',
-    'interface GestureCardProps {',
-    '  title: string;',
-    '  body: string;',
-    '}',
-    '',
-    'export function GestureCard({ title, body }: GestureCardProps) {',
-    '  const offset = useSharedValue(0);',
-    '  const pan = Gesture.Pan()',
-    '    .onChange((event) => {',
-    '      offset.value = event.translationX;',
-    '    })',
-    '    .onFinalize(() => {',
-    '      offset.value = withSpring(0);',
-    '    });',
-    '',
-    '  const style = useAnimatedStyle(() => ({',
-    '    transform: [{ translateX: offset.value }],',
-    '  }));',
-    '',
-    '  return (',
-    '    <GestureDetector gesture={pan}>',
-    '      <Animated.View style={[styles.card, style]}>',
-    '        <Text style={styles.title}>{title}</Text>',
-    '        <Text style={styles.body}>{body}</Text>',
-    '      </Animated.View>',
-    '    </GestureDetector>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  card: {',
-    "    backgroundColor: '#ffffff',",
-    "    borderColor: '#e5e7eb',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    padding: 16,',
-    "    boxShadow: '0 6px 10px rgba(0, 0, 0, 0.08)',",
-    '  },',
-    '  title: {',
-    "    color: '#111827',",
-    '    fontSize: 16,',
-    '    fontWeight: "700",',
-    '  },',
-    '  body: {',
-    "    color: '#4b5563',",
-    '    fontSize: 14,',
-    '    lineHeight: 20,',
-    '    marginTop: 8,',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderKeyboardForm(): string {
-  return [
-    "import { Keyboard, Platform, ScrollView, StyleSheet, TextInput } from 'react-native';",
-    "import { KeyboardAwareScrollView, KeyboardToolbar } from 'react-native-keyboard-controller';",
-    '',
-    'export function KeyboardForm() {',
-    '  if (Platform.OS === "web") {',
-    '    return (',
-    '      <ScrollView contentContainerStyle={styles.form} style={styles.scroller}>',
-    '        <TextInput blurOnSubmit onSubmitEditing={Keyboard.dismiss} placeholder="Project note" returnKeyType="done" style={styles.input} />',
-    '        <TextInput blurOnSubmit multiline onSubmitEditing={Keyboard.dismiss} placeholder="Details" returnKeyType="done" style={[styles.input, styles.multiline]} />',
-    '      </ScrollView>',
-    '    );',
-    '  }',
-    '  return (',
-    '    <>',
-    '      <KeyboardAwareScrollView bottomOffset={72} contentContainerStyle={styles.form} style={styles.scroller}>',
-    '        <TextInput blurOnSubmit onSubmitEditing={Keyboard.dismiss} placeholder="Project note" returnKeyType="done" style={styles.input} />',
-    '        <TextInput blurOnSubmit multiline onSubmitEditing={Keyboard.dismiss} placeholder="Details" returnKeyType="done" style={[styles.input, styles.multiline]} />',
-    '      </KeyboardAwareScrollView>',
-    '      <KeyboardToolbar onDoneCallback={Keyboard.dismiss} />',
-    '    </>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  scroller: {',
-    '    maxHeight: 220,',
-    '  },',
-    '  form: {',
-    '    gap: 12,',
-    '    paddingVertical: 8,',
-    '  },',
-    '  input: {',
-    "    borderColor: '#d1d5db',",
-    '    borderRadius: 10,',
-    '    borderWidth: 1,',
-    '    minHeight: 44,',
-    '    paddingHorizontal: 12,',
-    '  },',
-    '  multiline: {',
-    '    minHeight: 88,',
-    '    paddingTop: 10,',
-    '    textAlignVertical: "top",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderSvgMark(): string {
-  return [
-    "import Svg, { Path } from 'react-native-svg';",
-    '',
-    'export function SvgMark({ size = 44 }: { size?: number }) {',
-    '  return (',
-    '    <Svg width={size} height={size} viewBox="0 0 2048 2048" accessibilityRole="image">',
-    '      <Path fill="#5666ff" d="m146.9 1305.8l-14.4 30q0 32.2 89.9 62.1 91 28.9 198.6 28.9 108.8 0 238.6-32.2 129.8-32.2 225.2-78.8 96.6-46.6 158.7-97.6 63.3-51.1 63.3-88.8 0-47.7-111-88.8-111-41-322.9-89.8-210.8-50-309.6-125.4-97.6-75.5-97.6-183.1 0-108.8 77.6-207.5 77.7-98.8 202-175.3 125.4-76.6 273-136.5 305.1-123.2 565.9-123.2 99.9 0 176.4 17.8 146.5 34.4 146.5 90.9 0 56.6-10 77.7-10 20-16.6 26.7-5.6 6.6-15.6 13.3-8.9 6.6-13.3 10-48.8 41-267.4 51-75.5 3.3-82.1 7.8-6.7 4.4-12.2 4.4-4.5 0-11.1-8.9-6.7-8.9-6.7-28.8 0-20 43.3-73.3-135.4 7.8-289.6 62.2-153.2 54.4-266.3 123.1-113.2 67.7-188.7 134.3-75.4 65.5-75.4 93.2 0 26.7 16.6 44.4 46.6 49.9 258.6 104.3 219.7 56.6 292.9 91 73.2 34.4 120.9 65.5 48.9 31 77.7 63.2 67.7 77.7 67.7 157.6 0 79.9-43.3 149.8-42.1 69.9-128.7 135.4-85.4 65.4-201.9 116.5-255.3 114.3-608.1 114.3-257.5 0-328.5-136.5-18.8-34.4-18.8-71 0-37.8 16.6-67.7 17.8-30 42.2-45.5 47.7-30 67.7-30 19.9 0 19.9 13.3z" />',
-    '      <Path fill="#f66d22" d="m486.9 1709.8l-14.4 30q0 32.2 89.9 62.1 91 28.9 198.6 28.9 108.8 0 238.6-32.2 129.8-32.2 225.2-78.8 96.6-46.6 158.7-97.6 63.3-51.1 63.3-88.8 0-47.7-111-88.8-111-41-322.9-89.8-210.8-50-309.6-125.4-97.6-75.5-97.6-183.1 0-108.8 77.6-207.5 77.7-98.8 202-175.3 125.4-76.6 273-136.5 305.1-123.2 565.9-123.2 99.9 0 176.4 17.8 146.5 34.4 146.5 90.9 0 56.6-10 77.7-10 20-16.6 26.7-5.6 6.6-15.6 13.3-8.9 6.6-13.3 10-48.8 41-267.4 51-75.5 3.3-82.1 7.8-6.7 4.4-12.2 4.4-4.5 0-11.1-8.9-6.7-8.9-6.7-28.8 0-20 43.3-73.3-135.4 7.8-289.6 62.2-153.2 54.4-266.3 123.1-113.2 67.7-188.7 134.3-75.4 65.5-75.4 93.2 0 26.7 16.6 44.4 46.6 49.9 258.6 104.3 219.7 56.6 292.9 91 73.2 34.4 120.9 65.5 48.9 31 77.7 63.2 67.7 77.7 67.7 157.6 0 79.9-43.3 149.8-42.1 69.9-128.7 135.4-85.4 65.4-201.9 116.5-255.3 114.3-608.1 114.3-257.5 0-328.5-136.5-18.8-34.4-18.8-71 0-37.8 16.6-67.7 17.8-30 42.2-45.5 47.7-30 67.7-30 19.9 0 19.9 13.3z" />',
-    '    </Svg>',
-    '  );',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function renderScreensCard(): string {
-  return [
-    "import { useEffect } from 'react';",
-    "import { StyleSheet, Text, View } from 'react-native';",
-    "import { enableScreens } from 'react-native-screens';",
-    '',
-    'export function ScreensCard() {',
-    '  useEffect(() => {',
-    '    enableScreens(true);',
-    '  }, []);',
-    '',
-    '  return (',
-    '    <View style={styles.card}>',
-    '      <Text style={styles.title}>Native Screens</Text>',
-    '      <Text style={styles.body}>react-native-screens is enabled so navigation can use native screen primitives for better memory and lifecycle behavior.</Text>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  card: {',
-    "    backgroundColor: '#eef2ff',",
-    "    borderColor: '#c7d2fe',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    padding: 16,',
-    '  },',
-    '  title: {',
-    "    color: '#312e81',",
-    '    fontSize: 16,',
-    '    fontWeight: "700",',
-    '  },',
-    '  body: {',
-    "    color: '#4338ca',",
-    '    fontSize: 14,',
-    '    lineHeight: 20,',
-    '    marginTop: 8,',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderExpositionNotice(): string {
-  return ['export function ExpositionNotice() {', '  return null;', '}', ''].join('\n');
-}
-
-function renderSoftwareMansionLogo(): string {
-  return [
-    "import { SvgXml } from 'react-native-svg';",
-    '',
-    'const softwareMansionLogoXml = `<svg fill="currentColor" viewBox="0 0 149.79 80" xmlns="http://www.w3.org/2000/svg" width="150" height="80" preserveAspectRatio="xMidYMid meet"><path d="M24.281 79.063h124.58V24.356L125.513.937H.933v54.707z" fill="#fff"></path><path d="M0 .001h125.9l23.894 23.967V80h-125.9L.002 56.033V0zm1.867 3.198v52.057l21.48 21.545V24.744zm1.321-1.324 21.48 21.545h121.94l-21.48-21.545zm144.74 23.418H25.218v52.833h122.71z"></path><path d="M47.255 46.215c0 1.873-1.246 3.496-4.234 3.496-1.308 0-2.367-.312-3.3-.686v-2.623c.996.5 2.179.812 3.237.812.997 0 1.494-.312 1.494-.875 0-1.748-4.731-1.187-4.731-4.746 0-2.185 1.744-3.498 4.172-3.498.995 0 1.929.251 2.926.813v2.685c-1.308-.812-2.242-1.062-2.989-1.062-.872 0-1.37.313-1.37.874-.062 1.625 4.794 1 4.794 4.81z"></path><path d="M49.62 43.903c0-3.184 2.614-5.807 5.79-5.807 3.175 0 5.79 2.623 5.79 5.808 0 3.185-2.615 5.807-5.79 5.807-3.176-.062-5.79-2.622-5.79-5.807zm8.716 0c0-1.748-1.307-3.06-2.927-3.06-1.618 0-2.925 1.312-2.925 3.061 0 1.748 1.307 3.06 2.925 3.06 1.62 0 2.927-1.312 2.927-3.061z"></path><path d="M67.675 37.408v.937h3.674l-1.246 2.623h-2.366v8.493H65.06v-8.556h-1.867v-2.622h1.867v-1.061c0-3.373 1.744-5.059 4.483-5.059.685 0 1.307.125 1.868.25v2.623c-.498-.187-1.058-.25-1.62-.25-1.494 0-2.116 1-2.116 2.623z"></path><path d="M76.952 40.906v4.434c0 1.187.685 1.687 1.743 1.687.685 0 1.37-.188 1.93-.562v2.747c-.747.312-1.431.5-2.427.5-2.43 0-3.923-1.312-3.923-3.998v-4.746h-1.619v-2.622h1.62v-2.873l2.676-.687v3.56h3.674v2.622h-3.674z"></path><path d="m99.988 38.346-3.549 11.115h-2.677l-2.428-7.619-2.49 7.619h-2.678l-3.549-11.115h3.051l1.992 7.432 2.367-7.432h2.676l2.367 7.432 1.992-7.432z"></path><path d="M101.36 43.903c0-3.184 2.303-5.807 5.48-5.807 1.244 0 2.24.375 2.987 1v-.75h2.678v11.115h-2.616v-.874c-.747.687-1.805 1.124-3.112 1.124-3.052-.062-5.417-2.622-5.417-5.807zm8.717 0c0-1.748-1.308-3.06-2.927-3.06s-2.926 1.312-2.926 3.061c0 1.748 1.307 3.06 2.926 3.06 1.619 0 2.927-1.312 2.927-3.061z"></path><path d="M116.3 38.346h2.615v1.498c.81-1.498 2.303-1.748 3.611-1.748v3.184c-1.868-.5-3.548.562-3.548 2.936v5.183H116.3z"></path><path d="M130.99 47.089a9.627 9.627 0 0 0 3.549-.687l-1.37 2.81a7.296 7.296 0 0 1-2.677.5c-3.923 0-6.288-2.436-6.288-5.808 0-3.185 2.365-5.808 5.79-5.808 2.303 0 4.171 1.187 4.918 2.685v4.06h-7.844c.373 1.31 1.68 2.248 3.922 2.248zm-3.985-4.371h5.79c-.373-1.313-1.494-2.124-2.926-2.124-1.37 0-2.428.874-2.864 2.124z"></path><path d="M55.223 58.83v7.306h-2.677v-6.869c0-1.187-.872-1.873-1.743-1.873-.934 0-1.744.686-1.744 1.873v6.869h-2.676v-6.869c0-1.187-.872-1.873-1.744-1.873-.934 0-1.743.686-1.743 1.873v6.869H40.22V55.02h2.615v.812c.622-.75 1.432-1 2.49-1 1.183 0 2.18.5 2.864 1.437.871-1 1.992-1.436 3.362-1.436 2.054 0 3.673 1.623 3.673 3.996z"></path><path d="M58.025 60.579c0-3.186 2.304-5.808 5.478-5.808 1.246 0 2.243.374 2.989.999v-.75h2.677v11.115h-2.615v-.874c-.747.687-1.805 1.124-3.112 1.124-3.052 0-5.417-2.622-5.417-5.807zm8.717 0c0-1.75-1.308-3.061-2.927-3.061s-2.926 1.312-2.926 3.061c0 1.748 1.308 3.06 2.926 3.06s2.927-1.312 2.927-3.061z"></path><path d="M72.843 55.02h2.614v.812c.81-.812 1.868-1.062 2.927-1.062 2.304 0 4.17 1.748 4.17 4.122v7.18h-2.676v-6.556a2.103 2.103 0 0 0-2.117-2.123 2.102 2.102 0 0 0-2.116 2.123v6.62h-2.678V55.02h-.124z"></path><path d="M93.326 62.889c0 1.873-1.245 3.496-4.234 3.496-1.307 0-2.366-.312-3.299-.686v-2.623c.996.5 2.179.812 3.238.812.996 0 1.493-.312 1.493-.874 0-1.75-4.73-1.188-4.73-4.747 0-2.186 1.742-3.497 4.17-3.497.996 0 1.93.25 2.927.812v2.685c-1.308-.812-2.242-1.062-2.989-1.062-.872 0-1.37.312-1.37.874-.062 1.687 4.794 1.063 4.794 4.81z"></path><path d="M99.116 55.02v11.115h-2.677V55.02z"></path><path d="M101.92 60.579c0-3.186 2.615-5.808 5.79-5.808s5.79 2.622 5.79 5.807-2.615 5.807-5.79 5.807-5.79-2.622-5.79-5.807zm8.717 0c0-1.75-1.307-3.061-2.927-3.061-1.618 0-2.926 1.312-2.926 3.061 0 1.748 1.308 3.06 2.926 3.06 1.62 0 2.927-1.312 2.927-3.061z"></path><path d="M116.24 55.02h2.615v.812c.81-.812 1.868-1.062 2.927-1.062 2.303 0 4.17 1.748 4.17 4.122v7.18h-2.676v-6.556a2.103 2.103 0 0 0-2.118-2.123 2.103 2.103 0 0 0-2.116 2.123v6.62h-2.677V55.02h-.125z"></path><path d="M131.24 63.076v.437h-.933v2.623h-.499v-2.623h-.933v-.437z"></path><path d="m132.3 63.076.997 2.435.933-2.435h.623v3.06h-.498v-2.248l-.934 2.248h-.436l-.934-2.248v2.248h-.498v-3.061h.747z"></path></svg>`;',
-    '',
-    'export function SoftwareMansionLogo({ width = 150, height = 80 }: { width?: number; height?: number }) {',
-    '  return <SvgXml xml={softwareMansionLogoXml} width={width} height={height} accessibilityRole="image" />;',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function renderPackageCard(): string {
-  return [
-    "import type { ReactNode } from 'react';",
-    "import { StyleSheet, Text, View } from 'react-native';",
-    '',
-    "import { useAppTheme } from '../../theme/provider';",
-    '',
-    'interface PackageCardProps {',
-    '  title: string;',
-    '  packageName: string;',
-    '  body: string;',
-    '  children?: ReactNode;',
-    '}',
-    '',
-    'export function PackageCard({ title, packageName, body, children }: PackageCardProps) {',
-    '  const theme = useAppTheme();',
-    '  const colors = theme.activeColors;',
-    '',
-    '  return (',
-    '    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
-    '      <Text style={[styles.packageName, { color: colors.text }]}>{packageName}</Text>',
-    `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>{title}</Text>`,
-    '      <Text style={[styles.body, { color: colors.text }]}>{body}</Text>',
-    '      {children ? <View style={styles.demo}>{children}</View> : null}',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  card: {',
-    "    backgroundColor: '#ffffff',",
-    "    borderColor: '#e5e7eb',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    gap: 8,',
-    '    padding: 16,',
-    '  },',
-    '  packageName: {',
-    "    color: '#6b7280',",
-    '    fontSize: 12,',
-    '    fontWeight: "700",',
-    '  },',
-    '  title: {',
-    "    color: '#111827',",
-    '    fontSize: 17,',
-    '    fontWeight: "800",',
-    '  },',
-    '  body: {',
-    "    color: '#4b5563',",
-    '    fontSize: 14,',
-    '    lineHeight: 20,',
-    '  },',
-    '  demo: {',
-    '    marginTop: 6,',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderExpositionComponentIndex(): string {
-  return [
-    "export { AnimatedPressable } from './animated-pressable';",
-    "export { ExpositionNotice } from './notice';",
-    "export { GestureCard } from './gesture-card';",
-    "export { KeyboardForm } from './keyboard-form';",
-    "export { PackageCard } from './package-card';",
-    "export { ScreensCard } from './screens-card';",
-    "export { SoftwareMansionLogo } from './software-mansion-logo';",
-    "export { SvgMark } from './svg-mark';",
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiActivityIndicator(): string {
-  return [
-    "import type { ComponentProps } from 'react';",
-    "import { ActivityIndicator as RNActivityIndicator } from 'react-native';",
-    '',
-    'export function ActivityIndicator(props: ComponentProps<typeof RNActivityIndicator>) {',
-    '  return <RNActivityIndicator color="#2563eb" {...props} />;',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiAvatar(): string {
-  return [
-    "import type { ReactNode } from 'react';",
-    "import { StyleSheet, View, type ViewProps } from 'react-native';",
-    '',
-    'type AvatarProps = ViewProps & {',
-    '  children?: ReactNode;',
-    '  className?: string;',
-    '};',
-    '',
-    'export function Avatar({ children, className: _className, style, ...props }: AvatarProps) {',
-    '  return (',
-    '    <View style={[styles.avatar, style]} {...props}>',
-    '      {children}',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'export function AvatarFallback({ children, className: _className, style, ...props }: AvatarProps) {',
-    '  return (',
-    '    <View style={[styles.fallback, style]} {...props}>',
-    '      {children}',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  avatar: {',
-    "    alignItems: 'center',",
-    "    backgroundColor: '#e2e8f0',",
-    '    borderRadius: 999,',
-    '    height: 48,',
-    "    justifyContent: 'center',",
-    '    width: 48,',
-    '  },',
-    '  fallback: {',
-    "    alignItems: 'center',",
-    "    justifyContent: 'center',",
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiButton(): string {
-  return [
-    "import type { ReactNode } from 'react';",
-    "import { Pressable, StyleSheet, type PressableProps } from 'react-native';",
-    '',
-    "type ButtonVariant = 'primary' | 'secondary' | 'tonal' | 'plain';",
-    '',
-    'export interface ButtonProps extends PressableProps {',
-    '  children?: ReactNode;',
-    '  variant?: ButtonVariant;',
-    '}',
-    '',
-    'export function Button({ children, style, variant = "primary", ...props }: ButtonProps) {',
-    '  return (',
-    '    <Pressable',
-    '      {...props}',
-    "      style={(state) => [styles.base, styles[variant], typeof style === 'function' ? style(state) : style]}",
-    '      accessibilityRole="button">',
-    '      {children}',
-    '    </Pressable>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  base: {',
-    "    alignItems: 'center',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    "    justifyContent: 'center',",
-    '    minHeight: 40,',
-    '    paddingHorizontal: 14,',
-    '    paddingVertical: 10,',
-    '  },',
-    '  plain: {',
-    "    backgroundColor: 'transparent',",
-    "    borderColor: '#d1d5db',",
-    '  },',
-    '  primary: {',
-    "    backgroundColor: '#2563eb',",
-    "    borderColor: '#1d4ed8',",
-    '  },',
-    '  secondary: {',
-    "    backgroundColor: '#f8fafc',",
-    "    borderColor: '#94a3b8',",
-    '  },',
-    '  tonal: {',
-    "    backgroundColor: '#dbeafe',",
-    "    borderColor: '#93c5fd',",
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiDatePicker(): string {
-  return [
-    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
-    '',
-    'export interface DatePickerProps {',
-    "  mode?: 'date' | 'time' | 'datetime';",
-    '  value: Date;',
-    '  onChange?: (event: unknown, selectedDate?: Date) => void;',
-    '}',
-    '',
-    'export function DatePicker({ value, onChange }: DatePickerProps) {',
-    '  return (',
-    '    <View style={styles.container}>',
-    '      <Text style={styles.value}>{value.toDateString()}</Text>',
-    '      <Pressable',
-    '        onPress={() => onChange?.({ type: "set" }, new Date())}',
-    '        style={styles.button}',
-    '        accessibilityRole="button">',
-    '        <Text style={styles.buttonText}>Use Today</Text>',
-    '      </Pressable>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  button: {',
-    "    backgroundColor: '#eff6ff',",
-    '    borderRadius: 10,',
-    "    borderColor: '#bfdbfe',",
-    '    borderWidth: 1,',
-    '    paddingHorizontal: 12,',
-    '    paddingVertical: 8,',
-    '  },',
-    '  buttonText: {',
-    "    color: '#1d4ed8',",
-    '    fontWeight: "700",',
-    '  },',
-    '  container: {',
-    "    alignItems: 'center',",
-    "    flexDirection: 'row',",
-    "    justifyContent: 'space-between',",
-    '  },',
-    '  value: {',
-    "    color: '#334155',",
-    '    fontSize: 14,',
-    '    fontWeight: "600",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiPicker(): string {
-  return [
-    "import { Children, isValidElement, type ReactNode } from 'react';",
-    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
-    '',
-    'export interface PickerItemProps {',
-    '  label: string;',
-    '  value: string;',
-    '}',
-    '',
-    'export interface PickerProps {',
-    '  selectedValue: string;',
-    '  onValueChange?: (value: string) => void;',
-    '  children?: ReactNode;',
-    '}',
-    '',
-    'export function Picker({ selectedValue, onValueChange, children }: PickerProps) {',
-    '  const items = Children.toArray(children)',
-    '    .filter(isValidElement)',
-    '    .map((child) => child.props as PickerItemProps);',
-    '',
-    '  return (',
-    '    <View style={styles.row}>',
-    '      {items.map((item) => {',
-    '        const active = item.value === selectedValue;',
-    '        return (',
-    '          <Pressable',
-    '            key={item.value}',
-    '            onPress={() => onValueChange?.(item.value)}',
-    '            style={[styles.item, active ? styles.itemActive : styles.itemIdle]}',
-    '            accessibilityRole="button">',
-    '            <Text style={active ? styles.textActive : styles.textIdle}>{item.label}</Text>',
-    '          </Pressable>',
-    '        );',
-    '      })}',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'export function PickerItem(_props: PickerItemProps) {',
-    '  return null;',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  item: {',
-    '    borderRadius: 999,',
-    '    borderWidth: 1,',
-    '    minHeight: 34,',
-    '    paddingHorizontal: 12,',
-    '    paddingVertical: 8,',
-    '  },',
-    '  itemActive: {',
-    "    backgroundColor: '#2563eb',",
-    "    borderColor: '#1d4ed8',",
-    '  },',
-    '  itemIdle: {',
-    "    backgroundColor: '#f8fafc',",
-    "    borderColor: '#cbd5e1',",
-    '  },',
-    '  row: {',
-    "    flexDirection: 'row',",
-    "    flexWrap: 'wrap',",
-    '    gap: 8,',
-    '  },',
-    '  textActive: {',
-    "    color: '#ffffff',",
-    '    fontSize: 13,',
-    '    fontWeight: "700",',
-    '  },',
-    '  textIdle: {',
-    "    color: '#334155',",
-    '    fontSize: 13,',
-    '    fontWeight: "700",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiProgressIndicator(): string {
-  return [
-    "import { StyleSheet, View } from 'react-native';",
-    '',
-    'export interface ProgressIndicatorProps {',
-    '  value: number;',
-    '}',
-    '',
-    'export function ProgressIndicator({ value }: ProgressIndicatorProps) {',
-    '  const clamped = Math.max(0, Math.min(100, Math.round(value)));',
-    '  return (',
-    '    <View style={styles.track}>',
-    '      <View style={[styles.fill, { width: `${clamped}%` }]} />',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  fill: {',
-    "    backgroundColor: '#2563eb',",
-    '    borderRadius: 999,',
-    "    height: '100%',",
-    '  },',
-    '  track: {',
-    "    backgroundColor: '#dbeafe',",
-    '    borderRadius: 999,',
-    '    height: 10,',
-    "    overflow: 'hidden',",
-    '    width: "100%",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiSlider(): string {
-  return [
-    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
-    '',
-    'export interface SliderProps {',
-    '  value: number;',
-    '  onValueChange?: (value: number) => void;',
-    '  min?: number;',
-    '  max?: number;',
-    '  step?: number;',
-    '  disabled?: boolean;',
-    '}',
-    '',
-    'export function Slider({',
-    '  value,',
-    '  onValueChange,',
-    '  min = 0,',
-    '  max = 1,',
-    '  step = 0.05,',
-    '  disabled = false,',
-    '}: SliderProps) {',
-    '  const clamp = (next: number) => Math.max(min, Math.min(max, next));',
-    '  const changeBy = (delta: number) => onValueChange?.(clamp(Number((value + delta).toFixed(3))));',
-    '',
-    '  return (',
-    '    <View style={[styles.row, disabled && styles.disabled]}>',
-    '      <Pressable disabled={disabled} onPress={() => changeBy(-step)} style={styles.button} accessibilityRole="button">',
-    '        <Text style={styles.buttonLabel}>-</Text>',
-    '      </Pressable>',
-    '      <Text style={styles.value}>{value.toFixed(2)}</Text>',
-    '      <Pressable disabled={disabled} onPress={() => changeBy(step)} style={styles.button} accessibilityRole="button">',
-    '        <Text style={styles.buttonLabel}>+</Text>',
-    '      </Pressable>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  button: {',
-    "    alignItems: 'center',",
-    "    backgroundColor: '#eff6ff',",
-    '    borderRadius: 10,',
-    "    borderColor: '#bfdbfe',",
-    '    borderWidth: 1,',
-    "    justifyContent: 'center',",
-    '    minHeight: 36,',
-    '    minWidth: 36,',
-    '  },',
-    '  buttonLabel: {',
-    "    color: '#1d4ed8',",
-    '    fontSize: 18,',
-    '    fontWeight: "700",',
-    '  },',
-    '  disabled: {',
-    '    opacity: 0.45,',
-    '  },',
-    '  row: {',
-    "    alignItems: 'center',",
-    "    flexDirection: 'row',",
-    '    gap: 10,',
-    '  },',
-    '  value: {',
-    "    color: '#334155',",
-    '    fontSize: 14,',
-    '    fontVariant: ["tabular-nums"],',
-    '    fontWeight: "700",',
-    '    minWidth: 52,',
-    "    textAlign: 'center',",
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiText(): string {
-  return [
-    "import type { TextProps } from 'react-native';",
-    "import { StyleSheet, Text as RNText } from 'react-native';",
-    '',
-    "type Variant = 'largeTitle' | 'heading' | 'body' | 'callout' | 'subhead' | 'footnote' | 'caption2';",
-    "type Tone = 'primary' | 'secondary' | 'tertiary' | 'quarternary';",
-    '',
-    'export interface NativeWindUiTextProps extends TextProps {',
-    '  variant?: Variant;',
-    '  color?: Tone;',
-    '  className?: string;',
-    '}',
-    '',
-    'const variantStyles: Record<Variant, TextProps["style"]> = {',
-    '  largeTitle: { fontSize: 30, fontWeight: "900", lineHeight: 36 },',
-    '  heading: { fontSize: 18, fontWeight: "800", lineHeight: 24 },',
-    '  body: { fontSize: 16, fontWeight: "500", lineHeight: 22 },',
-    '  callout: { fontSize: 15, fontWeight: "600", lineHeight: 21 },',
-    '  subhead: { fontSize: 14, fontWeight: "700", lineHeight: 20 },',
-    '  footnote: { fontSize: 13, fontWeight: "500", lineHeight: 18 },',
-    '  caption2: { fontSize: 12, fontWeight: "700", lineHeight: 16 },',
-    '};',
-    '',
-    'const toneStyles: Record<Tone, TextProps["style"]> = {',
-    '  primary: { color: "#0f172a" },',
-    '  secondary: { color: "#334155" },',
-    '  tertiary: { color: "#475569" },',
-    '  quarternary: { color: "#64748b" },',
-    '};',
-    '',
-    'export function Text({',
-    '  variant = "body",',
-    '  color = "primary",',
-    '  className: _className,',
-    '  style,',
-    '  ...props',
-    '}: NativeWindUiTextProps) {',
-    '  return <RNText {...props} style={[styles.base, variantStyles[variant], toneStyles[color], style]} />;',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  base: {',
-    "    color: '#0f172a',",
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiThemeToggle(): string {
-  return [
-    "import { useState } from 'react';",
-    "import { Pressable, StyleSheet, Text } from 'react-native';",
-    '',
-    'export function ThemeToggle() {',
-    '  const [darkPreview, setDarkPreview] = useState(false);',
-    '  return (',
-    '    <Pressable',
-    '      onPress={() => setDarkPreview((current) => !current)}',
-    '      style={[styles.button, darkPreview ? styles.dark : styles.light]}',
-    '      accessibilityRole="button">',
-    '      <Text style={[styles.label, darkPreview ? styles.darkLabel : styles.lightLabel]}>{darkPreview ? "Dark preview" : "Light preview"}</Text>',
-    '    </Pressable>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  button: {',
-    "    alignItems: 'center',",
-    '    borderRadius: 999,',
-    '    borderWidth: 1,',
-    "    justifyContent: 'center',",
-    '    minHeight: 34,',
-    '    minWidth: 120,',
-    '    paddingHorizontal: 12,',
-    '    paddingVertical: 6,',
-    '  },',
-    '  dark: {',
-    "    backgroundColor: '#0f172a',",
-    "    borderColor: '#1e293b',",
-    '  },',
-    '  darkLabel: {',
-    "    color: '#f8fafc',",
-    '  },',
-    '  label: {',
-    '    fontSize: 12,',
-    '    fontWeight: "700",',
-    '  },',
-    '  light: {',
-    "    backgroundColor: '#dbeafe',",
-    "    borderColor: '#93c5fd',",
-    '  },',
-    '  lightLabel: {',
-    "    color: '#0f172a',",
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderNativeWindUiToggle(): string {
-  return [
-    "import { Switch } from 'react-native';",
-    '',
-    'export interface ToggleProps {',
-    '  value: boolean;',
-    '  onValueChange?: (next: boolean) => void;',
-    '}',
-    '',
-    'export function Toggle({ value, onValueChange }: ToggleProps) {',
-    '  return (',
-    '    <Switch',
-    '      value={value}',
-    '      onValueChange={onValueChange}',
-    '      trackColor={{ false: "#cbd5e1", true: "#93c5fd" }}',
-    '      thumbColor={value ? "#2563eb" : "#f8fafc"}',
-    '    />',
-    '  );',
-    '}',
     '',
   ].join('\n');
 }

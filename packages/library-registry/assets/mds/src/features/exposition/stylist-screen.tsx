@@ -19,7 +19,7 @@ import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker
 import tailwindColors from 'tailwindcss/colors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnimatedPressable } from '../../components/exposition';
+import { AnimatedPressable } from '../../components/swmansion/animated-pressable';
 import { EMBEDDED_GOOGLE_FONTS } from './embedded-fonts';
 import defaultThemeTokens, {
   type StylistColorMode,

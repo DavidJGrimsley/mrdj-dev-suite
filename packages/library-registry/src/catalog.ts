@@ -1,0 +1,1543 @@
+import type {
+  LibraryAsset,
+  LibraryAssetRole,
+  LibraryCompatibility,
+  LibraryDependency,
+  LibraryIntegration,
+  LibraryItem,
+  LibraryItemKind,
+  LibraryPreview,
+  LibrarySource,
+  LibraryVariant,
+} from "./types.js";
+
+const ALL_PLATFORMS = ["android", "ios", "web"] as const;
+const SDK_56: LibraryCompatibility = { expoSdk: { min: 56, max: 56 } };
+const SDK_56_ROUTER: LibraryCompatibility = {
+  ...SDK_56,
+  navigation: ["expo-router"],
+  platforms: ALL_PLATFORMS,
+  aliases: ["@"],
+};
+const SDK_56_ALIAS: LibraryCompatibility = {
+  ...SDK_56,
+  aliases: ["@"],
+  platforms: ALL_PLATFORMS,
+};
+const SDK_56_CEA_ASSETS: LibraryCompatibility = {
+  ...SDK_56_ALIAS,
+  aliases: ["@", "@/assets"],
+};
+const SDK_56_NATIVEWIND_UI: LibraryCompatibility = {
+  ...SDK_56_ALIAS,
+  styling: ["nativewindui"],
+};
+
+const MDS_SOURCE: LibrarySource = {
+  name: "mds",
+  displayName: "Mr. DJ's Dev Suite",
+  version: "0.1.26",
+  license: "MIT",
+  repository: "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  sourcePath: "packages/cli",
+};
+
+const CEA_SOURCE: LibrarySource = {
+  name: "create-expo-app",
+  displayName: "Expo create-expo-app default template",
+  version: "56.0.4",
+  license: "MIT",
+  repository:
+    "https://github.com/expo/expo/tree/main/templates/expo-template-default",
+  sourcePath: "test-apps/create-expo-app-test1",
+};
+
+const CES_SOURCE: LibrarySource = {
+  name: "create-expo-stack",
+  displayName: "create-expo-stack",
+  version: "2.21.3",
+  license: "MIT",
+  repository: "https://github.com/roninoss/create-expo-stack",
+  sourcePath: "build/templates/base/components",
+};
+
+const CES_MDS_SOURCE: LibrarySource = {
+  name: "nativewindui",
+  displayName: "NativeWindUI via create-expo-stack",
+  version: "2.21.3-mrdj.2",
+  license: "MIT",
+  repository: "https://github.com/roninoss/create-expo-stack",
+  sourcePath: "test-apps/56test-agentic/src/components/nativewindui",
+};
+
+const SOFTWARE_MANSION_DEMO_SOURCE: LibrarySource = {
+  name: "swmansion",
+  displayName: "Software Mansion package demos",
+  version: "0.1.26",
+  license: "MIT",
+  repository: "https://github.com/DavidJGrimsley/mrdj-dev-suite",
+  sourcePath: "packages/cli",
+};
+
+interface ItemInput {
+  id: string;
+  name: string;
+  description: string;
+  kind: LibraryItemKind;
+  source?: LibrarySource;
+  tags?: readonly string[];
+  categories?: readonly string[];
+  compatibility?: LibraryCompatibility;
+  dependencies?: readonly LibraryDependency[];
+  composedItems?: readonly string[];
+  relatedItems?: readonly string[];
+  variants?: readonly LibraryVariant[];
+  assets?: readonly LibraryAsset[];
+  integration?: LibraryIntegration;
+  preview?: LibraryPreview;
+}
+
+function defineItem(input: ItemInput): LibraryItem {
+  return {
+    id: input.id,
+    name: input.name,
+    description: input.description,
+    kind: input.kind,
+    source: input.source ?? MDS_SOURCE,
+    tags: input.tags ?? [],
+    categories: input.categories ?? [],
+    delivery: "source-copy",
+    compatibility: input.compatibility ?? SDK_56,
+    dependencies: input.dependencies ?? [],
+    composedItems: input.composedItems ?? [],
+    relatedItems: input.relatedItems ?? [],
+    variants: input.variants ?? [],
+    assets: input.assets ?? [],
+    integration:
+      input.integration ??
+      ({
+        summary:
+          "Copy the editable source into the detected project structure.",
+        instructions: [],
+      } satisfies LibraryIntegration),
+    ...(input.preview ? { preview: input.preview } : {}),
+  };
+}
+
+function asset(
+  path: string,
+  destination: string,
+  role: LibraryAssetRole = "source",
+  encoding: LibraryAsset["encoding"] = "utf8",
+  contentTokens?: LibraryAsset["contentTokens"],
+): LibraryAsset {
+  return {
+    path,
+    destination,
+    role,
+    encoding,
+    ...(contentTokens ? { contentTokens } : {}),
+  };
+}
+
+function mdsAsset(
+  relativePath: string,
+  destination: string,
+  role: LibraryAssetRole = "source",
+  contentTokens?: LibraryAsset["contentTokens"],
+): LibraryAsset {
+  return asset(
+    `assets/mds/${relativePath}`,
+    destination,
+    role,
+    "utf8",
+    contentTokens,
+  );
+}
+
+function ceaAsset(
+  relativePath: string,
+  destination: string,
+  role: LibraryAssetRole = "source",
+  encoding: LibraryAsset["encoding"] = "utf8",
+): LibraryAsset {
+  return asset(
+    `assets/create-expo-app/sdk-56/${relativePath}`,
+    destination,
+    role,
+    encoding,
+  );
+}
+
+function cesAsset(
+  relativePath: string,
+  destination: string,
+  role: LibraryAssetRole = "source",
+): LibraryAsset {
+  return asset(
+    `assets/create-expo-stack/2.21.3/${relativePath}`,
+    destination,
+    role,
+  );
+}
+
+function nativeWindUiAsset(
+  relativePath: string,
+  destination: string,
+): LibraryAsset {
+  return asset(
+    `assets/create-expo-stack/2.21.3-mrdj.2/${relativePath}`,
+    destination,
+    "source",
+  );
+}
+
+function runtime(
+  name: string,
+  version: string,
+  installer: LibraryDependency["installer"] = "package-manager",
+): LibraryDependency {
+  return { name, version, kind: "runtime", installer };
+}
+
+function development(name: string, version: string): LibraryDependency {
+  return { name, version, kind: "development", installer: "package-manager" };
+}
+
+function routeVariants(
+  sourcePath: string,
+  routeName: string,
+): LibraryVariant[] {
+  const tabsRouteName = routeName === "index" ? "exposition" : routeName;
+  return [
+    {
+      id: "stack",
+      name: "Stack route",
+      compatibility: {
+        navigation: ["expo-router"],
+        navigationLayout: ["stack"],
+        aliases: ["@"],
+      },
+      dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+      assets: [
+        mdsAsset(sourcePath, `{{appDir}}/exposition/${routeName}.tsx`, "route"),
+      ],
+    },
+    {
+      id: "tabs",
+      name: "Tabs route",
+      compatibility: {
+        navigation: ["expo-router"],
+        navigationLayout: ["tabs"],
+        aliases: ["@"],
+      },
+      dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+      assets: [
+        mdsAsset(sourcePath, `{{appDir}}/(tabs)/${tabsRouteName}.tsx`, "route"),
+      ],
+    },
+    {
+      id: "drawer-tabs",
+      name: "Drawer and tabs route",
+      compatibility: {
+        navigation: ["expo-router"],
+        navigationLayout: ["drawer+tabs"],
+        aliases: ["@"],
+      },
+      dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+      assets: [
+        mdsAsset(
+          `routes/drawer-tabs/${routeName}.tsx`,
+          `{{appDir}}/(drawer)/(tabs)/${routeName}.tsx`,
+          "route",
+        ),
+      ],
+    },
+  ];
+}
+
+const mdsItems: LibraryItem[] = [
+  defineItem({
+    id: "mds/theme-support",
+    name: "MDS theme support",
+    description:
+      "Typed theme tokens, runtime provider, and generated font asset map.",
+    kind: "integration",
+    tags: ["theme", "tokens"],
+    categories: ["theming", "support"],
+    assets: [
+      mdsAsset("src/theme/tokens.ts", "src/theme/tokens.ts", "support"),
+      mdsAsset("src/theme/provider.tsx", "src/theme/provider.tsx", "support"),
+      mdsAsset(
+        "src/theme/font-assets.ts",
+        "src/theme/font-assets.ts",
+        "support",
+      ),
+    ],
+    integration: {
+      summary: "Install the theme provider near the root of the React tree.",
+      instructions: [
+        "Wrap application routes in AppThemeProvider before using MDS themed screens.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "swmansion/animated-pressable",
+    name: "Animated pressable",
+    description:
+      "A spring-free timing animation example for tactile press feedback.",
+    kind: "animation",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["pressable", "reanimated", "eject:shared", "eject:exposition"],
+    categories: ["motion", "controls"],
+    dependencies: [runtime("react-native-reanimated", "4.3.1", "expo")],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/animated-pressable.tsx",
+        "{{componentsDir}}/swmansion/animated-pressable.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "swmansion/gesture-card",
+    name: "Gesture card",
+    description:
+      "A draggable card demonstrating Gesture Handler and Reanimated composition.",
+    kind: "animation",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["gesture", "reanimated", "eject:shared", "eject:exposition"],
+    categories: ["motion", "gestures"],
+    dependencies: [
+      runtime("react-native-gesture-handler", "~2.31.1", "expo"),
+      runtime("react-native-reanimated", "4.3.1", "expo"),
+    ],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/gesture-card.tsx",
+        "{{componentsDir}}/swmansion/gesture-card.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "swmansion/keyboard-form",
+    name: "Keyboard-aware form",
+    description:
+      "A keyboard-aware form with native toolbar behavior and safe platform fallback.",
+    kind: "component",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["form", "keyboard", "eject:shared", "eject:exposition"],
+    categories: ["forms", "input"],
+    dependencies: [
+      runtime("react-native-keyboard-controller", "1.21.6", "expo"),
+    ],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/keyboard-form.tsx",
+        "{{componentsDir}}/swmansion/keyboard-form.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "swmansion/svg-mark",
+    name: "SVG mark",
+    description: "A compact reusable SVG mark with no project-specific state.",
+    kind: "component",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["svg", "brand", "eject:shared", "eject:exposition"],
+    categories: ["graphics"],
+    dependencies: [runtime("react-native-svg", "15.15.4", "expo")],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/svg-mark.tsx",
+        "{{componentsDir}}/swmansion/svg-mark.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "swmansion/software-mansion-logo",
+    name: "Software Mansion logo",
+    description: "The SVG logo used by the generated package exposition.",
+    kind: "component",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["svg", "logo", "eject:shared", "eject:exposition"],
+    categories: ["graphics", "exposition"],
+    dependencies: [runtime("react-native-svg", "15.15.4", "expo")],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/software-mansion-logo.tsx",
+        "{{componentsDir}}/swmansion/software-mansion-logo.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "swmansion/screens-card",
+    name: "Screens status card",
+    description: "A small React Native Screens capability and status example.",
+    kind: "component",
+    source: SOFTWARE_MANSION_DEMO_SOURCE,
+    tags: ["navigation", "screens", "eject:shared", "eject:exposition"],
+    categories: ["exposition", "navigation"],
+    dependencies: [runtime("react-native-screens", "4.25.2", "expo")],
+    assets: [
+      mdsAsset(
+        "src/components/swmansion/screens-card.tsx",
+        "{{componentsDir}}/swmansion/screens-card.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "mds/package-card",
+    name: "Package card",
+    description:
+      "A themed card for documenting an included package and its purpose.",
+    kind: "component",
+    tags: ["card", "package", "eject:shared", "eject:exposition"],
+    categories: ["exposition", "content"],
+    composedItems: ["mds/theme-support"],
+    assets: [
+      mdsAsset(
+        "src/components/exposition/package-card.tsx",
+        "{{componentsDir}}/exposition/package-card.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "mds/exposition-components",
+    name: "Exposition component set",
+    description:
+      "The complete barrel-exported component set used by MDS exposition screens.",
+    kind: "integration",
+    tags: ["components", "eject:shared", "eject:exposition"],
+    categories: ["exposition", "support"],
+    composedItems: [
+      "swmansion/animated-pressable",
+      "swmansion/gesture-card",
+      "swmansion/keyboard-form",
+      "swmansion/svg-mark",
+      "swmansion/software-mansion-logo",
+      "swmansion/screens-card",
+      "mds/package-card",
+    ],
+    assets: [
+      mdsAsset(
+        "src/components/exposition/notice.tsx",
+        "{{componentsDir}}/exposition/notice.tsx",
+        "support",
+      ),
+      mdsAsset(
+        "src/components/exposition/index.ts",
+        "{{componentsDir}}/exposition/index.ts",
+        "support",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "mds/onboarding-preview",
+    name: "Onboarding preview flow",
+    description:
+      "The current MDS legal-consent onboarding preview and explicit handoff to a future real account flow.",
+    kind: "flow",
+    tags: ["onboarding", "legal", "preview", "eject:onboarding"],
+    categories: ["onboarding", "flows"],
+    compatibility: SDK_56_ROUTER,
+    dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+    relatedItems: ["mds/settings"],
+    assets: [
+      mdsAsset(
+        "src/features/onboarding/onboarding-screen.tsx",
+        "{{featuresDir}}/onboarding/onboarding-screen.tsx",
+      ),
+      mdsAsset(
+        "src/features/onboarding/agreement-screen.tsx",
+        "{{featuresDir}}/onboarding/agreement-screen.tsx",
+      ),
+      mdsAsset(
+        "src/features/onboarding/terms-screen.tsx",
+        "{{featuresDir}}/onboarding/terms-screen.tsx",
+      ),
+      mdsAsset(
+        "src/features/onboarding/account-setup-screen.tsx",
+        "{{featuresDir}}/onboarding/account-setup-screen.tsx",
+      ),
+      mdsAsset(
+        "src/features/onboarding/legal-documents.ts",
+        "{{featuresDir}}/onboarding/legal-documents.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/onboarding/components/legal-document-view.tsx",
+        "{{featuresDir}}/onboarding/components/legal-document-view.tsx",
+        "support",
+      ),
+      mdsAsset("src/app/onboarding.tsx", "{{appDir}}/onboarding.tsx", "route"),
+      mdsAsset(
+        "src/app/onboarding/agreement.tsx",
+        "{{appDir}}/onboarding/agreement.tsx",
+        "route",
+      ),
+      mdsAsset(
+        "src/app/onboarding/terms.tsx",
+        "{{appDir}}/onboarding/terms.tsx",
+        "route",
+      ),
+      mdsAsset(
+        "src/app/onboarding/account-setup.tsx",
+        "{{appDir}}/onboarding/account-setup.tsx",
+        "route",
+      ),
+    ],
+    integration: {
+      summary: "Add the generated onboarding routes to an Expo Router stack.",
+      instructions: [
+        "Review and replace every bracketed legal placeholder with counsel before production.",
+        "Replace the account-setup handoff with the application’s separately implemented auth flow.",
+      ],
+      notes: [
+        "This item is a preview flow and does not implement authentication.",
+      ],
+    },
+    preview: {
+      description: "Legal consent, terms review, and account-flow handoff.",
+    },
+  }),
+  defineItem({
+    id: "mds/settings",
+    name: "Settings screen",
+    description:
+      "The generated MDS settings modal with a keyboard-controller form example.",
+    kind: "screen",
+    tags: ["settings", "form", "eject:settings"],
+    categories: ["settings", "screens"],
+    compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    variants: [
+      {
+        id: "expo-router",
+        name: "Expo Router route",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset("src/app/settings.tsx", "{{appDir}}/settings.tsx", "route"),
+        ],
+      },
+      {
+        id: "react-navigation",
+        name: "React Navigation screen",
+        compatibility: { navigation: ["react-navigation"] },
+        integration: [
+          "Register SettingsScreen in the application-owned React Navigation tree.",
+        ],
+      },
+    ],
+    composedItems: ["swmansion/keyboard-form", "mds/theme-support"],
+    relatedItems: ["mds/onboarding-preview"],
+    assets: [
+      mdsAsset(
+        "src/features/settings/settings-screen.tsx",
+        "{{featuresDir}}/settings/settings-screen.tsx",
+      ),
+    ],
+    integration: {
+      summary:
+        "Register the settings route as a modal in the root Expo Router stack.",
+      instructions: [
+        "Add a settings route link from an application-owned screen or menu.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "mds/stylist-sync-support",
+    name: "Stylist sync support",
+    description:
+      "The local Android sync helper used by the generated Stylist API route.",
+    kind: "integration",
+    tags: ["stylist", "sync", "developer-tools", "eject:stylist"],
+    categories: ["theming", "developer-tools", "support"],
+    compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    dependencies: [development("@mr.dj2u/cli", "^0.1.26")],
+    assets: [
+      mdsAsset(
+        "scripts/stylist-sync-android.mjs",
+        "scripts/stylist-sync-android.mjs",
+        "support",
+      ),
+    ],
+    integration: {
+      summary:
+        "Keep the Stylist sync helper local to the project and install the matching MDS CLI development dependency.",
+      instructions: [
+        "Do not expose the Stylist sync endpoint in a production deployment.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "mds/stylist",
+    name: "Stylist flow",
+    description:
+      "The generated local theme editor, embedded-font list, and protected sync API route.",
+    kind: "flow",
+    tags: ["stylist", "theme", "eject:stylist"],
+    categories: ["theming", "developer-tools"],
+    compatibility: SDK_56_ROUTER,
+    dependencies: [
+      runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+      runtime("react-native-safe-area-context", "~5.7.0", "expo"),
+      runtime("reanimated-color-picker", "^4.2.0"),
+      development("tailwindcss", "^4.2.4"),
+      development("@types/node", "^25.9.1"),
+    ],
+    composedItems: [
+      "swmansion/animated-pressable",
+      "mds/theme-support",
+      "mds/stylist-sync-support",
+    ],
+    variants: routeVariants("src/app/exposition/stylist.tsx", "stylist"),
+    assets: [
+      mdsAsset(
+        "src/features/exposition/stylist-screen.tsx",
+        "{{featuresDir}}/exposition/stylist-screen.tsx",
+        "source",
+        ["__MDS_APP_NAME__"],
+      ),
+      mdsAsset(
+        "src/features/exposition/embedded-fonts.ts",
+        "{{featuresDir}}/exposition/embedded-fonts.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/app/exposition/stylist-sync+api.ts",
+        "{{appDir}}/exposition/stylist-sync+api.ts",
+        "route",
+      ),
+    ],
+    integration: {
+      summary:
+        "Expose the Stylist route only in local development and keep the sync endpoint local.",
+      instructions: [
+        "Run Stylist through the MDS development command so its file sync endpoint targets the correct project.",
+        "Eject or remove the developer-only route before a production release.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "mds/data-local",
+    name: "Local data example",
+    description:
+      "A platform-aware local data boundary backed by Expo SQLite on native.",
+    kind: "flow",
+    tags: ["data", "sqlite", "adapter", "eject:data"],
+    categories: ["data", "exposition"],
+    compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    dependencies: [runtime("expo-sqlite", "~56.0.4", "expo")],
+    composedItems: ["mds/exposition-components", "mds/theme-support"],
+    variants: routeVariants("src/app/exposition/data.tsx", "data"),
+    assets: [
+      mdsAsset(
+        "src/features/exposition/data-screen.tsx",
+        "{{featuresDir}}/exposition/data-screen.tsx",
+      ),
+      mdsAsset("src/data/mock-app.ts", "src/data/mock-app.ts", "support"),
+      mdsAsset(
+        "src/services/local-data.ts",
+        "src/services/local-data.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/services/local-data.native.ts",
+        "src/services/local-data.native.ts",
+        "support",
+      ),
+    ],
+    integration: {
+      summary:
+        "Use the service boundary from screens instead of importing SQLite directly.",
+      instructions: [
+        "Replace the fixture app snapshot before treating this example as product data.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "mds/expo-sdk-56",
+    name: "Expo SDK 56 exposition",
+    description:
+      "A generated screen demonstrating Expo UI universal controls and SDK 56 capabilities.",
+    kind: "screen",
+    tags: ["expo", "sdk-56", "expo-ui", "eject:exposition"],
+    categories: ["exposition", "sdk"],
+    compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    dependencies: [
+      runtime("@expo/ui", "~56.0.14", "expo"),
+      runtime("react-native-svg", "15.15.4", "expo"),
+    ],
+    composedItems: ["mds/exposition-components", "mds/theme-support"],
+    variants: routeVariants("src/app/exposition/sdk-56.tsx", "sdk-56"),
+    assets: [
+      mdsAsset(
+        "src/features/exposition/expo-sdk-56-screen.tsx",
+        "{{featuresDir}}/exposition/expo-sdk-56-screen.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "mds/exposition",
+    name: "MDS package exposition",
+    description:
+      "The complete temporary MDS package exposition, Stylist, local data, and SDK examples.",
+    kind: "flow",
+    tags: ["exposition", "packages", "eject:exposition"],
+    categories: ["developer-tools", "flows"],
+    compatibility: SDK_56_ROUTER,
+    dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+    composedItems: [
+      "mds/exposition-components",
+      "mds/stylist",
+      "mds/data-local",
+      "mds/expo-sdk-56",
+    ],
+    relatedItems: ["nativewindui/components"],
+    variants: routeVariants("src/app/exposition/index.tsx", "index"),
+    assets: [
+      mdsAsset(
+        "src/features/exposition/exposition-screen.tsx",
+        "{{featuresDir}}/exposition/exposition-screen.tsx",
+      ),
+    ],
+    integration: {
+      summary:
+        "Install as a temporary learning surface and eject it before production.",
+      instructions: [
+        "Add links from a development-only home screen.",
+        "Run `mds eject exposition` after deciding which examples to retain.",
+      ],
+    },
+  }),
+];
+
+const nativeWindUiItems: LibraryItem[] = [
+  defineItem({
+    id: "nativewindui/support",
+    name: "NativeWindUI support",
+    description:
+      "Class merging, color-scheme, navigation theme, color, and opacity helpers.",
+    kind: "integration",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "support"],
+    categories: ["styling", "support"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [
+      runtime("clsx", "^2.1.0"),
+      runtime("tailwind-merge", "^2.2.1"),
+      runtime("nativewind", "latest"),
+      runtime("expo-router", "~56.2.6", "expo"),
+      runtime("react-native-screens", "4.25.2", "expo"),
+    ],
+    assets: [
+      nativeWindUiAsset("src/lib/cn.ts", "src/lib/cn.ts"),
+      nativeWindUiAsset(
+        "src/lib/useColorScheme.tsx",
+        "src/lib/useColorScheme.tsx",
+      ),
+      nativeWindUiAsset(
+        "src/lib/useHeaderSearchBar.tsx",
+        "src/lib/useHeaderSearchBar.tsx",
+      ),
+      nativeWindUiAsset("src/theme/colors.ts", "src/theme/colors.ts"),
+      nativeWindUiAsset(
+        "src/theme/with-opacity.ts",
+        "src/theme/with-opacity.ts",
+      ),
+      nativeWindUiAsset("src/theme/index.ts", "src/theme/index.ts"),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/activity-indicator",
+    name: "NativeWindUI activity indicator",
+    description: "A theme-aware activity indicator.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "loading"],
+    categories: ["feedback"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/ActivityIndicator.tsx",
+        "{{componentsDir}}/nativewindui/ActivityIndicator.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/avatar",
+    name: "NativeWindUI avatar",
+    description:
+      "Avatar image and fallback primitives with NativeWind class composition.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "avatar"],
+    categories: ["identity"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [runtime("@rn-primitives/avatar", "^1.4.0")],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Avatar.tsx",
+        "{{componentsDir}}/nativewindui/Avatar.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/text",
+    name: "NativeWindUI text",
+    description: "Variant-driven cross-platform text backed by UITextView.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "text", "typography"],
+    categories: ["typography"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [
+      runtime("class-variance-authority", "^0.7.0"),
+      runtime("react-native-uitextview", "^1.1.4", "expo"),
+    ],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Text.tsx",
+        "{{componentsDir}}/nativewindui/Text.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/button",
+    name: "NativeWindUI button",
+    description:
+      "A CVA-powered pressable with primary, secondary, destructive, and plain variants.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "button", "variants"],
+    categories: ["controls"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [
+      runtime("@rn-primitives/slot", "^1.4.0"),
+      runtime("class-variance-authority", "^0.7.0"),
+    ],
+    composedItems: ["nativewindui/support", "nativewindui/text"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Button.tsx",
+        "{{componentsDir}}/nativewindui/Button.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/icon",
+    name: "NativeWindUI icon",
+    description: "Platform-specific SF Symbols and Material icon adapter.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "icon"],
+    categories: ["graphics", "controls"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [
+      runtime("@expo/vector-icons", "^15.0.2", "expo"),
+      runtime("expo-symbols", "~56.0.5", "expo"),
+      runtime("rn-icon-mapper", "^0.0.1"),
+    ],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Icon/Icon.tsx",
+        "{{componentsDir}}/nativewindui/Icon/Icon.tsx",
+      ),
+      nativeWindUiAsset(
+        "src/components/nativewindui/Icon/Icon.ios.tsx",
+        "{{componentsDir}}/nativewindui/Icon/Icon.ios.tsx",
+      ),
+      nativeWindUiAsset(
+        "src/components/nativewindui/Icon/index.ts",
+        "{{componentsDir}}/nativewindui/Icon/index.ts",
+      ),
+      nativeWindUiAsset(
+        "src/components/nativewindui/Icon/types.ts",
+        "{{componentsDir}}/nativewindui/Icon/types.ts",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/date-picker",
+    name: "NativeWindUI date picker",
+    description:
+      "Platform-aware date picker with an Android trigger implementation.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "date", "picker"],
+    categories: ["forms", "input"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [
+      runtime("@react-native-community/datetimepicker", "9.1.0", "expo"),
+    ],
+    composedItems: [
+      "nativewindui/support",
+      "nativewindui/button",
+      "nativewindui/text",
+    ],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/DatePicker/DatePicker.tsx",
+        "{{componentsDir}}/nativewindui/DatePicker/DatePicker.tsx",
+      ),
+      nativeWindUiAsset(
+        "src/components/nativewindui/DatePicker/DatePicker.android.tsx",
+        "{{componentsDir}}/nativewindui/DatePicker/DatePicker.android.tsx",
+      ),
+      nativeWindUiAsset(
+        "src/components/nativewindui/DatePicker/index.ts",
+        "{{componentsDir}}/nativewindui/DatePicker/index.ts",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/picker",
+    name: "NativeWindUI picker",
+    description: "A theme-aware native picker wrapper.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "picker"],
+    categories: ["forms", "input"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [runtime("@react-native-picker/picker", "2.11.4", "expo")],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Picker.tsx",
+        "{{componentsDir}}/nativewindui/Picker.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/progress-indicator",
+    name: "NativeWindUI progress indicator",
+    description: "An animated horizontal progress indicator.",
+    kind: "animation",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "progress", "reanimated"],
+    categories: ["feedback", "motion"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [runtime("react-native-reanimated", "4.3.1", "expo")],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/ProgressIndicator.tsx",
+        "{{componentsDir}}/nativewindui/ProgressIndicator.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/slider",
+    name: "NativeWindUI slider",
+    description: "A themed native slider wrapper.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "slider"],
+    categories: ["forms", "input"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [runtime("@react-native-community/slider", "5.2.0", "expo")],
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Slider.tsx",
+        "{{componentsDir}}/nativewindui/Slider.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/toggle",
+    name: "NativeWindUI toggle",
+    description: "A color-scheme-aware Switch wrapper.",
+    kind: "component",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "toggle"],
+    categories: ["forms", "controls"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    composedItems: ["nativewindui/support"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/Toggle.tsx",
+        "{{componentsDir}}/nativewindui/Toggle.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/theme-toggle",
+    name: "NativeWindUI theme toggle",
+    description:
+      "An animated light and dark theme toggle using the shared icon adapter.",
+    kind: "animation",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "theme", "toggle", "reanimated"],
+    categories: ["theming", "controls", "motion"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    dependencies: [runtime("react-native-reanimated", "4.3.1", "expo")],
+    composedItems: ["nativewindui/support", "nativewindui/icon"],
+    assets: [
+      nativeWindUiAsset(
+        "src/components/nativewindui/ThemeToggle.tsx",
+        "{{componentsDir}}/nativewindui/ThemeToggle.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "nativewindui/components",
+    name: "NativeWindUI component set",
+    description:
+      "All completed NativeWindUI components emitted by the supported Super Stack fixture.",
+    kind: "integration",
+    source: CES_MDS_SOURCE,
+    tags: ["nativewindui", "components"],
+    categories: ["component-library", "styling"],
+    compatibility: SDK_56_NATIVEWIND_UI,
+    composedItems: [
+      "nativewindui/activity-indicator",
+      "nativewindui/avatar",
+      "nativewindui/button",
+      "nativewindui/date-picker",
+      "nativewindui/icon",
+      "nativewindui/picker",
+      "nativewindui/progress-indicator",
+      "nativewindui/slider",
+      "nativewindui/text",
+      "nativewindui/theme-toggle",
+      "nativewindui/toggle",
+    ],
+    relatedItems: ["mds/exposition", "nativewindui/exposition"],
+  }),
+  defineItem({
+    id: "nativewindui/exposition",
+    name: "NativeWindUI exposition",
+    description:
+      "An interactive screen exercising every completed bundled NativeWindUI primitive.",
+    kind: "screen",
+    tags: ["nativewindui", "exposition", "eject:exposition"],
+    categories: ["exposition", "screens", "component-library"],
+    compatibility: {
+      ...SDK_56_NATIVEWIND_UI,
+      navigation: ["expo-router"],
+    },
+    composedItems: [
+      "nativewindui/components",
+      "mds/exposition-components",
+      "mds/theme-support",
+    ],
+    relatedItems: ["mds/exposition"],
+    variants: routeVariants(
+      "src/app/exposition/nativewindui.tsx",
+      "nativewindui",
+    ),
+    assets: [
+      mdsAsset(
+        "src/features/exposition/nativewindui-screen.tsx",
+        "{{featuresDir}}/exposition/nativewindui-screen.tsx",
+      ),
+    ],
+    integration: {
+      summary:
+        "Add the development-only exposition route alongside the NativeWindUI component set.",
+      instructions: [
+        "Remove or eject this demonstration screen before production.",
+      ],
+    },
+  }),
+];
+
+const ceaItems: LibraryItem[] = [
+  defineItem({
+    id: "expo/theme-support",
+    name: "Expo starter theme support",
+    description:
+      "The SDK 56 starter theme constants, color-scheme hooks, theme hook, and global CSS.",
+    kind: "integration",
+    source: CEA_SOURCE,
+    tags: ["expo", "theme", "starter"],
+    categories: ["theming", "support"],
+    compatibility: {
+      ...SDK_56_ALIAS,
+      styling: ["stylesheet"],
+    },
+    assets: [
+      ceaAsset("src/global.css", "src/global.css", "support"),
+      ceaAsset("src/constants/theme.ts", "src/constants/theme.ts", "support"),
+      ceaAsset(
+        "src/hooks/use-color-scheme.ts",
+        "src/hooks/use-color-scheme.ts",
+        "support",
+      ),
+      ceaAsset(
+        "src/hooks/use-color-scheme.web.ts",
+        "src/hooks/use-color-scheme.web.ts",
+        "support",
+      ),
+      ceaAsset("src/hooks/use-theme.ts", "src/hooks/use-theme.ts", "support"),
+    ],
+    integration: {
+      summary:
+        "Use the generated @ alias and load the global CSS from the theme constants module.",
+      instructions: ["Keep the @ alias mapped to the project src directory."],
+    },
+  }),
+  defineItem({
+    id: "expo/themed-text",
+    name: "Themed text",
+    description:
+      "Expo starter text with semantic color and typography variants.",
+    kind: "component",
+    source: CEA_SOURCE,
+    tags: ["expo", "text", "theme"],
+    categories: ["typography"],
+    compatibility: SDK_56_ALIAS,
+    composedItems: ["expo/theme-support"],
+    assets: [
+      ceaAsset(
+        "src/components/themed-text.tsx",
+        "{{componentsDir}}/themed-text.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/themed-view",
+    name: "Themed view",
+    description: "Expo starter view with semantic background variants.",
+    kind: "component",
+    source: CEA_SOURCE,
+    tags: ["expo", "view", "theme"],
+    categories: ["layout"],
+    compatibility: SDK_56_ALIAS,
+    composedItems: ["expo/theme-support"],
+    assets: [
+      ceaAsset(
+        "src/components/themed-view.tsx",
+        "{{componentsDir}}/themed-view.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/external-link",
+    name: "External link",
+    description:
+      "Expo Router link wrapper that opens an in-app browser on native.",
+    kind: "component",
+    source: CEA_SOURCE,
+    tags: ["expo", "link", "browser"],
+    categories: ["navigation", "controls"],
+    compatibility: { ...SDK_56_ALIAS, navigation: ["expo-router"] },
+    dependencies: [
+      runtime("expo-router", "~56.2.6", "expo"),
+      runtime("expo-web-browser", "~56.0.5", "expo"),
+    ],
+    assets: [
+      ceaAsset(
+        "src/components/external-link.tsx",
+        "{{componentsDir}}/external-link.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/hint-row",
+    name: "Hint row",
+    description:
+      "A two-column instructional row from the Expo starter home screen.",
+    kind: "component",
+    source: CEA_SOURCE,
+    tags: ["expo", "hint", "starter"],
+    categories: ["content", "layout"],
+    compatibility: SDK_56_ALIAS,
+    composedItems: ["expo/themed-text", "expo/themed-view"],
+    assets: [
+      ceaAsset("src/components/hint-row.tsx", "{{componentsDir}}/hint-row.tsx"),
+    ],
+  }),
+  defineItem({
+    id: "expo/collapsible",
+    name: "Collapsible",
+    description:
+      "An animated, themed disclosure component from the Expo explore screen.",
+    kind: "animation",
+    source: CEA_SOURCE,
+    tags: ["expo", "collapsible", "reanimated"],
+    categories: ["disclosure", "motion"],
+    compatibility: SDK_56_ALIAS,
+    dependencies: [
+      runtime("expo-symbols", "~56.0.5", "expo"),
+      runtime("react-native-reanimated", "4.3.1", "expo"),
+    ],
+    composedItems: ["expo/themed-text", "expo/themed-view"],
+    assets: [
+      ceaAsset(
+        "src/components/ui/collapsible.tsx",
+        "{{componentsDir}}/ui/collapsible.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/animated-icon",
+    name: "Animated Expo icon",
+    description:
+      "The SDK 56 starter splash overlay and animated Expo icon for native and web.",
+    kind: "animation",
+    source: CEA_SOURCE,
+    tags: ["expo", "icon", "splash", "reanimated"],
+    categories: ["motion", "graphics"],
+    compatibility: SDK_56_CEA_ASSETS,
+    dependencies: [
+      runtime("expo-image", "~56.0.9", "expo"),
+      runtime("react-native-reanimated", "4.3.1", "expo"),
+      runtime("react-native-worklets", "0.8.3", "expo"),
+    ],
+    assets: [
+      ceaAsset(
+        "src/components/animated-icon.tsx",
+        "{{componentsDir}}/animated-icon.tsx",
+      ),
+      ceaAsset(
+        "src/components/animated-icon.web.tsx",
+        "{{componentsDir}}/animated-icon.web.tsx",
+      ),
+      ceaAsset(
+        "src/components/animated-icon.module.css",
+        "{{componentsDir}}/animated-icon.module.css",
+        "support",
+      ),
+      ceaAsset(
+        "assets/images/logo-glow.png",
+        "assets/images/logo-glow.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/expo-logo.png",
+        "assets/images/expo-logo.png",
+        "static",
+        "binary",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/web-badge",
+    name: "Expo web badge",
+    description: "A themed Expo version badge for web layouts.",
+    kind: "component",
+    source: CEA_SOURCE,
+    tags: ["expo", "badge", "web"],
+    categories: ["feedback", "graphics"],
+    compatibility: SDK_56_CEA_ASSETS,
+    dependencies: [runtime("expo-image", "~56.0.9", "expo")],
+    composedItems: ["expo/themed-text", "expo/themed-view"],
+    assets: [
+      ceaAsset(
+        "src/components/web-badge.tsx",
+        "{{componentsDir}}/web-badge.tsx",
+      ),
+      ceaAsset(
+        "assets/images/expo-badge.png",
+        "assets/images/expo-badge.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/expo-badge-white.png",
+        "assets/images/expo-badge-white.png",
+        "static",
+        "binary",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/app-tabs",
+    name: "Expo starter app tabs",
+    description:
+      "Native Tabs on device and a responsive web tab bar from the SDK 56 starter.",
+    kind: "integration",
+    source: CEA_SOURCE,
+    tags: ["expo", "tabs", "native-tabs", "web"],
+    categories: ["navigation"],
+    compatibility: {
+      ...SDK_56_CEA_ASSETS,
+      navigation: ["expo-router"],
+      navigationLayout: ["tabs"],
+    },
+    dependencies: [
+      runtime("expo-router", "~56.2.6", "expo"),
+      runtime("expo-symbols", "~56.0.5", "expo"),
+    ],
+    composedItems: [
+      "expo/external-link",
+      "expo/themed-text",
+      "expo/themed-view",
+    ],
+    assets: [
+      ceaAsset("src/components/app-tabs.tsx", "{{componentsDir}}/app-tabs.tsx"),
+      ceaAsset(
+        "src/components/app-tabs.web.tsx",
+        "{{componentsDir}}/app-tabs.web.tsx",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/home.png",
+        "assets/images/tabIcons/home.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/home@2x.png",
+        "assets/images/tabIcons/home@2x.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/home@3x.png",
+        "assets/images/tabIcons/home@3x.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/explore.png",
+        "assets/images/tabIcons/explore.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/explore@2x.png",
+        "assets/images/tabIcons/explore@2x.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/tabIcons/explore@3x.png",
+        "assets/images/tabIcons/explore@3x.png",
+        "static",
+        "binary",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/home-screen",
+    name: "Expo starter home screen",
+    description:
+      "The SDK 56 default welcome screen with device hints and animated branding.",
+    kind: "screen",
+    source: CEA_SOURCE,
+    tags: ["expo", "home", "starter"],
+    categories: ["screens", "starter"],
+    compatibility: { ...SDK_56_CEA_ASSETS, navigation: ["expo-router"] },
+    dependencies: [
+      runtime("expo-device", "~56.0.4", "expo"),
+      runtime("react-native-safe-area-context", "~5.7.0", "expo"),
+    ],
+    composedItems: [
+      "expo/animated-icon",
+      "expo/hint-row",
+      "expo/themed-text",
+      "expo/themed-view",
+      "expo/web-badge",
+    ],
+    assets: [ceaAsset("src/app/index.tsx", "{{appDir}}/index.tsx", "route")],
+  }),
+  defineItem({
+    id: "expo/explore-screen",
+    name: "Expo starter explore screen",
+    description:
+      "The SDK 56 default educational screen covering routes, platforms, images, and motion.",
+    kind: "screen",
+    source: CEA_SOURCE,
+    tags: ["expo", "explore", "starter"],
+    categories: ["screens", "starter"],
+    compatibility: { ...SDK_56_CEA_ASSETS, navigation: ["expo-router"] },
+    dependencies: [
+      runtime("expo-image", "~56.0.9", "expo"),
+      runtime("expo-symbols", "~56.0.5", "expo"),
+      runtime("react-native-safe-area-context", "~5.7.0", "expo"),
+    ],
+    composedItems: [
+      "expo/collapsible",
+      "expo/external-link",
+      "expo/themed-text",
+      "expo/themed-view",
+      "expo/web-badge",
+    ],
+    assets: [
+      ceaAsset("src/app/explore.tsx", "{{appDir}}/explore.tsx", "route"),
+      ceaAsset(
+        "assets/images/tutorial-web.png",
+        "assets/images/tutorial-web.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/react-logo.png",
+        "assets/images/react-logo.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/react-logo@2x.png",
+        "assets/images/react-logo@2x.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/react-logo@3x.png",
+        "assets/images/react-logo@3x.png",
+        "static",
+        "binary",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "expo/default-starter",
+    name: "Expo SDK 56 default starter",
+    description:
+      "The complete default SDK 56 two-screen Expo Router starter source set.",
+    kind: "flow",
+    source: CEA_SOURCE,
+    tags: ["expo", "starter", "flow"],
+    categories: ["starter", "flows"],
+    compatibility: {
+      ...SDK_56_CEA_ASSETS,
+      styling: ["stylesheet"],
+      navigation: ["expo-router"],
+      navigationLayout: ["tabs"],
+    },
+    dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+    composedItems: ["expo/app-tabs", "expo/home-screen", "expo/explore-screen"],
+    assets: [
+      ceaAsset("src/app/_layout.tsx", "{{appDir}}/_layout.tsx", "route"),
+    ],
+    integration: {
+      summary:
+        "Restore the full editable create-expo-app default starter into an empty SDK 56 app.",
+      instructions: [
+        "Use only when replacing an empty or identical route tree; customized route files intentionally conflict.",
+      ],
+    },
+  }),
+];
+
+const cesBaseItems: LibraryItem[] = [
+  defineItem({
+    id: "ces/button",
+    name: "create-expo-stack button",
+    description: "The base create-expo-stack rounded pressable button.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "button"],
+    categories: ["controls"],
+    compatibility: SDK_56,
+    assets: [
+      cesAsset("base/components/Button.tsx", "{{componentsDir}}/Button.tsx"),
+    ],
+  }),
+  defineItem({
+    id: "ces/container",
+    name: "create-expo-stack container",
+    description: "The base create-expo-stack safe-area screen container.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "container"],
+    categories: ["layout"],
+    compatibility: SDK_56,
+    assets: [
+      cesAsset(
+        "base/components/Container.tsx",
+        "{{componentsDir}}/Container.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "ces/edit-screen-info",
+    name: "create-expo-stack edit screen info",
+    description: "The default non-localized starter edit instructions.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "starter", "instructions"],
+    categories: ["content"],
+    compatibility: SDK_56,
+    assets: [
+      cesAsset(
+        "base/components/EditScreenInfo.tsx",
+        "{{componentsDir}}/EditScreenInfo.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "ces/screen-content",
+    name: "create-expo-stack screen content",
+    description:
+      "The base starter screen layout composed with edit instructions.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "screen"],
+    categories: ["layout", "starter"],
+    compatibility: SDK_56,
+    composedItems: ["ces/edit-screen-info"],
+    assets: [
+      cesAsset(
+        "base/components/ScreenContent.tsx",
+        "{{componentsDir}}/ScreenContent.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "ces/back-button",
+    name: "create-expo-stack back button",
+    description: "A compact Feather-icon back action.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "back", "icon"],
+    categories: ["navigation", "controls"],
+    compatibility: SDK_56,
+    dependencies: [runtime("@expo/vector-icons", "^15.0.2", "expo")],
+    assets: [
+      cesAsset(
+        "base/components/BackButton.tsx",
+        "{{componentsDir}}/BackButton.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "ces/header-button",
+    name: "create-expo-stack header button",
+    description: "A pressable header info icon.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "header", "icon"],
+    categories: ["navigation", "controls"],
+    compatibility: SDK_56,
+    dependencies: [runtime("@expo/vector-icons", "^15.0.2", "expo")],
+    assets: [
+      cesAsset(
+        "base/components/HeaderButton.tsx",
+        "{{componentsDir}}/HeaderButton.tsx",
+      ),
+    ],
+  }),
+  defineItem({
+    id: "ces/tab-bar-icon",
+    name: "create-expo-stack tab bar icon",
+    description: "A typed FontAwesome tab bar icon wrapper.",
+    kind: "component",
+    source: CES_SOURCE,
+    tags: ["create-expo-stack", "tabs", "icon"],
+    categories: ["navigation", "graphics"],
+    compatibility: { ...SDK_56, navigationLayout: ["tabs", "drawer+tabs"] },
+    dependencies: [runtime("@expo/vector-icons", "^15.0.2", "expo")],
+    assets: [
+      cesAsset(
+        "base/components/TabBarIcon.tsx",
+        "{{componentsDir}}/TabBarIcon.tsx",
+      ),
+    ],
+  }),
+];
+
+export const libraryCatalog: readonly LibraryItem[] = [
+  ...mdsItems,
+  ...nativeWindUiItems,
+  ...ceaItems,
+  ...cesBaseItems,
+];

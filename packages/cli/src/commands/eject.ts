@@ -4,6 +4,10 @@ import path from 'node:path';
 import { cancel, isCancel, multiselect } from '@clack/prompts';
 import chalk from 'chalk';
 
+import {
+  listLibraryDestinationsByTag,
+  listLibraryDestinationsForItems,
+} from '../library-generation.js';
 import { runStylistEjectCommand, type StylistEjectArgv } from './stylist.js';
 
 export type ExpositionKeepKey = 'onboarding' | 'settings' | 'data' | 'stylist';
@@ -200,46 +204,15 @@ async function hasStylistArtifacts(projectPath: string): Promise<boolean> {
 }
 
 async function removeOnboardingSetup(projectPath: string): Promise<string[]> {
-  const files = [
-    path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'onboarding', 'legal-documents.ts'),
-    path.join(projectPath, 'src', 'features', 'onboarding', 'components', 'legal-document-view.tsx'),
-    path.join(projectPath, 'src', 'app', 'onboarding.tsx'),
-    path.join(projectPath, 'app', 'onboarding.tsx'),
-    path.join(projectPath, 'src', 'app', 'onboarding', 'agreement.tsx'),
-    path.join(projectPath, 'src', 'app', 'onboarding', 'terms.tsx'),
-    path.join(projectPath, 'src', 'app', 'onboarding', 'account-setup.tsx'),
-    path.join(projectPath, 'app', 'onboarding', 'agreement.tsx'),
-    path.join(projectPath, 'app', 'onboarding', 'terms.tsx'),
-    path.join(projectPath, 'app', 'onboarding', 'account-setup.tsx'),
-  ];
-
-  return removeExistingFiles(files);
+  return removeExistingFiles(libraryFilesForTag(projectPath, 'eject:onboarding'));
 }
 
 async function removeSettingsSetup(projectPath: string): Promise<string[]> {
-  const files = [
-    path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
-    path.join(projectPath, 'src', 'app', 'settings.tsx'),
-    path.join(projectPath, 'app', 'settings.tsx'),
-  ];
-  return removeExistingFiles(files);
+  return removeExistingFiles(libraryFilesForTag(projectPath, 'eject:settings'));
 }
 
 async function removeDataAdapterSetup(projectPath: string): Promise<string[]> {
-  const files = [
-    path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'),
-    path.join(projectPath, 'src', 'app', 'exposition', 'data.tsx'),
-    path.join(projectPath, 'app', 'exposition', 'data.tsx'),
-    path.join(projectPath, 'src', 'app', '(tabs)', 'data.tsx'),
-    path.join(projectPath, 'app', '(tabs)', 'data.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'data.tsx'),
-    path.join(projectPath, 'app', '(drawer)', '(tabs)', 'data.tsx'),
-  ];
-  return removeExistingFiles(files);
+  return removeExistingFiles(libraryFilesForTag(projectPath, 'eject:data'));
 }
 
 async function removeSharedExpositionArtifacts(
@@ -248,65 +221,74 @@ async function removeSharedExpositionArtifacts(
 ): Promise<string[]> {
   const removeData = !keep.includes('data');
   const removeStylist = !keep.includes('stylist');
-  const keepAnyExpositionFeature = keep.includes('data') || keep.includes('stylist');
 
-  const files = [
-    path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
-    path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
-    path.join(projectPath, 'src', 'app', 'exposition', 'index.tsx'),
-    path.join(projectPath, 'src', 'app', 'exposition', 'sdk-56.tsx'),
-    path.join(projectPath, 'src', 'app', 'exposition', 'nativewindui.tsx'),
-    path.join(projectPath, 'app', 'exposition', 'index.tsx'),
-    path.join(projectPath, 'app', 'exposition', 'sdk-56.tsx'),
-    path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'),
-    path.join(projectPath, 'src', 'app', '(tabs)', 'exposition.tsx'),
-    path.join(projectPath, 'src', 'app', '(tabs)', 'sdk-56.tsx'),
-    path.join(projectPath, 'src', 'app', '(tabs)', 'nativewindui.tsx'),
-    path.join(projectPath, 'app', '(tabs)', 'exposition.tsx'),
-    path.join(projectPath, 'app', '(tabs)', 'sdk-56.tsx'),
-    path.join(projectPath, 'app', '(tabs)', 'nativewindui.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'index.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'sdk-56.tsx'),
-    path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'nativewindui.tsx'),
-    path.join(projectPath, 'app', '(drawer)', '(tabs)', 'index.tsx'),
-    path.join(projectPath, 'app', '(drawer)', '(tabs)', 'sdk-56.tsx'),
-    path.join(projectPath, 'app', '(drawer)', '(tabs)', 'nativewindui.tsx'),
+  const expositionFiles = new Set(libraryFilesForTag(projectPath, 'eject:exposition'));
+  const retainedRecipeIds = [
+    ...(keep.includes('settings') ? ['mds/settings'] : []),
+    ...(keep.includes('data') ? ['mds/data-local'] : []),
+    ...(keep.includes('stylist') ? ['mds/stylist'] : []),
   ];
+  for (const retainedFile of libraryFilesForItems(projectPath, retainedRecipeIds)) {
+    expositionFiles.delete(retainedFile);
+  }
+  const files = [...expositionFiles];
 
   if (removeData) {
-    files.push(
-      path.join(projectPath, 'src', 'app', '(tabs)', 'data.tsx'),
-      path.join(projectPath, 'app', '(tabs)', 'data.tsx'),
-      path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'data.tsx'),
-      path.join(projectPath, 'app', '(drawer)', '(tabs)', 'data.tsx')
-    );
+    files.push(...libraryFilesForTag(projectPath, 'eject:data'));
   }
 
   if (removeStylist) {
-    files.push(
-      path.join(projectPath, 'src', 'app', '(tabs)', 'stylist.tsx'),
-      path.join(projectPath, 'app', '(tabs)', 'stylist.tsx'),
-      path.join(projectPath, 'src', 'app', '(drawer)', '(tabs)', 'stylist.tsx'),
-      path.join(projectPath, 'app', '(drawer)', '(tabs)', 'stylist.tsx')
-    );
-  }
-
-  if (!keepAnyExpositionFeature) {
-    files.push(
-      path.join(projectPath, 'src', 'components', 'exposition', 'animated-pressable.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'gesture-card.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'svg-mark.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'software-mansion-logo.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'screens-card.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'notice.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'package-card.tsx'),
-      path.join(projectPath, 'src', 'components', 'exposition', 'index.ts')
-    );
+    files.push(...libraryFilesForTag(projectPath, 'eject:stylist'));
   }
 
   return removeExistingFiles(files);
+}
+
+function libraryFilesForTag(projectPath: string, tag: string): string[] {
+  return libraryFilesForDestinations(projectPath, listLibraryDestinationsByTag(tag));
+}
+
+function libraryFilesForItems(projectPath: string, itemIds: readonly string[]): string[] {
+  return libraryFilesForDestinations(projectPath, listLibraryDestinationsForItems(itemIds));
+}
+
+function libraryFilesForDestinations(
+  projectPath: string,
+  destinations: readonly string[]
+): string[] {
+  const files = new Set<string>();
+  for (const destination of destinations) {
+    const appDirectories = destination.includes('{{appDir}}') ? ['app', 'src/app'] : [null];
+    const componentDirectories = destination.includes('{{componentsDir}}')
+      ? ['components', 'src/components']
+      : [null];
+    const featureDirectories = destination.includes('{{featuresDir}}')
+      ? ['features', 'src/features']
+      : [null];
+    for (const appDirectory of appDirectories) {
+      for (const componentsDirectory of componentDirectories) {
+        for (const featuresDirectory of featureDirectories) {
+          const relativePath = destination
+            .split('{{appDir}}')
+            .join(appDirectory ?? '')
+            .split('{{componentsDir}}')
+            .join(componentsDirectory ?? '')
+            .split('{{featuresDir}}')
+            .join(featuresDirectory ?? '');
+          if (relativePath.includes('{{') || path.isAbsolute(relativePath)) {
+            throw new Error(`Unsafe MDS Library ejection destination: ${destination}`);
+          }
+          const resolved = path.resolve(projectPath, relativePath);
+          const relative = path.relative(projectPath, resolved);
+          if (relative.startsWith('..') || path.isAbsolute(relative)) {
+            throw new Error(`Unsafe MDS Library ejection destination: ${destination}`);
+          }
+          files.add(resolved);
+        }
+      }
+    }
+  }
+  return [...files];
 }
 
 async function removeReferencesForRemovedGroups(

@@ -28,6 +28,37 @@ afterEach(async () => {
   tempDirs.length = 0;
 });
 
+async function createLibraryTestProject(): Promise<string> {
+  const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-library-'));
+  tempDirs.push(projectPath);
+  await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'components'), { recursive: true });
+  await writeFile(
+    path.join(projectPath, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'mds-library-mcp-test',
+        private: true,
+        dependencies: {
+          expo: '~56.0.0',
+          'expo-router': '~6.0.0',
+          react: '19.1.0',
+          'react-native': '0.81.0',
+        },
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  await writeFile(
+    path.join(projectPath, 'app.json'),
+    JSON.stringify({ expo: { name: 'MDS Library Test', slug: 'mds-library-test' } }, null, 2),
+    'utf8'
+  );
+  return projectPath;
+}
+
 describe('mds MCP helpers', () => {
   it('lists generated knowledge resources', async () => {
     const resources = await listResources();
@@ -86,6 +117,209 @@ describe('mds MCP helpers', () => {
     expect(result.every((skill) => skill.uri.startsWith('mds://skills/'))).toBe(true);
   });
 
+  it('lists all MDS Library tools with confirmation-safe schemas', () => {
+    const tools = listTools();
+    const toolNames = new Set(tools.map((tool) => tool.name));
+    expect(toolNames.has('library_search')).toBe(true);
+    expect(toolNames.has('library_get')).toBe(true);
+    expect(toolNames.has('library_plan_add')).toBe(true);
+    expect(toolNames.has('library_add')).toBe(true);
+
+    const planTool = tools.find((tool) => tool.name === 'library_plan_add');
+    expect(planTool?.description).toContain('placement guidance');
+    expect(planTool?.description).toContain('Before applying any library item');
+    const addTool = tools.find((tool) => tool.name === 'library_add');
+    expect(addTool?.description).toContain('named the app placement/integration point');
+    const addSchema = addTool?.inputSchema as {
+      properties?: Record<string, { const?: unknown; type?: string }>;
+      required?: string[];
+    };
+    expect(addSchema.required).toEqual(
+      expect.arrayContaining(['id', 'projectPath', 'planHash', 'confirmed'])
+    );
+    expect(addSchema.properties?.confirmed).toMatchObject({
+      type: 'boolean',
+      const: true,
+    });
+    expect(addSchema.properties?.installDependencies).toMatchObject({
+      type: 'boolean',
+    });
+  });
+
+  it('searches and resolves MDS Library items with optional project compatibility context', async () => {
+    const projectPath = await createLibraryTestProject();
+    const search = (await executeTool('library_search', {
+      query: 'svg',
+      kind: 'component',
+      source: 'swmansion',
+      projectPath,
+    })) as Array<{ id: string }>;
+
+    expect(search.some((item) => item.id === 'swmansion/svg-mark')).toBe(true);
+
+    const resolution = (await executeTool('library_get', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as {
+      item: { id: string };
+      compatible: boolean;
+      issues: unknown[];
+    };
+    expect(resolution.item.id).toBe('swmansion/svg-mark');
+    expect(resolution.compatible).toBe(true);
+    expect(Array.isArray(resolution.issues)).toBe(true);
+  });
+
+  it('throws the same unknown-item error as the CLI for library_get', async () => {
+    await expect(
+      executeTool('library_get', {
+        id: 'missing/item',
+      })
+    ).rejects.toThrow('Unknown library item: missing/item');
+  });
+
+  it('returns a deterministic MDS Library add plan hash', async () => {
+    const projectPath = await createLibraryTestProject();
+    const first = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as { planHash: string; placementGuidance: string[] };
+    const second = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as { planHash: string };
+
+    expect(first.planHash.length).toBeGreaterThan(0);
+    expect(second.planHash).toBe(first.planHash);
+    expect(first.placementGuidance).toContainEqual(
+      expect.stringContaining('ask the developer where they want to see or use it')
+    );
+    expect(first.placementGuidance).toContainEqual(
+      expect.stringContaining('src/components/swmansion/svg-mark.tsx')
+    );
+  });
+
+  it('requires explicit confirmation before applying an MDS Library add plan', async () => {
+    const projectPath = await createLibraryTestProject();
+    const input = {
+      id: 'swmansion/svg-mark',
+      projectPath,
+      planHash: 'not-confirmed',
+      installDependencies: false,
+    };
+
+    await expect(executeTool('library_add', input)).rejects.toThrow('confirmed=true');
+    await expect(executeTool('library_add', { ...input, confirmed: false })).rejects.toThrow(
+      'confirmed=true'
+    );
+  });
+
+  it('rejects a stale MDS Library plan hash', async () => {
+    const projectPath = await createLibraryTestProject();
+    const plan = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as { planHash: string };
+    const destinationDirectory = path.join(projectPath, 'src', 'components', 'swmansion');
+    await mkdir(destinationDirectory, { recursive: true });
+    await writeFile(
+      path.join(destinationDirectory, 'svg-mark.tsx'),
+      '// project changed after planning\n',
+      'utf8'
+    );
+
+    await expect(
+      executeTool('library_add', {
+        id: 'swmansion/svg-mark',
+        projectPath,
+        planHash: plan.planHash,
+        confirmed: true,
+        installDependencies: false,
+      })
+    ).rejects.toThrow('stale planHash');
+  });
+
+  it('applies a confirmed safe MDS Library plan without installing dependencies', async () => {
+    const projectPath = await createLibraryTestProject();
+    const plan = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as { planHash: string };
+
+    const result = (await executeTool('library_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+      planHash: plan.planHash,
+      confirmed: true,
+      installDependencies: false,
+    })) as {
+      dependenciesInstalled: boolean;
+      executedCommands: string[];
+      pendingCommands: string[];
+      writtenFiles: string[];
+    };
+    const installedSource = await readFile(
+      path.join(projectPath, 'src', 'components', 'swmansion', 'svg-mark.tsx'),
+      'utf8'
+    );
+
+    expect(result.dependenciesInstalled).toBe(false);
+    expect(result.executedCommands).toEqual([]);
+    expect(result.pendingCommands.some((command) => command.includes('react-native-svg'))).toBe(
+      true
+    );
+    expect(result.writtenFiles).toContain('src/components/swmansion/svg-mark.tsx');
+    expect(installedSource).toContain('SvgMark');
+  });
+
+  it('does not overwrite a customized MDS Library destination', async () => {
+    const projectPath = await createLibraryTestProject();
+    const initialPlan = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as { planHash: string };
+    await executeTool('library_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+      planHash: initialPlan.planHash,
+      confirmed: true,
+      installDependencies: false,
+    });
+
+    const destination = path.join(projectPath, 'src', 'components', 'swmansion', 'svg-mark.tsx');
+    const customizedSource = '// user customization must survive\nexport const custom = true;\n';
+    await writeFile(destination, customizedSource, 'utf8');
+    const blockedPlan = (await executeTool('library_plan_add', {
+      id: 'swmansion/svg-mark',
+      projectPath,
+    })) as {
+      canApply: boolean;
+      conflicts: Array<{ code: string; path: string }>;
+      planHash: string;
+    };
+
+    expect(blockedPlan.canApply).toBe(false);
+    expect(blockedPlan.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'file-conflict',
+          path: 'src/components/swmansion/svg-mark.tsx',
+        }),
+      ])
+    );
+
+    await expect(
+      executeTool('library_add', {
+        id: 'swmansion/svg-mark',
+        projectPath,
+        planHash: blockedPlan.planHash,
+        confirmed: true,
+        installDependencies: false,
+      })
+    ).rejects.toThrow();
+    expect(await readFile(destination, 'utf8')).toBe(customizedSource);
+  });
+
   it('starts through the packaged mds-mcp-server entrypoint and exposes Super Stack tools', async () => {
     const testDir = path.dirname(fileURLToPath(import.meta.url));
     const mcpServerEntrypoint = path.resolve(testDir, '..', 'dist', 'stdio.js');
@@ -112,7 +346,24 @@ describe('mds MCP helpers', () => {
       expect(toolNames.has('mds_runtime_versions')).toBe(true);
       expect(toolNames.has('create_expo_super_stack_resolve_info')).toBe(true);
       expect(toolNames.has('create_expo_super_stack_generate')).toBe(true);
+      expect(toolNames.has('library_search')).toBe(true);
+      expect(toolNames.has('library_get')).toBe(true);
+      expect(toolNames.has('library_plan_add')).toBe(true);
+      expect(toolNames.has('library_add')).toBe(true);
       expect(promptNames.has('review_motion')).toBe(true);
+
+      const librarySearch = await client.callTool({
+        name: 'library_search',
+        arguments: { query: 'svg', source: 'swmansion' },
+      });
+      const serializedSearch = librarySearch.content[0];
+      if (!serializedSearch || serializedSearch.type !== 'text') {
+        throw new Error('library_search did not return JSON text content.');
+      }
+      const searchItems = JSON.parse(serializedSearch.text) as Array<{
+        id: string;
+      }>;
+      expect(searchItems.some((item) => item.id === 'swmansion/svg-mark')).toBe(true);
     } finally {
       await client.close().catch(() => undefined);
     }

@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { access, stat } from 'node:fs/promises';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -219,13 +219,13 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('ExpositionNotice');
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
+        path.join(projectPath, 'src', 'components', 'swmansion', 'keyboard-form.tsx'),
         'utf8'
       )
     ).resolves.toContain("from 'react-native-keyboard-controller'");
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'components', 'exposition', 'keyboard-form.tsx'),
+        path.join(projectPath, 'src', 'components', 'swmansion', 'keyboard-form.tsx'),
         'utf8'
       )
     ).resolves.not.toContain("require('react-native-keyboard-controller')");
@@ -1177,7 +1177,7 @@ describe('runOnboardCommand', () => {
         path.join(projectPath, 'src', 'components', 'nativewindui', 'ActivityIndicator.tsx'),
         'utf8'
       )
-    ).resolves.toContain('export function ActivityIndicator');
+    ).resolves.toContain('useColorScheme');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
@@ -1189,10 +1189,52 @@ describe('runOnboardCommand', () => {
         path.join(projectPath, 'src', 'components', 'nativewindui', 'ThemeToggle.tsx'),
         'utf8'
       )
-    ).resolves.toContain('lightLabel');
+    ).resolves.toContain('LayoutAnimationConfig');
     await expect(
       readFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'utf8')
-    ).resolves.toContain("typeof style === 'function' ? style(state) : style");
+    ).resolves.toContain('buttonVariants');
+  });
+
+  it('keeps NativeWindUI primitives for React Navigation without generating Expo Router routes', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-nativewindui-react-nav-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'nativewindui-react-nav-app',
+        scripts: {},
+        dependencies: {
+          '@react-navigation/native': '^7.1.21',
+        },
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'App.tsx'),
+      "import 'react-navigation';\nexport default function App() { return null; }\n",
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'NativeWindUI React Nav App',
+      defaults: 'project-docs,uniwind,nativewindui',
+    });
+
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('NativeWindUI Exposition');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'utf8')
+    ).resolves.toContain('buttonVariants');
+    await expect(
+      access(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'))
+    ).rejects.toThrow();
   });
 
   it('keeps prompt helpers explicit about defaults, explanations, and server wording', () => {

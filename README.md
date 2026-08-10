@@ -132,6 +132,24 @@ node packages/cli/dist/cli.js continue /path/to/expo-app
 node packages/cli/dist/cli.js continue /path/to/expo-app --json
 ```
 
+#### MDS Library
+
+`mds library` searches the bundled MDS Library and safely copies editable component, screen, flow, and integration source into an Expo project. The catalog remains available after exposition files are ejected; it does not try to guess which items an older project originally contained.
+
+```bash
+# Browse or inspect the universal catalog
+node packages/cli/dist/cli.js library list --query animation
+node packages/cli/dist/cli.js library show swmansion/animated-pressable
+
+# Preview every file and dependency change, then add after confirmation
+node packages/cli/dist/cli.js library add swmansion/animated-pressable /path/to/expo-app --dry-run
+node packages/cli/dist/cli.js library add swmansion/animated-pressable /path/to/expo-app
+```
+
+Library add operations preflight the whole item. Identical files are skipped, while customized files, incompatible dependencies, unsafe destinations, and unsupported project variants stop the operation without overwriting source. Use `--no-install` to copy source without running dependency installation, or `--json` for agent-friendly output.
+
+The source-copy destination is only the safe default home for reusable code. When an agent is adding any library item, it should ask where or how the developer wants it used in the app, then import/use or wire it into that screen, route, provider boundary, or setup location after copying. If the developer is not sure, leave the source in the default catalog destination and report the import path as the fallback.
+
 Defaults for new MDS projects:
 
 - Uniwind, not NativeWind, when MDS is managing styling for an existing app.

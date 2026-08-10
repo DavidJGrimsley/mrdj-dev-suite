@@ -45,6 +45,7 @@
     "@mr.dj2u/cli": "^0.1.26",
     "@mr.dj2u/doctor": "^0.1.7",
     "@mr.dj2u/knowledge": "^0.1.8",
+    "@mr.dj2u/library-registry": "0.0.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "zod": "^4.4.3"
   },
