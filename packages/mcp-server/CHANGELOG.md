@@ -1,5 +1,13 @@
 # @mr.dj2u/mcp-server
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [c1ca453]
+  - @mr.dj2u/library-registry@0.2.0
+  - @mr.dj2u/cli@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
