@@ -10,6 +10,11 @@ import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
+import {
+  runLibraryAddCommand,
+  runLibraryListCommand,
+  runLibraryShowCommand,
+} from './commands/library.js';
 import { runMcpInstallCommand } from './commands/mcp-install.js';
 import { runOnboardCommand } from './commands/onboard.js';
 import { runRoadmapCommand } from './commands/roadmap.js';
@@ -27,6 +32,11 @@ import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
+import type {
+  LibraryAddArgv,
+  LibraryListArgv,
+  LibraryShowArgv,
+} from './commands/library.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { RoadmapArgv } from './commands/roadmap.js';
@@ -592,6 +602,80 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runAgentCommand(argv as AgentArgv);
+      }
+    )
+    .command(
+      'library <action> [id] [path]',
+      'Browse or safely restore reusable MDS Library source',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Library command',
+            choices: ['list', 'show', 'add'] as const,
+          })
+          .positional('id', {
+            describe: 'Namespaced library item id',
+            type: 'string',
+          })
+          .positional('path', {
+            describe: 'Target Expo project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('query', {
+            alias: 'q',
+            describe: 'Search ids, names, descriptions, tags, and categories',
+            type: 'string',
+          })
+          .option('kind', {
+            describe: 'Filter list results by library item kind',
+            choices: ['component', 'animation', 'screen', 'flow', 'integration'] as const,
+          })
+          .option('source', {
+            describe: 'Filter list results by source catalog',
+            choices: ['mds', 'create-expo-app', 'create-expo-stack', 'nativewindui', 'swmansion'] as const,
+          })
+          .option('compatible', {
+            describe: 'Show only list results compatible with the current Expo project',
+            type: 'boolean',
+            default: false,
+          })
+          .option('dry-run', {
+            describe: 'Preflight and print the add plan without writing files',
+            type: 'boolean',
+            default: false,
+          })
+          .option('variant', {
+            describe: 'Resolve a specific library item variant',
+            type: 'string',
+          })
+          .option('yes', {
+            alias: 'y',
+            describe: 'Confirm the preflighted add without prompting',
+            type: 'boolean',
+            default: false,
+          })
+          .option('install', {
+            describe: 'Install missing dependencies (disable with --no-install)',
+            type: 'boolean',
+            default: true,
+          })
+          .option('json', {
+            describe: 'Print the add plan or result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        const action = String(argv.action);
+        if (action === 'list') {
+          await runLibraryListCommand(argv as LibraryListArgv);
+          return;
+        }
+        if (action === 'show') {
+          await runLibraryShowCommand(argv as LibraryShowArgv);
+          return;
+        }
+        await runLibraryAddCommand(argv as LibraryAddArgv);
       }
     )
     .command(
