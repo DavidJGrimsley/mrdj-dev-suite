@@ -1233,8 +1233,8 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'utf8')
     ).resolves.toContain('buttonVariants');
     await expect(
-      access(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'))
-    ).resolves.toBeUndefined();
+      access(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'))
+    ).rejects.toThrow();
   });
 
   it('keeps prompt helpers explicit about defaults, explanations, and server wording', () => {

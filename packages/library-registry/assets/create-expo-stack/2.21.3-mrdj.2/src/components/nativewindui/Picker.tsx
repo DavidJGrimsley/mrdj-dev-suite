@@ -11,7 +11,11 @@ export function Picker<T>({
   dropdownIconRippleColor,
   className,
   ...props
-}: React.ComponentProps<typeof RNPicker<T>>) {
+}: Omit<React.ComponentProps<typeof RNPicker>, 'selectedValue' | 'onValueChange'> & {
+  selectedValue?: T;
+  onValueChange?: (value: T, itemIndex: number) => void;
+  className?: string;
+}) {
   const { colors } = useColorScheme();
   return (
     <View
