@@ -1,5 +1,11 @@
 # @mr.dj2u/library-registry
 
+## 0.2.0
+
+### Minor Changes
+
+- c1ca453: Add reusable legal documents to the MDS Library.
+
 ## 0.1.0
 
 ### Minor Changes
