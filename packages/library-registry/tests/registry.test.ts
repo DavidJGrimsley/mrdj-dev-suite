@@ -45,6 +45,7 @@ describe("MDS Library catalog", () => {
 
     for (const id of [
       "swmansion/animated-pressable",
+      "mds/legal-documents",
       "mds/onboarding-preview",
       "mds/settings",
       "mds/stylist",
@@ -95,6 +96,9 @@ describe("MDS Library catalog", () => {
     expect(
       listLibraryItems({ tags: ["eject:onboarding"] }).map((item) => item.id),
     ).toEqual(["mds/onboarding-preview"]);
+    expect(
+      listLibraryItems({ tags: ["legal", "privacy"] }).map((item) => item.id),
+    ).toEqual(["mds/legal-documents"]);
     const nativeWindEjectIds = listLibraryItems({ tags: ["eject:exposition"] })
       .map((item) => item.id)
       .filter((id) => id.startsWith("nativewindui/"));
@@ -120,6 +124,9 @@ describe("MDS Library catalog", () => {
         (item) => item.id === "ces/tab-bar-icon",
       ),
     ).toBe(true);
+    expect(searchLibraryItems("legal privacy terms")[0]?.id).toBe(
+      "mds/legal-documents",
+    );
     expect(
       searchLibraryItems("nativewindui picker", { kind: "component" }).length,
     ).toBeGreaterThan(1);
@@ -271,6 +278,104 @@ describe("library resolution", () => {
     expect(route).toBeDefined();
     expect((await readLibraryAsset(route!)).toString("utf8")).toContain(
       "from '@/features/",
+    );
+  });
+
+  it("resolves legal documents as public routes by default with reusable variants", async () => {
+    const legal = resolveLibraryItem("mds/legal-documents", routerContext);
+    const viewerOnly = resolveLibraryItem("mds/legal-documents", routerContext, {
+      variant: "viewer-only",
+    });
+    const settingsLinks = resolveLibraryItem("mds/legal-documents", routerContext, {
+      variant: "settings-links",
+    });
+    const onboardingAgreement = resolveLibraryItem(
+      "mds/legal-documents",
+      routerContext,
+      { variant: "onboarding-agreement" },
+    );
+
+    expect(legal.compatible).toBe(true);
+    expect(legal.variant?.id).toBe("public-routes");
+    expect(legal.items.map((item) => item.id)).toContain("mds/theme-support");
+    expect(legal.items.at(-1)?.id).toBe("mds/legal-documents");
+    expect(legal.dependencies).toContainEqual(
+      expect.objectContaining({ name: "expo-router" }),
+    );
+    expect(legal.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/legal/legal-documents.ts",
+          contentTokens: ["__MDS_APP_NAME__"],
+        }),
+        expect.objectContaining({
+          destination: "src/features/legal/legal-document-modal.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/terms.tsx" }),
+        expect.objectContaining({ destination: "src/app/privacy.tsx" }),
+      ]),
+    );
+
+    expect(viewerOnly.compatible).toBe(true);
+    expect(viewerOnly.variant?.id).toBe("viewer-only");
+    expect(viewerOnly.assets.some((asset) => asset.role === "route")).toBe(
+      false,
+    );
+    expect(
+      viewerOnly.assets.some((asset) =>
+        asset.destination.endsWith("legal-document-links.tsx"),
+      ),
+    ).toBe(false);
+
+    expect(settingsLinks.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/legal/legal-document-links.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/terms.tsx" }),
+        expect.objectContaining({ destination: "src/app/privacy.tsx" }),
+      ]),
+    );
+    expect(onboardingAgreement.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/legal/legal-agreement-screen.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/app/onboarding/legal-agreement.tsx",
+        }),
+      ]),
+    );
+
+    const documentAsset = legal.assets.find(
+      (asset) => asset.destination === "src/features/legal/legal-documents.ts",
+    );
+    expect(documentAsset).toBeDefined();
+    const documentSource = (await readLibraryAsset(documentAsset!)).toString(
+      "utf8",
+    );
+    expect(documentSource).toContain("not legal advice");
+    expect(documentSource).toContain("__MDS_APP_NAME__");
+
+    const providerAsset = legal.assets.find(
+      (asset) => asset.destination === "src/theme/provider.tsx",
+    );
+    const viewAsset = legal.assets.find(
+      (asset) =>
+        asset.destination === "src/features/legal/legal-document-view.tsx",
+    );
+    expect(providerAsset).toBeDefined();
+    expect(viewAsset).toBeDefined();
+    const providerSource = (await readLibraryAsset(providerAsset!)).toString(
+      "utf8",
+    );
+    expect(providerSource).toContain("scheme = 'system'");
+    expect(providerSource).toContain("AppThemeColorOverrides");
+    const viewSource = (await readLibraryAsset(viewAsset!)).toString("utf8");
+    expect(viewSource).toContain("maxWidth: 920");
+    expect(viewSource).toContain("alignItems: 'center'");
+    expect(legal.integration).toContainEqual(
+      expect.stringContaining("root Expo Router layout renders Tabs"),
     );
   });
 

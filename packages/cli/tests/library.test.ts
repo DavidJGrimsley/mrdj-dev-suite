@@ -49,6 +49,19 @@ describe('MDS Library CLI services', () => {
     expect(inspection.packageManager).toBe('pnpm');
   });
 
+  it('detects a custom tab shell rendered from the root layout', async () => {
+    const projectPath = await createExpoProject();
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      "import AppTabs from '@/components/app-tabs';\nexport default function Layout() { return <AppTabs />; }\n",
+      'utf8'
+    );
+
+    const inspection = await inspectLibraryProject(projectPath);
+
+    expect(inspection.navigationLayout).toBe('tabs');
+  });
+
   it('reads project name and platforms from a static app.config.ts without executing it', async () => {
     const projectPath = await createExpoProject({ appConfig: 'ts', includeProjectInfo: false });
     const inspection = await inspectLibraryProject(projectPath);
@@ -70,6 +83,65 @@ describe('MDS Library CLI services', () => {
     expect(componentPlan.files.some((file) => file.destination === 'src/components/themed-text.tsx')).toBe(true);
     expect(flowPlan.variant).toBe('stack');
     expect(flowPlan.conflicts.some((conflict) => conflict.message.includes('path alias'))).toBe(false);
+  });
+
+  it('adds legal documents with public routes, token rendering, idempotency, and route protection', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'mds/legal-documents');
+
+    expect(plan.canApply).toBe(true);
+    expect(plan.variant).toBe('public-routes');
+    expect(plan.commands).toEqual([]);
+    expect(plan.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: 'src/app/terms.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/app/privacy.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/features/legal/legal-documents.ts' }),
+        expect.objectContaining({ destination: 'src/features/legal/legal-document-modal.tsx' }),
+      ])
+    );
+
+    const result = await applyLibraryAdd(projectPath, 'mds/legal-documents', {
+      confirmed: true,
+      planHash: plan.planHash,
+      installDependencies: false,
+    });
+    expect(result.writtenFiles).toEqual(
+      expect.arrayContaining([
+        'src/app/terms.tsx',
+        'src/app/privacy.tsx',
+        'src/features/legal/legal-documents.ts',
+      ])
+    );
+    const legalSourcePath = path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts');
+    const renderedLegalSource = await readFile(legalSourcePath, 'utf8');
+    expect(renderedLegalSource).toContain('Library Test App');
+    expect(renderedLegalSource).toContain('not legal advice');
+    expect(renderedLegalSource).not.toContain('__MDS_APP_NAME__');
+
+    const secondPlan = await planLibraryAdd(projectPath, 'mds/legal-documents');
+    expect(secondPlan.canApply).toBe(true);
+    expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
+
+    const customTermsRoute = path.join(projectPath, 'src', 'app', 'terms.tsx');
+    const customizedSource = '// app-specific legal route customization\n';
+    await writeFile(customTermsRoute, customizedSource, 'utf8');
+    const blockedPlan = await planLibraryAdd(projectPath, 'mds/legal-documents');
+    expect(blockedPlan.canApply).toBe(false);
+    expect(blockedPlan.conflicts).toContainEqual(
+      expect.objectContaining({
+        code: 'integration-conflict',
+        path: 'src/app/terms.tsx',
+      })
+    );
+    await expect(
+      applyLibraryAdd(projectPath, 'mds/legal-documents', {
+        confirmed: true,
+        planHash: blockedPlan.planHash,
+        installDependencies: false,
+      })
+    ).rejects.toThrow('blocked');
+    expect(await readFile(customTermsRoute, 'utf8')).toBe(customizedSource);
   });
 
   it('produces deterministic plans and exact dependency commands', async () => {
@@ -246,6 +318,31 @@ describe('MDS Library CLI services', () => {
     });
     expect(secondResult.writtenFiles).toEqual([]);
     expect(secondResult.skippedFiles).toEqual(['src/components/Button.tsx']);
+  });
+
+  it('skips text files with matching content across line endings', async () => {
+    const projectPath = await createExpoProject();
+    const firstPlan = await planLibraryAdd(projectPath, 'ces/button');
+    await applyLibraryAdd(projectPath, 'ces/button', {
+      confirmed: true,
+      planHash: firstPlan.planHash,
+      installDependencies: false,
+    });
+
+    const buttonPath = path.join(projectPath, 'src', 'components', 'Button.tsx');
+    const originalSource = await readFile(buttonPath, 'utf8');
+    const sourceWithCrlf = originalSource.replace(/\r\n?/g, '\n').replace(/\n/g, '\r\n');
+    await writeFile(buttonPath, sourceWithCrlf, 'utf8');
+
+    const secondPlan = await planLibraryAdd(projectPath, 'ces/button');
+    expect(secondPlan.canApply).toBe(true);
+    expect(secondPlan.conflicts).toEqual([]);
+    expect(secondPlan.files).toHaveLength(1);
+    expect(secondPlan.files[0]).toMatchObject({
+      destination: 'src/components/Button.tsx',
+      action: 'skip-identical',
+    });
+    expect(secondPlan.files[0]?.existingHash).toBe(secondPlan.files[0]?.contentHash);
   });
 
   it('blocks a whole multi-file plan when one destination is customized', async () => {
