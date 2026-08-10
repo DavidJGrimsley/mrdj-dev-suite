@@ -1,6 +1,6 @@
 {
   "name": "@mr.dj2u/mcp-server",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "description": "MCP server for mds suite (Claude integration point)",
   "type": "module",
   "repository": {
@@ -42,10 +42,10 @@
     "clean": "node -e \"const fs=require('node:fs'); for (const p of ['dist','tsconfig.tsbuildinfo']) fs.rmSync(p,{recursive:true,force:true});\""
   },
   "dependencies": {
-    "@mr.dj2u/cli": "^0.1.26",
+    "@mr.dj2u/cli": "^0.2.0",
     "@mr.dj2u/doctor": "^0.1.7",
     "@mr.dj2u/knowledge": "^0.1.8",
-    "@mr.dj2u/library-registry": "0.0.0",
+    "@mr.dj2u/library-registry": "0.1.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "zod": "^4.4.3"
   },
