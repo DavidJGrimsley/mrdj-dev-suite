@@ -130,6 +130,8 @@ That release PR is the review point for the actual version changes. Changesets w
 
 Do not manually edit those generated release files.
 
+The release workflow uses a GitHub App installation token instead of the built-in `GITHUB_TOKEN` so GitHub does not pause the auto-created release PR for manual workflow approval. In this repo, that token is generated from `vars.RELEASE_BOT_APP_CLIENT_ID` and `secrets.RELEASE_BOT_APP_PRIVATE_KEY`, and the GitHub App must be installed on this repository with access to the public packages it publishes.
+
 ## 6. Review and Merge the Release PR
 
 Review the generated versions and changelog text. Confirm that the intended package is included and that the bump type is correct. Then merge the release PR.

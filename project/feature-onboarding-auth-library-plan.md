@@ -551,3 +551,7 @@ Start with `mds/legal-documents`, then `mds/onboarding`:
 - give it future-facing variant metadata;
 - test it in a clean Expo app;
 - then dogfood it in Time2Pay.
+
+## CESS Integration
+
+Add a CESS prompt for each high-level library item so the installer can ask whether the developer wants that package and any default placement it should generate. For legal docs, the question should also ask whether to generate public `/terms` and `/privacy` routes or just the reusable viewer.

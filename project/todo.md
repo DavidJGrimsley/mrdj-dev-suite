@@ -344,17 +344,37 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 
 ## Dogfooding Bugs and Fixes
 
-### Experimemo
-- [ ] Fix the generated Expo Router `<Link asChild>`/`<Slot>` style-array crash in the new-experiment screen by flattening the child style before it reaches `Slot`; add a generated-app regression check.
+> Complete each branch-scoped subsection in one branch. Split it only if implementation planning shows the scope cannot be reviewed or validated safely as a unit.
+
+### Branch: `dogfood-doctor`
+- [ ] Make Doctor's default, `--fast`, `--full`, and `--ci` check selection explicit in help and reports, including skipped checks and when full mode is required.
+- [ ] Detect hardcoded credential values in source and configuration files, including API keys that are not exposed through `EXPO_PUBLIC_*` variables.
+- [ ] Fix Expo API-route detection so the server-output warning appears only for real Expo Router API route files, with regression coverage for non-Expo repositories.
+- [ ] Dogfood the SEO workflow against the pre-MDS DJsPortfolio: verify data-loader pages and API/MCP detail pages render server-visible content and emit appropriate JSON-LD; extend MDS SEO knowledge and checks for any gap found.
+
+### Branch: `dogfood-agent-and-release-workflow`
+- [ ] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
+- [ ] Have MDS proactively create the small GitHub setup changes it can authenticate for, such as an initial PR that enables or refreshes CI; otherwise provide an exact CLI and GitHub UI procedure, including branch-ruleset setup.
+- [ ] Make `/push-merge-loop` poll Copilot and Codex review threads as well as status checks, address actionable findings, push updates, and repeat until the PR is ready or the retry limit is reached.
+- [ ] Provide a `test` branch-ruleset preset that does not require a human review when automated test-branch merging is enabled.
+- [ ] After each successful `test` to `main` promotion, offer or automate a `sync-main-into-test` PR using a merge commit so the next promotion starts from an up-to-date `test` branch.
+- [ ] Make `continue_project` recognize Expo SDK upgrade work from the active Time2Pay project state and route to the official Expo upgrade skill instead of selecting stale todo work.
+- [ ] Generate and configure a release CI workflow when GitHub and EAS credentials are available: `test` deploys to TestFlight, `main` deploys to EAS production, and the production workflow includes the Apple submission step.
+- [ ] Expand generated App Store Connect guidance with the complete prerequisite, credential, TestFlight, production-submission, and troubleshooting steps needed to finish the release flow.
+- [ ] Add generated release metadata tasks for a consistent public app name and configured support, terms-of-service, and privacy-policy URLs across app config and store submissions.
+
+### Branch: `dogfood-generator-and-ejection`
+- [ ] Fix the generated Expo Router `<Link asChild>`/`<Slot>` style-array crash in the Experimemo new-experiment screen by flattening the child style before it reaches `Slot`; add a generated-app regression check.
+- [ ] Add system light and dark mode to generated apps in the way that create expo app does, including Expo SDK 56 dark-mode splash configuration and assets; preserve both modes through exposition ejection.
 - [ ] Dogfood a generated app that does not select Uniwind and verify no Uniwind configuration, dependencies, or default styling behavior remains.
+- [ ] Add a Phase 0 styling reconciliation that confirms the chosen UI system, Expo UI/Universal Components/NativeTabs usage, and any style-library conflicts; persist the resulting component strategy in project memory so later agents can apply it without repeated clarification.
+- [ ] Do not implicitly select or retain Uniwind when it was not chosen; ensure generated configuration, dependencies, and defaults exactly match onboarding decisions.
+- [ ] Add an ejection inventory workflow that shows template and create-expo-app components, asks what to retain or eject, defaults to retaining components selected in project memory, and prevents recreated substitutes for retained components.
+- [ ] Generate a follow-up cleanup task after the app shell and core flows are complete, before polish/release, to remove unused or intentionally ejected components and packages.
+- [ ] Add a pre-release content pass that removes developer-facing notes and todos from user routes, keeps MDS guidance in project documentation or removable exposition routes, and makes remaining in-app copy user-facing.
+- [ ] Add an icon-release workflow before app-store preparation: accept a 1024x1024 master icon, generate platform assets through https://smartutilify.netlify.app/tools/icons-favicons, copy them into the project root with a dedicated script, and later automate platform-specific output from project info.
+- [ ] Confirm/add scripts from my other projects such as `generate-sitemap` for static builds, ensuring the sitemap rebuilds on every build; prefer an Expo-supported alternative when available. Include copy icons as well.
 - [ ] Use the completed Experimemo MVP changes as a generated-app regression fixture: user-facing production copy, Expo UI/NativeTabs, app icon, system dark mode, and store metadata links must survive Phase 0 and exposition ejection.
-
-### DJsPortfolio
-- [ ] Dogfood the SEO workflow against the pre-MDS portfolio: verify data-loader pages and API/MCP detail pages render server-visible content and emit appropriate JSON-LD; extend MDS SEO knowledge and checks for any gap found.
-
-### Time2Pay
-- [ ] Make `continue_project` recognize Expo SDK upgrade work from the active project state and route to the official Expo upgrade skill instead of selecting stale todo work.
-
 
 ## MDS Library
 
@@ -423,8 +443,8 @@ env:...
 - [ ] Consider adding agentic workflows for issues on github.
 - [ ] Consider publishing the stylist component to npm
 - [ ] Add the Supabase project to the template so it's actually usable from the start and the dev will just have to swap out their Supabase URL and anon key. This will be set up for auth so that when you start up SS app with auth and Supabase, the app will start with login/onboarding flow like a complete app. Obviously it will be used in the Settings and throughout the generated app.
-- [ ] The agent should not only run tests and doctor after finishing work but it should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
 - [ ] Revisit the Stylist save flow to see if we can make it more designer friendly with less duplication and unused fields. Maybe the style.md template should include a json Style section and we'll just have to educate on how to edit it. The better experience would be if the Stylist was something that the dev could share with the rest of the nontechnical team so they could set it themselves. This could easily be done locally but remotely would present challenges. Maybe we could have a shareable link Or I could just host the stylist in a generic way on my portfolio website or expostylist.com that would let them edit the style and then save it back to the project style file/download the save configuration and email it to the dev. This would be super cool for collaboration and also for making it easier for non-technical team members to contribute to the design of the app.
 
 ## I^2(Infinite Intelligence) - An Agentic IDE based on MDS.
+- [ ] When starting a session, the agent should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
 - [ ] Blitz mode - this will scan the project todo and identify unfinished tasks, group them into scoped branches, open a worktree for each and then use sub agents to complete each task in each branch at the same time and open PRs in order based on merge conflicts and progression of functionality of course. Full Blitz would merge all of those into test one by one and alert the user when they are all done. Standard blitz will load the app in each branch for testing. During the Blitz work, each worktree will appear as a window in the Blitz Widget and when the user clicks on a window, it will open that worktree IDE window but you can see them all working in real time even before clicking. Each window is a copy of the IDE basically with the mother IDE hosting them but the user probably won't see the difference.
