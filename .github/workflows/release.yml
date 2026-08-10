@@ -53,8 +53,8 @@ jobs:
         with:
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
-          version: pnpm changeset version && pnpm install --lockfile-only --ignore-scripts
-          publish: pnpm changeset publish
+          version: pnpm exec changeset version && pnpm install --lockfile-only --ignore-scripts
+          publish: pnpm exec changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
