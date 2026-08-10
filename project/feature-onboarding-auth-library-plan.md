@@ -552,7 +552,6 @@ Start with `mds/legal-documents`, then `mds/onboarding`:
 - test it in a clean Expo app;
 - then dogfood it in Time2Pay.
 
+## CESS Integration
 
-
-# CESS Integration
-let's go ahead and add a question in CESS for these legal docs - it doesn't have to be a specific question like where do you want to host them, just enough to know they're going to need the package. or maybe it should set up the /privacy and /terms routes by default? what do you think? But I do want to add it to CESS for sure. go ahead and modify the feature onboar...plan to include adding a question to CESS for each high-level library item that we're making.
+Add a CESS prompt for each high-level library item so the installer can ask whether the developer wants that package and any default placement it should generate. For legal docs, the question should also ask whether to generate public `/terms` and `/privacy` routes or just the reusable viewer.

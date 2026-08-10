@@ -50,6 +50,11 @@
 - [x] Add unit tests using temp projects for passing, warning, and failing reports.
 - [x] Test Doctor against `time2pay`, `DJsPortfolio`, `PokePages`, `expo-super-template`, and `core-monorepo`.
 
+### Dogfood Follow-Ups
+- [ ] Make Doctor's default, `--fast`, `--full`, and `--ci` check selection explicit in help and reports, including skipped checks and when full mode is required.
+- [ ] Detect hardcoded credential values in source and configuration files, including API keys that are not exposed through `EXPO_PUBLIC_*` variables.
+- [ ] Fix Expo API-route detection so the server-output warning appears only for real Expo Router API route files, with regression coverage for non-Expo repositories.
+
 ## Sprint 4: Ship/Test Workflow
 
 ### Goal
@@ -68,6 +73,12 @@ Turn the repeated request "push to git, open PR to test, poll it, fix failures, 
 - [x] Document failure handling: fetch logs, summarize, fix locally, rerun Doctor, push again, and keep polling.
 - [x] Keep final merge manual during the dry-run proving period.
 - [x] Keep destructive/mutating behavior behind an explicit `--execute` flag until the workflow is proven.
+
+### Dogfood Follow-Ups
+- [ ] Have MDS proactively create the small GitHub setup changes it can authenticate for, such as an initial PR that enables or refreshes CI; otherwise provide an exact CLI and GitHub UI procedure, including branch-ruleset setup.
+- [ ] Make `/push-merge-loop` poll Copilot and Codex review threads as well as status checks, address actionable findings, push updates, and repeat until the PR is ready or the retry limit is reached.
+- [ ] Provide a `test` branch-ruleset preset that does not require a human review when automated test-branch merging is enabled.
+- [ ] After each successful `test` to `main` promotion, offer or automate a `sync-main-into-test` PR using a merge commit so the next promotion starts from an up-to-date `test` branch.
 
 ## Sprint 5: Post-Create Onboarding
 
@@ -323,6 +334,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Add `/wrap-up` prompt for post-testing release preflight: mark completed todo items, run `mds doctor --ci`, review `git status`, and confirm intentionally omitted files before publish flow.
 - [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
 - [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
+- [ ] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
 - [x] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
 - [ ] Ensure the style guide is using the information in the style.md to generate the app and that the Stylist uses that theme on launch, even before the user has ever opened the app or if they have. This will be from the Style.md that they added to the project/style.md.
 - [x] Go through generated exposition pages and fix any bugs.
@@ -354,14 +366,15 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 ### Branch: `dogfood-generator-and-ejection`
 - [ ] Fix the generated Expo Router `<Link asChild>`/`<Slot>` style-array crash in the Experimemo new-experiment screen by flattening the child style before it reaches `Slot`; add a generated-app regression check.
 - [ ] Add system light and dark mode to generated apps in the way that create expo app does, including Expo SDK 56 dark-mode splash configuration and assets; preserve both modes through exposition ejection.
+- [ ] Dogfood a generated app that does not select Uniwind and verify no Uniwind configuration, dependencies, or default styling behavior remains.
 - [ ] Add a Phase 0 styling reconciliation that confirms the chosen UI system, Expo UI/Universal Components/NativeTabs usage, and any style-library conflicts; persist the resulting component strategy in project memory so later agents can apply it without repeated clarification.
 - [ ] Do not implicitly select or retain Uniwind when it was not chosen; ensure generated configuration, dependencies, and defaults exactly match onboarding decisions.
 - [ ] Add an ejection inventory workflow that shows template and create-expo-app components, asks what to retain or eject, defaults to retaining components selected in project memory, and prevents recreated substitutes for retained components.
 - [ ] Generate a follow-up cleanup task after the app shell and core flows are complete, before polish/release, to remove unused or intentionally ejected components and packages.
 - [ ] Add a pre-release content pass that removes developer-facing notes and todos from user routes, keeps MDS guidance in project documentation or removable exposition routes, and makes remaining in-app copy user-facing.
 - [ ] Add an icon-release workflow before app-store preparation: accept a 1024x1024 master icon, generate platform assets through https://smartutilify.netlify.app/tools/icons-favicons, copy them into the project root with a dedicated script, and later automate platform-specific output from project info.
+- [ ] Confirm/add scripts from my other projects such as `generate-sitemap` for static builds, ensuring the sitemap rebuilds on every build; prefer an Expo-supported alternative when available. Include copy icons as well.
 - [ ] Use the completed Experimemo MVP changes as a generated-app regression fixture: user-facing production copy, Expo UI/NativeTabs, app icon, system dark mode, and store metadata links must survive Phase 0 and exposition ejection.
-
 
 ## MDS Library
 
@@ -389,10 +402,16 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 
 ### Create Expo Super Stack
 - [ ] Remove question about using the latest expo sdk from onboarding CLI. We are only going to use latest. We can have a note about it in the very beginning.
+- [ ] Add system light and dark mode to generated apps in the way that create expo app does, including Expo SDK 56 dark-mode splash configuration and assets; preserve both modes through exposition ejection.
 - [x] Add/edit the super stack/our create expo stack fork to use SDK 56
 - [x] GO through generated app info pages and fix any references that mismatch expo sdk 56.
 - [ ] Fix presentation view for modal on web after 56 update to be like a mobile modal instead of a full screen page.
 - [x] Use expo ui, native tabs, and other newly stable packages from expo in the generated app and exposition pages. Create and exposition page for expo sdk 56 including an inline expo module! add it to all layout generations.
+- [ ] Add a Phase 0 styling reconciliation that confirms the chosen UI system, Expo UI/Universal Components/NativeTabs usage, and any style-library conflicts; persist the resulting component strategy in project memory so later agents can apply it without repeated clarification.
+- [ ] Do not implicitly select or retain Uniwind when it was not chosen; ensure generated configuration, dependencies, and defaults exactly match onboarding decisions.
+- [ ] Add an ejection inventory workflow that shows template and create-expo-app components, asks what to retain or eject, defaults to retaining components selected in project memory, and prevents recreated substitutes for retained components.
+- [ ] Generate a follow-up cleanup task after the app shell and core flows are complete, before polish/release, to remove unused or intentionally ejected components and packages.
+- [ ] Add a pre-release content pass that removes developer-facing notes and todos from user routes, keeps MDS guidance in project documentation or removable exposition routes, and makes remaining in-app copy user-facing.
 - [ ] Add a list of commands that come with a generated project to the readme with short explanations of what they do and when to use them (already in progress, just update).
 - [ ] eject-stylist script
 - [ ] Add an 'eject-exposition' command (effectively what reset app by expo does but a little more interactive). This should be an interactive prompt like CESS that asks the user which parts of the exposition they want to reset. options to keep being: Onboarding Setup, Settings Page, Data Adapter, and Stylist. This would mean the eject stylist would have to be integrated into this command maybe... cause if the user already ejected stylist then they can't keep it so this script needs just check if the stylist has been ejected, if so, don't show it in the list. But the eject stylist script could still be useful for later ejecting it specifically. Edit the Phase 0 Section to Instruct the user to mark the tasks done if they have actually done them or if they want to defer, this really only applies to eject stylist since eject exposition has the option to keep things and should be run either way to complete phase 0. But of course they can do what they want to do.
@@ -400,9 +419,13 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] add the deferred MCP/slash wrapper for mds stylist eject (without changing CLI behavior). - couple with next task.
 - [ ] Ensure agentic onboarding aligns with everything in Create expo stack (forked) and create expo super stack and more.
 - [ ] Consider adding the following tools as part of the suite & optional usage: argent, radon IDE, npx serve sim. https://github.com/software-mansion/argent https://github.com/software-mansion/radon-ide https://github.com/EvanBacon/serve-sim
-- [ ] Confirm/add scripts from my other projects such as `generate-sitemap` for static builds, ensuring the sitemap rebuilds on every build; prefer an Expo-supported alternative when available. Include copy icons as well.
+- [ ] Add an icon-release workflow before app-store preparation: accept a 1024x1024 master icon, generate platform assets through https://smartutilify.netlify.app/tools/icons-favicons, copy them into the project root with a dedicated script, and later automate platform-specific output from project info.
+- [ ] Confirm/add scripts from my other projects such as `generate-sitemap` for static builds, ensuring the sitemap rebuilds on every build; prefer an Expo-supported alternative when available.
 - [ ] Modify clear-expo-start to also force close all applications on android because 9/10 times I press a to open on Android, nothing happens. 
 - [ ] Add expo-mcp local installation as an onboarding question and if the answer is yes, wire it up according to this: https://docs.expo.dev/eas/ai/mcp/#set-up-local-capabilities-recommended
+- [ ] Generate and configure a release CI workflow when GitHub and EAS credentials are available: `test` deploys to TestFlight, `main` deploys to EAS production, and the production workflow includes the Apple submission step.
+- [ ] Expand generated App Store Connect guidance with the complete prerequisite, credential, TestFlight, production-submission, and troubleshooting steps needed to finish the release flow.
+- [ ] Add generated release metadata tasks for a consistent public app name and configured support, terms-of-service, and privacy-policy URLs across app config and store submissions.
 - [ ] Fix this behavior (we want @latest): 
 ```
 ...

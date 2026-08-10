@@ -1,6 +1,6 @@
 {
   "name": "@mr.dj2u/library-registry",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed source-copy registry for reusable Expo components, screens, flows, and integrations",
   "type": "module",
   "repository": {
