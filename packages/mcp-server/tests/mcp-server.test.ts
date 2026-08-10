@@ -61,6 +61,7 @@ async function createLibraryTestProject(): Promise<string> {
     JSON.stringify(
       {
         compilerOptions: {
+          baseUrl: '.',
           paths: { '@/*': ['./src/*'] },
         },
       },

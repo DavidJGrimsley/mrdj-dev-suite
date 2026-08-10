@@ -68,6 +68,7 @@ export function LegalAgreementScreen({
     acceptDocument,
     hasAcceptedRequiredDocuments,
   } = useLegalAcceptance();
+  const canContinue = hasAcceptedRequiredDocuments && Boolean(onComplete);
 
   const closeModal = () => setActiveDocument(null);
   const acceptActiveDocument = () => {
@@ -101,19 +102,19 @@ export function LegalAgreementScreen({
 
       <Pressable
         accessibilityRole="button"
-        disabled={!hasAcceptedRequiredDocuments}
+        disabled={!canContinue}
         onPress={onComplete}
         style={[
           styles.continueButton,
           {
-            backgroundColor: hasAcceptedRequiredDocuments ? colors.primary : colors.surface,
+            backgroundColor: canContinue ? colors.primary : colors.surface,
             borderRadius: theme.layout.radius,
           },
         ]}>
         <Text
           style={[
             styles.continueButtonText,
-            { color: hasAcceptedRequiredDocuments ? '#ffffff' : colors.text },
+            { color: canContinue ? '#ffffff' : colors.text },
           ]}>
           {continueLabel}
         </Text>
