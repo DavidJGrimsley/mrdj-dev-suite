@@ -407,7 +407,10 @@ export async function applyLibraryAdd(
     }
     const rawContent = await readLibraryAsset(asset);
     const rendered = renderAssetContent(asset, rawContent, plan.context);
-    if (rendered.conflict || sha256(rendered.content) !== file.contentHash) {
+    if (
+      rendered.conflict ||
+      hashPlannedFileContent(rendered.content, asset.encoding) !== file.contentHash
+    ) {
       throw new Error(
         'Library add plan is stale because bundled asset content changed. Plan the add again.'
       );
@@ -507,7 +510,7 @@ async function planFiles(
     const safeDestination = await resolveSafeDestination(context.projectPath, asset.destination);
     const rawContent = await readLibraryAsset(asset);
     const rendered = renderAssetContent(asset, rawContent, context);
-    const contentHash = sha256(rendered.content);
+    const contentHash = hashPlannedFileContent(rendered.content, asset.encoding);
     const normalizedDestination = normalizeProjectRelativePath(asset.destination);
 
     if (!safeDestination) {
@@ -554,7 +557,7 @@ async function planFiles(
     let action: LibraryPlannedFileAction = 'create';
     let existingHash: string | undefined;
     if (existing.kind === 'file') {
-      existingHash = sha256(existing.content);
+      existingHash = hashPlannedFileContent(existing.content, asset.encoding);
       action = existingHash === contentHash ? 'skip-identical' : 'conflict';
       if (action === 'conflict') {
         conflicts.push({
@@ -1275,7 +1278,9 @@ async function detectNavigationLayout(
   }
   const layout = await readOptionalText(path.join(projectPath, appDirectory, '_layout.tsx'));
   if (/\bDrawer\b/.test(layout ?? '')) return 'drawer+tabs';
-  if (/\bTabs\b/.test(layout ?? '')) return 'tabs';
+  if (/\bTabs\b/.test(layout ?? '') || /<[A-Z][A-Za-z0-9_]*Tabs\b/.test(layout ?? '')) {
+    return 'tabs';
+  }
   return 'stack';
 }
 
@@ -1424,6 +1429,17 @@ function sortForStableSerialization(value: unknown): unknown {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entryValue]) => [key, sortForStableSerialization(entryValue)])
   );
+}
+
+function hashPlannedFileContent(content: Buffer, encoding: LibraryAsset['encoding']): string {
+  if (encoding === 'binary') {
+    return sha256(content);
+  }
+  return sha256(Buffer.from(normalizeTextLineEndings(content.toString('utf8')), 'utf8'));
+}
+
+function normalizeTextLineEndings(content: string): string {
+  return content.replace(/\r\n?/g, '\n');
 }
 
 function sha256(content: Buffer): string {

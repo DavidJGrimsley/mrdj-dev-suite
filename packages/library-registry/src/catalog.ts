@@ -432,6 +432,136 @@ const mdsItems: LibraryItem[] = [
     ],
   }),
   defineItem({
+    id: "mds/legal-documents",
+    name: "Legal documents",
+    description:
+      "Reusable terms and privacy content with public routes, modal review, settings links, and onboarding agreement surfaces.",
+    kind: "flow",
+    tags: [
+      "legal",
+      "terms",
+      "privacy",
+      "agreements",
+      "content-pages",
+      "onboarding",
+    ],
+    categories: ["legal", "content", "onboarding"],
+    compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    composedItems: ["mds/theme-support"],
+    relatedItems: ["mds/onboarding-preview", "mds/settings"],
+    variants: [
+      {
+        id: "public-routes",
+        name: "Public terms and privacy routes",
+        description:
+          "Adds /terms and /privacy Expo Router routes backed by the shared legal document source.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset("src/app/terms.tsx", "{{appDir}}/terms.tsx", "route"),
+          mdsAsset("src/app/privacy.tsx", "{{appDir}}/privacy.tsx", "route"),
+        ],
+        integration: [
+          "Register /terms and /privacy as public routes if your app has auth or hosted-route guards.",
+          "If the root Expo Router layout renders Tabs, NativeTabs, or a custom tab shell directly, move tabbed screens into a route group and render a root Stack or Slot so /terms and /privacy can render outside the tabs.",
+        ],
+      },
+      {
+        id: "viewer-only",
+        name: "Reusable viewer only",
+        description:
+          "Copies the legal content source, renderer, modal viewer, and acceptance hook without adding routes.",
+        integration: [
+          "Import LegalDocumentView or LegalDocumentModal from the copied legal feature files where the app needs a custom legal surface.",
+        ],
+      },
+      {
+        id: "onboarding-agreement",
+        name: "Onboarding agreement surface",
+        description:
+          "Adds a standalone onboarding legal-agreement route powered by the shared document viewer and local acceptance hook.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset(
+            "src/features/legal/legal-agreement-screen.tsx",
+            "{{featuresDir}}/legal/legal-agreement-screen.tsx",
+          ),
+          mdsAsset(
+            "src/app/onboarding/legal-agreement.tsx",
+            "{{appDir}}/onboarding/legal-agreement.tsx",
+            "route",
+          ),
+        ],
+        integration: [
+          "Wire the legal agreement route into the app's onboarding flow before routing to auth, profile setup, or the main app.",
+        ],
+      },
+      {
+        id: "settings-links",
+        name: "Settings or app-info links",
+        description:
+          "Adds reusable settings/app-info links plus public legal routes so users can open the documents from app chrome.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset(
+            "src/features/legal/legal-document-links.tsx",
+            "{{featuresDir}}/legal/legal-document-links.tsx",
+          ),
+          mdsAsset("src/app/terms.tsx", "{{appDir}}/terms.tsx", "route"),
+          mdsAsset("src/app/privacy.tsx", "{{appDir}}/privacy.tsx", "route"),
+        ],
+        integration: [
+          "Ask where the app should expose legal links, then render LegalDocumentLinks from the copied feature file in that settings or app-info surface.",
+        ],
+      },
+    ],
+    assets: [
+      mdsAsset(
+        "src/features/legal/legal-documents.ts",
+        "{{featuresDir}}/legal/legal-documents.ts",
+        "support",
+        ["__MDS_APP_NAME__"],
+      ),
+      mdsAsset(
+        "src/features/legal/legal-document-view.tsx",
+        "{{featuresDir}}/legal/legal-document-view.tsx",
+      ),
+      mdsAsset(
+        "src/features/legal/legal-page-route.tsx",
+        "{{featuresDir}}/legal/legal-page-route.tsx",
+      ),
+      mdsAsset(
+        "src/features/legal/legal-document-modal.tsx",
+        "{{featuresDir}}/legal/legal-document-modal.tsx",
+      ),
+      mdsAsset(
+        "src/features/legal/use-legal-acceptance.ts",
+        "{{featuresDir}}/legal/use-legal-acceptance.ts",
+        "support",
+      ),
+    ],
+    integration: {
+      summary:
+        "Copy the shared legal content source and render it through routes, modal review, settings links, or onboarding agreement surfaces.",
+      instructions: [
+        "Replace every placeholder legal section with documents reviewed for the app, jurisdiction, data practices, and business model.",
+        "Keep the terms and privacy content in the shared legal-documents source so public routes, modals, settings links, and onboarding review show the same copy.",
+        "If the app already has brand or theme colors, map the copied src/theme/tokens.ts palette to the app's existing light and dark colors, or pass color overrides into AppThemeProvider.",
+      ],
+      notes: [
+        "The bundled placeholder copy is not legal advice and must be reviewed before production.",
+        "The local acceptance hook is intentionally lightweight; replace or adapt it when onboarding needs persistence or backend audit records.",
+        "AppThemeProvider follows the system color scheme by default; pass scheme=\"light\", scheme=\"dark\", or scheme=\"preview\" when a screen needs a fixed theme.",
+      ],
+    },
+    preview: {
+      description:
+        "Terms and privacy documents that can render as public routes, modals, settings links, or onboarding review.",
+    },
+  }),
+  defineItem({
     id: "mds/onboarding-preview",
     name: "Onboarding preview flow",
     description:

@@ -7,6 +7,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react';
+import { useColorScheme } from 'react-native';
 
 import defaultThemeTokens, {
   type StylistColorPalette,
@@ -19,6 +20,11 @@ export type AppThemeValue = StylistThemeTokens & {
   activeColors: StylistColorPalette;
 };
 
+type AppThemeSchemePreference = StylistColorScheme | 'preview' | 'system';
+export type AppThemeColorOverrides = Partial<
+  Record<StylistColorScheme, Partial<StylistColorPalette>>
+>;
+
 const AppThemeContext = createContext<AppThemeValue>({
   ...defaultThemeTokens,
   activeScheme: defaultThemeTokens.colorSystem.previewScheme,
@@ -28,16 +34,45 @@ const AppThemeSetterContext = createContext<Dispatch<SetStateAction<StylistTheme
   null
 );
 
-export function AppThemeProvider({ children }: { children: ReactNode }) {
+function resolveActiveScheme(
+  theme: StylistThemeTokens,
+  systemScheme: ReturnType<typeof useColorScheme>,
+  preference: AppThemeSchemePreference,
+): StylistColorScheme {
+  if (preference === 'light' || preference === 'dark') {
+    return preference;
+  }
+  if (preference === 'system' && (systemScheme === 'light' || systemScheme === 'dark')) {
+    return systemScheme;
+  }
+  return theme.colorSystem.previewScheme;
+}
+
+export function AppThemeProvider({
+  children,
+  colors,
+  scheme = 'system',
+}: {
+  children: ReactNode;
+  colors?: AppThemeColorOverrides;
+  scheme?: AppThemeSchemePreference;
+}) {
   const [theme, setTheme] = useState<StylistThemeTokens>(defaultThemeTokens);
+  const systemScheme = useColorScheme();
   const value = useMemo<AppThemeValue>(() => {
-    const activeScheme = theme.colorSystem.previewScheme;
+    const activeScheme = resolveActiveScheme(theme, systemScheme, scheme);
+    const mergedColors = {
+      light: { ...theme.colors.light, ...colors?.light },
+      dark: { ...theme.colors.dark, ...colors?.dark },
+    };
+
     return {
       ...theme,
+      colors: mergedColors,
       activeScheme,
-      activeColors: theme.colors[activeScheme],
+      activeColors: mergedColors[activeScheme],
     };
-  }, [theme]);
+  }, [colors, scheme, systemScheme, theme]);
 
   return (
     <AppThemeSetterContext.Provider value={setTheme}>

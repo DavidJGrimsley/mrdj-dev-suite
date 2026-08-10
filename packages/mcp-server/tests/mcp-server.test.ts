@@ -34,6 +34,11 @@ async function createLibraryTestProject(): Promise<string> {
   await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'components'), { recursive: true });
   await writeFile(
+    path.join(projectPath, 'src', 'app', '_layout.tsx'),
+    "import { Stack } from 'expo-router';\nexport default function Layout() { return <Stack />; }\n",
+    'utf8'
+  );
+  await writeFile(
     path.join(projectPath, 'package.json'),
     JSON.stringify(
       {
@@ -41,9 +46,23 @@ async function createLibraryTestProject(): Promise<string> {
         private: true,
         dependencies: {
           expo: '~56.0.0',
-          'expo-router': '~6.0.0',
+          'expo-router': '~56.2.6',
           react: '19.1.0',
           'react-native': '0.81.0',
+        },
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  await writeFile(
+    path.join(projectPath, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          baseUrl: '.',
+          paths: { '@/*': ['./src/*'] },
         },
       },
       null,
@@ -168,6 +187,31 @@ describe('mds MCP helpers', () => {
     expect(resolution.item.id).toBe('swmansion/svg-mark');
     expect(resolution.compatible).toBe(true);
     expect(Array.isArray(resolution.issues)).toBe(true);
+
+    const legalSearch = (await executeTool('library_search', {
+      query: 'privacy terms',
+      projectPath,
+    })) as Array<{ id: string }>;
+    expect(legalSearch.some((item) => item.id === 'mds/legal-documents')).toBe(true);
+
+    const legalResolution = (await executeTool('library_get', {
+      id: 'mds/legal-documents',
+      projectPath,
+    })) as {
+      item: { id: string };
+      variant?: { id: string };
+      compatible: boolean;
+      assets: Array<{ destination: string }>;
+    };
+    expect(legalResolution.item.id).toBe('mds/legal-documents');
+    expect(legalResolution.compatible).toBe(true);
+    expect(legalResolution.variant?.id).toBe('public-routes');
+    expect(legalResolution.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: 'src/app/terms.tsx' }),
+        expect.objectContaining({ destination: 'src/app/privacy.tsx' }),
+      ])
+    );
   });
 
   it('throws the same unknown-item error as the CLI for library_get', async () => {
