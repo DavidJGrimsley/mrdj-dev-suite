@@ -75,7 +75,13 @@ describe("MDS Library catalog", () => {
 
     expect(summary).toMatchObject({ kind: "flow", source: { name: "mds" } });
     expect(summary).not.toHaveProperty("assets");
-    expect(item?.assets.length).toBeGreaterThan(2);
+    expect(item?.composedItems).toContain("mds/theme-support");
+    expect(item?.assets.length).toBeGreaterThanOrEqual(2);
+    expect(
+      item?.assets.some((asset) =>
+        asset.destination.includes("onboarding-colors"),
+      ),
+    ).toBe(false);
     expect(item?.variants.map((variant) => variant.id)).toEqual([
       "multi-screen",
       "multi-screen-with-legal",
@@ -437,10 +443,10 @@ describe("library resolution", () => {
           contentTokens: ["__MDS_APP_NAME__"],
         }),
         expect.objectContaining({
-          destination: "src/features/onboarding/welcome-screen.tsx",
+          destination: "src/theme/color-utils.ts",
         }),
         expect.objectContaining({
-          destination: "src/features/onboarding/onboarding-colors.ts",
+          destination: "src/features/onboarding/welcome-screen.tsx",
         }),
         expect.objectContaining({
           destination: "src/features/onboarding/features-screen.tsx",

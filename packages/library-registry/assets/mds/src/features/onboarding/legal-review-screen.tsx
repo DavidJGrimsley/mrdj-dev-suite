@@ -5,8 +5,8 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { LegalDocumentModal } from '../legal/legal-document-modal';
 import { getLegalDocument, type LegalDocumentId } from '../legal/legal-documents';
 import { useLegalAcceptance } from '../legal/use-legal-acceptance';
+import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
-import { getReadableTextColor } from './onboarding-colors';
 import { onboardingConfig } from './onboarding-config';
 
 const requiredDocuments: LegalDocumentId[] = ['terms', 'privacy'];

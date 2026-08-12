@@ -1,5 +1,6 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
 import { LegalDocumentView } from './legal-document-view';
 import { getLegalDocument, type LegalDocumentId } from './legal-documents';
@@ -10,33 +11,6 @@ interface LegalDocumentModalProps {
   onClose: () => void;
   onPrimaryAction?: () => void;
   primaryActionLabel?: string;
-}
-
-function hexToRgb(hexColor: string): { red: number; green: number; blue: number } | null {
-  const normalized = hexColor.trim().replace(/^#/, '');
-  if (!/^[\da-f]{6}$/i.test(normalized)) {
-    return null;
-  }
-
-  return {
-    red: Number.parseInt(normalized.slice(0, 2), 16),
-    green: Number.parseInt(normalized.slice(2, 4), 16),
-    blue: Number.parseInt(normalized.slice(4, 6), 16),
-  };
-}
-
-function getReadableTextColor(
-  backgroundColor: string,
-  darkText = '#111827',
-  lightText = '#ffffff',
-) {
-  const rgb = hexToRgb(backgroundColor);
-  if (!rgb) {
-    return lightText;
-  }
-
-  const luminance = (0.299 * rgb.red + 0.587 * rgb.green + 0.114 * rgb.blue) / 255;
-  return luminance > 0.62 ? darkText : lightText;
 }
 
 export function LegalDocumentModal({

@@ -268,6 +268,7 @@ const mdsItems: LibraryItem[] = [
     assets: [
       mdsAsset("src/theme/tokens.ts", "src/theme/tokens.ts", "support"),
       mdsAsset("src/theme/provider.tsx", "src/theme/provider.tsx", "support"),
+      mdsAsset("src/theme/color-utils.ts", "src/theme/color-utils.ts", "support"),
       mdsAsset(
         "src/theme/font-assets.ts",
         "src/theme/font-assets.ts",
@@ -685,11 +686,6 @@ const mdsItems: LibraryItem[] = [
       mdsAsset(
         "src/features/onboarding/welcome-screen.tsx",
         "{{featuresDir}}/onboarding/welcome-screen.tsx",
-      ),
-      mdsAsset(
-        "src/features/onboarding/onboarding-colors.ts",
-        "{{featuresDir}}/onboarding/onboarding-colors.ts",
-        "support",
       ),
       mdsAsset(
         "src/features/onboarding/features-screen.tsx",

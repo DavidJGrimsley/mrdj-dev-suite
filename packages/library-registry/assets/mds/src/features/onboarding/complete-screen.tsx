@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
-import { getReadableTextColor } from './onboarding-colors';
 import { onboardingConfig } from './onboarding-config';
 
 export default function OnboardingCompleteScreen() {
