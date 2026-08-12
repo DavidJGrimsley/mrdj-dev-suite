@@ -450,6 +450,9 @@ const mdsItems: LibraryItem[] = [
     ],
     categories: ["legal", "content", "onboarding"],
     compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
+    dependencies: [
+      runtime("react-native-safe-area-context", "~5.7.0", "expo"),
+    ],
     composedItems: ["mds/theme-support"],
     relatedItems: ["mds/onboarding", "mds/settings"],
     variants: [
@@ -588,7 +591,7 @@ const mdsItems: LibraryItem[] = [
       notes: [
         "The bundled placeholder copy is not legal advice and must be reviewed before production.",
         "The local acceptance hook is intentionally lightweight; replace or adapt it when onboarding needs persistence or backend audit records.",
-        "The legal update gate adapter defaults to lightweight local storage for generated demos; hosted apps should configure user-scoped backend persistence.",
+        "The legal update gate adapter defaults to browser localStorage with an in-memory fallback for generated demos; hosted apps should configure user-scoped backend persistence.",
         "AppThemeProvider follows the system color scheme by default; pass scheme=\"light\", scheme=\"dark\", or scheme=\"preview\" when a screen needs a fixed theme.",
       ],
     },

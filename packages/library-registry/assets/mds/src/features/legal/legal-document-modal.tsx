@@ -1,4 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
@@ -27,7 +28,7 @@ export function LegalDocumentModal({
 
   return (
     <Modal animationType="slide" presentationStyle="pageSheet" visible={visible}>
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { borderBottomColor: colors.surface }]}>
           <View style={styles.headerText}>
             <Text style={[styles.title, { color: colors.text }]}>{document.title}</Text>
@@ -66,7 +67,7 @@ export function LegalDocumentModal({
             </Text>
           </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

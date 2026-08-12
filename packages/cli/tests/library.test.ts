@@ -91,7 +91,12 @@ describe('MDS Library CLI services', () => {
 
     expect(plan.canApply).toBe(true);
     expect(plan.variant).toBe('public-routes');
-    expect(plan.commands).toEqual([]);
+    expect(plan.commands).toEqual([
+      expect.objectContaining({
+        display: 'pnpm exec expo install react-native-safe-area-context@~5.7.0',
+        dependencies: ['react-native-safe-area-context@~5.7.0'],
+      }),
+    ]);
     expect(plan.files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ destination: 'src/app/terms.tsx', role: 'route' }),

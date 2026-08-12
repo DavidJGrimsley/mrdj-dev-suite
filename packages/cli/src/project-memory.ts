@@ -231,10 +231,16 @@ function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers
     '  },',
   ].join('\n');
 
-  return source.replace(
-    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u,
-    replacement
-  );
+  const completionPattern =
+    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u;
+
+  if (!completionPattern.test(source)) {
+    throw new Error(
+      'Unable to update onboarding completion config; template did not match the expected completion block.',
+    );
+  }
+
+  return source.replace(completionPattern, replacement);
 }
 
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
