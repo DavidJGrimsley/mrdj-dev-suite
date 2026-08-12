@@ -32,6 +32,10 @@ export type CessStylingSystem =
   | 'stylesheet';
 export type CessStateManagement = 'zustand' | 'none';
 export type CessAuthBackend = 'none' | 'supabase' | 'firebase';
+export type CessOnboardingFlow = 'none' | 'multi-screen';
+export type CessLegalDocumentMode = 'none' | 'public-routes' | 'onboarding-agreement';
+export type CessOnboardingCompletionMode = 'enter-app' | 'auth' | 'account-setup' | 'custom';
+export type CessLegalUpdateGate = 'none' | 'material-required';
 export type CessIntakeStatus = 'question' | 'confirm' | 'ready' | 'blocked';
 
 export interface CessIntakeAnswers {
@@ -43,6 +47,10 @@ export interface CessIntakeAnswers {
   stylingSystem?: CessStylingSystem;
   stateManagement?: CessStateManagement;
   authBackend?: CessAuthBackend;
+  onboardingFlow?: CessOnboardingFlow;
+  legalDocumentMode?: CessLegalDocumentMode;
+  onboardingCompletionMode?: CessOnboardingCompletionMode;
+  legalUpdateGate?: CessLegalUpdateGate;
   easSetup?: boolean;
   displayAppName?: string;
   overview?: string;
@@ -158,6 +166,10 @@ const STACK_DEFAULTS = {
   stylingSystem: 'uniwind' as const,
   stateManagement: 'zustand' as const,
   authBackend: 'none' as const,
+  onboardingFlow: 'multi-screen' as const,
+  legalDocumentMode: 'none' as const,
+  onboardingCompletionMode: 'enter-app' as const,
+  legalUpdateGate: 'none' as const,
   easSetup: false,
 };
 
@@ -252,6 +264,72 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
       { value: 'firebase', label: 'Firebase' },
     ],
     defaultValue: () => STACK_DEFAULTS.authBackend,
+  },
+  {
+    id: 'onboardingFlow',
+    prompt: 'Add a reusable onboarding flow to the generated app?',
+    kind: 'single-select',
+    options: () => [
+      { value: 'multi-screen', label: 'Multi-screen', hint: 'Default starter flow' },
+      { value: 'none', label: 'None / decide later' },
+    ],
+    defaultValue: () => STACK_DEFAULTS.onboardingFlow,
+  },
+  {
+    id: 'legalDocumentMode',
+    prompt: 'How should generated legal documents be included?',
+    kind: 'single-select',
+    options: (context) =>
+      context.resolvedAnswers.onboardingFlow === 'none'
+        ? [
+            { value: 'none', label: 'None', hint: 'Default' },
+            { value: 'public-routes', label: 'Public routes', hint: 'Adds /terms and /privacy' },
+          ]
+        : [
+            { value: 'none', label: 'None', hint: 'Default' },
+            { value: 'public-routes', label: 'Public routes', hint: 'Adds /terms and /privacy' },
+            {
+              value: 'onboarding-agreement',
+              label: 'Onboarding agreement',
+              hint: 'Adds legal review inside onboarding',
+            },
+          ],
+    defaultValue: (context) =>
+      context.resolvedAnswers.onboardingFlow === 'none' &&
+      context.onboardAnswers.legalDocumentMode === 'onboarding-agreement'
+        ? 'none'
+        : context.onboardAnswers.legalDocumentMode,
+  },
+  {
+    id: 'onboardingCompletionMode',
+    prompt: 'Where should onboarding completion hand off?',
+    kind: 'single-select',
+    options: () => [
+      { value: 'enter-app', label: 'Enter app', hint: 'Default route /' },
+      { value: 'auth', label: 'Auth flow', hint: 'For the next auth branch to wire' },
+      { value: 'account-setup', label: 'Account setup', hint: 'Profile/setup handoff' },
+      { value: 'custom', label: 'Custom route', hint: 'Edit onboarding-config.ts' },
+    ],
+    defaultValue: (context) => context.onboardAnswers.onboardingCompletionMode,
+    shouldAsk: (context) => context.resolvedAnswers.onboardingFlow !== 'none',
+  },
+  {
+    id: 'legalUpdateGate',
+    prompt: 'Gate protected app routes when material legal documents need re-acceptance?',
+    kind: 'single-select',
+    options: () => [
+      { value: 'none', label: 'None', hint: 'Default' },
+      {
+        value: 'material-required',
+        label: 'Material updates only',
+        hint: 'Adds /legal/updates and a protected-route guard',
+      },
+    ],
+    defaultValue: (context) =>
+      context.resolvedAnswers.legalDocumentMode === 'none'
+        ? 'none'
+        : context.onboardAnswers.legalUpdateGate,
+    shouldAsk: (context) => context.resolvedAnswers.legalDocumentMode !== 'none',
   },
   {
     id: 'easSetup',
@@ -1009,6 +1087,76 @@ function inferAuthBackend(value: string): CessAuthBackend | undefined {
   return undefined;
 }
 
+function inferOnboardingFlow(value: string | undefined): CessOnboardingFlow | undefined {
+  const normalized = normalizeText(value)?.toLowerCase().replace(/[`]/gu, '');
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes('none') || normalized.includes('decide later') || normalized.includes('off')) {
+    return 'none';
+  }
+  if (normalized.includes('multi-screen') || normalized.includes('multiscreen') || normalized.includes('onboarding')) {
+    return 'multi-screen';
+  }
+  return undefined;
+}
+
+function inferLegalDocumentMode(value: string | undefined): CessLegalDocumentMode | undefined {
+  const normalized = normalizeText(value)?.toLowerCase().replace(/[`]/gu, '');
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes('none') || normalized.includes('off')) {
+    return 'none';
+  }
+  if (normalized.includes('onboarding') || normalized.includes('agreement')) {
+    return 'onboarding-agreement';
+  }
+  if (normalized.includes('public') || normalized.includes('/terms') || normalized.includes('privacy')) {
+    return 'public-routes';
+  }
+  return undefined;
+}
+
+function inferLegalUpdateGate(value: string | undefined): CessLegalUpdateGate | undefined {
+  const normalized = normalizeText(value)?.toLowerCase().replace(/[`]/gu, '');
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes('none') || normalized.includes('off')) {
+    return 'none';
+  }
+  if (
+    normalized.includes('material') ||
+    normalized.includes('reaccept') ||
+    normalized.includes('re-accept') ||
+    normalized.includes('legal update')
+  ) {
+    return 'material-required';
+  }
+  return undefined;
+}
+
+function inferOnboardingCompletionMode(value: string | undefined): CessOnboardingCompletionMode | undefined {
+  const normalized = normalizeText(value)?.toLowerCase().replace(/[`]/gu, '');
+  if (!normalized) {
+    return undefined;
+  }
+  if (normalized.includes('auth') || normalized.includes('sign in') || normalized.includes('sign-in')) {
+    return 'auth';
+  }
+  if (normalized.includes('account')) {
+    return 'account-setup';
+  }
+  if (normalized.includes('custom')) {
+    return 'custom';
+  }
+  if (normalized.includes('enter') || normalized.includes('app') || normalized === '/') {
+    return 'enter-app';
+  }
+  return undefined;
+}
+
 function extractPlatformDecisions(
   value: string,
   assignValue: (
@@ -1229,6 +1377,33 @@ function extractTechStackDecisions(
     assignValue('authBackend', 'none', 'Tech Stack & CESS Onboarding section', priority);
   }
 
+  const onboardingFlow = inferOnboardingFlow(extractKeyValue(value, 'Onboarding Flow'));
+  if (onboardingFlow) {
+    assignValue('onboardingFlow', onboardingFlow, 'Tech Stack & CESS Onboarding section', priority);
+  }
+
+  const legalDocumentMode = inferLegalDocumentMode(extractKeyValue(value, 'Legal Documents'));
+  if (legalDocumentMode) {
+    assignValue('legalDocumentMode', legalDocumentMode, 'Tech Stack & CESS Onboarding section', priority);
+  }
+
+  const onboardingCompletionMode = inferOnboardingCompletionMode(
+    extractKeyValue(value, 'Onboarding Completion')
+  );
+  if (onboardingCompletionMode) {
+    assignValue(
+      'onboardingCompletionMode',
+      onboardingCompletionMode,
+      'Tech Stack & CESS Onboarding section',
+      priority
+    );
+  }
+
+  const legalUpdateGate = inferLegalUpdateGate(extractKeyValue(value, 'Legal Update Gate'));
+  if (legalUpdateGate) {
+    assignValue('legalUpdateGate', legalUpdateGate, 'Tech Stack & CESS Onboarding section', priority);
+  }
+
   const dataCategories = extractKeyValue(value, 'Data Categories');
   if (dataCategories) {
     const inferredDataNeeds = inferDataNeedSelections(dataCategories);
@@ -1399,6 +1574,19 @@ function extractOnboardingDecisionLines(
       }
     } else if (loweredKey === 'data start') {
       assignValue('dataStart', inferDataStart(rawValue), 'Onboarding decisions', priority);
+    } else if (loweredKey === 'onboarding flow') {
+      assignValue('onboardingFlow', inferOnboardingFlow(rawValue), 'Onboarding decisions', priority);
+    } else if (loweredKey === 'legal documents') {
+      assignValue('legalDocumentMode', inferLegalDocumentMode(rawValue), 'Onboarding decisions', priority);
+    } else if (loweredKey === 'onboarding completion') {
+      assignValue(
+        'onboardingCompletionMode',
+        inferOnboardingCompletionMode(rawValue),
+        'Onboarding decisions',
+        priority
+      );
+    } else if (loweredKey === 'legal update gate') {
+      assignValue('legalUpdateGate', inferLegalUpdateGate(rawValue), 'Onboarding decisions', priority);
     } else if (loweredKey === 'test-to-main safeguards') {
       assignValue('testToMainSafeguards', parseBooleanValue(rawValue), 'Onboarding decisions', priority);
     }
@@ -1518,6 +1706,14 @@ function normalizeExtractedAnswerValue(
       return normalizeEnum(value, ['zustand', 'none']);
     case 'authBackend':
       return normalizeEnum(value, ['none', 'supabase', 'firebase']);
+    case 'onboardingFlow':
+      return normalizeEnum(value, ['none', 'multi-screen']);
+    case 'legalDocumentMode':
+      return normalizeEnum(value, ['none', 'public-routes', 'onboarding-agreement']);
+    case 'onboardingCompletionMode':
+      return normalizeEnum(value, ['enter-app', 'auth', 'account-setup', 'custom']);
+    case 'legalUpdateGate':
+      return normalizeEnum(value, ['none', 'material-required']);
     case 'platformStrategy':
       return normalizePlatformStrategyValue(value);
     case 'appDirectory':
@@ -1825,6 +2021,22 @@ export function normalizeCessIntakeAnswers(
   ]);
   normalized.stateManagement = normalizeEnum(answers.stateManagement, ['zustand', 'none']);
   normalized.authBackend = normalizeEnum(answers.authBackend, ['none', 'supabase', 'firebase']);
+  normalized.onboardingFlow = normalizeEnum(answers.onboardingFlow, ['none', 'multi-screen']);
+  normalized.legalDocumentMode = normalizeEnum(answers.legalDocumentMode, [
+    'none',
+    'public-routes',
+    'onboarding-agreement',
+  ]);
+  normalized.onboardingCompletionMode = normalizeEnum(answers.onboardingCompletionMode, [
+    'enter-app',
+    'auth',
+    'account-setup',
+    'custom',
+  ]);
+  normalized.legalUpdateGate = normalizeEnum(answers.legalUpdateGate, [
+    'none',
+    'material-required',
+  ]);
   normalized.easSetup = normalizeBoolean(answers.easSetup);
   normalized.displayAppName = normalizeText(answers.displayAppName);
   normalized.overview = normalizeText(answers.overview);
@@ -1962,6 +2174,10 @@ export function buildMdsFlags(
     `--mds-web-output=${onboardAnswers.webOutput}`,
     `--mds-deployed-server=${onboardAnswers.deployedServer}`,
     `--mds-data-start=${onboardAnswers.dataStart}`,
+    `--mds-onboarding-flow=${onboardAnswers.onboardingFlow}`,
+    `--mds-legal-documents=${onboardAnswers.legalDocumentMode}`,
+    `--mds-onboarding-completion=${onboardAnswers.onboardingCompletionMode}`,
+    `--mds-legal-update-gate=${onboardAnswers.legalUpdateGate}`,
     '--mds-yes',
   ];
 
@@ -2051,6 +2267,12 @@ export function buildCessSummaryLines(
     onboardAnswers.webOutput === 'none'
       ? 'web output: none'
       : `web output: ${onboardAnswers.webOutput}, deployed server: ${onboardAnswers.deployedServer}`;
+  const onboardingLine = [
+    `onboarding: ${onboardAnswers.onboardingFlow}`,
+    `legal documents: ${onboardAnswers.legalDocumentMode}`,
+    `completion: ${onboardAnswers.onboardingCompletionMode}`,
+    `legal update gate: ${onboardAnswers.legalUpdateGate}`,
+  ].join(', ');
 
   return [
     `app: ${onboardAnswers.appName} (folder: ${appName}) at ${parentDir}`,
@@ -2059,6 +2281,7 @@ export function buildCessSummaryLines(
     `core flows: ${onboardAnswers.coreFlows}`,
     platformLine,
     serverLine,
+    onboardingLine,
     `data start: ${onboardAnswers.dataStart}, test-to-main: ${onboardAnswers.testToMainSafeguards ? 'on' : 'off'}, guidelines template: ${answers.guidelinesTemplate === false ? 'off' : 'on'}, save defaults: ${answers.saveDefaults ? 'on' : 'off'}`,
   ];
 }
@@ -2073,6 +2296,21 @@ function buildResolvedCessAnswers(
   const targetPlatforms = currentAnswers.targetPlatforms ?? onboardAnswers.targetPlatforms;
   const usesExpoUi = currentAnswers.usesExpoUi ?? onboardAnswers.usesExpoUi;
   const screens = currentAnswers.screens === 'defer' ? '' : currentAnswers.screens;
+  const onboardingFlow =
+    currentAnswers.onboardingFlow ?? onboardAnswers.onboardingFlow ?? STACK_DEFAULTS.onboardingFlow;
+  const rawLegalDocumentMode =
+    currentAnswers.legalDocumentMode ?? onboardAnswers.legalDocumentMode ?? STACK_DEFAULTS.legalDocumentMode;
+  const rawLegalUpdateGate =
+    currentAnswers.legalUpdateGate ?? onboardAnswers.legalUpdateGate ?? STACK_DEFAULTS.legalUpdateGate;
+  const legalUpdateGate = rawLegalUpdateGate === 'material-required' ? 'material-required' : 'none';
+  const legalDocumentModeBeforeGate =
+    onboardingFlow === 'none' && rawLegalDocumentMode === 'onboarding-agreement'
+      ? 'none'
+      : rawLegalDocumentMode;
+  const legalDocumentMode =
+    legalUpdateGate === 'material-required' && legalDocumentModeBeforeGate === 'none'
+      ? 'public-routes'
+      : legalDocumentModeBeforeGate;
 
   return {
     confirmed: currentAnswers.confirmed === true,
@@ -2084,6 +2322,13 @@ function buildResolvedCessAnswers(
     stylingSystem: currentAnswers.stylingSystem ?? STACK_DEFAULTS.stylingSystem,
     stateManagement: currentAnswers.stateManagement ?? STACK_DEFAULTS.stateManagement,
     authBackend: currentAnswers.authBackend ?? STACK_DEFAULTS.authBackend,
+    onboardingFlow,
+    legalDocumentMode,
+    onboardingCompletionMode:
+      currentAnswers.onboardingCompletionMode ??
+      onboardAnswers.onboardingCompletionMode ??
+      STACK_DEFAULTS.onboardingCompletionMode,
+    legalUpdateGate,
     easSetup: currentAnswers.easSetup ?? STACK_DEFAULTS.easSetup,
     displayAppName: currentAnswers.displayAppName ?? appDisplayName ?? onboardAnswers.appName ?? appName,
     overview: currentAnswers.overview ?? onboardAnswers.overview,
@@ -2190,6 +2435,10 @@ function buildOnboardArgvFromCess(
     easUses: answers.easUses,
     guidelinesTemplate: answers.guidelinesTemplate,
     dataStart: answers.dataStart,
+    onboardingFlow: answers.onboardingFlow,
+    legalDocumentMode: answers.legalDocumentMode,
+    onboardingCompletionMode: answers.onboardingCompletionMode,
+    legalUpdateGate: answers.legalUpdateGate,
     testToMain: answers.testToMainSafeguards,
     saveDefaults: answers.saveDefaults,
     defaults: buildOnboardDefaultsFromCessAnswers(answers),

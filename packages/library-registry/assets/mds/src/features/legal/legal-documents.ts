@@ -12,6 +12,9 @@ export interface LegalDocument {
   summary: string;
   effectiveDate: string;
   lastUpdated: string;
+  acceptanceVersion: string;
+  requiresReacceptance: boolean;
+  changeSummary: string;
   sections: LegalDocumentSection[];
 }
 
@@ -26,6 +29,10 @@ export const legalDocuments: Record<LegalDocumentId, LegalDocument> = {
       'Starter terms for __MDS_APP_NAME__ with common sections your legal reviewer can replace.',
     effectiveDate: '2026-08-10',
     lastUpdated: '2026-08-10',
+    acceptanceVersion: '2026-08-10',
+    requiresReacceptance: true,
+    changeSummary:
+      'Initial material Terms of Service version that should be accepted before protected app access.',
     sections: [
       {
         id: 'acceptance',
@@ -84,6 +91,10 @@ export const legalDocuments: Record<LegalDocumentId, LegalDocument> = {
       'Starter privacy policy for __MDS_APP_NAME__ with common data and rights sections to replace.',
     effectiveDate: '2026-08-10',
     lastUpdated: '2026-08-10',
+    acceptanceVersion: '2026-08-10',
+    requiresReacceptance: true,
+    changeSummary:
+      'Initial material Privacy Policy version that should be accepted before protected app access.',
     sections: [
       {
         id: 'data-processed',

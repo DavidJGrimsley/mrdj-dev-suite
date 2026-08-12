@@ -201,6 +201,22 @@ async function main(): Promise<void> {
             describe: 'Initial data mode',
             choices: ['local', 'supabase'] as const,
           })
+          .option('onboarding-flow', {
+            describe: 'Generated onboarding flow',
+            choices: ['none', 'multi-screen'] as const,
+          })
+          .option('legal-document-mode', {
+            describe: 'Generated legal document surface',
+            choices: ['none', 'public-routes', 'onboarding-agreement'] as const,
+          })
+          .option('onboarding-completion-mode', {
+            describe: 'Where generated onboarding completion should hand off',
+            choices: ['enter-app', 'auth', 'account-setup', 'custom'] as const,
+          })
+          .option('legal-update-gate', {
+            describe: 'Gate protected app routes on material legal document updates',
+            choices: ['none', 'material-required'] as const,
+          })
           .option('test-to-main', {
             describe: 'Generate test-to-main release safeguards and PR checks',
             type: 'boolean',
@@ -647,6 +663,10 @@ async function main(): Promise<void> {
           })
           .option('variant', {
             describe: 'Resolve a specific library item variant',
+            type: 'string',
+          })
+          .option('placement', {
+            describe: 'Record where this library item should be surfaced or wired in',
             type: 'string',
           })
           .option('yes', {

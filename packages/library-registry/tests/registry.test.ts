@@ -46,7 +46,7 @@ describe("MDS Library catalog", () => {
     for (const id of [
       "swmansion/animated-pressable",
       "mds/legal-documents",
-      "mds/onboarding-preview",
+      "mds/onboarding",
       "mds/settings",
       "mds/stylist",
       "mds/data-local",
@@ -69,13 +69,17 @@ describe("MDS Library catalog", () => {
 
   it("returns summaries from list and full metadata from get", () => {
     const summary = listLibraryItems().find(
-      (item) => item.id === "mds/onboarding-preview",
+      (item) => item.id === "mds/onboarding",
     );
-    const item = getLibraryItem("mds/onboarding-preview");
+    const item = getLibraryItem("mds/onboarding");
 
     expect(summary).toMatchObject({ kind: "flow", source: { name: "mds" } });
     expect(summary).not.toHaveProperty("assets");
-    expect(item?.assets.length).toBeGreaterThan(5);
+    expect(item?.assets.length).toBeGreaterThan(2);
+    expect(item?.variants.map((variant) => variant.id)).toEqual([
+      "multi-screen",
+      "multi-screen-with-legal",
+    ]);
     expect(item?.integration.notes?.join(" ")).toContain(
       "does not implement authentication",
     );
@@ -95,7 +99,7 @@ describe("MDS Library catalog", () => {
     ).toBe(true);
     expect(
       listLibraryItems({ tags: ["eject:onboarding"] }).map((item) => item.id),
-    ).toEqual(["mds/onboarding-preview"]);
+    ).toEqual(["mds/onboarding"]);
     expect(
       listLibraryItems({ tags: ["legal", "privacy"] }).map((item) => item.id),
     ).toEqual(["mds/legal-documents"]);
@@ -225,7 +229,7 @@ describe("library resolution", () => {
       }),
     );
     expect(
-      resolveLibraryItem("mds/onboarding-preview", {
+      resolveLibraryItem("mds/onboarding", {
         ...routerContext,
         dependencies: { "expo-router": "~56.1.9" },
       }).issues,
@@ -294,9 +298,19 @@ describe("library resolution", () => {
       routerContext,
       { variant: "onboarding-agreement" },
     );
+    const updateGate = resolveLibraryItem("mds/legal-documents", routerContext, {
+      variant: "legal-update-gate",
+    });
 
     expect(legal.compatible).toBe(true);
     expect(legal.variant?.id).toBe("public-routes");
+    expect(getLibraryItem("mds/legal-documents")?.variants.map((variant) => variant.id)).toEqual([
+      "public-routes",
+      "viewer-only",
+      "onboarding-agreement",
+      "settings-links",
+      "legal-update-gate",
+    ]);
     expect(legal.items.map((item) => item.id)).toContain("mds/theme-support");
     expect(legal.items.at(-1)?.id).toBe("mds/legal-documents");
     expect(legal.dependencies).toContainEqual(
@@ -346,6 +360,20 @@ describe("library resolution", () => {
         }),
       ]),
     );
+    expect(updateGate.variant?.id).toBe("legal-update-gate");
+    expect(updateGate.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/app/legal/updates.tsx" }),
+        expect.objectContaining({
+          destination: "src/features/legal/legal-acceptance-adapter.ts",
+        }),
+        expect.objectContaining({
+          destination: "src/features/legal/legal-update-screen.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/terms.tsx" }),
+        expect.objectContaining({ destination: "src/app/privacy.tsx" }),
+      ]),
+    );
 
     const documentAsset = legal.assets.find(
       (asset) => asset.destination === "src/features/legal/legal-documents.ts",
@@ -356,6 +384,17 @@ describe("library resolution", () => {
     );
     expect(documentSource).toContain("not legal advice");
     expect(documentSource).toContain("__MDS_APP_NAME__");
+    expect(documentSource).toContain("acceptanceVersion");
+    expect(documentSource).toContain("requiresReacceptance");
+    expect(documentSource).toContain("changeSummary");
+
+    const updateScreenAsset = updateGate.assets.find(
+      (asset) => asset.destination === "src/features/legal/legal-update-screen.tsx",
+    );
+    expect(updateScreenAsset).toBeDefined();
+    const updateScreenSource = (await readLibraryAsset(updateScreenAsset!)).toString("utf8");
+    expect(updateScreenSource).toContain("Review required document updates");
+    expect(updateScreenSource).toContain("LegalDocumentModal");
 
     const providerAsset = legal.assets.find(
       (asset) => asset.destination === "src/theme/provider.tsx",
@@ -376,6 +415,93 @@ describe("library resolution", () => {
     expect(viewSource).toContain("alignItems: 'center'");
     expect(legal.integration).toContainEqual(
       expect.stringContaining("root Expo Router layout renders Tabs"),
+    );
+    expect(updateGate.integration).toContainEqual(
+      expect.stringContaining("Stack.Protected"),
+    );
+  });
+
+  it("resolves production onboarding variants", async () => {
+    const onboarding = resolveLibraryItem("mds/onboarding", routerContext);
+    const withLegal = resolveLibraryItem("mds/onboarding", routerContext, {
+      variant: "multi-screen-with-legal",
+    });
+
+    expect(onboarding.compatible).toBe(true);
+    expect(onboarding.variant?.id).toBe("multi-screen");
+    expect(onboarding.items.map((item) => item.id)).toContain("mds/theme-support");
+    expect(onboarding.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/onboarding/onboarding-config.ts",
+          contentTokens: ["__MDS_APP_NAME__"],
+        }),
+        expect.objectContaining({
+          destination: "src/features/onboarding/welcome-screen.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/onboarding/onboarding-colors.ts",
+        }),
+        expect.objectContaining({
+          destination: "src/features/onboarding/features-screen.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/onboarding.tsx" }),
+        expect.objectContaining({
+          destination: "src/app/onboarding/features.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/app/onboarding/complete.tsx",
+        }),
+      ]),
+    );
+    expect(
+      onboarding.assets.some((asset) =>
+        asset.destination.includes("account-setup"),
+      ),
+    ).toBe(false);
+    const featuresScreen = onboarding.assets.find(
+      (asset) => asset.destination === "src/features/onboarding/features-screen.tsx",
+    );
+    expect(featuresScreen).toBeDefined();
+    const featuresSource = (await readLibraryAsset(featuresScreen!)).toString("utf8");
+    expect(featuresSource).toContain("featureHighlights");
+    expect(featuresSource).not.toContain('accessibilityRole="checkbox"');
+    expect(featuresSource).not.toContain('accessibilityRole="radio"');
+
+    expect(withLegal.compatible).toBe(true);
+    expect(withLegal.variant?.id).toBe("multi-screen-with-legal");
+    expect(withLegal.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["mds/legal-documents", "mds/onboarding"]),
+    );
+    expect(withLegal.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/onboarding/legal-review-screen.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/onboarding/features-screen.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/legal/legal-document-modal.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/onboarding/features.tsx" }),
+        expect.objectContaining({ destination: "src/app/onboarding/legal.tsx" }),
+        expect.objectContaining({ destination: "src/app/terms.tsx" }),
+        expect.objectContaining({ destination: "src/app/privacy.tsx" }),
+      ]),
+    );
+    const legalReview = withLegal.assets.find(
+      (asset) => asset.destination === "src/features/onboarding/legal-review-screen.tsx",
+    );
+    expect(legalReview).toBeDefined();
+    expect((await readLibraryAsset(legalReview!)).toString("utf8")).toContain(
+      "../legal/legal-document-modal",
+    );
+    expect(withLegal.assets.some((asset) => asset.destination.includes("preferences"))).toBe(
+      false,
+    );
+    expect(withLegal.assets.some((asset) => asset.destination === "src/app/onboarding/complete.tsx")).toBe(
+      false,
     );
   });
 
@@ -468,7 +594,7 @@ describe("library resolution", () => {
   });
 
   it("requires the @ alias for alias-based MDS routes", () => {
-    const result = resolveLibraryItem("mds/onboarding-preview", {
+    const result = resolveLibraryItem("mds/onboarding", {
       ...routerContext,
       aliases: {},
     });

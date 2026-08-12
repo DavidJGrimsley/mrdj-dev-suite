@@ -144,6 +144,50 @@ describe('MDS Library CLI services', () => {
     expect(await readFile(customTermsRoute, 'utf8')).toBe(customizedSource);
   });
 
+  it('adds the legal update gate variant with route and adapter assets', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'mds/legal-documents', {
+      variant: 'legal-update-gate',
+    });
+
+    expect(plan.canApply).toBe(true);
+    expect(plan.variant).toBe('legal-update-gate');
+    expect(plan.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: 'src/app/legal/updates.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/app/terms.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/app/privacy.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/features/legal/legal-acceptance-adapter.ts' }),
+        expect.objectContaining({ destination: 'src/features/legal/legal-update-screen.tsx' }),
+      ])
+    );
+
+    const result = await applyLibraryAdd(projectPath, 'mds/legal-documents', {
+      confirmed: true,
+      installDependencies: false,
+      planHash: plan.planHash,
+      variant: 'legal-update-gate',
+    });
+    expect(result.writtenFiles).toEqual(
+      expect.arrayContaining([
+        'src/app/legal/updates.tsx',
+        'src/features/legal/legal-acceptance-adapter.ts',
+        'src/features/legal/legal-update-screen.tsx',
+      ])
+    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'), 'utf8')
+    ).resolves.toContain('LegalAcceptanceAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'), 'utf8')
+    ).resolves.toContain('requiresReacceptance');
+
+    const secondPlan = await planLibraryAdd(projectPath, 'mds/legal-documents', {
+      variant: 'legal-update-gate',
+    });
+    expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
+  });
+
   it('produces deterministic plans and exact dependency commands', async () => {
     const projectPath = await createExpoProject();
     const first = await planLibraryAdd(projectPath, 'swmansion/svg-mark');
@@ -425,26 +469,30 @@ describe('MDS Library CLI services', () => {
 
   it('restores a stack onboarding flow below src/app after exposition ejection', async () => {
     const projectPath = await createExpoProject();
-    const initialPlan = await planLibraryAdd(projectPath, 'mds/onboarding-preview');
-    await applyLibraryAdd(projectPath, 'mds/onboarding-preview', {
+    const initialPlan = await planLibraryAdd(projectPath, 'mds/onboarding');
+    await applyLibraryAdd(projectPath, 'mds/onboarding', {
       confirmed: true,
       planHash: initialPlan.planHash,
       installDependencies: false,
     });
     const routePath = path.join(projectPath, 'src', 'app', 'onboarding.tsx');
+    const featuresRoutePath = path.join(projectPath, 'src', 'app', 'onboarding', 'features.tsx');
     await expect(access(routePath)).resolves.toBeUndefined();
+    await expect(access(featuresRoutePath)).resolves.toBeUndefined();
 
     await ejectAll(projectPath);
     await expect(access(routePath)).rejects.toThrow();
+    await expect(access(featuresRoutePath)).rejects.toThrow();
 
-    const restorePlan = await planLibraryAdd(projectPath, 'mds/onboarding-preview');
+    const restorePlan = await planLibraryAdd(projectPath, 'mds/onboarding');
     expect(restorePlan.canApply).toBe(true);
-    await applyLibraryAdd(projectPath, 'mds/onboarding-preview', {
+    await applyLibraryAdd(projectPath, 'mds/onboarding', {
       confirmed: true,
       planHash: restorePlan.planHash,
       installDependencies: false,
     });
     await expect(access(routePath)).resolves.toBeUndefined();
+    await expect(access(featuresRoutePath)).resolves.toBeUndefined();
   });
 
   it('restores a tabs data flow below app after exposition ejection', async () => {

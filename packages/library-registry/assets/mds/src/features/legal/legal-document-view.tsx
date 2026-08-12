@@ -116,6 +116,7 @@ export function LegalDocumentView({
             <View style={styles.metaRow}>
               <LegalDocumentMeta label="Effective" value={document.effectiveDate} />
               <LegalDocumentMeta label="Last updated" value={document.lastUpdated} />
+              <LegalDocumentMeta label="Acceptance version" value={document.acceptanceVersion} />
             </View>
           </View>
         ) : null}

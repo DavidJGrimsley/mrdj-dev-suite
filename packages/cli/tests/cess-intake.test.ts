@@ -43,6 +43,10 @@ describe('CESS intake contract', () => {
         stylingSystem: 'uniwind',
         stateManagement: 'zustand',
         authBackend: 'none',
+        onboardingFlow: 'multi-screen',
+        legalDocumentMode: 'none',
+        onboardingCompletionMode: 'enter-app',
+        legalUpdateGate: 'none',
         easSetup: false,
         audience: 'People',
         coreFlows: 'Try the app',
@@ -158,6 +162,10 @@ describe('CESS intake contract', () => {
       '- Deployed server: no deployed server planned',
       '- Expo UI: yes',
       '- Expo Native Tabs: yes',
+      '- Onboarding flow: multi-screen',
+      '- Legal documents: onboarding-agreement',
+      '- Onboarding completion: auth',
+      '- Legal update gate: material-required',
       '- EAS usage: building mobile applications',
       '- Data start: local dummy data with Expo SQLite',
       '- Test-to-main safeguards: yes',
@@ -176,6 +184,10 @@ describe('CESS intake contract', () => {
     expect(extracted.prefilledAnswers.stylingSystem).toBe('uniwind');
     expect(extracted.prefilledAnswers.usesExpoUi).toBe(true);
     expect(extracted.prefilledAnswers.includeCreateExpoComponents).toBe(false);
+    expect(extracted.prefilledAnswers.onboardingFlow).toBe('multi-screen');
+    expect(extracted.prefilledAnswers.legalDocumentMode).toBe('onboarding-agreement');
+    expect(extracted.prefilledAnswers.onboardingCompletionMode).toBe('auth');
+    expect(extracted.prefilledAnswers.legalUpdateGate).toBe('material-required');
     expect(extracted.missingQuestionIds).not.toContain('audience');
     expect(extracted.ambiguousQuestionIds).toEqual([]);
   });
@@ -234,6 +246,10 @@ describe('CESS intake contract', () => {
       '- Which Software Mansion packages: All',
       '- State management library: None',
       '- Auth: None',
+      '- Onboarding Flow: multi-screen',
+      '- Legal Documents: public-routes',
+      '- Onboarding Completion: account-setup',
+      '- Legal Update Gate: material-required',
       '- Data Categories: Local UI/app state, image uploads',
       '- Starting Data mode: local dummy data with Expo SQLite.',
       '',
@@ -274,6 +290,10 @@ describe('CESS intake contract', () => {
     expect(extracted.prefilledAnswers.usesExpoNativeTabs).toBe(true);
     expect(extracted.prefilledAnswers.stateManagement).toBe('none');
     expect(extracted.prefilledAnswers.authBackend).toBe('none');
+    expect(extracted.prefilledAnswers.onboardingFlow).toBe('multi-screen');
+    expect(extracted.prefilledAnswers.legalDocumentMode).toBe('public-routes');
+    expect(extracted.prefilledAnswers.onboardingCompletionMode).toBe('account-setup');
+    expect(extracted.prefilledAnswers.legalUpdateGate).toBe('material-required');
     expect(extracted.prefilledAnswers.dataNeedSelections).toEqual([
       'Local UI/app state',
       'File/image uploads or storage',
@@ -568,6 +588,10 @@ describe('CESS intake contract', () => {
       stylingSystem: 'uniwind',
       stateManagement: 'zustand',
       authBackend: 'supabase',
+      onboardingFlow: 'multi-screen',
+      legalDocumentMode: 'onboarding-agreement',
+      onboardingCompletionMode: 'auth',
+      legalUpdateGate: 'material-required',
       easSetup: true,
       displayAppName: 'Demo App',
       audience: 'Designers making hats',
@@ -601,6 +625,9 @@ describe('CESS intake contract', () => {
 
     expect(confirmStep.status).toBe('confirm');
     expect(confirmStep.summaryLines?.[0]).toContain('demo-app');
+    expect(confirmStep.summaryLines).toContain(
+      'onboarding: multi-screen, legal documents: onboarding-agreement, completion: auth, legal update gate: material-required'
+    );
 
     const readyStep = buildCessIntakeStep({
       parentDir: 'F:/ReactNativeApps',
@@ -627,6 +654,10 @@ describe('CESS intake contract', () => {
         stylingSystem: 'nativewindui',
         stateManagement: 'zustand',
         authBackend: 'firebase',
+        onboardingFlow: 'multi-screen',
+        legalDocumentMode: 'public-routes',
+        onboardingCompletionMode: 'account-setup',
+        legalUpdateGate: 'material-required',
         easSetup: false,
         displayAppName: 'Demo App',
         overview: 'Demo overview\nwith a second line',
@@ -677,6 +708,10 @@ describe('CESS intake contract', () => {
     const argv = buildCreateExpoSuperStackArgv(plan);
     expect(plan.onboardAnswers.defaults).toContain('nativewindui');
     expect(plan.onboardAnswers.defaults).not.toContain('uniwind');
+    expect(plan.onboardAnswers.onboardingFlow).toBe('multi-screen');
+    expect(plan.onboardAnswers.legalDocumentMode).toBe('public-routes');
+    expect(plan.onboardAnswers.onboardingCompletionMode).toBe('account-setup');
+    expect(plan.onboardAnswers.legalUpdateGate).toBe('material-required');
     expect(argv).toContain('--mds-no-guidelines-template');
     expect(argv).toContain('--mds-no-expo-ui');
     expect(argv).toContain('--mds-no-test-to-main');
@@ -693,6 +728,10 @@ describe('CESS intake contract', () => {
     expect(argv).toContain('--mds-later-scope=Marketplace later.');
     expect(argv).toContain('--mds-research-notes=Customer notes live in Drive.');
     expect(argv).toContain('--mds-deployment-target=Internal preview');
+    expect(argv).toContain('--mds-onboarding-flow=multi-screen');
+    expect(argv).toContain('--mds-legal-documents=public-routes');
+    expect(argv).toContain('--mds-onboarding-completion=account-setup');
+    expect(argv).toContain('--mds-legal-update-gate=material-required');
     expect(argv.every((arg) => !arg.includes('\n') && !arg.includes('\r'))).toBe(true);
   });
 

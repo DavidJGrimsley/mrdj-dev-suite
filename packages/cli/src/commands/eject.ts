@@ -40,6 +40,20 @@ const KEEP_KEY_LABEL: Record<ExpositionKeepKey, string> = {
 };
 
 const ALL_KEEP_KEYS: ExpositionKeepKey[] = ['onboarding', 'settings', 'data', 'stylist'];
+const LEGACY_ONBOARDING_PREVIEW_DESTINATIONS = [
+  '{{featuresDir}}/onboarding/onboarding-screen.tsx',
+  '{{featuresDir}}/onboarding/agreement-screen.tsx',
+  '{{featuresDir}}/onboarding/terms-screen.tsx',
+  '{{featuresDir}}/onboarding/account-setup-screen.tsx',
+  '{{featuresDir}}/onboarding/legal-documents.ts',
+  '{{featuresDir}}/onboarding/components/legal-document-view.tsx',
+  '{{featuresDir}}/onboarding/preferences-screen.tsx',
+  '{{appDir}}/onboarding.tsx',
+  '{{appDir}}/onboarding/agreement.tsx',
+  '{{appDir}}/onboarding/terms.tsx',
+  '{{appDir}}/onboarding/account-setup.tsx',
+  '{{appDir}}/onboarding/preferences.tsx',
+] as const;
 
 export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
@@ -204,7 +218,10 @@ async function hasStylistArtifacts(projectPath: string): Promise<boolean> {
 }
 
 async function removeOnboardingSetup(projectPath: string): Promise<string[]> {
-  return removeExistingFiles(libraryFilesForTag(projectPath, 'eject:onboarding'));
+  return removeExistingFiles([
+    ...libraryFilesForTag(projectPath, 'eject:onboarding'),
+    ...libraryFilesForDestinations(projectPath, LEGACY_ONBOARDING_PREVIEW_DESTINATIONS),
+  ]);
 }
 
 async function removeSettingsSetup(projectPath: string): Promise<string[]> {
@@ -313,6 +330,10 @@ async function removeReferencesForRemovedGroups(
   for (const filePath of layoutFiles) {
     if (!keep.includes('onboarding')) {
       await removeLineContaining(filePath, 'name="onboarding"');
+      await removeLineContaining(filePath, 'name="onboarding/legal"');
+      await removeLineContaining(filePath, 'name="onboarding/features"');
+      await removeLineContaining(filePath, 'name="onboarding/preferences"');
+      await removeLineContaining(filePath, 'name="onboarding/complete"');
       await removeLineContaining(filePath, 'name="onboarding/agreement"');
       await removeLineContaining(filePath, 'name="onboarding/terms"');
       await removeLineContaining(filePath, 'name="onboarding/account-setup"');

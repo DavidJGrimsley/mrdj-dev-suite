@@ -435,7 +435,7 @@ const mdsItems: LibraryItem[] = [
     id: "mds/legal-documents",
     name: "Legal documents",
     description:
-      "Reusable terms and privacy content with public routes, modal review, settings links, and onboarding agreement surfaces.",
+      "Reusable terms and privacy content with public routes, modal review, settings links, onboarding agreement, and material update gate surfaces.",
     kind: "flow",
     tags: [
       "legal",
@@ -444,11 +444,13 @@ const mdsItems: LibraryItem[] = [
       "agreements",
       "content-pages",
       "onboarding",
+      "legal-update-gate",
+      "protected-routes",
     ],
     categories: ["legal", "content", "onboarding"],
     compatibility: { ...SDK_56, platforms: ALL_PLATFORMS },
     composedItems: ["mds/theme-support"],
-    relatedItems: ["mds/onboarding-preview", "mds/settings"],
+    relatedItems: ["mds/onboarding", "mds/settings"],
     variants: [
       {
         id: "public-routes",
@@ -516,6 +518,37 @@ const mdsItems: LibraryItem[] = [
           "Ask where the app should expose legal links, then render LegalDocumentLinks from the copied feature file in that settings or app-info surface.",
         ],
       },
+      {
+        id: "legal-update-gate",
+        name: "Material update gate",
+        description:
+          "Adds /legal/updates for required legal re-acceptance before protected app content opens.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset("src/app/terms.tsx", "{{appDir}}/terms.tsx", "route"),
+          mdsAsset("src/app/privacy.tsx", "{{appDir}}/privacy.tsx", "route"),
+          mdsAsset(
+            "src/app/legal/updates.tsx",
+            "{{appDir}}/legal/updates.tsx",
+            "route",
+          ),
+          mdsAsset(
+            "src/features/legal/legal-acceptance-adapter.ts",
+            "{{featuresDir}}/legal/legal-acceptance-adapter.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/legal/legal-update-screen.tsx",
+            "{{featuresDir}}/legal/legal-update-screen.tsx",
+          ),
+        ],
+        integration: [
+          "Keep /terms, /privacy, and /legal/updates public, then wrap app routes in Stack.Protected or Tabs.Protected with a guard that includes legalGateStatus === \"complete\".",
+          "Replace the default localLegalAcceptanceAdapter with app-scoped persistence, such as Supabase user acceptance rows, before hosted production use.",
+          "Mark only material legal updates with requiresReacceptance: true; minor copy edits can update public documents without blocking app entry.",
+        ],
+      },
     ],
     assets: [
       mdsAsset(
@@ -548,11 +581,13 @@ const mdsItems: LibraryItem[] = [
       instructions: [
         "Replace every placeholder legal section with documents reviewed for the app, jurisdiction, data practices, and business model.",
         "Keep the terms and privacy content in the shared legal-documents source so public routes, modals, settings links, and onboarding review show the same copy.",
+        "Use the legal-update-gate variant when an authenticated app must block protected routes until current material document versions are accepted.",
         "If the app already has brand or theme colors, map the copied src/theme/tokens.ts palette to the app's existing light and dark colors, or pass color overrides into AppThemeProvider.",
       ],
       notes: [
         "The bundled placeholder copy is not legal advice and must be reviewed before production.",
         "The local acceptance hook is intentionally lightweight; replace or adapt it when onboarding needs persistence or backend audit records.",
+        "The legal update gate adapter defaults to lightweight local storage for generated demos; hosted apps should configure user-scoped backend persistence.",
         "AppThemeProvider follows the system color scheme by default; pass scheme=\"light\", scheme=\"dark\", or scheme=\"preview\" when a screen needs a fixed theme.",
       ],
     },
@@ -562,72 +597,120 @@ const mdsItems: LibraryItem[] = [
     },
   }),
   defineItem({
-    id: "mds/onboarding-preview",
-    name: "Onboarding preview flow",
+    id: "mds/onboarding",
+    name: "Onboarding flow",
     description:
-      "The current MDS legal-consent onboarding preview and explicit handoff to a future real account flow.",
+      "A reusable multi-screen onboarding flow with editable completion behavior and optional legal-document review.",
     kind: "flow",
-    tags: ["onboarding", "legal", "preview", "eject:onboarding"],
+    tags: ["onboarding", "multi-screen", "without-auth", "eject:onboarding"],
     categories: ["onboarding", "flows"],
     compatibility: SDK_56_ROUTER,
-    dependencies: [runtime("expo-router", "~56.2.6", "expo")],
-    relatedItems: ["mds/settings"],
+    composedItems: ["mds/theme-support"],
+    relatedItems: ["mds/legal-documents", "mds/settings"],
+    variants: [
+      {
+        id: "multi-screen",
+        name: "Multi-screen onboarding",
+        description:
+          "Adds welcome, feature highlights, and completion screens as Expo Router routes.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        assets: [
+          mdsAsset(
+            "src/features/onboarding/onboarding-config.ts",
+            "{{featuresDir}}/onboarding/onboarding-config.ts",
+            "support",
+            ["__MDS_APP_NAME__"],
+          ),
+          mdsAsset(
+            "src/features/onboarding/complete-screen.tsx",
+            "{{featuresDir}}/onboarding/complete-screen.tsx",
+          ),
+          mdsAsset("src/app/onboarding.tsx", "{{appDir}}/onboarding.tsx", "route"),
+          mdsAsset(
+            "src/app/onboarding/features.tsx",
+            "{{appDir}}/onboarding/features.tsx",
+            "route",
+          ),
+          mdsAsset(
+            "src/app/onboarding/complete.tsx",
+            "{{appDir}}/onboarding/complete.tsx",
+            "route",
+          ),
+        ],
+        integration: [
+          "Edit onboarding-config.ts to change copy, feature highlights, completion label, completion mode, and final route.",
+          "Wire completion into real app or session state when auth/profile persistence is available.",
+        ],
+      },
+      {
+        id: "multi-screen-with-legal",
+        name: "Multi-screen onboarding with legal review",
+        description:
+          "Adds welcome, feature highlights, and a final legal review step powered by mds/legal-documents.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+        composedItems: ["mds/legal-documents"],
+        assets: [
+          mdsAsset(
+            "src/features/onboarding/onboarding-config-with-legal.ts",
+            "{{featuresDir}}/onboarding/onboarding-config.ts",
+            "support",
+            ["__MDS_APP_NAME__"],
+          ),
+          mdsAsset(
+            "src/features/onboarding/legal-review-screen.tsx",
+            "{{featuresDir}}/onboarding/legal-review-screen.tsx",
+          ),
+          mdsAsset("src/app/onboarding.tsx", "{{appDir}}/onboarding.tsx", "route"),
+          mdsAsset(
+            "src/app/onboarding/features.tsx",
+            "{{appDir}}/onboarding/features.tsx",
+            "route",
+          ),
+          mdsAsset(
+            "src/app/onboarding/legal.tsx",
+            "{{appDir}}/onboarding/legal.tsx",
+            "route",
+          ),
+        ],
+        integration: [
+          "Replace the placeholder legal content in mds/legal-documents before production release.",
+          "The onboarding legal screen imports the shared legal document modal and acceptance hook instead of duplicating legal copy.",
+          "Edit onboarding-config.ts to change the feature highlights, legal step copy, completion label, completion mode, and final route.",
+        ],
+      },
+    ],
     assets: [
       mdsAsset(
-        "src/features/onboarding/onboarding-screen.tsx",
-        "{{featuresDir}}/onboarding/onboarding-screen.tsx",
+        "src/features/onboarding/welcome-screen.tsx",
+        "{{featuresDir}}/onboarding/welcome-screen.tsx",
       ),
       mdsAsset(
-        "src/features/onboarding/agreement-screen.tsx",
-        "{{featuresDir}}/onboarding/agreement-screen.tsx",
-      ),
-      mdsAsset(
-        "src/features/onboarding/terms-screen.tsx",
-        "{{featuresDir}}/onboarding/terms-screen.tsx",
-      ),
-      mdsAsset(
-        "src/features/onboarding/account-setup-screen.tsx",
-        "{{featuresDir}}/onboarding/account-setup-screen.tsx",
-      ),
-      mdsAsset(
-        "src/features/onboarding/legal-documents.ts",
-        "{{featuresDir}}/onboarding/legal-documents.ts",
+        "src/features/onboarding/onboarding-colors.ts",
+        "{{featuresDir}}/onboarding/onboarding-colors.ts",
         "support",
       ),
       mdsAsset(
-        "src/features/onboarding/components/legal-document-view.tsx",
-        "{{featuresDir}}/onboarding/components/legal-document-view.tsx",
-        "support",
-      ),
-      mdsAsset("src/app/onboarding.tsx", "{{appDir}}/onboarding.tsx", "route"),
-      mdsAsset(
-        "src/app/onboarding/agreement.tsx",
-        "{{appDir}}/onboarding/agreement.tsx",
-        "route",
-      ),
-      mdsAsset(
-        "src/app/onboarding/terms.tsx",
-        "{{appDir}}/onboarding/terms.tsx",
-        "route",
-      ),
-      mdsAsset(
-        "src/app/onboarding/account-setup.tsx",
-        "{{appDir}}/onboarding/account-setup.tsx",
-        "route",
+        "src/features/onboarding/features-screen.tsx",
+        "{{featuresDir}}/onboarding/features-screen.tsx",
       ),
     ],
     integration: {
-      summary: "Add the generated onboarding routes to an Expo Router stack.",
+      summary: "Add production onboarding routes to an Expo Router stack.",
       instructions: [
-        "Review and replace every bracketed legal placeholder with counsel before production.",
-        "Replace the account-setup handoff with the application’s separately implemented auth flow.",
+        "Start users at /onboarding, then replace or extend the copied screens as the product flow matures.",
+        "Keep onboarding completion lightweight until the auth/profile branch wires the final route into real state.",
       ],
       notes: [
-        "This item is a preview flow and does not implement authentication.",
+        "This flow does not implement authentication or persisted onboarding state.",
+        "Preference/profile intake is intentionally omitted until the app can store the responses or change behavior from them.",
+        "Use a with-legal variant when onboarding needs legal review from mds/legal-documents.",
       ],
     },
     preview: {
-      description: "Legal consent, terms review, and account-flow handoff.",
+      description:
+        "Welcome, feature highlights, optional legal review, and editable completion handoff.",
     },
   }),
   defineItem({
@@ -659,7 +742,7 @@ const mdsItems: LibraryItem[] = [
       },
     ],
     composedItems: ["swmansion/keyboard-form", "mds/theme-support"],
-    relatedItems: ["mds/onboarding-preview"],
+    relatedItems: ["mds/onboarding"],
     assets: [
       mdsAsset(
         "src/features/settings/settings-screen.tsx",

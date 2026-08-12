@@ -1,4 +1,4 @@
-import { confirm, isCancel } from '@clack/prompts';
+import { confirm, isCancel, select, text } from '@clack/prompts';
 import chalk from 'chalk';
 
 import {
@@ -40,8 +40,11 @@ export interface LibraryAddArgv {
   noInstall?: boolean;
   install?: boolean;
   variant?: string;
+  placement?: string;
   json?: boolean;
 }
+
+const PROMPT_CANCELLED = Symbol('prompt-cancelled');
 
 export async function getLibraryListResult(
   argv: LibraryListArgv
@@ -174,7 +177,14 @@ export async function runLibraryAddCommand(argv: LibraryAddArgv): Promise<void> 
     throw new Error('mds library add requires an item id.');
   }
   const projectPath = argv.path ?? '.';
-  const plan = await planLibraryAdd(projectPath, argv.id, { variant: argv.variant });
+  const selectedVariant = await promptLibraryAddVariant(argv);
+  if (selectedVariant === PROMPT_CANCELLED) {
+    printLibraryAddCancelled(argv.json);
+    return;
+  }
+
+  const variant = selectedVariant ?? argv.variant;
+  const plan = await planLibraryAdd(projectPath, argv.id, { variant });
 
   if (argv.dryRun) {
     printLibraryAddPlan(plan, argv.json);
@@ -187,23 +197,25 @@ export async function runLibraryAddCommand(argv: LibraryAddArgv): Promise<void> 
     return;
   }
 
-  const confirmed = argv.yes || (await confirmLibraryAdd(plan));
+  const placement = await promptLibraryAddPlacement(argv, plan);
+  if (placement === PROMPT_CANCELLED) {
+    printLibraryAddCancelled(argv.json, plan.planHash);
+    return;
+  }
+
+  const confirmed = argv.yes || (await confirmLibraryAdd(plan, placement));
   if (!confirmed) {
-    if (argv.json) {
-      console.log(JSON.stringify({ cancelled: true, planHash: plan.planHash }, null, 2));
-    } else {
-      console.log(chalk.yellow('Library add cancelled. No files were written.'));
-    }
+    printLibraryAddCancelled(argv.json, plan.planHash);
     return;
   }
 
   const result = await applyLibraryAdd(projectPath, argv.id, {
     confirmed: true,
     planHash: plan.planHash,
-    variant: argv.variant,
+    variant,
     installDependencies: argv.install !== false && !argv.noInstall,
   });
-  printLibraryAddResult(result, argv.json);
+  printLibraryAddResult(result, argv.json, placement);
 }
 
 function printLibraryAddPlan(plan: LibraryAddPlan, json = false): void {
@@ -213,6 +225,7 @@ function printLibraryAddPlan(plan: LibraryAddPlan, json = false): void {
   }
   console.log(chalk.bold(`mds library add ${plan.id} (dry run)`));
   console.log(chalk.dim(plan.projectPath));
+  if (plan.variant) console.log(`Variant: ${plan.variant}`);
   console.log(`Plan hash: ${plan.planHash}`);
   console.log();
   for (const file of plan.files) {
@@ -238,13 +251,18 @@ function printLibraryAddPlan(plan: LibraryAddPlan, json = false): void {
   }
 }
 
-function printLibraryAddResult(result: LibraryAddResult, json = false): void {
+function printLibraryAddResult(result: LibraryAddResult, json = false, placement?: string): void {
   if (json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify(placement ? { ...result, placement } : result, null, 2));
     return;
   }
   console.log(chalk.bold(`mds library add ${result.id}`));
   console.log(chalk.dim(result.projectPath));
+  if (result.variant) console.log(`Variant: ${result.variant}`);
+  if (placement) {
+    console.log(chalk.bold('Requested placement'));
+    console.log(`- ${placement}`);
+  }
   for (const file of result.writtenFiles) console.log(`${chalk.green('CREATED')} ${file}`);
   for (const file of result.skippedFiles) console.log(`${chalk.gray('SKIPPED')} ${file} (identical)`);
   for (const command of result.executedCommands) console.log(`${chalk.green('RAN')} ${command}`);
@@ -264,12 +282,69 @@ function printLibraryAddResult(result: LibraryAddResult, json = false): void {
   }
 }
 
-async function confirmLibraryAdd(plan: LibraryAddPlan): Promise<boolean> {
+function printLibraryAddCancelled(json = false, planHash?: string): void {
+  if (json) {
+    console.log(JSON.stringify({ cancelled: true, ...(planHash ? { planHash } : {}) }, null, 2));
+    return;
+  }
+  console.log(chalk.yellow('Library add cancelled. No files were written.'));
+}
+
+function canPromptLibraryAdd(argv: LibraryAddArgv): boolean {
+  return Boolean(!argv.yes && !argv.dryRun && !argv.json && process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function promptLibraryAddVariant(argv: LibraryAddArgv): Promise<string | undefined | typeof PROMPT_CANCELLED> {
+  if (!canPromptLibraryAdd(argv) || argv.variant || !argv.id) {
+    return argv.variant;
+  }
+
+  const item = getLibraryItem(argv.id);
+  if (!item || item.variants.length <= 1) {
+    return undefined;
+  }
+
+  const answer = await select<string>({
+    message: `Which ${argv.id} variant should be added?`,
+    options: item.variants.map((variant) => ({
+      value: variant.id,
+      label: variant.name,
+      hint: variant.description,
+    })),
+    initialValue: item.variants[0]?.id,
+  });
+
+  return isCancel(answer) ? PROMPT_CANCELLED : answer;
+}
+
+async function promptLibraryAddPlacement(
+  argv: LibraryAddArgv,
+  plan: LibraryAddPlan
+): Promise<string | undefined | typeof PROMPT_CANCELLED> {
+  const placement = argv.placement?.trim();
+  if (placement) {
+    return placement;
+  }
+  if (!canPromptLibraryAdd(argv) || plan.placementGuidance.length === 0) {
+    return undefined;
+  }
+
+  const answer = await text({
+    message: `Where should ${plan.id} be surfaced or wired in?`,
+    placeholder: 'e.g. /onboarding, landing hero, settings menu',
+    validate: (value) =>
+      value.trim().length > 0 ? undefined : 'Describe the route, screen, or surface.',
+  });
+
+  return isCancel(answer) ? PROMPT_CANCELLED : answer.trim();
+}
+
+async function confirmLibraryAdd(plan: LibraryAddPlan, placement?: string): Promise<boolean> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error('Non-interactive library add requires --yes. Use --dry-run to inspect first.');
   }
   const answer = await confirm({
-    message: `Copy ${plan.files.filter((file) => file.action === 'create').length} file(s) and run ${plan.commands.length} dependency command(s)?`,
+    message: `Copy ${plan.files.filter((file) => file.action === 'create').length} file(s) and run ${plan.commands.length} dependency command(s)${placement ? ` for ${placement}` : ''}?`,
     initialValue: false,
   });
   return !isCancel(answer) && answer;
