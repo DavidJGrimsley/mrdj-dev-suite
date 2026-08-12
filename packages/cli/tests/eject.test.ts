@@ -39,6 +39,12 @@ describe('runEjectExpositionCommand', () => {
     await mkdir(path.join(projectPath, 'src', 'services'), { recursive: true });
 
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'preferences-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'legal-review-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'), 'export {};\n', 'utf8');
@@ -59,6 +65,10 @@ describe('runEjectExpositionCommand', () => {
     await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'agreement.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'terms.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'account-setup.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'features.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'preferences.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'complete.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'legal.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'app', 'settings.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'data.tsx'), 'export {};\n', 'utf8');
     await writeFile(path.join(projectPath, 'src', 'app', 'exposition', 'stylist.tsx'), 'export {};\n', 'utf8');
@@ -68,6 +78,10 @@ describe('runEjectExpositionCommand', () => {
       path.join(projectPath, 'src', 'app', '_layout.tsx'),
       [
         '<Stack.Screen name="onboarding" />',
+        '<Stack.Screen name="onboarding/features" />',
+        '<Stack.Screen name="onboarding/preferences" />',
+        '<Stack.Screen name="onboarding/complete" />',
+        '<Stack.Screen name="onboarding/legal" />',
         '<Stack.Screen name="settings" />',
         '<Stack.Screen name="exposition/stylist" />',
         '<Stack.Screen name="exposition/data" />',
@@ -107,6 +121,9 @@ describe('runEjectExpositionCommand', () => {
     await runEjectExpositionCommand({ path: projectPath, keep: 'onboarding,settings' });
 
     await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'src', 'app', 'onboarding', 'features.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'src', 'app', 'onboarding', 'preferences.tsx'))).resolves.toBeUndefined();
     await expect(access(path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'))).resolves.toBeUndefined();
     await expect(access(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'src', 'data', 'mock-app.ts'))).rejects.toThrow();
@@ -117,6 +134,7 @@ describe('runEjectExpositionCommand', () => {
 
     const layout = await readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8');
     expect(layout).toContain('name="onboarding"');
+    expect(layout).toContain('name="onboarding/features"');
     expect(layout).toContain('name="settings"');
     expect(layout).not.toContain('name="exposition/data"');
     expect(layout).not.toContain('name="exposition/stylist"');
@@ -136,6 +154,58 @@ describe('runEjectExpositionCommand', () => {
 
     const home = await readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8');
     expect(home).not.toContain('/exposition/stylist');
+  });
+
+  it('removes production onboarding files and legacy preview leftovers when onboarding is not kept', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-onboarding-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'features', 'onboarding', 'components'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'onboarding'), { recursive: true });
+
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'preferences-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'features', 'onboarding', 'components', 'legal-document-view.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'features.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'preferences.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'complete.tsx'), 'export {};\n', 'utf8');
+    await writeFile(path.join(projectPath, 'src', 'app', 'onboarding', 'account-setup.tsx'), 'export {};\n', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      [
+        '<Stack.Screen name="onboarding" />',
+        '<Stack.Screen name="onboarding/features" />',
+        '<Stack.Screen name="onboarding/preferences" />',
+        '<Stack.Screen name="onboarding/complete" />',
+        '<Stack.Screen name="onboarding/account-setup" />',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+      '<Link href="/onboarding" asChild>\n</Link>\n',
+      'utf8'
+    );
+
+    await runEjectExpositionCommand({ path: projectPath, all: true });
+
+    await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'app', 'onboarding', 'features.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'app', 'onboarding', 'preferences.tsx'))).rejects.toThrow();
+    await expect(access(path.join(projectPath, 'src', 'app', 'onboarding', 'account-setup.tsx'))).rejects.toThrow();
+    const layout = await readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8');
+    expect(layout).not.toContain('name="onboarding"');
+    const home = await readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8');
+    expect(home).not.toContain('/onboarding');
   });
 
   it('keeps settings dependencies and removes root-level exposition files', async () => {

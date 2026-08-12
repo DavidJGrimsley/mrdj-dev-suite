@@ -141,7 +141,7 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('Ask conversational follow-up questions');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
-    ).resolves.toContain('Onboarding preview');
+    ).resolves.toContain('Onboarding');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
     ).resolves.toContain('flexGrow: 1');
@@ -512,55 +512,55 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('settings-screen');
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'),
         'utf8'
       )
-    ).resolves.toContain('Legal onboarding');
+    ).resolves.toContain('onboardingConfig.welcomeTitle');
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'),
         'utf8'
       )
     ).resolves.not.toContain('Continue to home');
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
         'utf8'
       )
-    ).resolves.toContain('LegalDocumentView');
+    ).resolves.toContain("mode: 'enter-app'");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('featureHighlights');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('onboardingConfig.completion');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
         'utf8'
       )
-    ).resolves.toContain('Account setup');
-    await expect(
-      readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
-        'utf8'
-      )
-    ).resolves.toContain('Continue to home');
-    await expect(
-      readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
-        'utf8'
-      )
-    ).resolves.toContain("router.replace('/')");
+    ).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'), 'utf8')
-    ).resolves.toContain('onboardingLegalDocuments.terms');
+    ).rejects.toThrow();
     await expect(
       readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
+        path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'),
         'utf8'
       )
-    ).resolves.toContain('/onboarding/account-setup');
+    ).resolves.toContain('nextRouteAfterWelcome');
     await expect(
-      readFile(path.join(projectPath, 'app', 'onboarding', 'agreement.tsx'), 'utf8')
-    ).resolves.toContain('agreement-screen');
+      readFile(path.join(projectPath, 'app', 'onboarding', 'features.tsx'), 'utf8')
+    ).resolves.toContain('features-screen');
     await expect(
-      readFile(path.join(projectPath, 'app', 'onboarding', 'account-setup.tsx'), 'utf8')
-    ).resolves.toContain('account-setup-screen');
+      readFile(path.join(projectPath, 'app', 'onboarding', 'complete.tsx'), 'utf8')
+    ).resolves.toContain('complete-screen');
 
     const packageJson = JSON.parse(
       await readFile(path.join(projectPath, 'package.json'), 'utf8')
@@ -853,7 +853,7 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'global.css'), 'utf8')).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
-    ).resolves.toContain('Onboarding preview');
+    ).resolves.toContain('Onboarding');
   });
 
   it('can generate Expo Router exposition routes under src/app', async () => {
@@ -1124,6 +1124,51 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).rejects.toThrow();
+  });
+
+  it('generates a legal update gate route and protected app layout when selected', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-legal-gate-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'legal-gate-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Legal Gate App',
+      legalDocumentMode: 'none',
+      legalUpdateGate: 'material-required',
+    });
+
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '- Legal Documents: public-routes'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '- Legal Update Gate: material-required'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'app', 'legal', 'updates.tsx'), 'utf8')
+    ).resolves.toContain('legal-update-screen');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'), 'utf8')
+    ).resolves.toContain('LegalAcceptanceAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-update-screen.tsx'), 'utf8')
+    ).resolves.toContain('Review required document updates');
+    const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain("import { useLegalUpdateGateStatus } from '../src/features/legal/legal-acceptance-adapter';");
+    expect(rootLayout).toContain('<Stack.Screen name="legal/updates"');
+    expect(rootLayout).toContain('<Stack.Protected guard={legalGateStatus === "complete"}>');
+    expect(rootLayout).toContain('<Stack.Screen name="settings"');
   });
 
   it('generates the NativeWindUI exposition route when NativeWindUI is selected', async () => {
@@ -1409,6 +1454,10 @@ describe('runOnboardCommand', () => {
           usesExpoNativeTabs: false,
           includeCreateExpoComponents: true,
           dataStart: 'supabase',
+          onboardingFlow: 'multi-screen',
+          legalDocumentMode: 'public-routes',
+          onboardingCompletionMode: 'auth',
+          legalUpdateGate: 'none',
           testToMainSafeguards: true,
           easUses: ['hosting web apps', null],
         }),
@@ -1426,6 +1475,10 @@ describe('runOnboardCommand', () => {
         usesExpoNativeTabs: false,
         includeCreateExpoComponents: true,
         dataStart: 'supabase',
+        onboardingFlow: 'multi-screen',
+        legalDocumentMode: 'public-routes',
+        onboardingCompletionMode: 'auth',
+        legalUpdateGate: 'none',
         testToMainSafeguards: true,
         easUses: ['hosting web apps'],
       });
@@ -1488,6 +1541,10 @@ function sampleAnswers(appName: string): OnboardAnswers {
     appDirectory: 'root',
     platformLayoutMode: 'shared',
     dataStart: 'local',
+    onboardingFlow: 'multi-screen',
+    legalDocumentMode: 'none',
+    onboardingCompletionMode: 'enter-app',
+    legalUpdateGate: 'none',
     testToMainSafeguards: true,
     defaults: ['project-docs', 'guidelines', 'uniwind', 'doctor'],
   };

@@ -61,6 +61,10 @@ export interface OnboardArgv {
   easSelected?: boolean;
   easUses?: string | string[];
   dataStart?: 'local' | 'supabase';
+  onboardingFlow?: OnboardAnswers['onboardingFlow'];
+  legalDocumentMode?: OnboardAnswers['legalDocumentMode'];
+  onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
+  legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMain?: boolean;
   saveDefaults?: boolean;
 }
@@ -162,6 +166,10 @@ interface PersonalOnboardDefaults {
   usesExpoNativeTabs?: boolean;
   includeCreateExpoComponents?: boolean;
   dataStart?: OnboardAnswers['dataStart'];
+  onboardingFlow?: OnboardAnswers['onboardingFlow'];
+  legalDocumentMode?: OnboardAnswers['legalDocumentMode'];
+  onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
+  legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMainSafeguards?: boolean;
   easUses?: string[];
 }
@@ -390,6 +398,76 @@ export async function collectOnboardPlan(
       seed.dataStart,
       DATA_START_EXPLANATION
     ));
+  const onboardingFlow =
+    argv.onboardingFlow ??
+    (await askChoice(
+      'Add a reusable onboarding flow to the generated app?',
+      [
+        { value: 'multi-screen' as const, label: 'Multi-screen', hint: 'Default starter flow' },
+        { value: 'none' as const, label: 'None / decide later' },
+      ],
+      seed.onboardingFlow
+    ));
+  const legalDocumentOptions =
+    onboardingFlow === 'none'
+      ? [
+          { value: 'none' as const, label: 'None', hint: 'Default' },
+          { value: 'public-routes' as const, label: 'Public routes', hint: 'Adds /terms and /privacy' },
+        ]
+      : [
+          { value: 'none' as const, label: 'None', hint: 'Default' },
+          { value: 'public-routes' as const, label: 'Public routes', hint: 'Adds /terms and /privacy' },
+          {
+            value: 'onboarding-agreement' as const,
+            label: 'Onboarding agreement',
+            hint: 'Adds legal review inside onboarding',
+          },
+        ];
+  const seededLegalDocumentMode =
+    legalDocumentOptions.some((option) => option.value === seed.legalDocumentMode)
+      ? seed.legalDocumentMode
+      : 'none';
+  const selectedLegalDocumentMode =
+    argv.legalDocumentMode ??
+    (await askChoice(
+      'How should generated legal documents be included?',
+      legalDocumentOptions,
+      seededLegalDocumentMode
+    ));
+  const legalDocumentMode =
+    onboardingFlow === 'none' && selectedLegalDocumentMode === 'onboarding-agreement'
+      ? 'none'
+      : selectedLegalDocumentMode;
+  const legalUpdateGate =
+    argv.legalUpdateGate ??
+    (legalDocumentMode === 'none'
+      ? 'none'
+      : await askChoice(
+          'Gate protected app routes when material legal documents need re-acceptance?',
+          [
+            { value: 'none' as const, label: 'None', hint: 'Default' },
+            {
+              value: 'material-required' as const,
+              label: 'Material updates only',
+              hint: 'Adds /legal/updates and protected-route guard scaffolding',
+            },
+          ],
+          seed.legalUpdateGate
+        ));
+  const onboardingCompletionMode =
+    onboardingFlow === 'none'
+      ? seed.onboardingCompletionMode
+      : argv.onboardingCompletionMode ??
+        (await askChoice(
+          'Where should onboarding completion hand off?',
+          [
+            { value: 'enter-app' as const, label: 'Enter app', hint: 'Default route /' },
+            { value: 'auth' as const, label: 'Auth flow', hint: 'For the next auth branch to wire' },
+            { value: 'account-setup' as const, label: 'Account setup', hint: 'Profile/setup handoff' },
+            { value: 'custom' as const, label: 'Custom route', hint: 'Edit onboarding-config.ts' },
+          ],
+          seed.onboardingCompletionMode
+        ));
   const testToMainSafeguards =
     argv.testToMain ??
     (await askYesNoWithExplain(
@@ -436,6 +514,13 @@ export async function collectOnboardPlan(
       appDirectory,
       platformLayoutMode,
       dataStart,
+      onboardingFlow,
+      legalDocumentMode:
+        legalUpdateGate === 'material-required' && legalDocumentMode === 'none'
+          ? 'public-routes'
+          : legalDocumentMode,
+      onboardingCompletionMode,
+      legalUpdateGate,
       testToMainSafeguards,
       defaults,
     },
@@ -559,6 +644,14 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     argv.expoServerAdapter ?? savedDefaults.expoServerAdapter ?? 'none';
   const customBackend = argv.customBackend ?? savedDefaults.customBackend ?? false;
   const customBackendEntry = argv.customBackendEntry ?? savedDefaults.customBackendEntry ?? 'server.js';
+  const onboardingFlow = argv.onboardingFlow ?? savedDefaults.onboardingFlow ?? 'multi-screen';
+  const legalDocumentMode =
+    onboardingFlow === 'none' && (argv.legalDocumentMode ?? savedDefaults.legalDocumentMode) === 'onboarding-agreement'
+      ? 'none'
+      : argv.legalDocumentMode ?? savedDefaults.legalDocumentMode ?? 'none';
+  const legalUpdateGate = argv.legalUpdateGate ?? savedDefaults.legalUpdateGate ?? 'none';
+  const onboardingCompletionMode =
+    argv.onboardingCompletionMode ?? savedDefaults.onboardingCompletionMode ?? 'enter-app';
 
   return {
     appName: argv.appName ?? path.basename(projectPath),
@@ -604,6 +697,13 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     appDirectory: argv.appDirectory ?? savedDefaults.appDirectory ?? detectAppDirectory(projectPath),
     platformLayoutMode: argv.platformLayouts ?? savedDefaults.platformLayoutMode ?? 'shared',
     dataStart,
+    onboardingFlow,
+    legalDocumentMode:
+      legalUpdateGate === 'material-required' && legalDocumentMode === 'none'
+        ? 'public-routes'
+        : legalDocumentMode,
+    onboardingCompletionMode,
+    legalUpdateGate,
     testToMainSafeguards,
     defaults: deriveDefaults(
       argv.defaults ?? savedDefaults.defaults,
@@ -676,6 +776,10 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
     dataStart: answers.dataStart,
+    onboardingFlow: answers.onboardingFlow,
+    legalDocumentMode: answers.legalDocumentMode,
+    onboardingCompletionMode: answers.onboardingCompletionMode,
+    legalUpdateGate: answers.legalUpdateGate,
     testToMainSafeguards: answers.testToMainSafeguards,
     easUses: answers.easUses,
   };
@@ -715,6 +819,10 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   const deployedServer = normalizeChoice(raw.deployedServer, ['standard-expo', 'custom', 'none'] as const);
   const expoServerAdapter = normalizeChoice(raw.expoServerAdapter, ['eas', 'express', 'bun', 'other'] as const);
   const dataStart = normalizeChoice(raw.dataStart, ['local', 'supabase'] as const);
+  const onboardingFlow = normalizeChoice(raw.onboardingFlow, ['none', 'multi-screen'] as const);
+  const legalDocumentMode = normalizeChoice(raw.legalDocumentMode, ['none', 'public-routes', 'onboarding-agreement'] as const);
+  const onboardingCompletionMode = normalizeChoice(raw.onboardingCompletionMode, ['enter-app', 'auth', 'account-setup', 'custom'] as const);
+  const legalUpdateGate = normalizeChoice(raw.legalUpdateGate, ['none', 'material-required'] as const);
   const customBackendEntry = normalizeString(raw.customBackendEntry);
   const easUses = normalizeStringArray(raw.easUses);
 
@@ -739,6 +847,10 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   }
   if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
   if (dataStart) normalized.dataStart = dataStart;
+  if (onboardingFlow) normalized.onboardingFlow = onboardingFlow;
+  if (legalDocumentMode) normalized.legalDocumentMode = legalDocumentMode;
+  if (onboardingCompletionMode) normalized.onboardingCompletionMode = onboardingCompletionMode;
+  if (legalUpdateGate) normalized.legalUpdateGate = legalUpdateGate;
   if (easUses) normalized.easUses = easUses;
 
   return normalized;

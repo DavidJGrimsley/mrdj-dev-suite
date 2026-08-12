@@ -46,6 +46,10 @@ export interface ParsedArgs {
     researchNotes?: string;
     dataNeeds?: string;
     dataStart?: "local" | "supabase";
+    onboardingFlow?: OnboardArgv["onboardingFlow"];
+    legalDocumentMode?: OnboardArgv["legalDocumentMode"];
+    onboardingCompletionMode?: OnboardArgv["onboardingCompletionMode"];
+    legalUpdateGate?: OnboardArgv["legalUpdateGate"];
     deploymentTarget?: string;
     defaults?: string[];
     createExpoStackBin?: string;
@@ -506,6 +510,47 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg.startsWith("--mds-onboarding-flow=")) {
+      const value = arg.slice("--mds-onboarding-flow=".length);
+      if (value === "none" || value === "multi-screen") {
+        mds.onboardingFlow = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--mds-legal-documents=")) {
+      const value = arg.slice("--mds-legal-documents=".length);
+      if (
+        value === "none" ||
+        value === "public-routes" ||
+        value === "onboarding-agreement"
+      ) {
+        mds.legalDocumentMode = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--mds-onboarding-completion=")) {
+      const value = arg.slice("--mds-onboarding-completion=".length);
+      if (
+        value === "enter-app" ||
+        value === "auth" ||
+        value === "account-setup" ||
+        value === "custom"
+      ) {
+        mds.onboardingCompletionMode = value;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("--mds-legal-update-gate=")) {
+      const value = arg.slice("--mds-legal-update-gate=".length);
+      if (value === "none" || value === "material-required") {
+        mds.legalUpdateGate = value;
+      }
+      continue;
+    }
+
     if (arg.startsWith("--mds-deployment-target=")) {
       mds.deploymentTarget = arg.slice("--mds-deployment-target=".length);
       continue;
@@ -657,6 +702,10 @@ export function renderHelpText(): string {
     "  --mds-no-guidelines-template  Do not use the bundled MDS project/guidelines template",
     "  --mds-app-name=<name>         Set display app name for project memory",
     "  --mds-screens=                List must-include screens for project memory",
+    "  --mds-onboarding-flow=        none | multi-screen",
+    "  --mds-legal-documents=        none | public-routes | onboarding-agreement",
+    "  --mds-onboarding-completion=  enter-app | auth | account-setup | custom",
+    "  --mds-legal-update-gate=      none | material-required",
     "  --mds-expo-ui-universal       Use Expo UI Universal components when Expo UI is selected",
     "",
     "Help:",
@@ -2419,6 +2468,10 @@ function buildOnboardArgv(
     researchNotes: parsed.mds.researchNotes,
     dataNeeds: parsed.mds.dataNeeds,
     dataStart: parsed.mds.dataStart,
+    onboardingFlow: parsed.mds.onboardingFlow,
+    legalDocumentMode: parsed.mds.legalDocumentMode,
+    onboardingCompletionMode: parsed.mds.onboardingCompletionMode,
+    legalUpdateGate: parsed.mds.legalUpdateGate,
     deploymentTarget: parsed.mds.deploymentTarget,
     defaults: parsed.mds.defaults,
     saveDefaults: parsed.mds.saveDefaults,

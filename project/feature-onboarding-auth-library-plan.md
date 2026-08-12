@@ -21,6 +21,8 @@ The library already supports the metadata model this needs: namespaced item ids,
 - Use a clean Expo app as a regression fixture before touching Time2Pay.
 - Teach `create-expo-super-stack` to consume these library items once the registry entries are proven.
 - Implement this as three focused branches: legal documents, onboarding, then Supabase auth.
+- Treat onboarding state as its own adapter/composition layer. The UI flow should not be tied directly to Zustand or Supabase, but CESS should choose a production persistence adapter when the selected stack supports one.
+- Recommended persistence stack by the end of Branch 3: Supabase auth plus onboarding database tables as the source of truth, with Zustand as the local app cache when Zustand is selected.
 
 ## Reference Repositories
 
@@ -199,9 +201,9 @@ Expected behavior:
 
 ### Goal
 
-Replace the current `mds/onboarding-preview` with a refined onboarding flow that is useful in real apps and easy to discover through the library.
+Replace the current preview onboarding entry with `mds/onboarding`, a refined onboarding flow that is useful in real apps and easy to discover through the library.
 
-The current item can remain while the refined flow is developed, but it should be clear in the catalog that `mds/onboarding-preview` is not the final onboarding system and does not implement auth.
+The preview entry should be removed from the catalog once the refined flow exists; new installs should use `mds/onboarding`.
 
 If the refined onboarding flow includes legal acceptance, it should compose with `mds/legal-documents` rather than carrying its own separate legal document source.
 
@@ -223,7 +225,7 @@ Initial scope:
 
 - Welcome/value proposition screen.
 - Optional legal/terms review step powered by `mds/legal-documents`.
-- User preference/profile-intake step that does not require auth.
+- Product feature/integration highlight step with no preference collection until responses can be persisted or change app behavior.
 - Completion state that can route to the app, auth, or account setup depending on composition.
 - Theme-aware UI using MDS theme support.
 - Expo Router route assets for SDK 56.
@@ -310,6 +312,86 @@ The agent-facing behavior should be:
 - If the developer asks for onboarding with auth, compose onboarding plus the auth item.
 - If the developer has not decided, install onboarding without auth and leave a clear integration seam.
 
+### Onboarding State And Persistence
+
+Onboarding needs state, but that state should be layered so simple apps stay simple and CESS-generated Supabase apps become real immediately after env variables and database SQL are applied.
+
+Recommended model:
+
+- `mds/onboarding` owns screens, route flow, legal-review UI, and completion handoff.
+- `mds/legal-documents` owns legal content, renderers, and legal acceptance document metadata.
+- `mds/onboarding-state` or an equivalent support module owns the state contract and default adapters.
+- `mds/auth-supabase` owns session state, auth screens, Supabase client setup, and route guards.
+- `mds/onboarding-auth-supabase` composes onboarding, legal docs, auth, and Supabase-backed onboarding persistence.
+
+The base onboarding screens should call a tiny source-copy adapter instead of importing Zustand or Supabase directly:
+
+```ts
+type OnboardingPersistenceMode =
+  | "memory"
+  | "zustand-local"
+  | "supabase-profile"
+  | "zustand-supabase";
+
+type OnboardingDocumentAcceptance = {
+  documentId: "terms" | "privacy";
+  documentVersion: string;
+  acceptedAt: string;
+};
+
+type OnboardingState = {
+  flowId: string;
+  flowVersion: number;
+  completedAt?: string;
+  legalAcceptances: OnboardingDocumentAcceptance[];
+  pendingSync?: boolean;
+};
+```
+
+Default recommendations:
+
+- Library-only `mds/onboarding`: include a no-dependency `memory` adapter so the copied flow works in a clean app, but document that it is not sufficient for production legal acceptance.
+- CESS with no auth and no Zustand: use the memory adapter and add a generated TODO when legal acceptance is selected.
+- CESS with Zustand and no auth: use `zustand-local` for local onboarding completion and legal acceptance so users do not repeat onboarding on every launch.
+- CESS with Supabase auth and no Zustand: use `supabase-profile` after sign-in, with a small local pending state before auth if onboarding starts public.
+- CESS with Supabase auth and Zustand: use `zustand-supabase`; Zustand is the immediate client cache and Supabase is the source of truth.
+- Hosted apps with Supabase auth should prefer the composed order `onboarding -> auth -> legal -> app` so legal acceptance is written with a known user id. Time2Pay is the reference implementation for this path: Supabase is canonical for onboarding and legal state, and Zustand only caches the current gate/session shape in the UI.
+
+This gives the library a useful progression:
+
+```text
+mds/onboarding
+mds/onboarding-state --variant memory
+mds/onboarding-state --variant zustand-local
+mds/auth-supabase
+mds/onboarding-auth-supabase
+```
+
+Do not collect signup-intent answers by default until an adapter stores them or the app changes behavior from them. When that work is added, store intent as explicit optional metadata such as `intentReasons: string[]`, not as a hidden side effect of a decorative choice screen.
+
+### Legal Acceptance Persistence
+
+Legal acceptance should not be only in component state for production apps. The legal step should record at least:
+
+- user id when available;
+- document id;
+- document version or last-updated date;
+- accepted timestamp;
+- flow id/version if acceptance happened inside onboarding.
+
+### Material Legal Update Gate
+
+`mds/legal-documents` should support a `legal-update-gate` variant for apps that need users to accept material Terms/Privacy updates after account creation. Legal document metadata now includes `acceptanceVersion`, `requiresReacceptance`, and `changeSummary`; only documents with `requiresReacceptance: true` should block protected app content.
+
+Generated Expo Router SDK 53+/Router 5+ apps should prefer protected routes for this gate:
+
+- Keep `/terms`, `/privacy`, and `/legal/updates` public.
+- Wrap app content in `Stack.Protected` or `Tabs.Protected` with a guard that includes `legalGateStatus === "complete"`.
+- Use `/legal/updates` as the route-backed update surface and wire its `LegalAcceptanceAdapter` to Supabase user-scoped acceptance rows in hosted/authenticated apps.
+- Keep the default adapter lightweight for source-copy demos, but do not treat local-only acceptance as sufficient for hosted production legal records.
+
+For public onboarding before auth, keep only non-legal pending progress locally and sync it after sign-in. For apps where legal acceptance must be tied strictly to identity, prefer the composed auth flow where legal review happens after sign-up/sign-in and writes directly to Supabase. Hosted legal acceptance should not be local-only.
+
 ### Time2Pay dogfood path
 
 Use Time2Pay as the real-world validation target.
@@ -318,6 +400,8 @@ Suggested sequence:
 
 1. Create a Time2Pay dogfood branch.
 2. Add the baseline `mds/onboarding` item to Time2Pay through the published/local library workflow.
+3. Dogfood the hosted composition as `/onboarding` intro -> `/onboarding/features` -> `/onboarding/auth` -> `/onboarding/legal` -> `/dashboard`.
+4. Backfill existing hosted profiles into onboarding state so returning users skip intro/features but accept current legal documents once.
 3. Ask where the flow should appear in the app, then wire it into Time2Pay routing.
 4. Replace generic copy with Time2Pay-specific product language.
 5. Run Time2Pay typecheck/lint/doctor.
@@ -356,6 +440,7 @@ Initial scope:
 - Route guard / redirect pattern for Expo Router.
 - Sign-out helper for settings/profile screen integration.
 - Clear environment setup docs.
+- Onboarding state sync hooks when composed with `mds/onboarding`.
 
 Registry metadata:
 
@@ -365,6 +450,44 @@ Registry metadata:
 - `dependencies: ["@supabase/supabase-js", "expo-secure-store" or chosen storage dependency]`
 - `compatibility: Expo SDK 56, Expo Router`
 - `composedItems: ["mds/theme-support"]`
+
+### Supabase Onboarding Tables
+
+Branch 3 should include a small database contract that CESS can generate as SQL. Keep it separate from app-specific profile data so the library does not assume every app has the same profile schema.
+
+Minimum tables:
+
+```sql
+create table public.user_onboarding_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  flow_id text not null default 'mds/onboarding',
+  flow_version integer not null default 1,
+  completed_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.user_legal_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  document_id text not null,
+  document_version text not null,
+  flow_id text,
+  accepted_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb,
+  unique (user_id, document_id, document_version)
+);
+```
+
+Required policies:
+
+- authenticated users can select their own onboarding state and legal acceptances;
+- authenticated users can insert/update only their own onboarding state;
+- authenticated users can insert only their own legal acceptances;
+- service-role-only maintenance can backfill or repair records outside the client path.
+
+CESS should generate either a `supabase/migrations/...` SQL file or a clearly named project SQL file, plus comments telling the developer to apply it to the selected Supabase project.
 
 ### CESS integration
 
@@ -379,8 +502,18 @@ Once `mds/auth-supabase` works through the library:
    - add project docs explaining where to place the real Supabase URL and anon key;
    - wire the root layout/route guard;
    - add a settings/profile sign-out route or hook point.
-3. Keep real secrets out of generated files.
-4. Never put service-role keys in client code.
+3. Add an onboarding persistence option:
+   - memory only;
+   - Zustand local;
+   - Supabase profile/table;
+   - Zustand local cache plus Supabase sync.
+4. Choose non-interactive persistence defaults from the selected stack:
+   - Supabase auth + Zustand: `zustand-supabase`;
+   - Supabase auth without Zustand: `supabase-profile`;
+   - Zustand without Supabase auth: `zustand-local`;
+   - neither: `memory`.
+5. Keep real secrets out of generated files.
+6. Never put service-role keys in client code.
 
 ### Supabase project dogfood
 
@@ -398,6 +531,7 @@ Dogfood sequence:
 Acceptance:
 
 - A clean CESS app can run with real Supabase auth after the developer supplies env vars.
+- A clean CESS app can persist onboarding completion and legal acceptance according to the selected persistence mode.
 - The auth flow passes typecheck/lint/doctor.
 - The library can add auth without overwriting customized app auth files unless explicitly confirmed.
 - The agent can explain exactly what the developer must configure in Supabase.
@@ -424,9 +558,10 @@ Suggested order:
 7. Dogfood onboarding in Time2Pay.
 8. Build `mds/auth-supabase`.
 9. Test auth in a clean Expo app against the dedicated Supabase project.
-10. Add `mds/onboarding-auth-supabase` composition.
-11. Teach CESS to install/wire onboarding and auth options.
-12. Dogfood the combined path in Time2Pay or a hosted-mode sample app.
+10. Add onboarding-state adapters and Supabase onboarding tables.
+11. Add `mds/onboarding-auth-supabase` composition.
+12. Teach CESS to install/wire onboarding, auth, legal documents, and persistence options.
+13. Dogfood the combined path in Time2Pay or a hosted-mode sample app.
 
 ## Branch Strategy
 
@@ -468,7 +603,7 @@ Testing:
 Scope:
 
 - Add refined `mds/onboarding`.
-- Keep `mds/onboarding-preview` for compatibility.
+- Remove the old preview onboarding entry instead of keeping a compatibility alias.
 - Add baseline `multi-screen` variant.
 - Add completion seam for `enter-app`, `auth`, `account-setup`, and `custom`.
 - Compose with `mds/legal-documents` only when legal acceptance is selected.
@@ -496,6 +631,17 @@ Scope:
 - Add session provider/hook.
 - Add route guard/redirect pattern.
 - Add env setup docs and `.env.example` support where appropriate.
+- Add CESS auth-method options as a follow-up to the first Supabase auth slice:
+  - email magic link;
+  - phone OTP;
+  - email/password;
+  - optional OAuth providers.
+- Add onboarding persistence adapters:
+  - memory fallback;
+  - Zustand local persistence;
+  - Supabase profile/table persistence;
+  - Zustand local cache plus Supabase sync.
+- Add Supabase SQL for onboarding completion and legal acceptance tables with RLS.
 - Add `mds/onboarding-auth-supabase` composition once both base items are proven.
 - Teach CESS to install/wire auth and onboarding options after the library path works.
 
@@ -508,8 +654,14 @@ Testing:
 - Combined flow:
   - onboarding to app without auth;
   - onboarding to auth to app with Supabase auth.
+  - legal acceptance persists and is not requested again after sign-in/app restart.
+  - pending public onboarding acceptance can sync after sign-in, or the composed auth flow can place legal review after identity is known.
 - Time2Pay or hosted-mode sample:
   - dogfood only after the clean app passes.
+
+### Branch 4 - Landing Page
+- standard
+- with parallax
 
 ## How To Add A New Library Flow
 
@@ -533,12 +685,12 @@ For onboarding/auth work, the repeatable library-add workflow is:
 ## Open Questions
 
 - Should `mds/legal-documents` be an integration item plus route variants, or a flow item because it includes public routes and modal surfaces?
-- Should legal document content live in JSON, TypeScript constants, markdown, or a typed adapter that can support all three later?
-- Should onboarding completion state use local storage, app-owned profile state, or a tiny adapter interface?
-- Should auth session state use only Supabase's client session or wrap it in an MDS provider?
+- Should legal document content live in JSON, TypeScript constants, markdown, or a typed adapter that can support all three later? TS
+- Onboarding completion state direction: use a tiny adapter interface, with CESS-selected adapters for memory, Zustand local, Supabase profile/table, or Zustand plus Supabase sync.
+- Auth session state direction: wrap Supabase's client session in an MDS provider/hook so route guards, onboarding sync, and settings sign-out have one local integration point.
 - Should `with-auth` remain only a composition/discovery tag, or should the CLI eventually expose it as a convenience alias that resolves to composition? Current recommendation: composition first, optional alias later.
 - How much legal/terms UI belongs in default onboarding versus a separate `mds/legal-consent` item?
-- Should CESS install onboarding by default, or only when the developer chooses app-start flows?
+- Should CESS install onboarding by default, or only when the developer chooses app-start flows? Current recommendation: ask interactively; non-interactive CESS can keep onboarding on by default only when the generated app also has a clear completion/persistence mode.
 
 ## Immediate Next Task
 
@@ -546,7 +698,7 @@ Start with `mds/legal-documents`, then `mds/onboarding`:
 
 - extract the reusable legal content/rendering pattern from PokePages and Time2Pay;
 - add public terms/privacy route support plus modal/agreement rendering;
-- keep `mds/onboarding-preview` as-is for compatibility;
+- remove the old preview onboarding entry instead of keeping a compatibility alias;
 - create a refined baseline multi-screen onboarding item;
 - give it future-facing variant metadata;
 - test it in a clean Expo app;

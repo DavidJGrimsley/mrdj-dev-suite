@@ -345,6 +345,10 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-platform-layouts=platform-specific",
       "--mds-web-output=server",
       "--mds-deployed-server=standard-expo",
+      "--mds-onboarding-flow=multi-screen",
+      "--mds-legal-documents=onboarding-agreement",
+      "--mds-onboarding-completion=auth",
+      "--mds-legal-update-gate=material-required",
       "--mds-screens=Home,Profile,Checkout",
       "--mds-no-create-expo-components",
       "--mds-no-expo-ui",
@@ -361,6 +365,10 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.platformLayouts).toBe("platform-specific");
     expect(parsed.mds.webOutput).toBe("server");
     expect(parsed.mds.deployedServer).toBe("standard-expo");
+    expect(parsed.mds.onboardingFlow).toBe("multi-screen");
+    expect(parsed.mds.legalDocumentMode).toBe("onboarding-agreement");
+    expect(parsed.mds.onboardingCompletionMode).toBe("auth");
+    expect(parsed.mds.legalUpdateGate).toBe("material-required");
     expect(parsed.mds.screens).toBe("Home,Profile,Checkout");
     expect(parsed.mds.createExpoComponents).toBe(false);
     expect(parsed.mds.expoUi).toBe(false);
@@ -409,6 +417,10 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-platform-layouts=solo",
       "--mds-web-output=foo",
       "--mds-deployed-server=bar",
+      "--mds-onboarding-flow=wizard",
+      "--mds-legal-documents=contracts",
+      "--mds-onboarding-completion=launch",
+      "--mds-legal-update-gate=always",
     ]);
 
     expect(parsed.mds.platformStrategy).toBeUndefined();
@@ -416,6 +428,10 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.platformLayouts).toBeUndefined();
     expect(parsed.mds.webOutput).toBeUndefined();
     expect(parsed.mds.deployedServer).toBeUndefined();
+    expect(parsed.mds.onboardingFlow).toBeUndefined();
+    expect(parsed.mds.legalDocumentMode).toBeUndefined();
+    expect(parsed.mds.onboardingCompletionMode).toBeUndefined();
+    expect(parsed.mds.legalUpdateGate).toBeUndefined();
   });
 
   it("sanitizes Expo slug and scheme values from display names", async () => {

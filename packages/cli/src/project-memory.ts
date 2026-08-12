@@ -18,6 +18,10 @@ export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
 export type PlatformLayoutMode = 'shared' | 'platform-specific';
 export type ExpoServerAdapter = 'eas' | 'express' | 'bun' | 'other' | 'none';
+export type OnboardingFlow = 'none' | 'multi-screen';
+export type LegalDocumentMode = 'none' | 'public-routes' | 'onboarding-agreement';
+export type OnboardingCompletionMode = 'enter-app' | 'auth' | 'account-setup' | 'custom';
+export type LegalUpdateGate = 'none' | 'material-required';
 
 export interface OnboardAnswers {
   appName: string;
@@ -61,6 +65,10 @@ export interface OnboardAnswers {
   appDirectory: AppDirectory;
   platformLayoutMode: PlatformLayoutMode;
   dataStart: DataStart;
+  onboardingFlow: OnboardingFlow;
+  legalDocumentMode: LegalDocumentMode;
+  onboardingCompletionMode: OnboardingCompletionMode;
+  legalUpdateGate: LegalUpdateGate;
   testToMainSafeguards: boolean;
   defaults: string[];
 }
@@ -102,6 +110,7 @@ interface NavigationShell {
 
 interface GeneratedLibraryRouteAssets {
   onboarding?: ReadonlyMap<string, string>;
+  legal?: ReadonlyMap<string, string>;
   settings?: ReadonlyMap<string, string>;
   stylist?: ReadonlyMap<string, string>;
   expoSdk56?: ReadonlyMap<string, string>;
@@ -147,6 +156,91 @@ function buildGeneratedLibraryContext(
     componentsDirectory: 'src/components',
     featuresDirectory: 'src/features',
   };
+}
+
+function shouldGenerateOnboarding(answers: OnboardAnswers): boolean {
+  return answers.onboardingFlow === 'multi-screen';
+}
+
+function onboardingLibraryVariant(answers: OnboardAnswers): 'multi-screen' | 'multi-screen-with-legal' {
+  return answers.legalDocumentMode === 'onboarding-agreement'
+    ? 'multi-screen-with-legal'
+    : 'multi-screen';
+}
+
+function shouldGenerateStandaloneLegalDocuments(answers: OnboardAnswers): boolean {
+  return answers.legalDocumentMode === 'public-routes';
+}
+
+function shouldGenerateLegalUpdateGate(answers: OnboardAnswers): boolean {
+  return answers.legalUpdateGate === 'material-required';
+}
+
+function legalDocumentsLibraryVariant(
+  answers: OnboardAnswers
+): 'public-routes' | 'legal-update-gate' {
+  return shouldGenerateLegalUpdateGate(answers) ? 'legal-update-gate' : 'public-routes';
+}
+
+function onboardingCompletionConfig(answers: OnboardAnswers): {
+  mode: OnboardingCompletionMode;
+  route: string;
+  label: string;
+  helperText: string;
+} {
+  switch (answers.onboardingCompletionMode) {
+    case 'auth':
+      return {
+        mode: 'auth',
+        route: '/sign-in',
+        label: 'Continue to sign in',
+        helperText: 'Auth handoff selected. Add the auth route in the auth library branch or edit this route.',
+      };
+    case 'account-setup':
+      return {
+        mode: 'account-setup',
+        route: '/account-setup',
+        label: 'Continue to account setup',
+        helperText: 'Account setup handoff selected. Add that route or edit this route when profile setup exists.',
+      };
+    case 'custom':
+      return {
+        mode: 'custom',
+        route: '/',
+        label: 'Continue',
+        helperText: 'Custom handoff selected. Edit route and label in this config before release.',
+      };
+    case 'enter-app':
+      return {
+        mode: 'enter-app',
+        route: '/',
+        label: "Let's begin",
+        helperText: 'Default mode: enter the app shell.',
+      };
+  }
+}
+
+function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
+  const completion = onboardingCompletionConfig(answers);
+  const replacement = [
+    '  completion: {',
+    `    mode: '${completion.mode}',`,
+    `    route: '${completion.route}' as Href,`,
+    `    label: ${JSON.stringify(completion.label)},`,
+    `    helperText: ${JSON.stringify(completion.helperText)},`,
+    '  },',
+  ].join('\n');
+
+  const completionPattern =
+    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u;
+
+  if (!completionPattern.test(source)) {
+    throw new Error(
+      'Unable to update onboarding completion config; template did not match the expected completion block.',
+    );
+  }
+
+  return source.replace(completionPattern, replacement);
 }
 
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
@@ -330,19 +424,31 @@ export async function scaffoldRichBoilerplate(
     loadLibraryTextAssets('mds/exposition-components', libraryContext),
     loadLibraryTextAssets('mds/stylist-sync-support', libraryContext),
   ]);
-  const routerLibraryAssets =
+  const onboardingAssets =
+    navigationShell.library === 'expo-router' && shouldGenerateOnboarding(answers)
+      ? await loadLibraryTextAssets('mds/onboarding', libraryContext, onboardingLibraryVariant(answers))
+      : undefined;
+  const legalAssets =
+    navigationShell.library === 'expo-router' &&
+    (shouldGenerateStandaloneLegalDocuments(answers) || shouldGenerateLegalUpdateGate(answers))
+      ? await loadLibraryTextAssets(
+          'mds/legal-documents',
+          libraryContext,
+          legalDocumentsLibraryVariant(answers)
+        )
+      : undefined;
+  const settingsAssets =
     navigationShell.library === 'expo-router'
-      ? await Promise.all([
-          loadLibraryTextAssets('mds/onboarding-preview', libraryContext),
-          loadLibraryTextAssets('mds/settings', libraryContext),
-          loadLibraryTextAssets('mds/stylist', libraryContext),
-          ...(answers.usesExpoUiUniversalComponents
-            ? [loadLibraryTextAssets('mds/expo-sdk-56', libraryContext)]
-            : []),
-        ])
-      : [];
-  const [onboardingAssets, settingsAssets, stylistAssets, expoSdk56Assets] =
-    routerLibraryAssets;
+      ? await loadLibraryTextAssets('mds/settings', libraryContext)
+      : undefined;
+  const stylistAssets =
+    navigationShell.library === 'expo-router'
+      ? await loadLibraryTextAssets('mds/stylist', libraryContext)
+      : undefined;
+  const expoSdk56Assets =
+    navigationShell.library === 'expo-router' && answers.usesExpoUiUniversalComponents
+      ? await loadLibraryTextAssets('mds/expo-sdk-56', libraryContext)
+      : undefined;
   const nativeWindUiAssets = includeNativeWindUiExposition
     ? await loadLibraryTextAssets(
         'nativewindui/exposition',
@@ -358,6 +464,14 @@ export async function scaffoldRichBoilerplate(
     fallback: () => string
   ): string =>
     assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback();
+  const legalLibraryAssetsFor = (
+    destination: string
+  ): ReadonlyMap<string, string> | undefined =>
+    onboardingAssets?.has(destination)
+      ? onboardingAssets
+      : legalAssets?.has(destination)
+        ? legalAssets
+        : undefined;
 
   await mkdir(path.join(projectPath, 'src', 'features', 'home'), {
     recursive: true,
@@ -365,7 +479,7 @@ export async function scaffoldRichBoilerplate(
   await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), {
     recursive: true,
   });
-  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding', 'components'), {
+  await mkdir(path.join(projectPath, 'src', 'features', 'legal'), {
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'features', 'settings'), {
@@ -491,73 +605,168 @@ export async function scaffoldRichBoilerplate(
       renderHomeScreen(answers, navigationShell),
       force
     ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-screen.tsx'),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/onboarding-screen.tsx',
-        renderOnboardingScreen
-      ),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'agreement-screen.tsx'),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/agreement-screen.tsx',
-        renderAgreementScreen
-      ),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen.tsx'),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/terms-screen.tsx',
-        renderTermsScreen
-      ),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'account-setup-screen.tsx'),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/account-setup-screen.tsx',
-        renderAccountSetupScreen
-      ),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(projectPath, 'src', 'features', 'onboarding', 'legal-documents.ts'),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/legal-documents.ts',
-        renderLegalDocuments
-      ),
-      force
-    ),
-    await writeIfAllowed(
-      path.join(
-        projectPath,
-        'src',
-        'features',
-        'onboarding',
-        'components',
-        'legal-document-view.tsx'
-      ),
-      libraryAssetOrFallback(
-        'mds/onboarding-preview',
-        onboardingAssets,
-        'src/features/onboarding/components/legal-document-view.tsx',
-        renderLegalDocumentView
-      ),
-      force
-    ),
+    ...(onboardingAssets
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
+            renderGeneratedOnboardingConfig(
+              requireLibraryTextAsset(
+                'mds/onboarding',
+                onboardingAssets,
+                'src/features/onboarding/onboarding-config.ts'
+              ),
+              answers
+            ),
+            force
+          ),
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'),
+            requireLibraryTextAsset(
+              'mds/onboarding',
+              onboardingAssets,
+              'src/features/onboarding/welcome-screen.tsx'
+            ),
+            force
+          ),
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen.tsx'),
+            requireLibraryTextAsset(
+              'mds/onboarding',
+              onboardingAssets,
+              'src/features/onboarding/features-screen.tsx'
+            ),
+            force
+          ),
+          ...(onboardingAssets.has('src/features/onboarding/complete-screen.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/onboarding',
+                    onboardingAssets,
+                    'src/features/onboarding/complete-screen.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets.has('src/features/onboarding/legal-review-screen.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'onboarding', 'legal-review-screen.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/onboarding',
+                    onboardingAssets,
+                    'src/features/onboarding/legal-review-screen.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+        ]
+      : []),
+    ...((onboardingAssets ?? legalAssets)
+      ? [
+          ...(onboardingAssets?.has('src/features/legal/legal-documents.ts') ||
+          legalAssets?.has('src/features/legal/legal-documents.ts')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-documents.ts')!,
+                    'src/features/legal/legal-documents.ts'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/legal-document-view.tsx') ||
+          legalAssets?.has('src/features/legal/legal-document-view.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-document-view.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-document-view.tsx')!,
+                    'src/features/legal/legal-document-view.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/legal-page-route.tsx') ||
+          legalAssets?.has('src/features/legal/legal-page-route.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-page-route.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-page-route.tsx')!,
+                    'src/features/legal/legal-page-route.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/legal-document-modal.tsx') ||
+          legalAssets?.has('src/features/legal/legal-document-modal.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-document-modal.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-document-modal.tsx')!,
+                    'src/features/legal/legal-document-modal.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/use-legal-acceptance.ts') ||
+          legalAssets?.has('src/features/legal/use-legal-acceptance.ts')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'use-legal-acceptance.ts'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/use-legal-acceptance.ts')!,
+                    'src/features/legal/use-legal-acceptance.ts'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/legal-acceptance-adapter.ts') ||
+          legalAssets?.has('src/features/legal/legal-acceptance-adapter.ts')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-acceptance-adapter.ts')!,
+                    'src/features/legal/legal-acceptance-adapter.ts'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+          ...(onboardingAssets?.has('src/features/legal/legal-update-screen.tsx') ||
+          legalAssets?.has('src/features/legal/legal-update-screen.tsx')
+            ? [
+                await writeIfAllowed(
+                  path.join(projectPath, 'src', 'features', 'legal', 'legal-update-screen.tsx'),
+                  requireLibraryTextAsset(
+                    'mds/legal-documents',
+                    legalLibraryAssetsFor('src/features/legal/legal-update-screen.tsx')!,
+                    'src/features/legal/legal-update-screen.tsx'
+                  ),
+                  force
+                ),
+              ]
+            : []),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
       libraryAssetOrFallback(
@@ -668,6 +877,7 @@ export async function scaffoldRichBoilerplate(
         routeForce,
         {
           onboarding: onboardingAssets,
+          legal: legalAssets,
           settings: settingsAssets,
           stylist: stylistAssets,
           expoSdk56: expoSdk56Assets,
@@ -841,6 +1051,10 @@ export function renderInfo(
     '- Which Software Mansion packages: All',
     `- State management library: ${formatGeneratorStateManagement(answers.generatorStateManagement)}`,
     `- Auth: ${formatGeneratorAuth(answers.generatorAuthBackend)}`,
+    `- Onboarding Flow: ${formatOnboardingFlow(answers.onboardingFlow)}`,
+    `- Legal Documents: ${formatLegalDocumentMode(answers.legalDocumentMode)}`,
+    `- Onboarding Completion: ${formatOnboardingCompletionMode(answers.onboardingCompletionMode)}`,
+    `- Legal Update Gate: ${formatLegalUpdateGate(answers.legalUpdateGate)}`,
     `- Data Categories: ${answers.dataNeeds}`,
     `- Starting Data mode: ${formatDataStart(answers.dataStart)}.`,
     '',
@@ -1397,6 +1611,38 @@ function formatDataStart(value: DataStart): string {
   return value === 'supabase' ? 'Supabase from the start' : 'local dummy data with Expo SQLite';
 }
 
+function formatOnboardingFlow(value: OnboardingFlow): string {
+  return value === 'multi-screen' ? 'multi-screen' : 'none';
+}
+
+function formatLegalDocumentMode(value: LegalDocumentMode): string {
+  switch (value) {
+    case 'public-routes':
+      return 'public-routes';
+    case 'onboarding-agreement':
+      return 'onboarding-agreement';
+    case 'none':
+      return 'none';
+  }
+}
+
+function formatOnboardingCompletionMode(value: OnboardingCompletionMode): string {
+  switch (value) {
+    case 'auth':
+      return 'auth';
+    case 'account-setup':
+      return 'account-setup';
+    case 'custom':
+      return 'custom';
+    case 'enter-app':
+      return 'enter-app';
+  }
+}
+
+function formatLegalUpdateGate(value: LegalUpdateGate): string {
+  return value === 'material-required' ? 'material-required' : 'none';
+}
+
 function deriveServeProdScript(answers: OnboardAnswers): string {
   if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
     return 'node server.js';
@@ -1680,27 +1926,29 @@ async function scaffoldNavigationRoutes(
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
   const homeScreen = path.join(projectPath, 'src', 'features', 'home', 'home-screen');
-  const onboardingScreen = path.join(
+  const welcomeScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen');
+  const featuresScreen = path.join(
     projectPath,
     'src',
     'features',
     'onboarding',
-    'onboarding-screen'
+    'features-screen'
   );
-  const agreementScreen = path.join(
+  const completeScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen');
+  const legalReviewScreen = path.join(
     projectPath,
     'src',
     'features',
     'onboarding',
-    'agreement-screen'
+    'legal-review-screen'
   );
-  const termsScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'terms-screen');
-  const accountSetupScreen = path.join(
+  const legalPageRoute = path.join(projectPath, 'src', 'features', 'legal', 'legal-page-route');
+  const legalUpdateScreen = path.join(
     projectPath,
     'src',
     'features',
-    'onboarding',
-    'account-setup-screen'
+    'legal',
+    'legal-update-screen'
   );
   const settingsScreen = path.join(projectPath, 'src', 'features', 'settings', 'settings-screen');
   const expositionScreen = path.join(
@@ -1740,50 +1988,112 @@ async function scaffoldNavigationRoutes(
 
   const rootExpositionDir = path.join(appDir, 'exposition');
   const onboardingDir = path.join(appDir, 'onboarding');
+  const legalDir = path.join(appDir, 'legal');
   await mkdir(rootExpositionDir, { recursive: true });
   await mkdir(onboardingDir, { recursive: true });
+  await mkdir(legalDir, { recursive: true });
 
   results.push(
-    await writeIfAllowed(
-      path.join(appDir, 'onboarding.tsx'),
-      routeAssetOrFallback(
-        'mds/onboarding-preview',
-        libraryAssets.onboarding,
-        `${appDirectory}/onboarding.tsx`,
-        () => renderRouteExport(appDir, onboardingScreen)
-      ),
-      routeForce
-    ),
-    await writeIfAllowed(
-      path.join(onboardingDir, 'agreement.tsx'),
-      routeAssetOrFallback(
-        'mds/onboarding-preview',
-        libraryAssets.onboarding,
-        `${appDirectory}/onboarding/agreement.tsx`,
-        () => renderRouteExport(onboardingDir, agreementScreen)
-      ),
-      routeForce
-    ),
-    await writeIfAllowed(
-      path.join(onboardingDir, 'terms.tsx'),
-      routeAssetOrFallback(
-        'mds/onboarding-preview',
-        libraryAssets.onboarding,
-        `${appDirectory}/onboarding/terms.tsx`,
-        () => renderRouteExport(onboardingDir, termsScreen)
-      ),
-      routeForce
-    ),
-    await writeIfAllowed(
-      path.join(onboardingDir, 'account-setup.tsx'),
-      routeAssetOrFallback(
-        'mds/onboarding-preview',
-        libraryAssets.onboarding,
-        `${appDirectory}/onboarding/account-setup.tsx`,
-        () => renderRouteExport(onboardingDir, accountSetupScreen)
-      ),
-      routeForce
-    ),
+    ...(libraryAssets.onboarding
+      ? [
+          await writeIfAllowed(
+            path.join(appDir, 'onboarding.tsx'),
+            routeAssetOrFallback(
+              'mds/onboarding',
+              libraryAssets.onboarding,
+              `${appDirectory}/onboarding.tsx`,
+              () => renderRouteExport(appDir, welcomeScreen)
+            ),
+            routeForce
+          ),
+          await writeIfAllowed(
+            path.join(onboardingDir, 'features.tsx'),
+            routeAssetOrFallback(
+              'mds/onboarding',
+              libraryAssets.onboarding,
+              `${appDirectory}/onboarding/features.tsx`,
+              () => renderRouteExport(onboardingDir, featuresScreen)
+            ),
+            routeForce
+          ),
+          ...(libraryAssets.onboarding.has(`${appDirectory}/onboarding/complete.tsx`)
+            ? [
+                await writeIfAllowed(
+                  path.join(onboardingDir, 'complete.tsx'),
+                  routeAssetOrFallback(
+                    'mds/onboarding',
+                    libraryAssets.onboarding,
+                    `${appDirectory}/onboarding/complete.tsx`,
+                    () => renderRouteExport(onboardingDir, completeScreen)
+                  ),
+                  routeForce
+                ),
+              ]
+            : []),
+          ...(libraryAssets.onboarding.has(`${appDirectory}/onboarding/legal.tsx`)
+            ? [
+                await writeIfAllowed(
+                  path.join(onboardingDir, 'legal.tsx'),
+                  routeAssetOrFallback(
+                    'mds/onboarding',
+                    libraryAssets.onboarding,
+                    `${appDirectory}/onboarding/legal.tsx`,
+                    () => renderRouteExport(onboardingDir, legalReviewScreen)
+                  ),
+                  routeForce
+                ),
+              ]
+            : []),
+        ]
+      : []),
+    ...((libraryAssets.onboarding?.has(`${appDirectory}/terms.tsx`) ||
+    libraryAssets.legal?.has(`${appDirectory}/terms.tsx`))
+      ? [
+          await writeIfAllowed(
+            path.join(appDir, 'terms.tsx'),
+            routeAssetOrFallback(
+              'mds/legal-documents',
+              libraryAssets.onboarding?.has(`${appDirectory}/terms.tsx`)
+                ? libraryAssets.onboarding
+                : libraryAssets.legal,
+              `${appDirectory}/terms.tsx`,
+              () => renderRouteExport(appDir, legalPageRoute)
+            ),
+            routeForce
+          ),
+        ]
+      : []),
+    ...((libraryAssets.onboarding?.has(`${appDirectory}/privacy.tsx`) ||
+    libraryAssets.legal?.has(`${appDirectory}/privacy.tsx`))
+      ? [
+          await writeIfAllowed(
+            path.join(appDir, 'privacy.tsx'),
+            routeAssetOrFallback(
+              'mds/legal-documents',
+              libraryAssets.onboarding?.has(`${appDirectory}/privacy.tsx`)
+                ? libraryAssets.onboarding
+                : libraryAssets.legal,
+              `${appDirectory}/privacy.tsx`,
+              () => renderRouteExport(appDir, legalPageRoute)
+            ),
+            routeForce
+          ),
+        ]
+      : []),
+    ...(libraryAssets.legal?.has(`${appDirectory}/legal/updates.tsx`)
+      ? [
+          await writeIfAllowed(
+            path.join(legalDir, 'updates.tsx'),
+            routeAssetOrFallback(
+              'mds/legal-documents',
+              libraryAssets.legal,
+              `${appDirectory}/legal/updates.tsx`,
+              () => renderRouteExport(legalDir, legalUpdateScreen)
+            ),
+            routeForce
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(appDir, 'settings.tsx'),
       routeAssetOrFallback(
@@ -2722,6 +3032,12 @@ function renderRichRootLayout(
     appDir,
     path.join(projectPath, 'src', 'theme', 'font-assets')
   );
+  const legalAcceptanceAdapterImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter')
+  );
+  const legalGateEnabled =
+    navigationShell.library === 'expo-router' && shouldGenerateLegalUpdateGate(answers);
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
@@ -2739,12 +3055,52 @@ function renderRichRootLayout(
       ]
     : [];
   const nativeWindUiScreen: string[] = [];
+  const onboardingScreens = shouldGenerateOnboarding(answers)
+    ? [
+        '        <Stack.Screen name="onboarding" options={{ title: \'Onboarding\' }} />',
+        '        <Stack.Screen name="onboarding/features" options={{ title: \'Features\' }} />',
+        ...(answers.legalDocumentMode === 'onboarding-agreement'
+          ? [
+              '        <Stack.Screen name="onboarding/legal" options={{ title: \'Legal Documents\' }} />',
+            ]
+          : []),
+        ...(answers.legalDocumentMode === 'onboarding-agreement'
+          ? []
+          : ['        <Stack.Screen name="onboarding/complete" options={{ title: \'Complete\' }} />']),
+      ]
+    : [];
+  const legalScreens =
+    answers.legalDocumentMode === 'public-routes' ||
+    answers.legalDocumentMode === 'onboarding-agreement' ||
+    legalGateEnabled
+      ? [
+          ...(legalGateEnabled
+            ? [
+                '        <Stack.Screen name="legal/updates" options={{ title: \'Legal Updates\' }} />',
+              ]
+            : []),
+          '        <Stack.Screen name="terms" options={{ title: \'Terms Of Service\' }} />',
+          '        <Stack.Screen name="privacy" options={{ title: \'Privacy Policy\' }} />',
+        ]
+      : [];
   const shellScreen =
     navigationShell.layout === 'tabs'
       ? '        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />'
       : navigationShell.layout === 'drawer + tabs'
         ? '        <Stack.Screen name="(drawer)" options={{ headerShown: false }} />'
         : '        <Stack.Screen name="index" options={{ title: \'Home\' }} />';
+  const appScreens = [shellScreen, ...expositionScreens, ...nativeWindUiScreen];
+  const protectedAppScreens = legalGateEnabled
+    ? [
+        '        <Stack.Protected guard={legalGateStatus === "complete"}>',
+        ...appScreens.map((screen) => screen.replace(/^ {8}/u, '          ')),
+        "          <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
+        '        </Stack.Protected>',
+      ]
+    : [
+        ...appScreens,
+        "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
+      ];
 
   return [
     renderGlobalCssImport(path.join(appDir, '_layout.tsx'), projectPath),
@@ -2760,6 +3116,9 @@ function renderRichRootLayout(
     "import { SafeAreaProvider } from 'react-native-safe-area-context';",
     `import themeFontAssets from '${themeFontAssetsImport}';`,
     `import { AppThemeProvider, useAppTheme } from '${themeProviderImport}';`,
+    ...(legalGateEnabled
+      ? [`import { useLegalUpdateGateStatus } from '${legalAcceptanceAdapterImport}';`]
+      : []),
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
     '  const theme = useAppTheme();',
@@ -2795,6 +3154,7 @@ function renderRichRootLayout(
     '',
     'function LayoutInner() {',
     '  const theme = useAppTheme();',
+    ...(legalGateEnabled ? ['  const legalGateStatus = useLegalUpdateGateStatus();'] : []),
     '  const shellColor = theme.activeColors.background;',
     '  return (',
     '    <GestureHandlerRootView style={{ flex: 1, backgroundColor: shellColor }}>',
@@ -2823,14 +3183,9 @@ function renderRichRootLayout(
     '                  </Link>',
     '                ),',
     '              }}>',
-    shellScreen,
-    '        <Stack.Screen name="onboarding" options={{ title: \'Onboarding\' }} />',
-    '        <Stack.Screen name="onboarding/agreement" options={{ title: \'Agreement\' }} />',
-    '        <Stack.Screen name="onboarding/terms" options={{ title: \'Terms Of Service\' }} />',
-    '        <Stack.Screen name="onboarding/account-setup" options={{ title: \'Account Setup\' }} />',
-    ...expositionScreens,
-    ...nativeWindUiScreen,
-    "        <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
+    ...onboardingScreens,
+    ...legalScreens,
+    ...protectedAppScreens,
     '            </Stack>',
     '          </RouterThemeBridge>',
     '        </SafeAreaProvider>',
@@ -3082,6 +3437,16 @@ function renderNativeWindUiScreen(): string {
 
 function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationShell): string {
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
+  const onboardingLinks = shouldGenerateOnboarding(answers)
+    ? [
+        '        <Link href="/onboarding" asChild>',
+        '          <Pressable style={StyleSheet.flatten([styles.primaryCard, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }])}>',
+        '            <Text style={styles.primaryTitle}>Onboarding</Text>',
+        '            <Text style={styles.primaryBody}>Open the generated onboarding flow before the main product flow replaces it.</Text>',
+        '          </Pressable>',
+        '        </Link>',
+      ]
+    : [];
   const expositionLinks =
     navigationShell.library === 'expo-router' && navigationShell.layout !== 'stack'
       ? includeNativeWindUiExposition
@@ -3140,12 +3505,7 @@ function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationSh
     '        ) : null}',
     '      </View>',
     '      <View style={styles.grid}>',
-    '        <Link href="/onboarding" asChild>',
-    '          <Pressable style={StyleSheet.flatten([styles.primaryCard, { backgroundColor: colors.primary, borderRadius: theme.layout.radius }])}>',
-    '            <Text style={styles.primaryTitle}>Onboarding preview</Text>',
-    '            <Text style={styles.primaryBody}>Open the generated onboarding screen before the main product flow replaces it.</Text>',
-    '          </Pressable>',
-    '        </Link>',
+    ...onboardingLinks,
     '        {expositionLinks.map((item) => (',
     '          <Link key={String(item.href)} href={item.href} asChild>',
     '            <Pressable style={StyleSheet.flatten([styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }])}>',
@@ -3261,407 +3621,6 @@ function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationSh
     '    lineHeight: 20,',
     '  },',
     '});',
-    '',
-  ].join('\n');
-}
-
-function renderOnboardingScreen(): string {
-  return [
-    "import { Link, useRouter } from 'expo-router';",
-    "import { useMemo, useState } from 'react';",
-    "import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';",
-    '',
-    "import { onboardingLegalDocuments } from './legal-documents';",
-    '',
-    'export default function OnboardingScreen() {',
-    '  const [acceptedAgreement, setAcceptedAgreement] = useState(false);',
-    '  const [acceptedTerms, setAcceptedTerms] = useState(false);',
-    '  const router = useRouter();',
-    '  const canContinue = acceptedAgreement && acceptedTerms;',
-    '  const agreementUpdated = useMemo(() => new Date(onboardingLegalDocuments.agreement.lastUpdated).toLocaleDateString(), []);',
-    '  const termsUpdated = useMemo(() => new Date(onboardingLegalDocuments.terms.lastUpdated).toLocaleDateString(), []);',
-    '',
-    '  return (',
-    '    <View style={styles.screen}>',
-    '      <Text style={styles.title}>Legal onboarding</Text>',
-    '      <Text style={styles.body}>Review and approve the Agreement and Terms before continuing in your real auth or profile flow.</Text>',
-    '      <View style={styles.card}>',
-    '        <View style={styles.rowTop}>',
-    '          <Text style={styles.cardTitle}>Agreement</Text>',
-    '          <Text style={styles.meta}>{agreementUpdated}</Text>',
-    '        </View>',
-    '        <Text style={styles.cardBody}>A compact starter agreement with fill-in fields your team can finalize.</Text>',
-    '        <View style={styles.rowBottom}>',
-    '          <Link href="/onboarding/agreement" asChild>',
-    '            <Pressable accessibilityRole="button" style={styles.linkButton}>',
-    '              <Text style={styles.linkButtonText}>View agreement</Text>',
-    '            </Pressable>',
-    '          </Link>',
-    '          <View style={styles.acceptWrap}>',
-    '            <Text style={styles.acceptText}>Accepted</Text>',
-    '            <Switch value={acceptedAgreement} onValueChange={setAcceptedAgreement} />',
-    '          </View>',
-    '        </View>',
-    '      </View>',
-    '      <View style={styles.card}>',
-    '        <View style={styles.rowTop}>',
-    '          <Text style={styles.cardTitle}>Terms of service</Text>',
-    '          <Text style={styles.meta}>{termsUpdated}</Text>',
-    '        </View>',
-    '        <Text style={styles.cardBody}>Production-safe baseline terms with placeholders for business specifics.</Text>',
-    '        <View style={styles.rowBottom}>',
-    '          <Link href="/onboarding/terms" asChild>',
-    '            <Pressable accessibilityRole="button" style={styles.linkButton}>',
-    '              <Text style={styles.linkButtonText}>View terms</Text>',
-    '            </Pressable>',
-    '          </Link>',
-    '          <View style={styles.acceptWrap}>',
-    '            <Text style={styles.acceptText}>Accepted</Text>',
-    '            <Switch value={acceptedTerms} onValueChange={setAcceptedTerms} />',
-    '          </View>',
-    '        </View>',
-    '      </View>',
-    '      <Pressable',
-    '        accessibilityRole="button"',
-    '        disabled={!canContinue}',
-    '        onPress={() => {',
-    '          if (canContinue) router.push("/onboarding/account-setup");',
-    '        }}',
-    '        style={[styles.ctaButton, !canContinue && styles.ctaButtonDisabled]}',
-    '      >',
-    '        <Text style={styles.ctaButtonText}>Continue to account setup</Text>',
-    '      </Pressable>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  screen: {',
-    "    backgroundColor: '#ffffff',",
-    '    flex: 1,',
-    '    gap: 14,',
-    '    padding: 20,',
-    '  },',
-    '  title: {',
-    "    color: '#111827',",
-    '    fontSize: 26,',
-    '    fontWeight: "800",',
-    '  },',
-    '  body: {',
-    "    color: '#4b5563',",
-    '    fontSize: 15,',
-    '    lineHeight: 22,',
-    '  },',
-    '  card: {',
-    "    backgroundColor: '#ffffff',",
-    "    borderColor: '#d1d5db',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    gap: 8,',
-    '    padding: 14,',
-    '  },',
-    '  rowTop: {',
-    '    alignItems: "center",',
-    '    flexDirection: "row",',
-    '    justifyContent: "space-between",',
-    '  },',
-    '  rowBottom: {',
-    '    alignItems: "center",',
-    '    flexDirection: "row",',
-    '    justifyContent: "space-between",',
-    '  },',
-    '  cardTitle: {',
-    "    color: '#111827',",
-    '    fontSize: 18,',
-    '    fontWeight: "800",',
-    '  },',
-    '  cardBody: {',
-    "    color: '#4b5563',",
-    '    fontSize: 14,',
-    '    lineHeight: 20,',
-    '  },',
-    '  meta: {',
-    "    color: '#6b7280',",
-    '    fontSize: 12,',
-    '    fontWeight: "700",',
-    '  },',
-    '  linkButton: {',
-    "    backgroundColor: '#111827',",
-    '    borderRadius: 9,',
-    '    paddingHorizontal: 12,',
-    '    paddingVertical: 8,',
-    '  },',
-    '  linkButtonText: {',
-    "    color: '#ffffff',",
-    '    fontSize: 13,',
-    '    fontWeight: "700",',
-    '  },',
-    '  acceptWrap: {',
-    '    alignItems: "center",',
-    '    flexDirection: "row",',
-    '    gap: 8,',
-    '  },',
-    '  acceptText: {',
-    "    color: '#111827',",
-    '    fontSize: 13,',
-    '    fontWeight: "700",',
-    '  },',
-    '  ctaButton: {',
-    '    alignItems: "center",',
-    "    backgroundColor: '#0f172a',",
-    '    borderRadius: 12,',
-    '    marginTop: "auto",',
-    '    paddingVertical: 14,',
-    '  },',
-    '  ctaButtonDisabled: {',
-    "    backgroundColor: '#9ca3af',",
-    '  },',
-    '  ctaButtonText: {',
-    "    color: '#ffffff',",
-    '    fontSize: 15,',
-    '    fontWeight: "800",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderAccountSetupScreen(): string {
-  return [
-    "import { useRouter } from 'expo-router';",
-    "import { Pressable, StyleSheet, Text, View } from 'react-native';",
-    '',
-    'export default function AccountSetupScreen() {',
-    '  const router = useRouter();',
-    '',
-    '  return (',
-    '    <View style={styles.screen}>',
-    '      <Text style={styles.title}>Account setup</Text>',
-    '      <Text style={styles.body}>This is the production-ready handoff point after legal acceptance. Replace this with your real auth and profile onboarding flow.</Text>',
-    '      <Pressable',
-    '        accessibilityRole="button"',
-    "        onPress={() => router.replace('/')}",
-    '        style={styles.homeButton}>',
-    '        <Text style={styles.homeButtonText}>Continue to home</Text>',
-    '      </Pressable>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  screen: {',
-    "    backgroundColor: '#ffffff',",
-    '    flex: 1,',
-    '    gap: 12,',
-    '    padding: 20,',
-    '  },',
-    '  title: {',
-    "    color: '#111827',",
-    '    fontSize: 26,',
-    '    fontWeight: "800",',
-    '  },',
-    '  body: {',
-    "    color: '#4b5563',",
-    '    fontSize: 15,',
-    '    lineHeight: 22,',
-    '  },',
-    '  homeButton: {',
-    "    alignItems: 'center',",
-    "    backgroundColor: '#2563eb',",
-    '    borderRadius: 12,',
-    '    marginTop: 12,',
-    '    paddingHorizontal: 18,',
-    '    paddingVertical: 14,',
-    '  },',
-    '  homeButtonText: {',
-    "    color: '#ffffff',",
-    '    fontSize: 16,',
-    '    fontWeight: "800",',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderLegalDocuments(): string {
-  return [
-    'export interface LegalDocumentSection {',
-    '  id: string;',
-    '  title: string;',
-    '  body: string;',
-    '}',
-    '',
-    'export interface LegalDocument {',
-    '  id: "agreement" | "terms";',
-    '  title: string;',
-    '  summary: string;',
-    '  effectiveDate: string;',
-    '  lastUpdated: string;',
-    '  sections: LegalDocumentSection[];',
-    '}',
-    '',
-    'export const onboardingLegalDocuments: Record<"agreement" | "terms", LegalDocument> = {',
-    '  agreement: {',
-    '    id: "agreement",',
-    '    title: "User Agreement",',
-    '    summary: "Agreement template for onboarding consent and account usage.",',
-    '    effectiveDate: "2026-05-24",',
-    '    lastUpdated: "2026-05-24",',
-    '    sections: [',
-    '      { id: "scope", title: "Scope", body: "This agreement covers access to [APP NAME], account conduct, and baseline obligations between [COMPANY NAME] and each user." },',
-    '      { id: "usage", title: "Acceptable Use", body: "Users agree not to misuse the service, attempt unauthorized access, or submit harmful content." },',
-    '      { id: "privacy", title: "Privacy and Data", body: "User data is handled according to the published privacy notice. Replace this section with your final privacy commitments and retention policy." },',
-    '      { id: "termination", title: "Termination", body: "Either party may terminate usage under the conditions described in this section. Add jurisdiction-specific language before production launch." },',
-    '    ],',
-    '  },',
-    '  terms: {',
-    '    id: "terms",',
-    '    title: "Terms of Service",',
-    '    summary: "Near-blank, production-oriented terms starter for legal review.",',
-    '    effectiveDate: "2026-05-24",',
-    '    lastUpdated: "2026-05-24",',
-    '    sections: [',
-    '      { id: "eligibility", title: "Eligibility", body: "Users must meet age and legal capacity requirements for their jurisdiction." },',
-    '      { id: "accounts", title: "Accounts", body: "Users are responsible for account credentials and activity performed through their account." },',
-    '      { id: "payments", title: "Payments and Billing", body: "If applicable, describe pricing, billing intervals, refunds, and failed payment handling." },',
-    '      { id: "liability", title: "Disclaimers and Liability", body: "Define limitations of liability and service disclaimers with legal counsel." },',
-    '      { id: "governing-law", title: "Governing Law", body: "Specify governing law, venue, and dispute resolution expectations." },',
-    '    ],',
-    '  },',
-    '};',
-    '',
-  ].join('\n');
-}
-
-function renderLegalDocumentView(): string {
-  return [
-    "import { ScrollView, StyleSheet, Text, View } from 'react-native';",
-    '',
-    "import type { LegalDocument } from '../legal-documents';",
-    '',
-    'interface LegalDocumentViewProps {',
-    '  document: LegalDocument;',
-    '}',
-    '',
-    'function LegalDocumentMeta({ label, value }: { label: string; value: string }) {',
-    '  return (',
-    '    <View style={styles.metaItem}>',
-    '      <Text style={styles.metaLabel}>{label}</Text>',
-    '      <Text style={styles.metaValue}>{value}</Text>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'function LegalSectionItem({ title, body }: { title: string; body: string }) {',
-    '  return (',
-    '    <View style={styles.section}>',
-    '      <Text style={styles.sectionTitle}>{title}</Text>',
-    '      <Text style={styles.sectionBody}>{body}</Text>',
-    '    </View>',
-    '  );',
-    '}',
-    '',
-    'export function LegalDocumentView({ document }: LegalDocumentViewProps) {',
-    '  return (',
-    '    <ScrollView contentContainerStyle={styles.content} style={styles.screen}>',
-    '      <Text style={styles.title}>{document.title}</Text>',
-    '      <Text style={styles.summary}>{document.summary}</Text>',
-    '      <View style={styles.metaRow}>',
-    '        <LegalDocumentMeta label="Effective" value={document.effectiveDate} />',
-    '        <LegalDocumentMeta label="Last updated" value={document.lastUpdated} />',
-    '      </View>',
-    '      {document.sections.map((section) => (',
-    '        <LegalSectionItem key={section.id} title={section.title} body={section.body} />',
-    '      ))}',
-    '    </ScrollView>',
-    '  );',
-    '}',
-    '',
-    'const styles = StyleSheet.create({',
-    '  screen: {',
-    "    backgroundColor: '#f8fafc',",
-    '    flex: 1,',
-    '  },',
-    '  content: {',
-    '    gap: 14,',
-    '    padding: 20,',
-    '    paddingTop: 84,',
-    '  },',
-    '  title: {',
-    "    color: '#0f172a',",
-    '    fontSize: 28,',
-    '    fontWeight: "800",',
-    '  },',
-    '  summary: {',
-    "    color: '#334155',",
-    '    fontSize: 15,',
-    '    lineHeight: 22,',
-    '  },',
-    '  metaRow: {',
-    '    flexDirection: "row",',
-    '    gap: 10,',
-    '  },',
-    '  metaItem: {',
-    "    backgroundColor: '#e2e8f0',",
-    '    borderRadius: 10,',
-    '    gap: 2,',
-    '    paddingHorizontal: 10,',
-    '    paddingVertical: 8,',
-    '  },',
-    '  metaLabel: {',
-    "    color: '#475569',",
-    '    fontSize: 11,',
-    '    fontWeight: "700",',
-    '    textTransform: "uppercase",',
-    '  },',
-    '  metaValue: {',
-    "    color: '#0f172a',",
-    '    fontSize: 13,',
-    '    fontWeight: "700",',
-    '  },',
-    '  section: {',
-    "    backgroundColor: '#ffffff',",
-    "    borderColor: '#e2e8f0',",
-    '    borderRadius: 12,',
-    '    borderWidth: 1,',
-    '    gap: 7,',
-    '    padding: 14,',
-    '  },',
-    '  sectionTitle: {',
-    "    color: '#0f172a',",
-    '    fontSize: 17,',
-    '    fontWeight: "800",',
-    '  },',
-    '  sectionBody: {',
-    "    color: '#334155',",
-    '    fontSize: 14,',
-    '    lineHeight: 21,',
-    '  },',
-    '});',
-    '',
-  ].join('\n');
-}
-
-function renderAgreementScreen(): string {
-  return [
-    "import { LegalDocumentView } from './components/legal-document-view';",
-    "import { onboardingLegalDocuments } from './legal-documents';",
-    '',
-    'export default function AgreementScreen() {',
-    '  return <LegalDocumentView document={onboardingLegalDocuments.agreement} />;',
-    '}',
-    '',
-  ].join('\n');
-}
-
-function renderTermsScreen(): string {
-  return [
-    "import { LegalDocumentView } from './components/legal-document-view';",
-    "import { onboardingLegalDocuments } from './legal-documents';",
-    '',
-    'export default function TermsScreen() {',
-    '  return <LegalDocumentView document={onboardingLegalDocuments.terms} />;',
-    '}',
     '',
   ].join('\n');
 }

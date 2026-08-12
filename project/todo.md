@@ -395,6 +395,8 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 
 - [ ] Follow `project/feature-onboarding-auth-library-plan.md` for the two-part onboarding/auth library rollout.
 - [ ] Add the redesigned onboarding flow to MDS Library from its dedicated feature branch.
+- [x] Add the material legal update gate variant to `mds/legal-documents`, including `/legal/updates`, document acceptance metadata, and generated protected-route scaffolding.
+- [ ] Add optional onboarding intent/profile-intake variants only when responses are persisted or directly change app behavior; avoid choice-only onboarding pages.
 - [ ] Add completed sign-in and sign-up screens/flows from the dedicated auth branch; do not treat the current account-setup placeholder as auth.
 - [ ] Add npm-package-backed Library entries and decide which advanced MDS components should graduate into runtime packages.
 - [ ] Design reviewed contributor submissions, attribution, licensing, governance, signup-fee, nonprofit, and potential payout policies without granting repository write access by default.

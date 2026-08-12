@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
 import { LegalDocumentModal } from './legal-document-modal';
 import { getLegalDocument, type LegalDocumentId } from './legal-documents';
@@ -23,6 +24,8 @@ function AgreementRow({
   const theme = useAppTheme();
   const colors = theme.activeColors;
   const document = getLegalDocument(documentId);
+  const actionColor = accepted ? colors.success : colors.primary;
+  const actionForeground = getReadableTextColor(actionColor, theme.colors.light.text);
 
   return (
     <View
@@ -46,11 +49,13 @@ function AgreementRow({
         style={[
           styles.reviewButton,
           {
-            backgroundColor: accepted ? colors.success : colors.primary,
+            backgroundColor: actionColor,
             borderRadius: Math.max(8, theme.layout.radius - 4),
           },
         ]}>
-        <Text style={styles.reviewButtonText}>{accepted ? 'Accepted' : 'Review'}</Text>
+        <Text style={[styles.reviewButtonText, { color: actionForeground }]}>
+          {accepted ? 'Accepted' : 'Review'}
+        </Text>
       </Pressable>
     </View>
   );
@@ -62,6 +67,7 @@ export function LegalAgreementScreen({
 }: LegalAgreementScreenProps) {
   const theme = useAppTheme();
   const colors = theme.activeColors;
+  const primaryForeground = getReadableTextColor(colors.primary, theme.colors.light.text);
   const [activeDocument, setActiveDocument] = useState<LegalDocumentId | null>(null);
   const {
     acceptedDocuments,
@@ -114,7 +120,7 @@ export function LegalAgreementScreen({
         <Text
           style={[
             styles.continueButtonText,
-            { color: canContinue ? '#ffffff' : colors.text },
+            { color: canContinue ? primaryForeground : colors.text },
           ]}>
           {continueLabel}
         </Text>
@@ -182,7 +188,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   reviewButtonText: {
-    color: '#ffffff',
     fontSize: 13,
     fontWeight: '900',
   },
