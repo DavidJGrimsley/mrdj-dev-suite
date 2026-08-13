@@ -17,7 +17,7 @@ import {
 } from './commands/onboard.js';
 
 import type { OnboardArgv } from './commands/onboard.js';
-import type { ExpoServerAdapter, OnboardAnswers } from './project-memory.js';
+import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from './project-memory.js';
 
 export type CessScriptLanguage = 'typescript' | 'javascript';
 export type CessPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
@@ -31,7 +31,7 @@ export type CessStylingSystem =
   | 'restyle'
   | 'stylesheet';
 export type CessStateManagement = 'zustand' | 'none';
-export type CessAuthBackend = 'none' | 'supabase' | 'firebase';
+export type CessAuthBackend = AuthProviderChoice;
 export type CessOnboardingFlow = 'none' | 'multi-screen';
 export type CessLegalDocumentMode = 'none' | 'public-routes' | 'onboarding-agreement';
 export type CessOnboardingCompletionMode = 'enter-app' | 'auth' | 'account-setup' | 'custom';
@@ -260,8 +260,10 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
     kind: 'single-select',
     options: () => [
       { value: 'none', label: 'None', hint: 'Default' },
+      { value: 'base', label: 'Base adapter', hint: 'Custom provider shell' },
       { value: 'supabase', label: 'Supabase' },
       { value: 'firebase', label: 'Firebase' },
+      { value: 'convex', label: 'Convex', hint: 'Experimental' },
     ],
     defaultValue: () => STACK_DEFAULTS.authBackend,
   },
@@ -306,7 +308,7 @@ const CESS_QUESTIONS: CessQuestionDefinition[] = [
     kind: 'single-select',
     options: () => [
       { value: 'enter-app', label: 'Enter app', hint: 'Default route /' },
-      { value: 'auth', label: 'Auth flow', hint: 'For the next auth branch to wire' },
+      { value: 'auth', label: 'Auth flow', hint: 'Generated /sign-in route' },
       { value: 'account-setup', label: 'Account setup', hint: 'Profile/setup handoff' },
       { value: 'custom', label: 'Custom route', hint: 'Edit onboarding-config.ts' },
     ],
@@ -1078,11 +1080,17 @@ function inferDataStart(value: string): OnboardAnswers['dataStart'] | undefined 
 
 function inferAuthBackend(value: string): CessAuthBackend | undefined {
   const normalized = value.toLowerCase();
+  if (normalized.includes('convex')) {
+    return 'convex';
+  }
   if (normalized.includes('supabase')) {
     return 'supabase';
   }
   if (normalized.includes('firebase')) {
     return 'firebase';
+  }
+  if (normalized.includes('base') || normalized.includes('custom provider')) {
+    return 'base';
   }
   return undefined;
 }
@@ -1262,6 +1270,10 @@ function extractPackageChoices(
       assignValue('authBackend', 'supabase', 'Package Choices section', priority);
     } else if (entry === 'firebase') {
       assignValue('authBackend', 'firebase', 'Package Choices section', priority);
+    } else if (entry === 'convex') {
+      assignValue('authBackend', 'convex', 'Package Choices section', priority);
+    } else if (entry === 'auth' || entry === 'base auth') {
+      assignValue('authBackend', 'base', 'Package Choices section', priority);
     }
   }
 }
@@ -1705,7 +1717,7 @@ function normalizeExtractedAnswerValue(
     case 'stateManagement':
       return normalizeEnum(value, ['zustand', 'none']);
     case 'authBackend':
-      return normalizeEnum(value, ['none', 'supabase', 'firebase']);
+      return normalizeEnum(value, ['none', 'base', 'supabase', 'firebase', 'convex']);
     case 'onboardingFlow':
       return normalizeEnum(value, ['none', 'multi-screen']);
     case 'legalDocumentMode':
@@ -2020,7 +2032,13 @@ export function normalizeCessIntakeAnswers(
     'stylesheet',
   ]);
   normalized.stateManagement = normalizeEnum(answers.stateManagement, ['zustand', 'none']);
-  normalized.authBackend = normalizeEnum(answers.authBackend, ['none', 'supabase', 'firebase']);
+  normalized.authBackend = normalizeEnum(answers.authBackend, [
+    'none',
+    'base',
+    'supabase',
+    'firebase',
+    'convex',
+  ]);
   normalized.onboardingFlow = normalizeEnum(answers.onboardingFlow, ['none', 'multi-screen']);
   normalized.legalDocumentMode = normalizeEnum(answers.legalDocumentMode, [
     'none',
@@ -2123,11 +2141,6 @@ export function buildCreateExpoStackFlags(answers: CessIntakeAnswers): string[] 
   if (answers.stateManagement === 'zustand') {
     flags.push('--zustand');
   }
-  if (answers.authBackend === 'supabase') {
-    flags.push('--supabase');
-  } else if (answers.authBackend === 'firebase') {
-    flags.push('--firebase');
-  }
   return flags;
 }
 
@@ -2174,6 +2187,7 @@ export function buildMdsFlags(
     `--mds-web-output=${onboardAnswers.webOutput}`,
     `--mds-deployed-server=${onboardAnswers.deployedServer}`,
     `--mds-data-start=${onboardAnswers.dataStart}`,
+    `--mds-auth-provider=${onboardAnswers.authProvider ?? intakeAnswers.authBackend}`,
     `--mds-onboarding-flow=${onboardAnswers.onboardingFlow}`,
     `--mds-legal-documents=${onboardAnswers.legalDocumentMode}`,
     `--mds-onboarding-completion=${onboardAnswers.onboardingCompletionMode}`,
@@ -2249,7 +2263,7 @@ export function buildCessSummaryLines(
     answers.stateManagement === 'zustand' ? 'Zustand' : 'No shared state starter',
     answers.authBackend === 'none'
       ? 'No auth starter'
-      : formatTitle(answers.authBackend ?? STACK_DEFAULTS.authBackend),
+      : formatAuthBackendLabel(answers.authBackend ?? STACK_DEFAULTS.authBackend),
     answers.easSetup
       ? 'EAS planned; sign in and set it up manually in Phase 0'
       : 'No EAS planned',
@@ -2397,7 +2411,11 @@ function buildOnboardArgvFromCess(
     generatorReactNavigationLayout: answers.reactNavigationLayout,
     generatorStylingSystem: answers.stylingSystem,
     generatorStateManagement: answers.stateManagement,
-    generatorAuthBackend: answers.authBackend,
+    generatorAuthBackend:
+      answers.authBackend === 'supabase' || answers.authBackend === 'firebase'
+        ? answers.authBackend
+        : 'none',
+    authProvider: answers.authBackend,
     generatorEasSetup: answers.easSetup,
     overview: normalizeText(answers.overview),
     audience: normalizeText(answers.audience),
@@ -2471,6 +2489,15 @@ function buildOnboardDefaultsFromCessAnswers(
   }
   if (answers.dataStart === 'supabase' || answers.authBackend === 'supabase') {
     defaults.add('supabase');
+  }
+  if (answers.authBackend === 'firebase') {
+    defaults.add('firebase');
+  }
+  if (answers.authBackend === 'convex') {
+    defaults.add('convex');
+  }
+  if (answers.authBackend === 'base') {
+    defaults.add('auth');
   }
   defaults.add('doctor');
   if (answers.testToMainSafeguards ?? true) {
@@ -2666,6 +2693,21 @@ function formatStylingLabel(value: CessStylingSystem): string {
       return 'Restyle';
     case 'stylesheet':
       return 'StyleSheet only';
+  }
+}
+
+function formatAuthBackendLabel(value: CessAuthBackend): string {
+  switch (value) {
+    case 'base':
+      return 'Base auth adapter';
+    case 'supabase':
+      return 'Supabase auth';
+    case 'firebase':
+      return 'Firebase auth';
+    case 'convex':
+      return 'Convex auth (experimental)';
+    case 'none':
+      return 'No auth starter';
   }
 }
 

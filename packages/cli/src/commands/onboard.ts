@@ -10,7 +10,7 @@ import { scaffoldProjectMemory } from '../project-memory.js';
 import { generateProjectRoadmap } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
-import type { ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
+import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
 import type { Option } from '@clack/prompts';
 
 export interface OnboardArgv {
@@ -28,6 +28,7 @@ export interface OnboardArgv {
   generatorStylingSystem?: 'uniwind' | 'nativewind' | 'nativewindui' | 'tamagui' | 'restyle' | 'stylesheet';
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
+  authProvider?: AuthProviderChoice;
   generatorEasSetup?: boolean;
   overview?: string;
   audience?: string;
@@ -170,6 +171,7 @@ interface PersonalOnboardDefaults {
   legalDocumentMode?: OnboardAnswers['legalDocumentMode'];
   onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
+  authProvider?: AuthProviderChoice;
   testToMainSafeguards?: boolean;
   easUses?: string[];
 }
@@ -398,6 +400,19 @@ export async function collectOnboardPlan(
       seed.dataStart,
       DATA_START_EXPLANATION
     ));
+  const authProvider =
+    argv.authProvider ??
+    (await askChoice(
+      'Add a reusable MDS auth flow now?',
+      [
+        { value: 'none' as const, label: 'None / decide later', hint: 'Default' },
+        { value: 'base' as const, label: 'Base adapter', hint: 'Provider-neutral shell for custom auth' },
+        { value: 'supabase' as const, label: 'Supabase', hint: 'Supabase Auth with Expo-safe session storage' },
+        { value: 'firebase' as const, label: 'Firebase', hint: 'Firebase JS SDK email/password auth' },
+        { value: 'convex' as const, label: 'Convex', hint: 'Experimental Convex Auth adapter' },
+      ],
+      seed.authProvider ?? 'none'
+    ));
   const onboardingFlow =
     argv.onboardingFlow ??
     (await askChoice(
@@ -462,7 +477,7 @@ export async function collectOnboardPlan(
           'Where should onboarding completion hand off?',
           [
             { value: 'enter-app' as const, label: 'Enter app', hint: 'Default route /' },
-            { value: 'auth' as const, label: 'Auth flow', hint: 'For the next auth branch to wire' },
+            { value: 'auth' as const, label: 'Auth flow', hint: 'Generated /sign-in route' },
             { value: 'account-setup' as const, label: 'Account setup', hint: 'Profile/setup handoff' },
             { value: 'custom' as const, label: 'Custom route', hint: 'Edit onboarding-config.ts' },
           ],
@@ -475,7 +490,13 @@ export async function collectOnboardPlan(
       seed.testToMainSafeguards,
       TEST_TO_MAIN_EXPLANATION
     ));
-  const defaults = deriveDefaults(argv.defaults, seed.defaults, dataStart, testToMainSafeguards);
+  const defaults = deriveDefaults(
+    argv.defaults,
+    seed.defaults,
+    dataStart,
+    testToMainSafeguards,
+    authProvider
+  );
   const saveDefaults =
     typeof argv.saveDefaults === 'boolean'
       ? argv.saveDefaults
@@ -514,6 +535,7 @@ export async function collectOnboardPlan(
       appDirectory,
       platformLayoutMode,
       dataStart,
+      authProvider,
       onboardingFlow,
       legalDocumentMode:
         legalUpdateGate === 'material-required' && legalDocumentMode === 'none'
@@ -589,14 +611,24 @@ export function deriveDefaults(
   rawDefaults: string | string[] | undefined,
   fallback: string[],
   dataStart: OnboardAnswers['dataStart'],
-  testToMainSafeguards: boolean
+  testToMainSafeguards: boolean,
+  authProvider: AuthProviderChoice = 'none'
 ): string[] {
   const selected = new Set(parseDefaults(rawDefaults, fallback));
   selected.add('project-docs');
   selected.add('guidelines');
   selected.add('doctor');
-  if (dataStart === 'supabase') {
+  if (dataStart === 'supabase' || authProvider === 'supabase') {
     selected.add('supabase');
+  }
+  if (authProvider === 'firebase') {
+    selected.add('firebase');
+  }
+  if (authProvider === 'convex') {
+    selected.add('convex');
+  }
+  if (authProvider === 'base') {
+    selected.add('auth');
   }
   if (testToMainSafeguards) {
     selected.add('test-to-main');
@@ -652,6 +684,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
   const legalUpdateGate = argv.legalUpdateGate ?? savedDefaults.legalUpdateGate ?? 'none';
   const onboardingCompletionMode =
     argv.onboardingCompletionMode ?? savedDefaults.onboardingCompletionMode ?? 'enter-app';
+  const authProvider = argv.authProvider ?? savedDefaults.authProvider ?? 'none';
 
   return {
     appName: argv.appName ?? path.basename(projectPath),
@@ -662,6 +695,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     generatorStylingSystem: argv.generatorStylingSystem,
     generatorStateManagement: argv.generatorStateManagement,
     generatorAuthBackend: argv.generatorAuthBackend,
+    authProvider,
     generatorEasSetup: argv.generatorEasSetup,
     overview: argv.overview,
     audience: argv.audience ?? 'Expo app users',
@@ -709,7 +743,8 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
       argv.defaults ?? savedDefaults.defaults,
       ['project-docs', 'guidelines', 'uniwind', 'doctor'],
       dataStart,
-      testToMainSafeguards
+      testToMainSafeguards,
+      authProvider
     ),
   };
 }
@@ -775,6 +810,7 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
+    authProvider: answers.authProvider,
     dataStart: answers.dataStart,
     onboardingFlow: answers.onboardingFlow,
     legalDocumentMode: answers.legalDocumentMode,
@@ -819,6 +855,13 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   const deployedServer = normalizeChoice(raw.deployedServer, ['standard-expo', 'custom', 'none'] as const);
   const expoServerAdapter = normalizeChoice(raw.expoServerAdapter, ['eas', 'express', 'bun', 'other'] as const);
   const dataStart = normalizeChoice(raw.dataStart, ['local', 'supabase'] as const);
+  const authProvider = normalizeChoice(raw.authProvider, [
+    'none',
+    'base',
+    'supabase',
+    'firebase',
+    'convex',
+  ] as const);
   const onboardingFlow = normalizeChoice(raw.onboardingFlow, ['none', 'multi-screen'] as const);
   const legalDocumentMode = normalizeChoice(raw.legalDocumentMode, ['none', 'public-routes', 'onboarding-agreement'] as const);
   const onboardingCompletionMode = normalizeChoice(raw.onboardingCompletionMode, ['enter-app', 'auth', 'account-setup', 'custom'] as const);
@@ -847,6 +890,7 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   }
   if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
   if (dataStart) normalized.dataStart = dataStart;
+  if (authProvider) normalized.authProvider = authProvider;
   if (onboardingFlow) normalized.onboardingFlow = onboardingFlow;
   if (legalDocumentMode) normalized.legalDocumentMode = legalDocumentMode;
   if (onboardingCompletionMode) normalized.onboardingCompletionMode = onboardingCompletionMode;

@@ -702,7 +702,6 @@ describe('CESS intake contract', () => {
       '--tabs',
       '--nativewindui',
       '--zustand',
-      '--firebase',
     ]);
 
     const argv = buildCreateExpoSuperStackArgv(plan);
@@ -712,6 +711,7 @@ describe('CESS intake contract', () => {
     expect(plan.onboardAnswers.legalDocumentMode).toBe('public-routes');
     expect(plan.onboardAnswers.onboardingCompletionMode).toBe('account-setup');
     expect(plan.onboardAnswers.legalUpdateGate).toBe('material-required');
+    expect(plan.onboardAnswers.authProvider).toBe('firebase');
     expect(argv).toContain('--mds-no-guidelines-template');
     expect(argv).toContain('--mds-no-expo-ui');
     expect(argv).toContain('--mds-no-test-to-main');
@@ -729,10 +729,43 @@ describe('CESS intake contract', () => {
     expect(argv).toContain('--mds-research-notes=Customer notes live in Drive.');
     expect(argv).toContain('--mds-deployment-target=Internal preview');
     expect(argv).toContain('--mds-onboarding-flow=multi-screen');
+    expect(argv).toContain('--mds-auth-provider=firebase');
     expect(argv).toContain('--mds-legal-documents=public-routes');
     expect(argv).toContain('--mds-onboarding-completion=account-setup');
     expect(argv).toContain('--mds-legal-update-gate=material-required');
+    expect(argv).not.toContain('--firebase');
     expect(argv.every((arg) => !arg.includes('\n') && !arg.includes('\r'))).toBe(true);
+  });
+
+  it('routes Convex auth through the MDS auth provider instead of upstream flags', () => {
+    const plan = resolveCessPlan({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'convex-auth-app',
+      answers: {
+        scriptLanguage: 'typescript',
+        packageManager: 'pnpm',
+        navigationLibrary: 'expo-router',
+        stylingSystem: 'uniwind',
+        stateManagement: 'zustand',
+        authBackend: 'convex',
+        audience: 'People',
+        coreFlows: 'Sign in and use the app',
+        targetPlatforms: ['ios'],
+        dataStart: 'local',
+      },
+    });
+
+    expect(buildCreateExpoStackFlags(plan.answers)).toEqual([
+      '--typescript',
+      '--pnpm',
+      '--expo-router',
+      '--uniwind',
+      '--zustand',
+    ]);
+    expect(plan.onboardAnswers.authProvider).toBe('convex');
+    expect(plan.onboardAnswers.generatorAuthBackend).toBe('none');
+    expect(plan.onboardAnswers.defaults).toContain('convex');
+    expect(buildCreateExpoSuperStackArgv(plan)).toContain('--mds-auth-provider=convex');
   });
 
   it('records planned EAS intent without forwarding the interactive --eas generator flag', () => {

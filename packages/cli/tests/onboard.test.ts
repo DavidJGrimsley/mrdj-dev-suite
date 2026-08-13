@@ -99,7 +99,9 @@ describe('runOnboardCommand', () => {
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
-    ).resolves.not.toContain('Agent should derive the first core user flows from project/info.md during intake.');
+    ).resolves.not.toContain(
+      'Agent should derive the first core user flows from project/info.md during intake.'
+    );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '## Team Context'
     );
@@ -109,9 +111,9 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       'After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
-      'MDS_DERIVED_PHASE_'
-    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
+    ).resolves.not.toContain('MDS_DERIVED_PHASE_');
     await expect(
       readFile(path.join(projectPath, 'project', 'guidelines.md'), 'utf8')
     ).resolves.toContain('golden source of truth');
@@ -253,6 +255,12 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Expo SQLite');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.not.toContain('Supabase environments and branches');
+    await expect(
+      access(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'))
+    ).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'app', 'exposition', 'index.tsx'), 'utf8')
     ).resolves.toContain('exposition-screen');
@@ -465,10 +473,12 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       "Review styling in the 'Stylist' page"
     );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
-      'MDS_DERIVED_PHASE_'
-    );
-    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.not.toContain(
+    await expect(
+      readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
+    ).resolves.not.toContain('MDS_DERIVED_PHASE_');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
+    ).resolves.not.toContain(
       'Apply Stylist synced theme tokens to production UI components and screens.'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
@@ -488,10 +498,14 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('Test-To-Main Safeguards');
     await expect(
       readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
-    ).resolves.toContain('Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.');
+    ).resolves.toContain(
+      'Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.'
+    );
     await expect(
       readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
-    ).resolves.toContain('If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.');
+    ).resolves.toContain(
+      'If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.'
+    );
     await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
       'clear-expo-start'
     );
@@ -591,7 +605,11 @@ describe('runOnboardCommand', () => {
     expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
     expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
-    const cliPackageJson = JSON.parse(await readFile(path.join(process.cwd(), 'package.json'), 'utf8')) as {
+    const cliPackageJsonPath =
+      path.basename(process.cwd()) === 'cli'
+        ? path.join(process.cwd(), 'package.json')
+        : path.join(process.cwd(), 'packages', 'cli', 'package.json');
+    const cliPackageJson = JSON.parse(await readFile(cliPackageJsonPath, 'utf8')) as {
       version: string;
     };
     expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe(`^${cliPackageJson.version}`);
@@ -1112,18 +1130,108 @@ describe('runOnboardCommand', () => {
     ) as {
       dependencies: Record<string, string>;
     };
-    expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.105.4');
+    expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.112.3');
     expect(packageJson.dependencies['@react-native-async-storage/async-storage']).toBe('2.2.0');
-    expect(packageJson.dependencies['expo-sqlite']).toBeUndefined();
     await expect(
       readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')
-    ).resolves.toContain('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
+    ).resolves.toContain('@react-native-async-storage/async-storage');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
-    ).resolves.toContain('Two Supabase projects');
+    ).resolves.toContain('Supabase environments and branches');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Users signed up');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Sign the guestbook');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain('mds_guestbook_sign');
+    await expect(
+      readFile(
+        path.join(projectPath, 'supabase', 'migrations', '0002_mds_data_exposition.sql'),
+        'utf8'
+      )
+    ).resolves.toContain('mds_demo_signup_count');
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).rejects.toThrow();
+  });
+
+  it('generates MDS auth routes, docs, and protected layouts when auth is selected', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-auth-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'auth-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Auth App',
+      authProvider: 'supabase',
+      onboardingCompletionMode: 'auth',
+      legalUpdateGate: 'material-required',
+    });
+
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
+      dependencies: Record<string, string>;
+    };
+    expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.112.3');
+    expect(packageJson.dependencies['@react-native-async-storage/async-storage']).toBe('2.2.0');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-provider.tsx'), 'utf8')
+    ).resolves.toContain('useAuth');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-adapter.tsx'), 'utf8')
+    ).resolves.toContain('signInWithPassword');
+    await expect(readFile(path.join(projectPath, 'project', 'auth.md'), 'utf8')).resolves.toContain(
+      'Supabase Auth'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'app', '(auth)', 'sign-in.tsx'), 'utf8')
+    ).resolves.toContain('AuthScreen');
+    await expect(
+      readFile(
+        path.join(projectPath, 'supabase', 'migrations', '0001_mds_auth_onboarding.sql'),
+        'utf8'
+      )
+    ).resolves.toContain('auth.uid()');
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
+    );
+    const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain(
+      "import { AuthProvider, useAuth } from '../src/features/auth/auth-provider';"
+    );
+    expect(rootLayout).toContain('<AuthProvider>');
+    expect(rootLayout).toContain('<Stack.Protected guard={!auth.isAuthenticated}>');
+    expect(rootLayout).toContain('<Stack.Screen name="(auth)/sign-in"');
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && legalGateStatus === "complete"}>'
+    );
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('Signed-out users are routed to sign in by the protected app layout.');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
+        'utf8'
+      )
+    ).resolves.toContain("route: '/' as Href");
   });
 
   it('generates a legal update gate route and protected app layout when selected', async () => {
@@ -1159,13 +1267,21 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'app', 'legal', 'updates.tsx'), 'utf8')
     ).resolves.toContain('legal-update-screen');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'), 'utf8')
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
+        'utf8'
+      )
     ).resolves.toContain('LegalAcceptanceAdapter');
     await expect(
-      readFile(path.join(projectPath, 'src', 'features', 'legal', 'legal-update-screen.tsx'), 'utf8')
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-update-screen.tsx'),
+        'utf8'
+      )
     ).resolves.toContain('Review required document updates');
     const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
-    expect(rootLayout).toContain("import { useLegalUpdateGateStatus } from '../src/features/legal/legal-acceptance-adapter';");
+    expect(rootLayout).toContain(
+      "import { useLegalUpdateGateStatus } from '../src/features/legal/legal-acceptance-adapter';"
+    );
     expect(rootLayout).toContain('<Stack.Screen name="legal/updates"');
     expect(rootLayout).toContain('<Stack.Protected guard={legalGateStatus === "complete"}>');
     expect(rootLayout).toContain('<Stack.Screen name="settings"');
@@ -1212,7 +1328,7 @@ describe('runOnboardCommand', () => {
       'KeyboardProvider'
     );
     await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
-      "name=\"exposition/nativewindui\""
+      'name="exposition/nativewindui"'
     );
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
@@ -1241,7 +1357,9 @@ describe('runOnboardCommand', () => {
   });
 
   it('keeps NativeWindUI primitives for React Navigation without generating Expo Router routes', async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-nativewindui-react-nav-'));
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), 'mds-onboard-nativewindui-react-nav-')
+    );
     tempDirs.push(projectPath);
     await writeFile(
       path.join(projectPath, 'package.json'),
@@ -1372,6 +1490,12 @@ describe('runOnboardCommand', () => {
       'supabase',
       'test-to-main',
     ]);
+    expect(deriveDefaults(undefined, ['project-docs'], 'local', false, 'convex')).toEqual([
+      'project-docs',
+      'guidelines',
+      'doctor',
+      'convex',
+    ]);
     expect(deriveDefaults('custom-default', ['project-docs'], 'local', false)).toEqual([
       'custom-default',
       'project-docs',
@@ -1454,6 +1578,7 @@ describe('runOnboardCommand', () => {
           usesExpoNativeTabs: false,
           includeCreateExpoComponents: true,
           dataStart: 'supabase',
+          authProvider: 'convex',
           onboardingFlow: 'multi-screen',
           legalDocumentMode: 'public-routes',
           onboardingCompletionMode: 'auth',
@@ -1475,6 +1600,7 @@ describe('runOnboardCommand', () => {
         usesExpoNativeTabs: false,
         includeCreateExpoComponents: true,
         dataStart: 'supabase',
+        authProvider: 'convex',
         onboardingFlow: 'multi-screen',
         legalDocumentMode: 'public-routes',
         onboardingCompletionMode: 'auth',

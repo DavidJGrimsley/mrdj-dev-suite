@@ -601,6 +601,185 @@ const mdsItems: LibraryItem[] = [
     },
   }),
   defineItem({
+    id: "mds/auth",
+    name: "Auth flow",
+    description:
+      "Provider-neutral authentication routes, UI, provider hooks, and backend-specific adapter variants.",
+    kind: "flow",
+    tags: [
+      "auth",
+      "session",
+      "sign-in",
+      "sign-up",
+      "protected-routes",
+      "eject:auth",
+    ],
+    categories: ["auth", "flows", "onboarding"],
+    compatibility: SDK_56_ROUTER,
+    dependencies: [runtime("expo-router", "~56.2.6", "expo")],
+    composedItems: ["mds/theme-support"],
+    relatedItems: ["mds/onboarding", "mds/legal-documents", "mds/settings"],
+    variants: [
+      {
+        id: "base",
+        name: "Base auth adapter",
+        description:
+          "Adds a provider-neutral auth shell with an in-memory adapter for custom provider work.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        assets: [
+          mdsAsset(
+            "src/features/auth/adapters/base-auth-adapter.tsx",
+            "{{featuresDir}}/auth/auth-adapter.tsx",
+            "support",
+          ),
+          mdsAsset("project/auth-base.md", "project/auth.md", "support"),
+        ],
+        integration: [
+          "Replace the base auth adapter with a real provider before production.",
+          "Wrap the app's root route layout in AuthProvider before using useAuth or protected auth screens.",
+        ],
+      },
+      {
+        id: "with-supabase",
+        name: "With Supabase",
+        description:
+          "Wires the auth shell to Supabase Auth and emits onboarding/legal persistence SQL.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [
+          runtime("@supabase/supabase-js", "^2.112.3"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+        ],
+        assets: [
+          mdsAsset(
+            "src/features/auth/adapters/supabase-auth-adapter.tsx",
+            "{{featuresDir}}/auth/auth-adapter.tsx",
+            "support",
+          ),
+          mdsAsset(
+            "src/services/supabase.ts",
+            "src/services/supabase.ts",
+            "support",
+          ),
+          mdsAsset(
+            "supabase/migrations/0001_mds_auth_onboarding.sql",
+            "supabase/migrations/0001_mds_auth_onboarding.sql",
+            "support",
+          ),
+          mdsAsset("env/supabase.env.example", ".env.example", "support"),
+          mdsAsset("project/auth-supabase.md", "project/auth.md", "support"),
+        ],
+        integration: [
+          "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local.",
+          "Apply the generated Supabase migration before relying on onboarding or legal acceptance persistence.",
+          "Keep Supabase service-role and secret keys out of Expo client code; use RLS policies for client-visible data.",
+        ],
+      },
+      {
+        id: "with-firebase",
+        name: "With Firebase",
+        description:
+          "Wires the auth shell to Firebase Authentication through the Expo-compatible Firebase JS SDK.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [
+          runtime("firebase", "^12.17.1", "expo"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+        ],
+        assets: [
+          mdsAsset(
+            "src/features/auth/adapters/firebase-auth-adapter.tsx",
+            "{{featuresDir}}/auth/auth-adapter.tsx",
+            "support",
+          ),
+          mdsAsset("src/services/firebase.ts", "src/services/firebase.ts", "support"),
+          mdsAsset("env/firebase.env.example", ".env.example", "support"),
+          mdsAsset("project/auth-firebase.md", "project/auth.md", "support"),
+        ],
+        integration: [
+          "Register a Firebase web app, enable Email/Password auth, and set the EXPO_PUBLIC_FIREBASE_* variables.",
+          "Use Firebase JS SDK for this source-copy variant; React Native Firebase requires a development build and native config plugins.",
+          "Add Firestore or another backend-backed audit path before treating legal acceptance as production-persistent.",
+        ],
+      },
+      {
+        id: "with-convex",
+        name: "With Convex",
+        description:
+          "Wires the auth shell to Convex React Native and Convex Auth. Experimental.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [
+          runtime("convex", "^1.43.0"),
+          runtime("@convex-dev/auth", "^0.0.95"),
+          runtime("@auth/core", "0.41.1"),
+          runtime("expo-secure-store", "~56.0.4", "expo"),
+        ],
+        assets: [
+          mdsAsset(
+            "src/features/auth/adapters/convex-auth-adapter.tsx",
+            "{{featuresDir}}/auth/auth-adapter.tsx",
+            "support",
+          ),
+          mdsAsset("src/services/convex.ts", "src/services/convex.ts", "support"),
+          mdsAsset("env/convex.env.example", ".env.example", "support"),
+          mdsAsset("project/auth-convex.md", "project/auth.md", "support"),
+        ],
+        integration: [
+          "Run npx convex dev and npx @convex-dev/auth before using the generated Convex auth adapter.",
+          "Set EXPO_PUBLIC_CONVEX_URL for the Expo app.",
+          "Treat this variant as experimental until the generated app is dogfooded with current Convex Auth APIs.",
+        ],
+      },
+    ],
+    assets: [
+      mdsAsset(
+        "src/features/auth/auth-types.ts",
+        "{{featuresDir}}/auth/auth-types.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/auth/auth-provider.tsx",
+        "{{featuresDir}}/auth/auth-provider.tsx",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/auth/auth-screen.tsx",
+        "{{featuresDir}}/auth/auth-screen.tsx",
+      ),
+      mdsAsset(
+        "src/app/(auth)/sign-in.tsx",
+        "{{appDir}}/(auth)/sign-in.tsx",
+        "route",
+      ),
+      mdsAsset(
+        "src/app/(auth)/sign-up.tsx",
+        "{{appDir}}/(auth)/sign-up.tsx",
+        "route",
+      ),
+      mdsAsset(
+        "src/app/(auth)/reset-password.tsx",
+        "{{appDir}}/(auth)/reset-password.tsx",
+        "route",
+      ),
+    ],
+    integration: {
+      summary:
+        "Add editable auth routes and a provider-backed AuthProvider to an Expo Router app.",
+      instructions: [
+        "Keep /sign-in, /sign-up, and /reset-password public, then protect app routes from the root Expo Router layout.",
+        "Choose exactly one auth provider variant so auth-adapter.tsx has a single implementation.",
+        "Compose with mds/onboarding by setting onboarding completion to /sign-in when users should authenticate after onboarding.",
+      ],
+      notes: [
+        "Protected routes are a client-side navigation guard; provider backends and database policies still enforce data access.",
+        "The Firebase variant intentionally uses Firebase JS SDK, not React Native Firebase, so it stays Expo-compatible.",
+        "The Convex variant is experimental because Convex Auth is beta and requires a Convex initialization step.",
+      ],
+    },
+    preview: {
+      description:
+        "Sign-in, sign-up, password reset, auth provider, and provider-specific adapters.",
+    },
+  }),
+  defineItem({
     id: "mds/onboarding",
     name: "Onboarding flow",
     description:

@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Turn the current MDS Library foundation into a practical source-copy library for app-start flows:
+Turn the current MDS Library foundation into a practical source-copy library for app-start and backend/data flows:
 
 - onboarding flows that can be chosen by experience style;
-- authentication flows that can connect to a real Supabase project;
+- authentication flows that can connect to real provider projects;
+- database/backend client setup that can be added at generation time or later through the library;
 - `create-expo-super-stack` defaults that can generate a complete app shell with onboarding/auth already wired;
+- a maintainable relationship between upstream `create-expo-stack`, the `@mr.dj2u/create-expo-stack` fork, and the MDS `create-expo-super-stack` wrapper;
 - Time2Pay dogfooding before treating the flows as broadly reusable.
 
 The library already supports the metadata model this needs: namespaced item ids, tags, categories, dependencies, composed items, variants, compatibility checks, and safe source-copy restore. This plan should therefore build on the existing registry instead of creating a separate onboarding/auth system.
@@ -16,13 +18,16 @@ The library already supports the metadata model this needs: namespaced item ids,
 - Treat onboarding and auth as separate library concerns that compose together.
 - Build the first onboarding variant now; design the metadata so later variants fit naturally.
 - Build legal documents as a reusable content/rendering block before refined onboarding consumes them.
-- Build auth as a real Supabase-backed flow, not a placeholder account-setup screen.
+- Build auth as a provider-neutral flow with real Supabase/Firebase support and clearly labeled Convex Auth beta support, not a placeholder account-setup screen.
+- Treat database/backend setup as a separate library concern from auth. Supabase Auth and Supabase DB may share a client, but `mds/auth` should not quietly become `mds/db`.
+- Add `mds/db` after auth so developers can add a chosen backend/data layer to an existing app at any point.
 - Dogfood onboarding in Time2Pay before broadening the catalog.
 - Use a clean Expo app as a regression fixture before touching Time2Pay.
 - Teach `create-expo-super-stack` to consume these library items once the registry entries are proven.
-- Implement this as three focused branches: legal documents, onboarding, then Supabase auth.
+- Implement this as focused branches: legal documents, onboarding, auth, landing page, database/backend, then CESS/CES maintenance.
 - Treat onboarding state as its own adapter/composition layer. The UI flow should not be tied directly to Zustand or Supabase, but CESS should choose a production persistence adapter when the selected stack supports one.
 - Recommended persistence stack by the end of Branch 3: Supabase auth plus onboarding database tables as the source of truth, with Zustand as the local app cache when Zustand is selected.
+- Recommended backend-library stack by the end of Branch 5: `mds/db` owns provider data clients and adapter contracts; `mds/auth` owns sessions; `mds/onboarding` owns app-start flow; composition items wire them together only where the integration is actually useful.
 
 ## Reference Repositories
 
@@ -51,14 +56,21 @@ Use tags and categories for discovery:
 
 - `category: onboarding`
 - `category: auth`
+- `category: database`
+- `category: backend`
 - `tag: onboarding`
 - `tag: auth`
+- `tag: database`
+- `tag: backend`
+- `tag: data-client`
 - `tag: legal`
 - `tag: terms`
 - `tag: privacy`
 - `tag: agreements`
 - `tag: content-pages`
 - `tag: supabase`
+- `tag: firebase`
+- `tag: convex`
 - `tag: session`
 - `tag: profile`
 - `tag: scrollable`
@@ -237,7 +249,7 @@ Registry metadata:
 - `categories: ["onboarding", "flows"]`
 - `tags: ["onboarding", "multi-screen", "without-auth"]`
 - `variants: ["multi-screen"]` initially
-- `relatedItems: ["mds/auth-supabase"]` once auth exists
+- `relatedItems: ["mds/auth"]` once auth exists
 - `composedItems: ["mds/theme-support"]`
 - compose with `mds/legal-documents` only when legal acceptance is selected
 
@@ -261,7 +273,7 @@ Do not duplicate every onboarding variant just to support auth.
 Preferred model:
 
 - `mds/onboarding` owns onboarding UI and progress.
-- `mds/auth-supabase` owns session/auth UI.
+- `mds/auth` owns session/auth UI.
 - A composition item, for example `mds/onboarding-auth-supabase`, wires them together.
 
 Auth should be built as reusable building blocks. The onboarding item should expose a small completion seam, not clone the whole flow for every auth choice.
@@ -279,7 +291,7 @@ type OnboardingCompletionMode =
 Expected behavior:
 
 - Without auth, the final onboarding step can be one fewer screen or a simple "Let's begin" screen that routes into the app.
-- With auth, the same onboarding flow changes its final action to route to sign-in/sign-up or uses the `mds/auth-supabase` building blocks in the final step.
+- With auth, the same onboarding flow changes its final action to route to sign-in/sign-up or uses the `mds/auth` building blocks in the final step.
 - App-specific behavior should be passed through a clear completion route/callback instead of hardcoded into the shared source.
 
 This lets the library support:
@@ -287,7 +299,7 @@ This lets the library support:
 ```text
 mds/onboarding --variant multi-screen
 mds/onboarding --variant scrollable
-mds/auth-supabase
+mds/auth --variant with-supabase
 mds/onboarding-auth-supabase
 ```
 
@@ -321,7 +333,7 @@ Recommended model:
 - `mds/onboarding` owns screens, route flow, legal-review UI, and completion handoff.
 - `mds/legal-documents` owns legal content, renderers, and legal acceptance document metadata.
 - `mds/onboarding-state` or an equivalent support module owns the state contract and default adapters.
-- `mds/auth-supabase` owns session state, auth screens, Supabase client setup, and route guards.
+- `mds/auth --variant with-supabase` owns session state, auth screens, Supabase client setup, and route guards.
 - `mds/onboarding-auth-supabase` composes onboarding, legal docs, auth, and Supabase-backed onboarding persistence.
 
 The base onboarding screens should call a tiny source-copy adapter instead of importing Zustand or Supabase directly:
@@ -363,7 +375,7 @@ This gives the library a useful progression:
 mds/onboarding
 mds/onboarding-state --variant memory
 mds/onboarding-state --variant zustand-local
-mds/auth-supabase
+mds/auth --variant with-supabase
 mds/onboarding-auth-supabase
 ```
 
@@ -414,25 +426,37 @@ Acceptance:
 - The flow can be removed, bypassed, or marked complete without corrupting app navigation.
 - The shared library item still works in a clean Expo test app after Time2Pay dogfooding.
 
-## Part 2 — Supabase Auth Plan
+## Part 2 — Auth Library Plan
 
 ### Goal
 
-Add a real Supabase-backed auth flow to the MDS Library and make `create-expo-super-stack` capable of generating a usable app with auth from the start.
+Add a real provider-backed auth flow to the MDS Library and make `create-expo-super-stack` capable of generating a usable app with auth from the start.
 
 This should be built after or alongside the baseline onboarding item, but auth needs its own clean boundary. The current `account-setup-screen` placeholder is not auth and should not be treated as auth.
+
+Implementation shape:
+
+- `mds/auth` is the reusable base library item.
+- Variants: `base`, `with-supabase`, `with-firebase`, and `with-convex`.
+- Supabase is the production-ready hosted path for this repo's current generated-app flow.
+- Firebase uses the Expo-compatible Firebase JS SDK.
+- Convex is intentionally experimental so MDS can explore Convex Auth without pretending the rest of the repo already depends on it.
 
 ### First production-worthy item
 
 Add a new item such as:
 
 ```text
-mds/auth-supabase
+mds/auth
 ```
 
 Initial scope:
 
-- Supabase client setup using `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+- Provider-neutral auth types, provider, and screens.
+- Base in-memory adapter for custom auth experiments.
+- Supabase client setup using `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- Firebase JS SDK client setup using `EXPO_PUBLIC_FIREBASE_*` values.
+- Convex client/auth setup using `EXPO_PUBLIC_CONVEX_URL`.
 - Sign-in screen.
 - Sign-up screen.
 - Password reset/request screen if lightweight enough for v1; otherwise track as follow-up.
@@ -446,8 +470,11 @@ Registry metadata:
 
 - `kind: "flow"`
 - `categories: ["auth", "flows"]`
-- `tags: ["auth", "supabase", "session", "sign-in", "sign-up"]`
-- `dependencies: ["@supabase/supabase-js", "expo-secure-store" or chosen storage dependency]`
+- `tags: ["auth", "session", "sign-in", "sign-up", "protected-routes"]`
+- provider variant dependencies:
+  - Supabase: `@supabase/supabase-js`, `expo-sqlite`
+  - Firebase: `firebase`, `@react-native-async-storage/async-storage`
+  - Convex: `convex`, `@convex-dev/auth`, `@auth/core`, `expo-secure-store`
 - `compatibility: Expo SDK 56, Expo Router`
 - `composedItems: ["mds/theme-support"]`
 
@@ -491,15 +518,18 @@ CESS should generate either a `supabase/migrations/...` SQL file or a clearly na
 
 ### CESS integration
 
-Once `mds/auth-supabase` works through the library:
+Once `mds/auth` works through the library:
 
 1. Add a CESS option for auth:
    - no auth;
-   - Supabase auth.
-2. If Supabase auth is selected, CESS should:
+   - base auth adapter;
+   - Supabase auth;
+   - Firebase auth;
+   - Convex auth.
+2. If an auth provider is selected, CESS should:
    - install the auth library item;
    - add `.env.example` keys;
-   - add project docs explaining where to place the real Supabase URL and anon key;
+   - add project docs explaining where to place the provider environment variables;
    - wire the root layout/route guard;
    - add a settings/profile sign-out route or hook point.
 3. Add an onboarding persistence option:
@@ -521,12 +551,19 @@ Use the dedicated Supabase project that exists for this purpose.
 
 Dogfood sequence:
 
-1. Confirm the Supabase project URL and anon key are available locally, not committed.
+1. Confirm the Supabase project URL and publishable/anon key are available locally, not committed.
 2. Create a clean Expo app with CESS and the Supabase auth option.
 3. Add the auth item through the library path first if CESS is not wired yet.
 4. Verify sign-up, sign-in, session persistence, sign-out, and app restart behavior.
 5. Verify the same flow works on native and web where supported.
 6. Only after the clean app passes, wire the same flow into Time2Pay if Time2Pay needs auth for the onboarding release.
+
+Credential policy:
+
+- It is acceptable for local smoke-test apps to use a shared development Supabase project through ignored `.env.local` files.
+- Do not bake shared Supabase credentials into library assets, generated committed files, docs examples, or published templates.
+- A public Expo client key is not a service-role secret, but it still points at a real project. Treat it as environment configuration, not source code.
+- If the goal is instant demo sign-in, prefer a documented optional `--use-local-dev-env` or local fixture copy step instead of committed credentials.
 
 Acceptance:
 
@@ -536,15 +573,127 @@ Acceptance:
 - The library can add auth without overwriting customized app auth files unless explicitly confirmed.
 - The agent can explain exactly what the developer must configure in Supabase.
 
+## Part 3 - Database Library Plan
+
+### Goal
+
+Add a reusable `mds/db` library item so CESS-generated apps and existing apps can add the chosen data/backend client later without rerunning the generator or copying one-off template code by hand.
+
+This should be deliberately thinner than a full data framework. The library should provide provider setup, environment docs, safe adapter contracts, and provider-specific starter files. App-specific tables, business queries, generated Convex functions, Firestore collections, or Supabase schemas should remain app work unless they belong to another reusable MDS flow.
+
+### First production-worthy item
+
+Add a new item such as:
+
+```text
+mds/db
+```
+
+Initial variants:
+
+```text
+base
+with-supabase
+with-firebase
+with-convex
+```
+
+Initial scope:
+
+- Provider-neutral data/backend adapter types.
+- A small `DataProvider` or `BackendProvider` only if the selected provider needs app-wide context. Do not add a global provider just to look symmetrical.
+- `base` variant with a no-network adapter or local/mock boundary for apps that want to define a backend later.
+- Supabase variant with client setup, `.env.example` keys, migrations folder, RLS notes, and a clear separation between Auth and DB usage.
+- Firebase variant with Firebase app setup plus Firestore-oriented starter docs. Keep Firebase Auth in `mds/auth`; keep Firestore/data in `mds/db`.
+- Convex variant with Convex client/provider setup, generated-folder expectations, setup docs, and a clear note that Convex is a backend/data/functions choice, while Convex Auth beta remains an auth variant.
+- Optional onboarding adapter hooks so `mds/onboarding` can persist completion/legal state through the selected backend without importing provider SDKs directly.
+- Optional auth bridge hooks so `mds/auth` can expose user identity to DB adapters without DB adapters reaching into route guards.
+- No committed real credentials and no service-role/admin keys in client files.
+
+Registry metadata:
+
+- `kind: "integration"`
+- `categories: ["database", "backend", "data"]`
+- `tags: ["database", "backend", "data-client", "supabase", "firebase", "convex"]`
+- Provider variant dependencies:
+  - Supabase: `@supabase/supabase-js`, `expo-sqlite` if localStorage/session reuse is needed by the shared client.
+  - Firebase: `firebase`.
+  - Convex: `convex`.
+- `compatibility: Expo SDK 56, Expo Router`
+- `relatedItems: ["mds/auth", "mds/onboarding", "mds/legal-documents", "mds/settings"]`
+- `composedItems: ["mds/theme-support"]` only if the item ships UI, such as a backend status screen.
+
+### Adapter contract
+
+Keep the adapter contract narrow and flow-oriented, not ORM-like:
+
+```ts
+type MdsBackendProvider = "local" | "supabase" | "firebase" | "convex";
+
+type MdsBackendSession = {
+  provider: MdsBackendProvider;
+  userId?: string;
+  isReady: boolean;
+};
+
+type MdsOnboardingStore = {
+  loadState(userId?: string): Promise<OnboardingState | null>;
+  saveState(state: OnboardingState, userId?: string): Promise<void>;
+  recordLegalAcceptance(acceptance: OnboardingDocumentAcceptance, userId?: string): Promise<void>;
+};
+```
+
+Do not try to abstract all database reads/writes. The useful reusable layer is the boundary between shared MDS flows and app-owned backend work.
+
+### Compatibility with auth, onboarding, and legal docs
+
+The integration direction should be:
+
+- `mds/auth` exposes session/user state.
+- `mds/db` exposes provider clients and small flow persistence adapters.
+- `mds/onboarding` consumes only the onboarding persistence adapter, not Supabase/Firebase/Convex directly.
+- `mds/legal-documents` consumes only the legal acceptance adapter, not provider SDKs directly.
+- Composition items choose and wire concrete adapters:
+  - `mds/onboarding-db-supabase`
+  - `mds/onboarding-db-firebase`
+  - `mds/onboarding-db-convex`
+  - `mds/auth-db-supabase` only if shared setup materially reduces duplication.
+
+Avoid a giant matrix of every auth provider times every DB provider. It is valid to support Supabase Auth with Convex DB, Firebase Auth with Supabase DB, or base auth with any DB if the app wants that.
+
+### CESS integration
+
+CESS already asks about data/backend needs, but today that decision is partly scaffold template and partly project docs. After `mds/db`, CESS should prefer library items:
+
+1. Ask for auth provider and DB/backend provider separately.
+2. If both choices point at the same provider, share setup where practical without merging the concepts.
+3. Install `mds/auth` for auth.
+4. Install `mds/db` for data/backend.
+5. Install composition adapters only when onboarding/legal/auth persistence needs them.
+6. Write `.env.example` keys only; write local `.env.local` only for explicit smoke-test/dev convenience and keep it ignored.
+7. Record the selected provider choices in `project/info.md`, `project/guidelines.md`, and generated TODOs.
+
+### Acceptance
+
+- A clean Expo app can add `mds/db --variant with-supabase`, compile, and read the generated setup docs.
+- A clean Expo app can add `mds/db --variant with-firebase`, compile, and read Firestore setup docs.
+- A clean Expo app can add `mds/db --variant with-convex`, compile after the documented Convex initialization step, and show where Convex-generated files belong.
+- `mds/onboarding` can persist through a selected DB adapter without importing provider SDKs directly.
+- `mds/auth` can coexist with a different DB provider.
+- CESS can generate an app with Supabase Auth and Convex DB without pretending they are the same selection.
+- Tests prove variant dependency resolution, asset copy, env example merge, and idempotency.
+
 ## Recommended Build Order
 
-Build onboarding first, then auth, but design onboarding with the auth seam from day one.
+Build onboarding first, then auth, then database/backend support, but design onboarding with the auth and persistence seams from day one.
 
 Reasoning:
 
 - Time2Pay needs onboarding soon.
 - Onboarding can be dogfooded without waiting for the auth system.
 - Auth is higher-risk because it touches env vars, session persistence, route guards, and real backend behavior.
+- DB/backend support is broader than auth and should come after auth proves the provider/client boundary.
+- CESS/CES maintenance should happen after the library items exist so CESS can consume them instead of hardcoding one-off templates.
 - A clean onboarding/auth boundary prevents the app-start flow from becoming one giant tangled template.
 
 Suggested order:
@@ -556,22 +705,29 @@ Suggested order:
 5. Compose onboarding with `mds/legal-documents` only when legal acceptance is selected.
 6. Test onboarding in a clean Expo app.
 7. Dogfood onboarding in Time2Pay.
-8. Build `mds/auth-supabase`.
+8. Build `mds/auth` with base, Supabase, Firebase, and Convex variants.
 9. Test auth in a clean Expo app against the dedicated Supabase project.
 10. Add onboarding-state adapters and Supabase onboarding tables.
 11. Add `mds/onboarding-auth-supabase` composition.
 12. Teach CESS to install/wire onboarding, auth, legal documents, and persistence options.
 13. Dogfood the combined path in Time2Pay or a hosted-mode sample app.
+14. Add `mds/db` with base, Supabase, Firebase, and Convex variants.
+15. Move CESS data/backend choices to `mds/db` library installation where practical.
+16. Add Convex as a CESS DB/backend option, separate from Convex Auth beta.
+17. Document and automate the CES -> `@mr.dj2u/create-expo-stack` -> CESS maintenance path.
 
 ## Branch Strategy
 
-Use three focused branches:
+Use focused branches:
 
 1. `feature/library-legal-documents`
 2. `feature/library-onboarding-flow`
-3. `feature/library-supabase-auth`
+3. `feature/library-auth`
+4. `feature/library-landing-page`
+5. `feature/library-db`
+6. `feature/cess-library-fork-maintenance`
 
-Each branch should merge independently after its own clean-app test and package checks pass. This keeps the reusable layers honest and avoids a giant branch where legal docs, onboarding, auth, CESS, and Time2Pay dogfooding are all tangled together.
+Each branch should merge independently after its own clean-app test and package checks pass. This keeps the reusable layers honest and avoids a giant branch where legal docs, onboarding, auth, DB, CESS, fork maintenance, and Time2Pay dogfooding are all tangled together.
 
 ### Branch 1 — Legal Documents
 
@@ -621,11 +777,11 @@ Testing:
   - dogfood onboarding copy/routing on a dedicated branch;
   - keep app-specific text and business decisions in Time2Pay.
 
-### Branch 3 — Supabase Auth
+### Branch 3 - Auth
 
 Scope:
 
-- Add `mds/auth-supabase`.
+- Add `mds/auth` with base, Supabase, Firebase, and Convex variants.
 - Add Supabase client setup.
 - Add sign-in/sign-up screens.
 - Add session provider/hook.
@@ -663,9 +819,108 @@ Testing:
 - standard
 - with parallax
 
+### Branch 5 - Database/Backend Library
+
+Scope:
+
+- Add `mds/db`.
+- Add variants:
+  - `base`;
+  - `with-supabase`;
+  - `with-firebase`;
+  - `with-convex`.
+- Move reusable Supabase/Firebase data-client setup out of CESS-only template logic and into library assets where possible.
+- Keep auth-specific provider logic in `mds/auth`; keep data/backend provider logic in `mds/db`.
+- Add onboarding/legal persistence adapter assets only where they reduce direct provider coupling.
+- Add registry tests for variants, dependencies, env examples, idempotency, and composed/related item metadata.
+- Add CLI/library tests proving `mds/db` can be added to an existing generated app.
+- Update docs so developers know how to combine mismatched providers, for example Supabase Auth plus Convex DB.
+
+Testing:
+
+- Clean Expo app:
+  - add `mds/db --variant base`;
+  - add `mds/db --variant with-supabase`;
+  - add `mds/db --variant with-firebase`;
+  - add `mds/db --variant with-convex`;
+  - run typecheck, lint, and Doctor after each realistic install path.
+- Combined flow:
+  - generate auth + onboarding;
+  - add DB later;
+  - verify onboarding/legal persistence uses adapters rather than direct provider imports.
+- Existing app:
+  - add a DB variant to an app that already has onboarding or auth;
+  - verify library restore/overwrite behavior is safe.
+
+Acceptance:
+
+- `mds/db` can be installed after app creation.
+- CESS can choose a DB/backend provider without conflating it with auth provider.
+- Provider docs are honest about what is ready, experimental, or app-specific.
+- No generated client file contains service-role/admin credentials.
+
+### Branch 6 - CESS, CES, and Fork Maintenance
+
+Scope:
+
+- Add Convex as a first-class CESS DB/backend option.
+- Keep Convex Auth beta available only through the auth provider question, with wording that makes the beta status obvious.
+- Update CESS to prefer MDS library items over bespoke generated template code for auth, DB, onboarding, legal docs, and future app-start flows.
+- Compare current upstream `create-expo-stack` behavior against the MDS `create-expo-super-stack` direction:
+  - what upstream CES owns;
+  - what `@mr.dj2u/create-expo-stack` fork changes;
+  - what CESS wraps or adds after generation;
+  - what should become MDS library items instead of fork patches.
+- Add the `@mr.dj2u/create-expo-stack` fork to this MDS repo's maintenance documentation and scripts if it is not already represented clearly.
+- Add `npm ci`/install verification for the fork only if it catches package-lock or package-manager behavior that `pnpm install --frozen-lockfile` does not cover.
+- Create a concrete upstream-sync guide so fixes from CES can be pulled into the fork without losing MDS additions.
+
+Maintenance guide requirements:
+
+1. Track three layers explicitly:
+   - upstream `create-expo-stack`;
+   - `@mr.dj2u/create-expo-stack` fork;
+   - MDS `create-expo-super-stack` wrapper plus library additions.
+2. Prefer upstream PRs for generic improvements that RoniOSS may accept.
+3. Keep MDS-specific stack options, such as Uniwind and MDS library installation, in the fork/wrapper layer when upstream does not want them.
+4. Use a normal fork branch for upstream PRs, and a separate MDS integration branch for local-only additions. Avoid "fork of a fork" unless GitHub permissions force it; branches/remotes are usually enough.
+5. When upstream CES releases:
+   - fetch upstream;
+   - merge or rebase onto the MDS fork integration branch;
+   - resolve conflicts in favor of upstream for generic fixes and in favor of MDS only for intentional stack additions;
+   - run fork tests;
+   - update the dependency consumed by `packages/create-expo-super-stack`;
+   - run CESS tests and a clean generated-app smoke test.
+6. Record any one-off conflict decision in the guide so the next sync does not require rediscovery.
+
+Testing:
+
+- Unit tests:
+  - CESS parses Convex DB/backend choices independently from auth choices.
+  - CESS resolves selected auth/DB/onboarding/legal options to library item installs.
+  - create-expo-super-stack still rejects invalid provider flags.
+- Package tests:
+  - build `@mr.dj2u/create-expo-stack` fork if source is vendored or checked out as part of the repo;
+  - run `npm ci` only in the fork workspace if the fork publishes/ships npm lock behavior that pnpm does not exercise;
+  - run CESS wrapper tests.
+- Smoke tests:
+  - clean app with Supabase Auth + Supabase DB;
+  - clean app with Supabase Auth + Convex DB;
+  - existing app add `mds/db` later.
+
+Acceptance:
+
+- A future agent can update from upstream CES using the guide without guessing which repo owns which change.
+- MDS-specific library behavior is not lost when pulling upstream CES fixes.
+- CESS installs reusable MDS library items where possible instead of duplicating template code.
+- Convex appears as a DB/backend option without implying Convex Auth is the default or mature path.
+
+### Branch 7 - settings page(s)
+Time2Pay has one that is configured for web (haven't really tested on mobile but we can easily test a generated app on mobile) and has some fancy sections, some sections that open to other pages, and a sign out button (we want to ship an empty-ish version of that), it should be built with universal components if expo ui is a chosen library.
+
 ## How To Add A New Library Flow
 
-For onboarding/auth work, the repeatable library-add workflow is:
+For onboarding/auth/db work, the repeatable library-add workflow is:
 
 1. Build or refine source assets under `packages/library-registry/assets/...`.
 2. Add or update the item metadata in `packages/library-registry/src/catalog.ts`.

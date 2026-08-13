@@ -46,6 +46,7 @@ export interface ParsedArgs {
     researchNotes?: string;
     dataNeeds?: string;
     dataStart?: "local" | "supabase";
+    authProvider?: OnboardArgv["authProvider"];
     onboardingFlow?: OnboardArgv["onboardingFlow"];
     legalDocumentMode?: OnboardArgv["legalDocumentMode"];
     onboardingCompletionMode?: OnboardArgv["onboardingCompletionMode"];
@@ -83,7 +84,7 @@ type OnboardWebOutput = "static" | "server" | "spa" | "none";
 type ExpoWebOutput = "single" | "static" | "server";
 const DEFAULT_PROJECT_NAME = "my-expo-app";
 export const EXPECTED_EXPO_SDK_MAJOR = 56;
-export const EXPECTED_EXPO_PACKAGE_SPEC = "expo@latest";
+export const EXPECTED_EXPO_PACKAGE_SPEC = "expo@~56.0.19";
 const STYLIST_SYNC_API_ROUTES = [
   "app/exposition/stylist-sync+api.ts",
   "src/app/exposition/stylist-sync+api.ts",
@@ -125,7 +126,7 @@ function quoteWindowsShellArg(value: string): string {
     return '""';
   }
   const escaped = value.replace(/(["^&|<>])/g, "^$1");
-  if (/^[A-Za-z0-9_./:@+=,-]+$/u.test(escaped)) {
+  if (/^[A-Za-z0-9_./:@+=,~-]+$/u.test(escaped)) {
     return escaped;
   }
   return `"${escaped}"`;
@@ -176,11 +177,11 @@ export async function main(): Promise<void> {
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
   const movedAppDir =
-    !parsed.mds.skipCreate && plan.answers.appDirectory === "src"
+    plan.answers.appDirectory === "src"
       ? await moveRootAppIntoSrc(projectPath)
       : null;
   const consolidatedSourceRepairs =
-    !parsed.mds.skipCreate && plan.answers.appDirectory === "src"
+    plan.answers.appDirectory === "src"
       ? await consolidateRootSourceFolders(projectPath)
       : [];
   const movedImportRepairs = movedAppDir
@@ -510,6 +511,25 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (
+      arg.startsWith("--mds-auth-provider=") ||
+      arg.startsWith("--mds-auth-backend=")
+    ) {
+      const value = arg.includes("--mds-auth-provider=")
+        ? arg.slice("--mds-auth-provider=".length)
+        : arg.slice("--mds-auth-backend=".length);
+      if (
+        value === "none" ||
+        value === "base" ||
+        value === "supabase" ||
+        value === "firebase" ||
+        value === "convex"
+      ) {
+        mds.authProvider = value;
+      }
+      continue;
+    }
+
     if (arg.startsWith("--mds-onboarding-flow=")) {
       const value = arg.slice("--mds-onboarding-flow=".length);
       if (value === "none" || value === "multi-screen") {
@@ -702,6 +722,7 @@ export function renderHelpText(): string {
     "  --mds-no-guidelines-template  Do not use the bundled MDS project/guidelines template",
     "  --mds-app-name=<name>         Set display app name for project memory",
     "  --mds-screens=                List must-include screens for project memory",
+    "  --mds-auth-provider=          none | base | supabase | firebase | convex",
     "  --mds-onboarding-flow=        none | multi-screen",
     "  --mds-legal-documents=        none | public-routes | onboarding-agreement",
     "  --mds-onboarding-completion=  enter-app | auth | account-setup | custom",
@@ -1141,17 +1162,22 @@ async function resolveGeneratedProjectPath(
   return directPath;
 }
 
-async function moveRootAppIntoSrc(
+export async function moveRootAppIntoSrc(
   projectPath: string,
 ): Promise<{ from: string; to: string } | null> {
   const rootAppDir = path.join(projectPath, "app");
   const srcAppDir = path.join(projectPath, "src", "app");
-  if (!(await pathExists(rootAppDir)) || (await pathExists(srcAppDir))) {
+  if (!(await pathExists(rootAppDir))) {
     return null;
   }
 
   await mkdir(path.dirname(srcAppDir), { recursive: true });
-  await rename(rootAppDir, srcAppDir);
+  if (await pathExists(srcAppDir)) {
+    await mergeDirectoryInto(rootAppDir, srcAppDir);
+    await rm(rootAppDir, { recursive: true, force: true });
+  } else {
+    await rename(rootAppDir, srcAppDir);
+  }
   return { from: rootAppDir, to: srcAppDir };
 }
 
@@ -2468,6 +2494,7 @@ function buildOnboardArgv(
     researchNotes: parsed.mds.researchNotes,
     dataNeeds: parsed.mds.dataNeeds,
     dataStart: parsed.mds.dataStart,
+    authProvider: parsed.mds.authProvider,
     onboardingFlow: parsed.mds.onboardingFlow,
     legalDocumentMode: parsed.mds.legalDocumentMode,
     onboardingCompletionMode: parsed.mds.onboardingCompletionMode,

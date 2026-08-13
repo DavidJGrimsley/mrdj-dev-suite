@@ -2,14 +2,8 @@ import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  DEFAULT_STYLIST_THEME,
-  renderGlobalCssThemeBlock,
-} from './stylist-theme.js';
-import {
-  loadLibraryTextAssets,
-  requireLibraryTextAsset,
-} from './library-generation.js';
+import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock } from './stylist-theme.js';
+import { loadLibraryTextAssets, requireLibraryTextAsset } from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
 
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
@@ -22,6 +16,7 @@ export type OnboardingFlow = 'none' | 'multi-screen';
 export type LegalDocumentMode = 'none' | 'public-routes' | 'onboarding-agreement';
 export type OnboardingCompletionMode = 'enter-app' | 'auth' | 'account-setup' | 'custom';
 export type LegalUpdateGate = 'none' | 'material-required';
+export type AuthProviderChoice = 'none' | 'base' | 'supabase' | 'firebase' | 'convex';
 
 export interface OnboardAnswers {
   appName: string;
@@ -29,9 +24,16 @@ export interface OnboardAnswers {
   generatorPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   generatorNavigationLibrary?: 'expo-router' | 'react-navigation';
   generatorReactNavigationLayout?: 'stack' | 'tabs' | 'drawer';
-  generatorStylingSystem?: 'uniwind' | 'nativewind' | 'nativewindui' | 'tamagui' | 'restyle' | 'stylesheet';
+  generatorStylingSystem?:
+    | 'uniwind'
+    | 'nativewind'
+    | 'nativewindui'
+    | 'tamagui'
+    | 'restyle'
+    | 'stylesheet';
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
+  authProvider?: AuthProviderChoice;
   generatorEasSetup?: boolean;
   overview?: string;
   audience: string;
@@ -109,6 +111,7 @@ interface NavigationShell {
 }
 
 interface GeneratedLibraryRouteAssets {
+  auth?: ReadonlyMap<string, string>;
   onboarding?: ReadonlyMap<string, string>;
   legal?: ReadonlyMap<string, string>;
   settings?: ReadonlyMap<string, string>;
@@ -162,7 +165,29 @@ function shouldGenerateOnboarding(answers: OnboardAnswers): boolean {
   return answers.onboardingFlow === 'multi-screen';
 }
 
-function onboardingLibraryVariant(answers: OnboardAnswers): 'multi-screen' | 'multi-screen-with-legal' {
+function shouldGenerateAuth(answers: OnboardAnswers): boolean {
+  return (answers.authProvider ?? 'none') !== 'none';
+}
+
+function authLibraryVariant(
+  answers: OnboardAnswers
+): 'base' | 'with-supabase' | 'with-firebase' | 'with-convex' {
+  switch (answers.authProvider ?? 'base') {
+    case 'supabase':
+      return 'with-supabase';
+    case 'firebase':
+      return 'with-firebase';
+    case 'convex':
+      return 'with-convex';
+    case 'base':
+    case 'none':
+      return 'base';
+  }
+}
+
+function onboardingLibraryVariant(
+  answers: OnboardAnswers
+): 'multi-screen' | 'multi-screen-with-legal' {
   return answers.legalDocumentMode === 'onboarding-agreement'
     ? 'multi-screen-with-legal'
     : 'multi-screen';
@@ -192,16 +217,18 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
     case 'auth':
       return {
         mode: 'auth',
-        route: '/sign-in',
-        label: 'Continue to sign in',
-        helperText: 'Auth handoff selected. Add the auth route in the auth library branch or edit this route.',
+        route: '/',
+        label: 'Continue to app',
+        helperText:
+          'Auth handoff selected. Signed-out users are routed to sign in by the protected app layout.',
       };
     case 'account-setup':
       return {
         mode: 'account-setup',
         route: '/account-setup',
         label: 'Continue to account setup',
-        helperText: 'Account setup handoff selected. Add that route or edit this route when profile setup exists.',
+        helperText:
+          'Account setup handoff selected. Add that route or edit this route when profile setup exists.',
       };
     case 'custom':
       return {
@@ -236,7 +263,7 @@ function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers
 
   if (!completionPattern.test(source)) {
     throw new Error(
-      'Unable to update onboarding completion config; template did not match the expected completion block.',
+      'Unable to update onboarding completion config; template did not match the expected completion block.'
     );
   }
 
@@ -257,8 +284,20 @@ const LOCAL_DATA_DEPENDENCIES = {
 } as const;
 
 const SUPABASE_DEPENDENCIES = {
+  '@supabase/supabase-js': '^2.112.3',
   '@react-native-async-storage/async-storage': '2.2.0',
-  '@supabase/supabase-js': '^2.105.4',
+} as const;
+
+const FIREBASE_AUTH_DEPENDENCIES = {
+  '@react-native-async-storage/async-storage': '2.2.0',
+  firebase: '^12.17.1',
+} as const;
+
+const CONVEX_AUTH_DEPENDENCIES = {
+  '@auth/core': '0.41.1',
+  '@convex-dev/auth': '^0.0.95',
+  convex: '^1.43.0',
+  'expo-secure-store': '~56.0.4',
 } as const;
 
 const UNIWIND_DEPENDENCIES = {
@@ -424,9 +463,17 @@ export async function scaffoldRichBoilerplate(
     loadLibraryTextAssets('mds/exposition-components', libraryContext),
     loadLibraryTextAssets('mds/stylist-sync-support', libraryContext),
   ]);
+  const authAssets =
+    navigationShell.library === 'expo-router' && shouldGenerateAuth(answers)
+      ? await loadLibraryTextAssets('mds/auth', libraryContext, authLibraryVariant(answers))
+      : undefined;
   const onboardingAssets =
     navigationShell.library === 'expo-router' && shouldGenerateOnboarding(answers)
-      ? await loadLibraryTextAssets('mds/onboarding', libraryContext, onboardingLibraryVariant(answers))
+      ? await loadLibraryTextAssets(
+          'mds/onboarding',
+          libraryContext,
+          onboardingLibraryVariant(answers)
+        )
       : undefined;
   const legalAssets =
     navigationShell.library === 'expo-router' &&
@@ -462,11 +509,8 @@ export async function scaffoldRichBoilerplate(
     assets: ReadonlyMap<string, string> | undefined,
     destination: string,
     fallback: () => string
-  ): string =>
-    assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback();
-  const legalLibraryAssetsFor = (
-    destination: string
-  ): ReadonlyMap<string, string> | undefined =>
+  ): string => (assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback());
+  const legalLibraryAssetsFor = (destination: string): ReadonlyMap<string, string> | undefined =>
     onboardingAssets?.has(destination)
       ? onboardingAssets
       : legalAssets?.has(destination)
@@ -480,6 +524,9 @@ export async function scaffoldRichBoilerplate(
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'features', 'legal'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'auth'), {
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'features', 'settings'), {
@@ -653,7 +700,13 @@ export async function scaffoldRichBoilerplate(
           ...(onboardingAssets.has('src/features/onboarding/legal-review-screen.tsx')
             ? [
                 await writeIfAllowed(
-                  path.join(projectPath, 'src', 'features', 'onboarding', 'legal-review-screen.tsx'),
+                  path.join(
+                    projectPath,
+                    'src',
+                    'features',
+                    'onboarding',
+                    'legal-review-screen.tsx'
+                  ),
                   requireLibraryTextAsset(
                     'mds/onboarding',
                     onboardingAssets,
@@ -821,13 +874,14 @@ export async function scaffoldRichBoilerplate(
 
   if (includeNativeWindUiExposition) {
     if (nativeWindUiAssets) {
-      const generatedNativeWindUiAssets = [...nativeWindUiAssets].filter(([destination]) =>
-        destination === 'src/features/exposition/nativewindui-screen.tsx' ||
-        destination.startsWith('src/components/nativewindui/') ||
-        destination.startsWith('src/lib/') ||
-        destination === 'src/theme/colors.ts' ||
-        destination === 'src/theme/with-opacity.ts' ||
-        destination === 'src/theme/index.ts'
+      const generatedNativeWindUiAssets = [...nativeWindUiAssets].filter(
+        ([destination]) =>
+          destination === 'src/features/exposition/nativewindui-screen.tsx' ||
+          destination.startsWith('src/components/nativewindui/') ||
+          destination.startsWith('src/lib/') ||
+          destination === 'src/theme/colors.ts' ||
+          destination === 'src/theme/with-opacity.ts' ||
+          destination === 'src/theme/index.ts'
       );
       results.push(
         ...(await Promise.all(
@@ -849,6 +903,10 @@ export async function scaffoldRichBoilerplate(
     await removeOptionalFile(
       path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx')
     );
+  }
+
+  if (authAssets) {
+    results.push(...(await writeLibraryAssetMap(projectPath, authAssets, force)));
   }
 
   if (answers.dataStart === 'local') {
@@ -877,6 +935,7 @@ export async function scaffoldRichBoilerplate(
         routeForce,
         {
           onboarding: onboardingAssets,
+          auth: authAssets,
           legal: legalAssets,
           settings: settingsAssets,
           stylist: stylistAssets,
@@ -901,10 +960,23 @@ export async function scaffoldRichBoilerplate(
   }
 
   if (answers.dataStart === 'supabase') {
+    await mkdir(path.join(projectPath, 'supabase', 'migrations'), {
+      recursive: true,
+    });
     results.push(
       await writeIfAllowed(
         path.join(projectPath, 'src', 'services', 'supabase.ts'),
         renderSupabaseClient(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'),
+        renderSupabaseDemoDataService(),
+        force
+      ),
+      await writeIfAllowed(
+        path.join(projectPath, 'supabase', 'migrations', '0002_mds_data_exposition.sql'),
+        renderSupabaseDataExpositionMigration(),
         force
       )
     );
@@ -1050,7 +1122,7 @@ export function renderInfo(
     '',
     '- Which Software Mansion packages: All',
     `- State management library: ${formatGeneratorStateManagement(answers.generatorStateManagement)}`,
-    `- Auth: ${formatGeneratorAuth(answers.generatorAuthBackend)}`,
+    `- Auth: ${formatAuthProvider(answers)}`,
     `- Onboarding Flow: ${formatOnboardingFlow(answers.onboardingFlow)}`,
     `- Legal Documents: ${formatLegalDocumentMode(answers.legalDocumentMode)}`,
     `- Onboarding Completion: ${formatOnboardingCompletionMode(answers.onboardingCompletionMode)}`,
@@ -1082,7 +1154,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
     '- [ ] Run or defer `eject-stylist`; mark this todo done after ejection or deciding to defer (if you want to keep the stylist around for tinkering).',
     '- [ ] Run `mds eject exposition` and keep only the generated sections you want to retain.',
-    ...(answers.generatorEasSetup ?? answers.easUses.length > 0
+    ...((answers.generatorEasSetup ?? answers.easUses.length > 0)
       ? ['- [ ] Sign in and set up EAS in the terminal.']
       : []),
     '- [ ] Resolve every `# TodoForContext(optional):` marker in `project/info.md` by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
@@ -1090,6 +1162,9 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.',
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
+    ...((answers.authProvider ?? 'none') !== 'none'
+      ? ['- [ ] Review `project/auth.md` and finish provider-specific auth setup.']
+      : []),
     '',
     '## Phase 1: App Shell And First Flow',
     '',
@@ -1099,15 +1174,27 @@ export function renderTodo(answers: OnboardAnswers): string {
     '## Phase 2: Data Layer',
     '',
     `- [ ] Implement the initial data layer using ${formatDataStart(answers.dataStart)}.`,
-    ...(answers.dataStart === 'supabase'
+    ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
       ? ['- [ ] Create separate Supabase projects for test/staging and production.']
+      : []),
+    ...(answers.authProvider === 'firebase'
+      ? [
+          '- [ ] Enable Firebase Email/Password auth and set the generated EXPO_PUBLIC_FIREBASE_* values.',
+        ]
+      : []),
+    ...(answers.authProvider === 'convex'
+      ? [
+          '- [ ] Run `npx convex dev` and initialize Convex Auth before using the generated auth routes.',
+        ]
       : []),
     '',
     '## Phase 3: Complete Product Flows',
     '',
     '- [ ] Build the remaining core flows from `project/info.md` phase by phase.',
     ...(answers.targetPlatforms.length > 1
-      ? ['- [ ] Adapt the working MVP flow for the remaining target platforms after the primary flow is stable.']
+      ? [
+          '- [ ] Adapt the working MVP flow for the remaining target platforms after the primary flow is stable.',
+        ]
       : []),
     ...(answers.easUses.length > 0
       ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`)
@@ -1226,12 +1313,24 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- Use `react-native-keyboard-controller` for real keyboard-heavy flows instead of piling up manual keyboard offsets.',
     '- Use Reanimated for meaningful motion, but avoid expensive animation loops in long lists.',
     `- Data starting point: ${formatDataStart(answers.dataStart)}.`,
-    ...(answers.dataStart === 'supabase'
+    `- Auth provider: ${formatAuthProvider(answers)}.`,
+    ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
       ? [
           '- Use separate Supabase projects for test/staging and production.',
           '- Never expose Supabase service-role or secret keys in client code.',
         ]
       : ['- Keep local dummy data behind an adapter so Supabase can replace it later.']),
+    ...(answers.authProvider === 'firebase'
+      ? [
+          '- The generated Firebase auth variant uses Firebase JS SDK for Expo compatibility.',
+          '- Add Firestore or another backend before relying on Firebase for production legal acceptance audit records.',
+        ]
+      : []),
+    ...(answers.authProvider === 'convex'
+      ? [
+          '- The generated Convex auth variant is experimental; run Convex initialization before typechecking provider-specific backend work.',
+        ]
+      : []),
     ...(answers.usesExpoUi
       ? [
           '- Expo UI is stable in SDK 56 for native SwiftUI and Jetpack Compose surfaces.',
@@ -1426,8 +1525,7 @@ async function ensurePackageJson(
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
     'stylist:sync:android':
       packageJson.scripts?.['stylist:sync:android'] ?? 'node ./scripts/stylist-sync-android.mjs',
-    'mds:eject':
-      packageJson.scripts?.['mds:eject'] ?? `${MDS_NPX_COMMAND} eject .`,
+    'mds:eject': packageJson.scripts?.['mds:eject'] ?? `${MDS_NPX_COMMAND} eject .`,
     'mds:eject:exposition':
       packageJson.scripts?.['mds:eject:exposition'] ?? `${MDS_NPX_COMMAND} eject exposition .`,
     'mds:eject:stylist':
@@ -1491,9 +1589,23 @@ async function ensurePackageJson(
     };
   }
 
-  if (answers.dataStart === 'supabase') {
+  if (answers.dataStart === 'supabase' || answers.authProvider === 'supabase') {
     packageJson.dependencies = {
       ...SUPABASE_DEPENDENCIES,
+      ...packageJson.dependencies,
+    };
+  }
+
+  if (answers.authProvider === 'firebase') {
+    packageJson.dependencies = {
+      ...FIREBASE_AUTH_DEPENDENCIES,
+      ...packageJson.dependencies,
+    };
+  }
+
+  if (answers.authProvider === 'convex') {
+    packageJson.dependencies = {
+      ...CONVEX_AUTH_DEPENDENCIES,
       ...packageJson.dependencies,
     };
   }
@@ -1682,7 +1794,9 @@ function formatGeneratorNavigation(value: OnboardAnswers['generatorNavigationLib
   return value === 'react-navigation' ? 'React Navigation' : 'Expo Router';
 }
 
-function formatGeneratorNavigationType(value: OnboardAnswers['generatorReactNavigationLayout']): string {
+function formatGeneratorNavigationType(
+  value: OnboardAnswers['generatorReactNavigationLayout']
+): string {
   if (value === 'tabs') {
     return 'Tabs';
   }
@@ -1693,7 +1807,10 @@ function formatGeneratorNavigationType(value: OnboardAnswers['generatorReactNavi
 }
 
 function formatCessStyleLibrary(answers: OnboardAnswers): string {
-  if (answers.generatorStylingSystem === 'nativewindui' || answers.defaults.includes('nativewindui')) {
+  if (
+    answers.generatorStylingSystem === 'nativewindui' ||
+    answers.defaults.includes('nativewindui')
+  ) {
     return 'NativeWindUI';
   }
   if (answers.generatorStylingSystem === 'nativewind' || answers.defaults.includes('nativewind')) {
@@ -1719,6 +1836,21 @@ function formatGeneratorAuth(value: OnboardAnswers['generatorAuthBackend']): str
     return 'Firebase';
   }
   return 'None';
+}
+
+function formatAuthProvider(answers: OnboardAnswers): string {
+  switch (answers.authProvider ?? 'none') {
+    case 'base':
+      return 'MDS base auth adapter';
+    case 'supabase':
+      return 'Supabase via MDS auth library';
+    case 'firebase':
+      return 'Firebase via MDS auth library';
+    case 'convex':
+      return 'Convex via MDS auth library (experimental)';
+    case 'none':
+      return formatGeneratorAuth(answers.generatorAuthBackend);
+  }
 }
 
 function formatGeneratorStateManagement(value: OnboardAnswers['generatorStateManagement']): string {
@@ -1927,13 +2059,7 @@ async function scaffoldNavigationRoutes(
   const results: WriteResult[] = [];
   const homeScreen = path.join(projectPath, 'src', 'features', 'home', 'home-screen');
   const welcomeScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen');
-  const featuresScreen = path.join(
-    projectPath,
-    'src',
-    'features',
-    'onboarding',
-    'features-screen'
-  );
+  const featuresScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'features-screen');
   const completeScreen = path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen');
   const legalReviewScreen = path.join(
     projectPath,
@@ -1983,8 +2109,7 @@ async function scaffoldNavigationRoutes(
     assets: ReadonlyMap<string, string> | undefined,
     destination: string,
     fallback: () => string
-  ): string =>
-    assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback();
+  ): string => (assets ? requireLibraryTextAsset(itemId, assets, destination) : fallback());
 
   const rootExpositionDir = path.join(appDir, 'exposition');
   const onboardingDir = path.join(appDir, 'onboarding');
@@ -2046,8 +2171,8 @@ async function scaffoldNavigationRoutes(
             : []),
         ]
       : []),
-    ...((libraryAssets.onboarding?.has(`${appDirectory}/terms.tsx`) ||
-    libraryAssets.legal?.has(`${appDirectory}/terms.tsx`))
+    ...(libraryAssets.onboarding?.has(`${appDirectory}/terms.tsx`) ||
+    libraryAssets.legal?.has(`${appDirectory}/terms.tsx`)
       ? [
           await writeIfAllowed(
             path.join(appDir, 'terms.tsx'),
@@ -2063,8 +2188,8 @@ async function scaffoldNavigationRoutes(
           ),
         ]
       : []),
-    ...((libraryAssets.onboarding?.has(`${appDirectory}/privacy.tsx`) ||
-    libraryAssets.legal?.has(`${appDirectory}/privacy.tsx`))
+    ...(libraryAssets.onboarding?.has(`${appDirectory}/privacy.tsx`) ||
+    libraryAssets.legal?.has(`${appDirectory}/privacy.tsx`)
       ? [
           await writeIfAllowed(
             path.join(appDir, 'privacy.tsx'),
@@ -2697,6 +2822,18 @@ async function writeIfAllowed(
   return { filePath, wrote: true };
 }
 
+async function writeLibraryAssetMap(
+  projectPath: string,
+  assets: ReadonlyMap<string, string>,
+  force: boolean
+): Promise<WriteResult[]> {
+  return Promise.all(
+    [...assets].map(([destination, contents]) =>
+      writeIfAllowed(path.join(projectPath, ...destination.split('/')), contents, force)
+    )
+  );
+}
+
 async function writeProjectMemoryFile(
   filePath: string,
   contents: string,
@@ -3036,8 +3173,13 @@ function renderRichRootLayout(
     appDir,
     path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter')
   );
+  const authProviderImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'features', 'auth', 'auth-provider')
+  );
   const legalGateEnabled =
     navigationShell.library === 'expo-router' && shouldGenerateLegalUpdateGate(answers);
+  const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
@@ -3066,7 +3208,9 @@ function renderRichRootLayout(
           : []),
         ...(answers.legalDocumentMode === 'onboarding-agreement'
           ? []
-          : ['        <Stack.Screen name="onboarding/complete" options={{ title: \'Complete\' }} />']),
+          : [
+              '        <Stack.Screen name="onboarding/complete" options={{ title: \'Complete\' }} />',
+            ]),
       ]
     : [];
   const legalScreens =
@@ -3090,9 +3234,25 @@ function renderRichRootLayout(
         ? '        <Stack.Screen name="(drawer)" options={{ headerShown: false }} />'
         : '        <Stack.Screen name="index" options={{ title: \'Home\' }} />';
   const appScreens = [shellScreen, ...expositionScreens, ...nativeWindUiScreen];
-  const protectedAppScreens = legalGateEnabled
+  const appGuardExpression = authEnabled
+    ? legalGateEnabled
+      ? 'auth.isAuthenticated && legalGateStatus === "complete"'
+      : 'auth.isAuthenticated'
+    : legalGateEnabled
+      ? 'legalGateStatus === "complete"'
+      : null;
+  const publicAuthScreens = authEnabled
     ? [
-        '        <Stack.Protected guard={legalGateStatus === "complete"}>',
+        '        <Stack.Protected guard={!auth.isAuthenticated}>',
+        '          <Stack.Screen name="(auth)/sign-in" options={{ title: \'Sign In\' }} />',
+        '          <Stack.Screen name="(auth)/sign-up" options={{ title: \'Sign Up\' }} />',
+        '          <Stack.Screen name="(auth)/reset-password" options={{ title: \'Reset Password\' }} />',
+        '        </Stack.Protected>',
+      ]
+    : [];
+  const protectedAppScreens = appGuardExpression
+    ? [
+        `        <Stack.Protected guard={${appGuardExpression}}>`,
         ...appScreens.map((screen) => screen.replace(/^ {8}/u, '          ')),
         "          <Stack.Screen name=\"settings\" options={{ presentation: 'modal', title: 'Settings' }} />",
         '        </Stack.Protected>',
@@ -3119,6 +3279,7 @@ function renderRichRootLayout(
     ...(legalGateEnabled
       ? [`import { useLegalUpdateGateStatus } from '${legalAcceptanceAdapterImport}';`]
       : []),
+    ...(authEnabled ? [`import { AuthProvider, useAuth } from '${authProviderImport}';`] : []),
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
     '  const theme = useAppTheme();',
@@ -3154,7 +3315,9 @@ function renderRichRootLayout(
     '',
     'function LayoutInner() {',
     '  const theme = useAppTheme();',
+    ...(authEnabled ? ['  const auth = useAuth();'] : []),
     ...(legalGateEnabled ? ['  const legalGateStatus = useLegalUpdateGateStatus();'] : []),
+    ...(authEnabled ? ['', '  if (auth.isLoading) {', '    return null;', '  }'] : []),
     '  const shellColor = theme.activeColors.background;',
     '  return (',
     '    <GestureHandlerRootView style={{ flex: 1, backgroundColor: shellColor }}>',
@@ -3183,6 +3346,7 @@ function renderRichRootLayout(
     '                  </Link>',
     '                ),',
     '              }}>',
+    ...publicAuthScreens,
     ...onboardingScreens,
     ...legalScreens,
     ...protectedAppScreens,
@@ -3204,7 +3368,9 @@ function renderRichRootLayout(
     '',
     '  return (',
     '    <AppThemeProvider>',
-    '      <LayoutInner />',
+    ...(authEnabled
+      ? ['      <AuthProvider>', '        <LayoutInner />', '      </AuthProvider>']
+      : ['      <LayoutInner />']),
     '    </AppThemeProvider>',
     '  );',
     '}',
@@ -3215,28 +3381,350 @@ function renderRichRootLayout(
 function renderSupabaseClient(): string {
   return [
     "import AsyncStorage from '@react-native-async-storage/async-storage';",
+    "import { AppState } from 'react-native';",
     "import { createClient } from '@supabase/supabase-js';",
     '',
     'const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;',
     'const supabasePublishableKey =',
-    '  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;',
-    '',
+    '  process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??',
+    '  process.env.EXPO_PUBLIC_SUPABASE_KEY ??',
+    '  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;',
+    'const isServerRender = typeof window === "undefined";',
+    'const supabaseStorage = {',
+    '  getItem: (key: string) => (isServerRender ? Promise.resolve(null) : AsyncStorage.getItem(key)),',
+    '  setItem: (key: string, value: string) =>',
+    '    isServerRender ? Promise.resolve() : AsyncStorage.setItem(key, value),',
+    '  removeItem: (key: string) =>',
+    '    isServerRender ? Promise.resolve() : AsyncStorage.removeItem(key),',
+    '};',
     'export const supabase = supabaseUrl && supabasePublishableKey',
     '  ? createClient(supabaseUrl, supabasePublishableKey, {',
     '      auth: {',
-    '        storage: AsyncStorage,',
-    '        autoRefreshToken: true,',
-    '        persistSession: true,',
+    '        storage: supabaseStorage,',
+    '        autoRefreshToken: !isServerRender,',
+    '        persistSession: !isServerRender,',
     '        detectSessionInUrl: false,',
     '      },',
     '    })',
     '  : null;',
     '',
-    'export function assertSupabaseConfigured(): void {',
-    '  if (!supabase) {',
-    "    throw new Error('Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY before using Supabase. EXPO_PUBLIC_SUPABASE_ANON_KEY is accepted as a fallback for older projects.');",
-    '  }',
+    'if (supabase) {',
+    "  AppState.addEventListener('change', (state) => {",
+    "    if (state === 'active') {",
+    '      supabase.auth.startAutoRefresh();',
+    '    } else {',
+    '      supabase.auth.stopAutoRefresh();',
+    '    }',
+    '  });',
     '}',
+    '',
+    'export function getSupabaseClient(): NonNullable<typeof supabase> {',
+    '  if (!supabase) {',
+    "    throw new Error('Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY before using Supabase. EXPO_PUBLIC_SUPABASE_KEY and EXPO_PUBLIC_SUPABASE_ANON_KEY are accepted as fallbacks for older projects.');",
+    '  }',
+    '  return supabase;',
+    '}',
+    '',
+    'export function assertSupabaseConfigured(): void {',
+    '  void getSupabaseClient();',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderSupabaseDemoDataService(): string {
+  return [
+    "import { getSupabaseClient } from './supabase';",
+    '',
+    'export interface GuestbookComment {',
+    '  id: number;',
+    '  displayName: string;',
+    '  message: string;',
+    '  createdAt: string;',
+    '}',
+    '',
+    'export interface SupabaseDataOverview {',
+    '  signupCount: number;',
+    '  guestbook: GuestbookComment[];',
+    '  isSignedIn: boolean;',
+    '}',
+    '',
+    'export interface GuestbookInput {',
+    '  displayName: string;',
+    '  message: string;',
+    '}',
+    '',
+    'function isRecord(value: unknown): value is Record<string, unknown> {',
+    "  return typeof value === 'object' && value !== null;",
+    '}',
+    '',
+    'function normalizeGuestbookRow(row: unknown): GuestbookComment | null {',
+    '  if (!isRecord(row)) {',
+    '    return null;',
+    '  }',
+    '',
+    '  const id = Number(row.id);',
+    '  const displayName = row.display_name;',
+    '  const message = row.message;',
+    '  const createdAt = row.created_at;',
+    '  if (',
+    '    !Number.isFinite(id) ||',
+    "    typeof displayName !== 'string' ||",
+    "    typeof message !== 'string' ||",
+    "    typeof createdAt !== 'string'",
+    '  ) {',
+    '    return null;',
+    '  }',
+    '',
+    '  return {',
+    '    id,',
+    '    displayName,',
+    '    message,',
+    '    createdAt,',
+    '  };',
+    '}',
+    '',
+    'function normalizeGuestbookRows(data: unknown): GuestbookComment[] {',
+    '  if (!Array.isArray(data)) {',
+    '    return [];',
+    '  }',
+    '',
+    '  return data',
+    '    .map((row) => normalizeGuestbookRow(row))',
+    '    .filter((row): row is GuestbookComment => Boolean(row));',
+    '}',
+    '',
+    'function toErrorMessage(error: unknown): string {',
+    '  if (error instanceof Error) {',
+    '    return error.message;',
+    '  }',
+    "  return 'Unable to load Supabase demo data.';",
+    '}',
+    '',
+    'export async function getSupabaseDataOverview(): Promise<SupabaseDataOverview> {',
+    '  const client = getSupabaseClient();',
+    '  const [sessionResult, signupCountResult, guestbookResult] = await Promise.all([',
+    '    client.auth.getSession(),',
+    "    client.rpc('mds_demo_signup_count'),",
+    "    client.rpc('mds_guestbook_recent', { limit_count: 10 }),",
+    '  ]);',
+    '',
+    '  if (sessionResult.error) {',
+    '    throw new Error(sessionResult.error.message);',
+    '  }',
+    '  if (signupCountResult.error) {',
+    '    throw new Error(signupCountResult.error.message);',
+    '  }',
+    '  if (guestbookResult.error) {',
+    '    throw new Error(guestbookResult.error.message);',
+    '  }',
+    '',
+    '  const signupCount = Number(signupCountResult.data ?? 0);',
+    '',
+    '  return {',
+    '    signupCount: Number.isFinite(signupCount) ? signupCount : 0,',
+    '    guestbook: normalizeGuestbookRows(guestbookResult.data),',
+    '    isSignedIn: Boolean(sessionResult.data.session),',
+    '  };',
+    '}',
+    '',
+    'export async function signGuestbook(input: GuestbookInput): Promise<GuestbookComment> {',
+    '  const displayName = input.displayName.trim();',
+    '  const message = input.message.trim();',
+    '',
+    '  if (!displayName) {',
+    "    throw new Error('Enter your name before signing the guestbook.');",
+    '  }',
+    '  if (!message) {',
+    "    throw new Error('Enter a message before signing the guestbook.');",
+    '  }',
+    '  if (displayName.length > 80) {',
+    "    throw new Error('Keep your name to 80 characters or fewer.');",
+    '  }',
+    '  if (message.length > 280) {',
+    "    throw new Error('Keep your message to 280 characters or fewer.');",
+    '  }',
+    '',
+    '  const client = getSupabaseClient();',
+    '  const sessionResult = await client.auth.getSession();',
+    '  if (sessionResult.error) {',
+    '    throw new Error(sessionResult.error.message);',
+    '  }',
+    '  if (!sessionResult.data.session) {',
+    "    throw new Error('Sign in with Supabase Auth before signing the guestbook.');",
+    '  }',
+    '',
+    "  const { data, error } = await client.rpc('mds_guestbook_sign', {",
+    '    comment_display_name: displayName,',
+    '    comment_message: message,',
+    '  });',
+    '',
+    '  if (error) {',
+    '    throw new Error(error.message);',
+    '  }',
+    '',
+    '  const [comment] = normalizeGuestbookRows(data);',
+    '  if (!comment) {',
+    "    throw new Error('The guestbook entry was saved but could not be loaded.');",
+    '  }',
+    '',
+    '  return comment;',
+    '}',
+    '',
+    'export function getSupabaseDemoErrorMessage(error: unknown): string {',
+    '  return toErrorMessage(error);',
+    '}',
+    '',
+  ].join('\n');
+}
+
+function renderSupabaseDataExpositionMigration(): string {
+  return [
+    'create table if not exists public.mds_demo_auth_signups (',
+    '  user_id uuid primary key references auth.users(id) on delete cascade,',
+    '  signed_up_at timestamptz not null default now()',
+    ');',
+    '',
+    'alter table public.mds_demo_auth_signups enable row level security;',
+    'revoke all on public.mds_demo_auth_signups from anon, authenticated;',
+    '',
+    'insert into public.mds_demo_auth_signups (user_id, signed_up_at)',
+    'select id, coalesce(created_at, now())',
+    'from auth.users',
+    'on conflict (user_id) do nothing;',
+    '',
+    'create or replace function public.mds_demo_track_auth_signup()',
+    'returns trigger',
+    'language plpgsql',
+    'security definer',
+    'set search_path = public, auth',
+    'as $$',
+    'begin',
+    '  insert into public.mds_demo_auth_signups (user_id, signed_up_at)',
+    '  values (new.id, coalesce(new.created_at, now()))',
+    '  on conflict (user_id) do nothing;',
+    '  return new;',
+    'end;',
+    '$$;',
+    '',
+    'drop trigger if exists mds_demo_track_auth_signup on auth.users;',
+    'create trigger mds_demo_track_auth_signup',
+    'after insert on auth.users',
+    'for each row',
+    'execute function public.mds_demo_track_auth_signup();',
+    '',
+    'create table if not exists public.mds_demo_guestbook_comments (',
+    '  id bigint generated always as identity primary key,',
+    '  user_id uuid not null references auth.users(id) on delete cascade,',
+    '  display_name text not null,',
+    '  message text not null,',
+    '  created_at timestamptz not null default now(),',
+    '  constraint mds_demo_guestbook_display_name_length',
+    '    check (char_length(btrim(display_name)) between 1 and 80),',
+    '  constraint mds_demo_guestbook_message_length',
+    '    check (char_length(btrim(message)) between 1 and 280)',
+    ');',
+    '',
+    'alter table public.mds_demo_guestbook_comments enable row level security;',
+    'revoke all on public.mds_demo_guestbook_comments from anon, authenticated;',
+    '',
+    'drop policy if exists "Anyone can read guestbook comments" on public.mds_demo_guestbook_comments;',
+    'create policy "Anyone can read guestbook comments"',
+    'on public.mds_demo_guestbook_comments',
+    'for select',
+    'to anon, authenticated',
+    'using (true);',
+    '',
+    'drop policy if exists "Signed-in users can sign the guestbook" on public.mds_demo_guestbook_comments;',
+    'create policy "Signed-in users can sign the guestbook"',
+    'on public.mds_demo_guestbook_comments',
+    'for insert',
+    'to authenticated',
+    'with check (auth.uid() = user_id);',
+    '',
+    'create or replace function public.mds_demo_signup_count()',
+    'returns integer',
+    'language sql',
+    'stable',
+    'security definer',
+    'set search_path = public',
+    'as $$',
+    '  select count(*)::integer from public.mds_demo_auth_signups;',
+    '$$;',
+    '',
+    'create or replace function public.mds_guestbook_recent(limit_count integer default 10)',
+    'returns table (',
+    '  id bigint,',
+    '  display_name text,',
+    '  message text,',
+    '  created_at timestamptz',
+    ')',
+    'language sql',
+    'stable',
+    'security definer',
+    'set search_path = public',
+    'as $$',
+    '  select',
+    '    comments.id,',
+    '    comments.display_name,',
+    '    comments.message,',
+    '    comments.created_at',
+    '  from public.mds_demo_guestbook_comments as comments',
+    '  order by comments.created_at desc, comments.id desc',
+    '  limit greatest(1, least(coalesce(limit_count, 10), 50));',
+    '$$;',
+    '',
+    'create or replace function public.mds_guestbook_sign(',
+    '  comment_display_name text,',
+    '  comment_message text',
+    ')',
+    'returns table (',
+    '  id bigint,',
+    '  display_name text,',
+    '  message text,',
+    '  created_at timestamptz',
+    ')',
+    'language plpgsql',
+    'security definer',
+    'set search_path = public',
+    'as $$',
+    'declare',
+    '  current_user_id uuid := auth.uid();',
+    "  trimmed_display_name text := nullif(btrim(comment_display_name), '');",
+    "  trimmed_message text := nullif(btrim(comment_message), '');",
+    '  inserted_id bigint;',
+    'begin',
+    '  if current_user_id is null then',
+    "    raise exception 'Sign in before signing the guestbook.' using errcode = '28000';",
+    '  end if;',
+    '',
+    '  if trimmed_display_name is null or char_length(trimmed_display_name) > 80 then',
+    "    raise exception 'Display name must be 1 to 80 characters.' using errcode = '22023';",
+    '  end if;',
+    '',
+    '  if trimmed_message is null or char_length(trimmed_message) > 280 then',
+    "    raise exception 'Message must be 1 to 280 characters.' using errcode = '22023';",
+    '  end if;',
+    '',
+    '  insert into public.mds_demo_guestbook_comments (user_id, display_name, message)',
+    '  values (current_user_id, trimmed_display_name, trimmed_message)',
+    '  returning public.mds_demo_guestbook_comments.id into inserted_id;',
+    '',
+    '  return query',
+    '  select',
+    '    comments.id,',
+    '    comments.display_name,',
+    '    comments.message,',
+    '    comments.created_at',
+    '  from public.mds_demo_guestbook_comments as comments',
+    '  where comments.id = inserted_id;',
+    'end;',
+    '$$;',
+    '',
+    'grant execute on function public.mds_demo_signup_count() to anon, authenticated;',
+    'grant execute on function public.mds_guestbook_recent(integer) to anon, authenticated;',
+    'grant execute on function public.mds_guestbook_sign(text, text) to authenticated;',
+    'revoke execute on function public.mds_guestbook_sign(text, text) from anon;',
     '',
   ].join('\n');
 }
@@ -3282,7 +3770,7 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '',
     '## Supabase Environments',
     '',
-    ...(answers.dataStart === 'supabase'
+    ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
       ? [
           '- Use one Supabase project for test/staging and one Supabase project for production.',
           '- Keep publishable client keys in environment files for the matching branch/environment.',
@@ -4798,31 +5286,156 @@ function renderDataScreen(answers: OnboardAnswers): string {
 
 function renderSupabaseDataScreen(answers: OnboardAnswers): string {
   return [
-    "import { ScrollView, StyleSheet, Text, View } from 'react-native';",
+    "import { useCallback, useEffect, useState } from 'react';",
+    "import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';",
     '',
     "import { ExpositionNotice } from '../../components/exposition';",
+    "import { getSupabaseDataOverview, getSupabaseDemoErrorMessage, signGuestbook, type SupabaseDataOverview } from '../../services/supabase-demo-data';",
     "import { useAppTheme } from '../../theme/provider';",
+    '',
+    'function formatCommentDate(value: string): string {',
+    '  const date = new Date(value);',
+    '  if (Number.isNaN(date.getTime())) {',
+    '    return value;',
+    '  }',
+    '',
+    "  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });",
+    '}',
     '',
     'export default function DataScreen() {',
     '  const theme = useAppTheme();',
     '  const colors = theme.activeColors;',
+    '  const [overview, setOverview] = useState<SupabaseDataOverview | null>(null);',
+    '  const [isLoading, setIsLoading] = useState(true);',
+    '  const [isSubmitting, setIsSubmitting] = useState(false);',
+    "  const [displayName, setDisplayName] = useState('');",
+    "  const [message, setMessage] = useState('');",
+    '  const [errorMessage, setErrorMessage] = useState<string | null>(null);',
+    '  const [successMessage, setSuccessMessage] = useState<string | null>(null);',
+    '',
+    '  const loadOverview = useCallback(async () => {',
+    '    setIsLoading(true);',
+    '    setErrorMessage(null);',
+    '    try {',
+    '      setOverview(await getSupabaseDataOverview());',
+    '    } catch (error) {',
+    '      setErrorMessage(getSupabaseDemoErrorMessage(error));',
+    '    } finally {',
+    '      setIsLoading(false);',
+    '    }',
+    '  }, []);',
+    '',
+    '  useEffect(() => {',
+    '    const timer = setTimeout(() => {',
+    '      void loadOverview();',
+    '    }, 0);',
+    '    return () => clearTimeout(timer);',
+    '  }, [loadOverview]);',
+    '',
+    '  async function submitGuestbook() {',
+    '    setErrorMessage(null);',
+    '    setSuccessMessage(null);',
+    '    setIsSubmitting(true);',
+    '    try {',
+    '      await signGuestbook({ displayName, message });',
+    "      setMessage('');",
+    "      setSuccessMessage('Guestbook signed. Thanks for testing the live data path.');",
+    '      setOverview(await getSupabaseDataOverview());',
+    '    } catch (error) {',
+    '      setErrorMessage(getSupabaseDemoErrorMessage(error));',
+    '    } finally {',
+    '      setIsSubmitting(false);',
+    '    }',
+    '  }',
+    '',
+    '  const guestbook = overview?.guestbook ?? [];',
+    '  const submitDisabled =',
+    '    !overview?.isSignedIn || !displayName.trim() || !message.trim() || isSubmitting;',
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
     `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Data Exposition</Text>`,
-    `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. Keep the adapter boundary in src/services so screens stay independent from backend details.</Text>`,
+    `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. This page reads and writes through the service adapter so screens stay independent from backend details.</Text>`,
     '      <ExpositionNotice />',
+    '      <View style={styles.statGrid}>',
+    '        <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '          <Text style={[styles.sectionTitle, { color: colors.text }]}>Users signed up</Text>',
+    '          <Text style={[styles.statValue, { color: colors.primary }]}>',
+    "            {isLoading ? '...' : overview?.signupCount ?? 0}",
+    '          </Text>',
+    '          <Text style={[styles.body, { color: colors.text }]}>Tracked from Supabase Auth through a server-side trigger.</Text>',
+    '        </View>',
+    '        <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '          <Text style={[styles.sectionTitle, { color: colors.text }]}>Session</Text>',
+    '          <Text style={[styles.statValue, { color: colors.primary }]}>',
+    "            {overview?.isSignedIn ? 'Signed in' : 'Read only'}",
+    '          </Text>',
+    '          <Text style={[styles.body, { color: colors.text }]}>Guestbook writes require Supabase Auth.</Text>',
+    '        </View>',
+    '      </View>',
+    '      {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}',
+    '      {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}',
+    '      <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '        <View style={styles.panelHeader}>',
+    '          <Text style={[styles.sectionTitle, { color: colors.text }]}>Guestbook</Text>',
+    '          <Pressable onPress={loadOverview} style={[styles.secondaryButton, { borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '            <Text style={[styles.secondaryButtonText, { color: colors.primary }]}>Refresh</Text>',
+    '          </Pressable>',
+    '        </View>',
+    '        {isLoading ? <ActivityIndicator color={colors.primary} /> : null}',
+    '        {!isLoading && guestbook.length === 0 ? <Text style={[styles.body, { color: colors.text }]}>No comments yet.</Text> : null}',
+    '        {guestbook.map((comment) => (',
+    '          <View key={comment.id} style={styles.guestbookRow}>',
+    '            <Text style={[styles.taskTitle, { color: colors.text }]}>{comment.displayName}</Text>',
+    '            <Text style={[styles.body, { color: colors.text }]}>{comment.message}</Text>',
+    '            <Text style={styles.commentMeta}>{formatCommentDate(comment.createdAt)}</Text>',
+    '          </View>',
+    '        ))}',
+    '      </View>',
+    '      <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '        <Text style={[styles.sectionTitle, { color: colors.text }]}>Sign the guestbook</Text>',
+    '        {!overview?.isSignedIn ? (',
+    '          <Text style={[styles.body, { color: colors.text }]}>Sign in with Supabase Auth to add your name and message.</Text>',
+    '        ) : (',
+    '          <>',
+    '            <TextInput',
+    '              autoCapitalize="words"',
+    '              maxLength={80}',
+    '              onChangeText={setDisplayName}',
+    '              placeholder="Name"',
+    '              placeholderTextColor="#6b7280"',
+    '              style={[styles.input, { borderColor: colors.primary }]}',
+    '              value={displayName}',
+    '            />',
+    '            <TextInput',
+    '              maxLength={280}',
+    '              multiline',
+    '              onChangeText={setMessage}',
+    '              placeholder="Message"',
+    '              placeholderTextColor="#6b7280"',
+    '              style={[styles.input, styles.messageInput, { borderColor: colors.primary }]}',
+    '              value={message}',
+    '            />',
+    '            <Pressable',
+    '              disabled={submitDisabled}',
+    '              onPress={submitGuestbook}',
+    '              style={[',
+    '                styles.button,',
+    '                { backgroundColor: colors.primary, borderRadius: theme.layout.radius },',
+    '                submitDisabled ? styles.buttonDisabled : null,',
+    '              ]}>',
+    '              <Text style={styles.buttonText}>{isSubmitting ? "Signing..." : "Sign guestbook"}</Text>',
+    '            </Pressable>',
+    '          </>',
+    '        )}',
+    '      </View>',
     '      <View style={styles.guidance}>',
-    '        <Text style={styles.sectionTitle}>Two Supabase projects</Text>',
-    '        <Text style={styles.body}>Create one Supabase project for test/staging and one for production. Point feature branches and the test branch at the test project, then only promote validated work to the production project from main.</Text>',
+    '        <Text style={styles.sectionTitle}>Supabase environments and branches</Text>',
+    '        <Text style={styles.body}>Supabase branches are separate environments with their own API credentials. Use preview branches for focused pull-request testing and persistent branches for staging, QA, or development.</Text>',
     '      </View>',
     '      <View style={styles.guidance}>',
     '        <Text style={styles.sectionTitle}>Client setup</Text>',
     '        <Text style={styles.body}>Use EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY for client access. Never put service-role or secret keys in Expo client code.</Text>',
-    '      </View>',
-    '      <View style={styles.guidance}>',
-    '        <Text style={styles.sectionTitle}>Migration path</Text>',
-    '        <Text style={styles.body}>Design tables from project/info.md, enable RLS on exposed schemas, and map local demo concepts into Supabase queries inside the service adapter.</Text>',
     '      </View>',
     '    </ScrollView>',
     '  );',
@@ -4900,6 +5513,83 @@ function renderDataScreenStyles(): string[] {
     "    color: '#4b5563',",
     '    fontSize: 14,',
     '    lineHeight: 21,',
+    '  },',
+    '  statGrid: {',
+    '    gap: 12,',
+    '  },',
+    '  statCard: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#e5e7eb',",
+    '    borderRadius: 10,',
+    '    borderWidth: 1,',
+    '    gap: 8,',
+    '    padding: 16,',
+    '  },',
+    '  statValue: {',
+    "    color: '#111827',",
+    '    fontSize: 34,',
+    '    fontWeight: "900",',
+    '  },',
+    '  panel: {',
+    "    backgroundColor: '#ffffff',",
+    "    borderColor: '#e5e7eb',",
+    '    borderRadius: 10,',
+    '    borderWidth: 1,',
+    '    gap: 12,',
+    '    padding: 16,',
+    '  },',
+    '  panelHeader: {',
+    '    alignItems: "center",',
+    '    flexDirection: "row",',
+    '    justifyContent: "space-between",',
+    '    gap: 12,',
+    '  },',
+    '  secondaryButton: {',
+    '    borderWidth: 1,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 8,',
+    '  },',
+    '  secondaryButtonText: {',
+    '    fontSize: 13,',
+    '    fontWeight: "800",',
+    '  },',
+    '  guestbookRow: {',
+    "    borderTopColor: '#e5e7eb',",
+    '    borderTopWidth: 1,',
+    '    gap: 4,',
+    '    paddingTop: 12,',
+    '  },',
+    '  commentMeta: {',
+    "    color: '#6b7280',",
+    '    fontSize: 12,',
+    '    fontWeight: "800",',
+    '    textTransform: "uppercase",',
+    '  },',
+    '  input: {',
+    "    backgroundColor: '#ffffff',",
+    '    borderRadius: 10,',
+    '    borderWidth: 1,',
+    "    color: '#111827',",
+    '    fontSize: 15,',
+    '    paddingHorizontal: 12,',
+    '    paddingVertical: 10,',
+    '  },',
+    '  messageInput: {',
+    '    minHeight: 96,',
+    '    textAlignVertical: "top",',
+    '  },',
+    '  buttonDisabled: {',
+    '    opacity: 0.5,',
+    '  },',
+    '  errorText: {',
+    "    color: '#b91c1c',",
+    '    fontSize: 14,',
+    '    fontWeight: "800",',
+    '  },',
+    '  successText: {',
+    "    color: '#047857',",
+    '    fontSize: 14,',
+    '    fontWeight: "800",',
     '  },',
     '});',
     '',
