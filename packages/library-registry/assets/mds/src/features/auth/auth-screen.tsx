@@ -109,8 +109,15 @@ export function AuthScreen({ mode }: { mode: AuthScreenMode }) {
             keyboardType="email-address"
             onChangeText={setEmail}
             placeholder="you@example.com"
-            placeholderTextColor="#6b7280"
-            style={[styles.input, { borderColor: colors.primary, color: '#111827' }]}
+            placeholderTextColor={colors.text}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.primary,
+                color: colors.text,
+              },
+            ]}
             textContentType="emailAddress"
             value={email}
           />
@@ -124,9 +131,16 @@ export function AuthScreen({ mode }: { mode: AuthScreenMode }) {
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
               onChangeText={setPassword}
               placeholder="At least 8 characters"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor={colors.text}
               secureTextEntry
-              style={[styles.input, { borderColor: colors.primary, color: '#111827' }]}
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.primary,
+                  color: colors.text,
+                },
+              ]}
               textContentType={mode === 'sign-in' ? 'password' : 'newPassword'}
               value={password}
             />
@@ -215,7 +229,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   input: {
-    backgroundColor: '#ffffff',
     borderWidth: 1,
     fontSize: 15,
     minHeight: 48,

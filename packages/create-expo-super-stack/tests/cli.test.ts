@@ -652,6 +652,43 @@ describe("create-expo-super-stack CLI helpers", () => {
     }
   });
 
+  it("fails before deleting app when src/app merge has route conflicts", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-src-app-conflict-"),
+    );
+    try {
+      await mkdir(path.join(projectPath, "app", "(tabs)"), { recursive: true });
+      await mkdir(path.join(projectPath, "src", "app", "(tabs)"), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(projectPath, "app", "(tabs)", "index.tsx"),
+        "export default function RootHome() { return null; }\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "src", "app", "(tabs)", "index.tsx"),
+        "export default function SrcHome() { return null; }\n",
+        "utf8",
+      );
+
+      await expect(moveRootAppIntoSrc(projectPath)).rejects.toThrow(
+        "generated route trees overlap",
+      );
+      await expect(
+        readFile(path.join(projectPath, "app", "(tabs)", "index.tsx"), "utf8"),
+      ).resolves.toContain("RootHome");
+      await expect(
+        readFile(
+          path.join(projectPath, "src", "app", "(tabs)", "index.tsx"),
+          "utf8",
+        ),
+      ).resolves.toContain("SrcHome");
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
   it("repairs moved src/app tab layout imports after app directory migration", async () => {
     const projectPath = await mkdtemp(
       path.join(os.tmpdir(), "super-stack-src-app-imports-"),

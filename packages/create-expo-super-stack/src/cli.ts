@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import {
   access,
+  lstat,
   mkdir,
   readdir,
   readFile,
@@ -1173,6 +1174,16 @@ export async function moveRootAppIntoSrc(
 
   await mkdir(path.dirname(srcAppDir), { recursive: true });
   if (await pathExists(srcAppDir)) {
+    const conflicts = await findDirectoryMergeConflicts(rootAppDir, srcAppDir);
+    if (conflicts.length > 0) {
+      throw new Error(
+        [
+          "Cannot move app/ into src/app because the generated route trees overlap.",
+          `Conflicting path${conflicts.length === 1 ? "" : "s"}: ${conflicts.join(", ")}`,
+          "Merge these files manually, then remove the root app/ directory.",
+        ].join(" "),
+      );
+    }
     await mergeDirectoryInto(rootAppDir, srcAppDir);
     await rm(rootAppDir, { recursive: true, force: true });
   } else {
@@ -1204,6 +1215,46 @@ async function consolidateRootSourceFolders(
   }
 
   return updatedPaths;
+}
+
+async function pathType(filePath: string): Promise<"directory" | "file" | null> {
+  try {
+    const stats = await lstat(filePath);
+    return stats.isDirectory() ? "directory" : "file";
+  } catch (error) {
+    if (typeof error === "object" && error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function findDirectoryMergeConflicts(
+  sourceDir: string,
+  targetDir: string,
+  relativeDir = "",
+): Promise<string[]> {
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  const conflicts: string[] = [];
+
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    const relativePath = path.join(relativeDir, entry.name);
+    const targetType = await pathType(targetPath);
+    if (!targetType) {
+      continue;
+    }
+
+    if (entry.isDirectory() && targetType === "directory") {
+      conflicts.push(...(await findDirectoryMergeConflicts(sourcePath, targetPath, relativePath)));
+      continue;
+    }
+
+    conflicts.push(relativePath);
+  }
+
+  return conflicts;
 }
 
 async function mergeDirectoryInto(

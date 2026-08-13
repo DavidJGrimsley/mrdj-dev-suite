@@ -534,6 +534,16 @@ describe("library resolution", () => {
     const authProviderSource = (await readLibraryAsset(authProviderAsset!)).toString("utf8");
     expect(authProviderSource).toContain("AuthAdapterProvider");
     expect(authProviderSource).toContain("useAuth");
+
+    const authScreenAsset = base.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-screen.tsx",
+    );
+    expect(authScreenAsset).toBeDefined();
+    const authScreenSource = (await readLibraryAsset(authScreenAsset!)).toString("utf8");
+    expect(authScreenSource).toContain("backgroundColor: colors.background");
+    expect(authScreenSource).toContain("color: colors.text");
+    expect(authScreenSource).not.toContain("color: '#111827'");
+    expect(authScreenSource).not.toContain("backgroundColor: '#ffffff'");
   });
 
   it("resolves production onboarding variants", async () => {
