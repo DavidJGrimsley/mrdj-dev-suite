@@ -4,12 +4,15 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 
 import { LegalDocumentModal } from '../legal/legal-document-modal';
 import { getLegalDocument, type LegalDocumentId } from '../legal/legal-documents';
-import { useLegalAcceptance } from '../legal/use-legal-acceptance';
+import {
+  getRequiredMaterialLegalDocuments,
+  useLegalUpdateGateSnapshot,
+} from '../legal/legal-acceptance-adapter';
 import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
 import { onboardingConfig } from './onboarding-config';
 
-const requiredDocuments: LegalDocumentId[] = ['terms', 'privacy'];
+const requiredDocuments = getRequiredMaterialLegalDocuments();
 
 function LegalRow({
   documentId,
@@ -35,7 +38,8 @@ function LegalRow({
           borderColor: accepted ? colors.success : colors.primary,
           borderRadius: theme.layout.radius,
         },
-      ]}>
+      ]}
+    >
       <View style={styles.documentText}>
         <Text style={[styles.documentTitle, { color: colors.text }]}>{document.title}</Text>
         <Text style={[styles.documentMeta, { color: colors.text }]}>
@@ -55,12 +59,19 @@ export default function OnboardingLegalReviewScreen() {
   const colors = theme.activeColors;
   const primaryForeground = getReadableTextColor(colors.primary, theme.colors.light.text);
   const [activeDocument, setActiveDocument] = useState<LegalDocumentId | null>(null);
-  const { acceptedDocuments, acceptDocument, hasAcceptedRequiredDocuments } = useLegalAcceptance();
+  const { snapshot, acceptDocument, savingDocumentId } = useLegalUpdateGateSnapshot();
+  const missingDocumentIds = new Set(
+    snapshot.requiredDocuments.map((document) => document.documentId)
+  );
+  const hasAcceptedRequiredDocuments = snapshot.status === 'complete';
 
   const closeModal = () => setActiveDocument(null);
-  const acceptActiveDocument = () => {
+  const acceptActiveDocument = async () => {
     if (activeDocument) {
-      acceptDocument(activeDocument);
+      const document = requiredDocuments.find((item) => item.documentId === activeDocument);
+      if (document) {
+        await acceptDocument(document);
+      }
     }
     closeModal();
   };
@@ -69,7 +80,8 @@ export default function OnboardingLegalReviewScreen() {
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={styles.content}
-      style={[styles.screen, { backgroundColor: colors.background }]}>
+      style={[styles.screen, { backgroundColor: colors.background }]}
+    >
       <View style={styles.header}>
         <Text style={[styles.kicker, { color: colors.primary }]}>Legal</Text>
         <Text
@@ -79,39 +91,46 @@ export default function OnboardingLegalReviewScreen() {
               color: colors.text,
               fontFamily: theme.typography.fontTitle,
             },
-          ]}>
+          ]}
+        >
           {onboardingConfig.legal.title}
         </Text>
         <Text style={[styles.body, { color: colors.text }]}>{onboardingConfig.legal.body}</Text>
       </View>
 
       <View style={styles.stack}>
-        {requiredDocuments.map((documentId) => (
+        {requiredDocuments.map((document) => (
           <LegalRow
-            accepted={acceptedDocuments[documentId]}
-            documentId={documentId}
-            key={documentId}
-            onOpen={() => setActiveDocument(documentId)}
+            accepted={!missingDocumentIds.has(document.documentId)}
+            documentId={document.documentId}
+            key={document.documentId}
+            onOpen={() => setActiveDocument(document.documentId)}
           />
         ))}
       </View>
 
       <Pressable
         accessibilityRole="button"
-        disabled={!hasAcceptedRequiredDocuments}
+        disabled={!hasAcceptedRequiredDocuments || Boolean(savingDocumentId)}
         onPress={() => router.replace(onboardingConfig.completion.route)}
         style={[
           styles.primaryButton,
           {
-            backgroundColor: hasAcceptedRequiredDocuments ? colors.primary : colors.surface,
+            backgroundColor:
+              hasAcceptedRequiredDocuments && !savingDocumentId ? colors.primary : colors.surface,
             borderRadius: theme.layout.radius,
           },
-        ]}>
+        ]}
+      >
         <Text
           style={[
             styles.primaryButtonText,
-            { color: hasAcceptedRequiredDocuments ? primaryForeground : colors.text },
-          ]}>
+            {
+              color:
+                hasAcceptedRequiredDocuments && !savingDocumentId ? primaryForeground : colors.text,
+            },
+          ]}
+        >
           {onboardingConfig.completion.label}
         </Text>
       </Pressable>

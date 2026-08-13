@@ -32,7 +32,7 @@ describe('MDS Library CLI services', () => {
   });
 
   it('detects Expo project conventions and normalizes wildcard aliases', async () => {
-    const projectPath = await createExpoProject();
+    const projectPath = await createExpoProject({ mdsRootLayout: true });
     const inspection = await inspectLibraryProject(projectPath);
 
     expect(inspection.expoSdk).toBe('~56.0.0');
@@ -147,6 +147,78 @@ describe('MDS Library CLI services', () => {
       })
     ).rejects.toThrow('blocked');
     expect(await readFile(customTermsRoute, 'utf8')).toBe(customizedSource);
+  });
+
+  it('adds the auth library with provider variants and idempotent generated files', async () => {
+    const projectPath = await createExpoProject({ mdsRootLayout: true });
+    const plan = await planLibraryAdd(projectPath, 'mds/auth', {
+      variant: 'with-supabase',
+    });
+
+    expect(plan.canApply).toBe(true);
+    expect(plan.variant).toBe('with-supabase');
+    expect(plan.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependencies: expect.arrayContaining(['@supabase/supabase-js@^2.112.3']),
+        }),
+        expect.objectContaining({
+          dependencies: expect.arrayContaining([
+            '@react-native-async-storage/async-storage@2.2.0',
+          ]),
+        }),
+      ])
+    );
+    expect(plan.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: 'src/app/(auth)/sign-in.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/app/(auth)/sign-up.tsx', role: 'route' }),
+        expect.objectContaining({ destination: 'src/features/auth/auth-adapter.tsx' }),
+        expect.objectContaining({ destination: 'src/features/auth/auth-provider.tsx' }),
+        expect.objectContaining({ destination: 'src/services/supabase.ts' }),
+        expect.objectContaining({ destination: '.env.example' }),
+        expect.objectContaining({ destination: 'project/auth.md' }),
+      ])
+    );
+
+    const result = await applyLibraryAdd(projectPath, 'mds/auth', {
+      confirmed: true,
+      installDependencies: false,
+      planHash: plan.planHash,
+      variant: 'with-supabase',
+    });
+
+    expect(result.writtenFiles).toEqual(
+      expect.arrayContaining([
+        'src/app/(auth)/sign-in.tsx',
+        'src/features/auth/auth-adapter.tsx',
+        'src/features/auth/auth-provider.tsx',
+        'src/features/auth/auth-types.ts',
+        'src/services/supabase.ts',
+        '.env.example',
+        'project/auth.md',
+      ])
+    );
+    expect(result.repairedFiles).toEqual(['src/app/_layout.tsx']);
+    const rootLayout = await readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain('AuthProvider');
+    expect(rootLayout).toContain('useAuth');
+    expect(rootLayout).toContain('<Stack.Protected guard={!auth.isAuthenticated}>');
+    expect(rootLayout).toContain('<Stack.Protected guard={auth.isAuthenticated}>');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-adapter.tsx'), 'utf8')
+    ).resolves.toContain('signInWithPassword');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'auth.md'), 'utf8')
+    ).resolves.toContain('Supabase Auth');
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
+    );
+
+    const secondPlan = await planLibraryAdd(projectPath, 'mds/auth', {
+      variant: 'with-supabase',
+    });
+    expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
   });
 
   it('adds the legal update gate variant with route and adapter assets', async () => {
@@ -537,6 +609,7 @@ async function createExpoProject(
     devDependencies?: Record<string, string>;
     optionalDependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
+    mdsRootLayout?: boolean;
   } = {}
 ): Promise<string> {
   const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-library-cli-'));
@@ -614,7 +687,7 @@ async function createExpoProject(
   }
   await writeFile(
     path.join(projectPath, appDirectory, '_layout.tsx'),
-    "import { Stack } from 'expo-router';\nexport default function Layout() { return <Stack />; }\n",
+    options.mdsRootLayout ? renderMdsRootLayoutFixture() : "import { Stack } from 'expo-router';\nexport default function Layout() { return <Stack />; }\n",
     'utf8'
   );
   if (layout === 'tabs') {
@@ -626,6 +699,46 @@ async function createExpoProject(
     );
   }
   return projectPath;
+}
+
+function renderMdsRootLayoutFixture(): string {
+  return [
+    "import type { ReactNode } from 'react';",
+    "import { Stack, ThemeProvider } from 'expo-router';",
+    "import { AppThemeProvider, useAppTheme } from '../theme/provider';",
+    '',
+    'function RouterThemeBridge({ children }: { children: ReactNode }) {',
+    '  return <ThemeProvider value={{ dark: false, colors: {} as never }}>{children}</ThemeProvider>;',
+    '}',
+    '',
+    'function LayoutInner() {',
+    '  const theme = useAppTheme();',
+    '  const shellColor = theme.activeColors.background;',
+    '  return (',
+    '    <RouterThemeBridge>',
+    '            <Stack',
+    '              screenOptions={{',
+    '                contentStyle: { backgroundColor: shellColor },',
+    '              }}>',
+    '        <Stack.Screen name="onboarding" options={{ title: \'Onboarding\' }} />',
+    '        <Stack.Screen name="terms" options={{ title: \'Terms Of Service\' }} />',
+    '        <Stack.Screen name="privacy" options={{ title: \'Privacy Policy\' }} />',
+    '        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />',
+    '        <Stack.Screen name="settings" options={{ presentation: \'modal\', title: \'Settings\' }} />',
+    '            </Stack>',
+    '    </RouterThemeBridge>',
+    '  );',
+    '}',
+    '',
+    'export default function Layout() {',
+    '  return (',
+    '    <AppThemeProvider>',
+    '      <LayoutInner />',
+    '    </AppThemeProvider>',
+    '  );',
+    '}',
+    '',
+  ].join('\n');
 }
 
 async function ejectAll(projectPath: string): Promise<void> {

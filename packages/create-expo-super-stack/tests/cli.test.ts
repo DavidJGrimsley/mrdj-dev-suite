@@ -25,6 +25,7 @@ import {
   repairExpoWebOutputForStylistLifecycle,
   repairGeneratedTypeSupport,
   repairMovedSrcAppImports,
+  moveRootAppIntoSrc,
   renderHelpText,
   resolveMissingWindowsTailwindOxideBinding,
   resolveProjectTarget,
@@ -56,6 +57,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(help).toContain("Usage:");
     expect(help).toContain("create-expo-super-stack [project-name]");
     expect(help).toContain("--mds-yes");
+    expect(help).toContain("--mds-auth-provider=");
     expect(help).toContain("--mds-save-defaults");
     expect(help).toContain("--mds-no-guidelines-template");
     expect(help).toContain("-h, --help");
@@ -176,14 +178,19 @@ describe("create-expo-super-stack CLI helpers", () => {
     const spec = prepareCommandForSpawn(
       {
         command: "npx",
-        args: ["expo", "install", "expo@latest"],
-        display: "npx expo install expo@latest",
+        args: ["expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        display: `npx expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
       },
       { platform: "win32", comSpec: "C:\\Windows\\System32\\cmd.exe" },
     );
 
     expect(spec.command).toBe("C:\\Windows\\System32\\cmd.exe");
-    expect(spec.args).toEqual(["/d", "/s", "/c", "npx expo install expo@latest"]);
+    expect(spec.args).toEqual([
+      "/d",
+      "/s",
+      "/c",
+      `npx expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
+    ]);
     expect(spec.shell).toBe(false);
   });
 
@@ -345,6 +352,7 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-platform-layouts=platform-specific",
       "--mds-web-output=server",
       "--mds-deployed-server=standard-expo",
+      "--mds-auth-provider=convex",
       "--mds-onboarding-flow=multi-screen",
       "--mds-legal-documents=onboarding-agreement",
       "--mds-onboarding-completion=auth",
@@ -365,6 +373,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.platformLayouts).toBe("platform-specific");
     expect(parsed.mds.webOutput).toBe("server");
     expect(parsed.mds.deployedServer).toBe("standard-expo");
+    expect(parsed.mds.authProvider).toBe("convex");
     expect(parsed.mds.onboardingFlow).toBe("multi-screen");
     expect(parsed.mds.legalDocumentMode).toBe("onboarding-agreement");
     expect(parsed.mds.onboardingCompletionMode).toBe("auth");
@@ -417,6 +426,7 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-platform-layouts=solo",
       "--mds-web-output=foo",
       "--mds-deployed-server=bar",
+      "--mds-auth-provider=magic",
       "--mds-onboarding-flow=wizard",
       "--mds-legal-documents=contracts",
       "--mds-onboarding-completion=launch",
@@ -428,6 +438,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.platformLayouts).toBeUndefined();
     expect(parsed.mds.webOutput).toBeUndefined();
     expect(parsed.mds.deployedServer).toBeUndefined();
+    expect(parsed.mds.authProvider).toBeUndefined();
     expect(parsed.mds.onboardingFlow).toBeUndefined();
     expect(parsed.mds.legalDocumentMode).toBeUndefined();
     expect(parsed.mds.onboardingCompletionMode).toBeUndefined();
@@ -591,6 +602,88 @@ describe("create-expo-super-stack CLI helpers", () => {
       };
       expect(repaired.expo.platforms).toEqual(["ios", "android", "web"]);
       expect(repaired.expo.web.output).toBe("server");
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("merges a root app directory into an existing src/app directory", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-src-app-merge-"),
+    );
+    try {
+      await mkdir(path.join(projectPath, "app", "(tabs)"), { recursive: true });
+      await mkdir(path.join(projectPath, "src", "app"), { recursive: true });
+      await writeFile(
+        path.join(projectPath, "app", "modal.tsx"),
+        "export default function Modal() { return null; }\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "app", "(tabs)", "index.tsx"),
+        "export default function LegacyHome() { return null; }\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "src", "app", "_layout.tsx"),
+        "export default function Layout() { return null; }\n",
+        "utf8",
+      );
+
+      const moved = await moveRootAppIntoSrc(projectPath);
+
+      expect(moved).toEqual({
+        from: path.join(projectPath, "app"),
+        to: path.join(projectPath, "src", "app"),
+      });
+      await expect(
+        readFile(path.join(projectPath, "src", "app", "modal.tsx"), "utf8"),
+      ).resolves.toContain("Modal");
+      await expect(
+        readFile(
+          path.join(projectPath, "src", "app", "(tabs)", "index.tsx"),
+          "utf8",
+        ),
+      ).resolves.toContain("LegacyHome");
+      await expect(readFile(path.join(projectPath, "app", "modal.tsx"), "utf8"))
+        .rejects.toThrow();
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("fails before deleting app when src/app merge has route conflicts", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-src-app-conflict-"),
+    );
+    try {
+      await mkdir(path.join(projectPath, "app", "(tabs)"), { recursive: true });
+      await mkdir(path.join(projectPath, "src", "app", "(tabs)"), {
+        recursive: true,
+      });
+      await writeFile(
+        path.join(projectPath, "app", "(tabs)", "index.tsx"),
+        "export default function RootHome() { return null; }\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(projectPath, "src", "app", "(tabs)", "index.tsx"),
+        "export default function SrcHome() { return null; }\n",
+        "utf8",
+      );
+
+      await expect(moveRootAppIntoSrc(projectPath)).rejects.toThrow(
+        "generated route trees overlap",
+      );
+      await expect(
+        readFile(path.join(projectPath, "app", "(tabs)", "index.tsx"), "utf8"),
+      ).resolves.toContain("RootHome");
+      await expect(
+        readFile(
+          path.join(projectPath, "src", "app", "(tabs)", "index.tsx"),
+          "utf8",
+        ),
+      ).resolves.toContain("SrcHome");
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

@@ -375,6 +375,8 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Add an icon-release workflow before app-store preparation: accept a 1024x1024 master icon, generate platform assets through https://smartutilify.netlify.app/tools/icons-favicons, copy them into the project root with a dedicated script, and later automate platform-specific output from project info.
 - [ ] Confirm/add scripts from my other projects such as `generate-sitemap` for static builds, ensuring the sitemap rebuilds on every build; prefer an Expo-supported alternative when available. Include copy icons as well.
 - [ ] Use the completed Experimemo MVP changes as a generated-app regression fixture: user-facing production copy, Expo UI/NativeTabs, app icon, system dark mode, and store metadata links must survive Phase 0 and exposition ejection.
+- [ ] Styling needs to be consistent - the stylist doesn't use dark mode automatically when the environment is dark (the rest of the app). We don't want to remove the toggle or change the behavior there but we should make it the same at start up basically.
+- [ ] Link colors seem to be hard coded blue instead of theme provided. let's make them use secondary color from the theme. See package exposition page after setting a new color theme (it starts blue so it looks like it's integrated but it isn't). I also see this blue throughout expo sdk 56 exposition page and we see no secondary color on the data page (there is a button to sign the guestbook which could be secondary color).
 
 ## MDS Library
 
@@ -397,7 +399,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Add the redesigned onboarding flow to MDS Library from its dedicated feature branch.
 - [x] Add the material legal update gate variant to `mds/legal-documents`, including `/legal/updates`, document acceptance metadata, and generated protected-route scaffolding.
 - [ ] Add optional onboarding intent/profile-intake variants only when responses are persisted or directly change app behavior; avoid choice-only onboarding pages.
-- [ ] Add completed sign-in and sign-up screens/flows from the dedicated auth branch; do not treat the current account-setup placeholder as auth.
+- [x] Add completed sign-in and sign-up screens/flows as `mds/auth` variants (`base`, `with-supabase`, `with-firebase`, `with-convex`); do not treat the current account-setup placeholder as auth.
 - [ ] Add npm-package-backed Library entries and decide which advanced MDS components should graduate into runtime packages.
 - [ ] Design reviewed contributor submissions, attribution, licensing, governance, signup-fee, nonprofit, and potential payout policies without granting repository write access by default.
 - [ ] Connect the I^2 IDE MDS Library widget to the shared registry APIs, including previews and project compatibility state.

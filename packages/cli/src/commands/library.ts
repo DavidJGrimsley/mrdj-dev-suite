@@ -264,6 +264,7 @@ function printLibraryAddResult(result: LibraryAddResult, json = false, placement
     console.log(`- ${placement}`);
   }
   for (const file of result.writtenFiles) console.log(`${chalk.green('CREATED')} ${file}`);
+  for (const file of result.repairedFiles) console.log(`${chalk.green('UPDATED')} ${file}`);
   for (const file of result.skippedFiles) console.log(`${chalk.gray('SKIPPED')} ${file} (identical)`);
   for (const command of result.executedCommands) console.log(`${chalk.green('RAN')} ${command}`);
   for (const command of result.pendingCommands) console.log(`${chalk.yellow('RUN')} ${command}`);

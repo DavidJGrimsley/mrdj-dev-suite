@@ -40,11 +40,12 @@ describe("MDS Library catalog", () => {
     );
   });
 
-  it("contains the approved MDS, Expo, CES, and NativeWindUI coverage without auth", () => {
+  it("contains the approved MDS, Expo, CES, and NativeWindUI coverage", () => {
     const ids = new Set(listLibraryItems().map((item) => item.id));
 
     for (const id of [
       "swmansion/animated-pressable",
+      "mds/auth",
       "mds/legal-documents",
       "mds/onboarding",
       "mds/settings",
@@ -60,9 +61,6 @@ describe("MDS Library catalog", () => {
     ]) {
       expect(ids.has(id), id).toBe(true);
     }
-    expect(
-      [...ids].some((id) => id.includes("sign-in") || id.includes("auth")),
-    ).toBe(false);
     expect(ids.has("mds/data-supabase")).toBe(false);
     expect(ids.has("mds/exposition-notice")).toBe(false);
   });
@@ -425,6 +423,127 @@ describe("library resolution", () => {
     expect(updateGate.integration).toContainEqual(
       expect.stringContaining("Stack.Protected"),
     );
+  });
+
+  it("resolves the auth library with base and provider variants", async () => {
+    const base = resolveLibraryItem("mds/auth", routerContext);
+    const supabase = resolveLibraryItem("mds/auth", routerContext, {
+      variant: "with-supabase",
+    });
+    const firebase = resolveLibraryItem("mds/auth", routerContext, {
+      variant: "with-firebase",
+    });
+    const convex = resolveLibraryItem("mds/auth", routerContext, {
+      variant: "with-convex",
+    });
+
+    expect(base.compatible).toBe(true);
+    expect(base.variant?.id).toBe("base");
+    expect(getLibraryItem("mds/auth")?.variants.map((variant) => variant.id)).toEqual([
+      "base",
+      "with-supabase",
+      "with-firebase",
+      "with-convex",
+    ]);
+    expect(base.items.map((item) => item.id)).toContain("mds/theme-support");
+    expect(base.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/auth/auth-adapter.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/auth/auth-provider.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/auth/auth-screen.tsx",
+        }),
+        expect.objectContaining({ destination: "src/app/(auth)/sign-in.tsx" }),
+        expect.objectContaining({ destination: "src/app/(auth)/sign-up.tsx" }),
+        expect.objectContaining({
+          destination: "src/app/(auth)/reset-password.tsx",
+        }),
+        expect.objectContaining({ destination: "project/auth.md" }),
+      ]),
+    );
+
+    expect(supabase.dependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "@supabase/supabase-js" }),
+        expect.objectContaining({
+          name: "@react-native-async-storage/async-storage",
+        }),
+      ]),
+    );
+    expect(supabase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/services/supabase.ts" }),
+        expect.objectContaining({ destination: ".env.example" }),
+        expect.objectContaining({
+          destination: "supabase/migrations/0001_mds_auth_onboarding.sql",
+        }),
+      ]),
+    );
+    expect(firebase.dependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "firebase" }),
+        expect.objectContaining({
+          name: "@react-native-async-storage/async-storage",
+        }),
+      ]),
+    );
+    expect(firebase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/services/firebase.ts" }),
+        expect.objectContaining({ destination: ".env.example" }),
+      ]),
+    );
+    expect(convex.dependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "convex" }),
+        expect.objectContaining({ name: "@convex-dev/auth" }),
+        expect.objectContaining({ name: "@auth/core" }),
+        expect.objectContaining({ name: "expo-secure-store" }),
+      ]),
+    );
+    expect(convex.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/services/convex.ts" }),
+        expect.objectContaining({ destination: ".env.example" }),
+      ]),
+    );
+    const convexServiceAsset = convex.assets.find(
+      (asset) => asset.destination === "src/services/convex.ts",
+    );
+    expect(convexServiceAsset).toBeDefined();
+    const convexServiceSource = (await readLibraryAsset(convexServiceAsset!)).toString("utf8");
+    expect(convexServiceSource).toContain("getConvexClient");
+    expect(convexServiceSource).not.toContain("example.convex.cloud");
+
+    const convexAdapterAsset = convex.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-adapter.tsx",
+    );
+    expect(convexAdapterAsset).toBeDefined();
+    const convexAdapterSource = (await readLibraryAsset(convexAdapterAsset!)).toString("utf8");
+    expect(convexAdapterSource).toContain("MissingConvexAuthAdapterProvider");
+    expect(convexAdapterSource).toContain("!isConvexConfigured");
+
+    const authProviderAsset = base.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-provider.tsx",
+    );
+    expect(authProviderAsset).toBeDefined();
+    const authProviderSource = (await readLibraryAsset(authProviderAsset!)).toString("utf8");
+    expect(authProviderSource).toContain("AuthAdapterProvider");
+    expect(authProviderSource).toContain("useAuth");
+
+    const authScreenAsset = base.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-screen.tsx",
+    );
+    expect(authScreenAsset).toBeDefined();
+    const authScreenSource = (await readLibraryAsset(authScreenAsset!)).toString("utf8");
+    expect(authScreenSource).toContain("backgroundColor: colors.background");
+    expect(authScreenSource).toContain("color: colors.text");
+    expect(authScreenSource).not.toContain("color: '#111827'");
+    expect(authScreenSource).not.toContain("backgroundColor: '#ffffff'");
   });
 
   it("resolves production onboarding variants", async () => {

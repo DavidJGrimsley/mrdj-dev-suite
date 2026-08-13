@@ -112,7 +112,7 @@ export default function LegalUpdateScreen() {
             styles.statusCard,
             {
               backgroundColor: colors.surface,
-              borderColor: colors.danger,
+              borderColor: colors.warning,
               borderRadius: theme.layout.radius,
             },
           ]}>

@@ -151,6 +151,7 @@ export interface LibraryAddResult {
   applied: boolean;
   dryRun: boolean;
   writtenFiles: string[];
+  repairedFiles: string[];
   skippedFiles: string[];
   executedCommands: string[];
   pendingCommands: string[];
@@ -389,6 +390,7 @@ export async function applyLibraryAdd(
       applied: false,
       dryRun: true,
       writtenFiles: [],
+      repairedFiles: [],
       skippedFiles,
       executedCommands: [],
       pendingCommands: plan.commands.map((command) => command.display),
@@ -448,6 +450,8 @@ export async function applyLibraryAdd(
     }
   }
 
+  const repairedFiles = await runPostLibraryAddRepairs(plan);
+
   return {
     projectPath: plan.projectPath,
     id,
@@ -456,6 +460,7 @@ export async function applyLibraryAdd(
     applied: true,
     dryRun: false,
     writtenFiles,
+    repairedFiles,
     skippedFiles,
     executedCommands,
     pendingCommands: shouldInstallDependencies
@@ -464,6 +469,136 @@ export async function applyLibraryAdd(
     dependenciesInstalled: shouldInstallDependencies && plan.commands.length > 0,
     plan,
   };
+}
+
+async function runPostLibraryAddRepairs(plan: LibraryAddPlan): Promise<string[]> {
+  if (plan.id !== 'mds/auth') {
+    return [];
+  }
+  const layoutPath = path.join(
+    plan.projectPath,
+    plan.context.appDirectory === 'src/app' ? 'src/app/_layout.tsx' : 'app/_layout.tsx'
+  );
+  const repaired = await wireAuthIntoMdsRootLayout(layoutPath, plan.context);
+  return repaired ? [path.relative(plan.projectPath, layoutPath).replace(/\\/g, '/')] : [];
+}
+
+async function wireAuthIntoMdsRootLayout(
+  layoutPath: string,
+  context: LibraryProjectInspection
+): Promise<boolean> {
+  let source: string;
+  try {
+    source = await readFile(layoutPath, 'utf8');
+  } catch {
+    return false;
+  }
+  if (source.includes('AuthProvider')) {
+    return false;
+  }
+  if (!source.includes('function LayoutInner()') || !source.includes('<AppThemeProvider>')) {
+    return false;
+  }
+
+  const layoutDir = path.dirname(layoutPath);
+  const authProviderPath = path.join(context.projectPath, context.featuresDirectory, 'auth', 'auth-provider');
+  let authImport = path.relative(layoutDir, authProviderPath).replace(/\\/g, '/');
+  if (!authImport.startsWith('.')) {
+    authImport = `./${authImport}`;
+  }
+
+  let next = source.replace(
+    /(import \{ AppThemeProvider, useAppTheme \} from ['"][^'"]+['"];)/u,
+    `$1\nimport { AuthProvider, useAuth } from '${authImport}';`
+  );
+  if (next === source) {
+    return false;
+  }
+  next = next.replace(
+    /(function LayoutInner\(\) \{\r?\n\s+const theme = useAppTheme\(\);\r?\n)/u,
+    `$1  const auth = useAuth();\n\n  if (auth.isLoading) {\n    return null;\n  }\n`
+  );
+  next = wrapMdsStackScreensForAuth(next);
+  next = next.replace(
+    /(<AppThemeProvider>\r?\n)(\s+<LayoutInner \/>\r?\n)(\s+<\/AppThemeProvider>)/u,
+    `$1      <AuthProvider>\n        <LayoutInner />\n      </AuthProvider>\n$3`
+  );
+
+  if (next === source || next.includes('const auth = useAuth();') === false) {
+    return false;
+  }
+  await writeFile(layoutPath, next, 'utf8');
+  return true;
+}
+
+function wrapMdsStackScreensForAuth(source: string): string {
+  const stackOpenIndex = source.indexOf('            <Stack');
+  if (stackOpenIndex < 0) {
+    return source;
+  }
+  const stackOpenEnd = source.indexOf('              }}>') + '              }}>'.length + 1;
+  if (stackOpenEnd <= stackOpenIndex) {
+    return source;
+  }
+  const stackCloseIndex = source.indexOf('            </Stack>', stackOpenEnd);
+  if (stackCloseIndex < 0) {
+    return source;
+  }
+
+  const before = source.slice(0, stackOpenEnd);
+  const inner = source.slice(stackOpenEnd, stackCloseIndex);
+  const after = source.slice(stackCloseIndex);
+  if (inner.includes('<Stack.Protected') || inner.includes('(auth)/sign-in')) {
+    return source;
+  }
+
+  const publicAuthScreens = [
+    '              <Stack.Protected guard={!auth.isAuthenticated}>',
+    '                <Stack.Screen name="(auth)/sign-in" options={{ title: \'Sign In\' }} />',
+    '                <Stack.Screen name="(auth)/sign-up" options={{ title: \'Sign Up\' }} />',
+    '                <Stack.Screen name="(auth)/reset-password" options={{ title: \'Reset Password\' }} />',
+    '              </Stack.Protected>',
+  ];
+
+  const publicScreens: string[] = [];
+  const protectedScreens: string[] = [];
+  for (const line of inner.split(/\r?\n/u)) {
+    if (!line.trim()) {
+      continue;
+    }
+    if (isPublicAuthAddScreen(line)) {
+      publicScreens.push(line);
+    } else {
+      protectedScreens.push(line.replace(/^ {14}/u, '                '));
+    }
+  }
+  if (protectedScreens.length === 0) {
+    return source;
+  }
+
+  const replacement = [
+    ...publicAuthScreens,
+    ...publicScreens,
+    '              <Stack.Protected guard={auth.isAuthenticated}>',
+    ...protectedScreens,
+    '              </Stack.Protected>',
+    '',
+  ].join('\n');
+
+  return `${before}${replacement}${after}`;
+}
+
+function isPublicAuthAddScreen(line: string): boolean {
+  return (
+    line.includes('name="onboarding') ||
+    line.includes("name='onboarding") ||
+    line.includes('name="terms"') ||
+    line.includes("name='terms'") ||
+    line.includes('name="privacy"') ||
+    line.includes("name='privacy'") ||
+    line.includes('name="legal/') ||
+    line.includes("name='legal/")
+  );
 }
 
 export async function runLibraryCommand(

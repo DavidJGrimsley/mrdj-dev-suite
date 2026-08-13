@@ -201,6 +201,10 @@ async function main(): Promise<void> {
             describe: 'Initial data mode',
             choices: ['local', 'supabase'] as const,
           })
+          .option('auth-provider', {
+            describe: 'Generated MDS auth provider',
+            choices: ['none', 'base', 'supabase', 'firebase', 'convex'] as const,
+          })
           .option('onboarding-flow', {
             describe: 'Generated onboarding flow',
             choices: ['none', 'multi-screen'] as const,
