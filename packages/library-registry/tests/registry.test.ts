@@ -511,6 +511,21 @@ describe("library resolution", () => {
         expect.objectContaining({ destination: ".env.example" }),
       ]),
     );
+    const convexServiceAsset = convex.assets.find(
+      (asset) => asset.destination === "src/services/convex.ts",
+    );
+    expect(convexServiceAsset).toBeDefined();
+    const convexServiceSource = (await readLibraryAsset(convexServiceAsset!)).toString("utf8");
+    expect(convexServiceSource).toContain("getConvexClient");
+    expect(convexServiceSource).not.toContain("example.convex.cloud");
+
+    const convexAdapterAsset = convex.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-adapter.tsx",
+    );
+    expect(convexAdapterAsset).toBeDefined();
+    const convexAdapterSource = (await readLibraryAsset(convexAdapterAsset!)).toString("utf8");
+    expect(convexAdapterSource).toContain("MissingConvexAuthAdapterProvider");
+    expect(convexAdapterSource).toContain("!isConvexConfigured");
 
     const authProviderAsset = base.assets.find(
       (asset) => asset.destination === "src/features/auth/auth-provider.tsx",

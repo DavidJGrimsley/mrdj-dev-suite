@@ -5,7 +5,16 @@ import { Platform } from 'react-native';
 const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
 export const isConvexConfigured = Boolean(convexUrl);
 
-export const convex = new ConvexReactClient(convexUrl ?? 'https://example.convex.cloud');
+let convexClient: ConvexReactClient | null = null;
+
+export function getConvexClient(): ConvexReactClient {
+  if (!convexUrl) {
+    throw new Error('Set EXPO_PUBLIC_CONVEX_URL before using Convex Auth.');
+  }
+
+  convexClient ??= new ConvexReactClient(convexUrl);
+  return convexClient;
+}
 
 export const convexAuthStorage = {
   async getItem(key: string) {

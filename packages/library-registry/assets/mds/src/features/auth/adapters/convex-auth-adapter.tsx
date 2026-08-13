@@ -1,24 +1,65 @@
 import { ConvexAuthProvider, useAuthActions, useConvexAuth } from '@convex-dev/auth/react';
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 
-import { convex, convexAuthStorage, isConvexConfigured } from '../../services/convex';
+import { convexAuthStorage, getConvexClient, isConvexConfigured } from '../../services/convex';
 
 import type { AuthActionInput, AuthActionResult, AuthAdapter, AuthSession } from './auth-types';
+
+const configurationError =
+  'Set EXPO_PUBLIC_CONVEX_URL and initialize Convex Auth before using this generated adapter.';
+
+const ConvexAuthAdapterContext = createContext<AuthAdapter | null>(null);
 
 function authError(error: unknown): AuthActionResult {
   const message = error instanceof Error ? error.message : String(error);
   return { ok: false, error: message };
 }
 
-export function AuthAdapterProvider({ children }: { children: ReactNode }) {
+function useMissingConvexAuthAdapter(): AuthAdapter {
+  const unavailable = useCallback(async () => {
+    return { ok: false, error: configurationError } satisfies AuthActionResult;
+  }, []);
+
+  return useMemo<AuthAdapter>(
+    () => ({
+      provider: 'convex',
+      state: { isLoading: false, session: null, error: configurationError },
+      signInWithEmailPassword: unavailable,
+      signUpWithEmailPassword: unavailable,
+      requestPasswordReset: unavailable,
+      signOut: unavailable,
+    }),
+    [unavailable],
+  );
+}
+
+function MissingConvexAuthAdapterProvider({ children }: { children: ReactNode }) {
+  const adapter = useMissingConvexAuthAdapter();
+  return <ConvexAuthAdapterContext.Provider value={adapter}>{children}</ConvexAuthAdapterContext.Provider>;
+}
+
+function ConfiguredConvexAuthAdapterProvider({ children }: { children: ReactNode }) {
   return (
-    <ConvexAuthProvider client={convex} storage={convexAuthStorage}>
-      {children}
+    <ConvexAuthProvider client={getConvexClient()} storage={convexAuthStorage}>
+      <ConfiguredConvexAuthAdapterState>{children}</ConfiguredConvexAuthAdapterState>
     </ConvexAuthProvider>
   );
 }
 
-export function useAuthAdapter(): AuthAdapter {
+function ConfiguredConvexAuthAdapterState({ children }: { children: ReactNode }) {
+  const adapter = useConfiguredConvexAuthAdapter();
+  return <ConvexAuthAdapterContext.Provider value={adapter}>{children}</ConvexAuthAdapterContext.Provider>;
+}
+
+export function AuthAdapterProvider({ children }: { children: ReactNode }) {
+  if (!isConvexConfigured) {
+    return <MissingConvexAuthAdapterProvider>{children}</MissingConvexAuthAdapterProvider>;
+  }
+
+  return <ConfiguredConvexAuthAdapterProvider>{children}</ConfiguredConvexAuthAdapterProvider>;
+}
+
+function useConfiguredConvexAuthAdapter(): AuthAdapter {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signIn, signOut: convexSignOut } = useAuthActions();
   const session = useMemo<AuthSession | null>(
@@ -33,13 +74,9 @@ export function useAuthAdapter(): AuthAdapter {
         : null,
     [isAuthenticated],
   );
-  const configurationError = isConvexConfigured
-    ? null
-    : 'Set EXPO_PUBLIC_CONVEX_URL and initialize Convex Auth before using this generated adapter.';
 
   const signInWithEmailPassword = useCallback(
     async ({ email, password }: AuthActionInput) => {
-      if (!isConvexConfigured) return { ok: false, error: configurationError ?? '' };
       try {
         await signIn('password', { email: email.trim(), password, flow: 'signIn' });
         return { ok: true } satisfies AuthActionResult;
@@ -47,12 +84,11 @@ export function useAuthAdapter(): AuthAdapter {
         return authError(error);
       }
     },
-    [configurationError, signIn],
+    [signIn],
   );
 
   const signUpWithEmailPassword = useCallback(
     async ({ email, password }: AuthActionInput) => {
-      if (!isConvexConfigured) return { ok: false, error: configurationError ?? '' };
       try {
         await signIn('password', { email: email.trim(), password, flow: 'signUp' });
         return { ok: true } satisfies AuthActionResult;
@@ -60,12 +96,11 @@ export function useAuthAdapter(): AuthAdapter {
         return authError(error);
       }
     },
-    [configurationError, signIn],
+    [signIn],
   );
 
   const requestPasswordReset = useCallback(
     async (email: string) => {
-      if (!isConvexConfigured) return { ok: false, error: configurationError ?? '' };
       try {
         await signIn('password', { email: email.trim(), flow: 'reset' });
         return { ok: true, message: 'Password reset request sent.' } satisfies AuthActionResult;
@@ -73,7 +108,7 @@ export function useAuthAdapter(): AuthAdapter {
         return authError(error);
       }
     },
-    [configurationError, signIn],
+    [signIn],
   );
 
   const signOut = useCallback(async () => {
@@ -88,14 +123,13 @@ export function useAuthAdapter(): AuthAdapter {
   return useMemo<AuthAdapter>(
     () => ({
       provider: 'convex',
-      state: { isLoading, session, error: configurationError },
+      state: { isLoading, session },
       signInWithEmailPassword,
       signUpWithEmailPassword,
       requestPasswordReset,
       signOut,
     }),
     [
-      configurationError,
       isLoading,
       requestPasswordReset,
       session,
@@ -104,4 +138,12 @@ export function useAuthAdapter(): AuthAdapter {
       signUpWithEmailPassword,
     ],
   );
+}
+
+export function useAuthAdapter(): AuthAdapter {
+  const adapter = useContext(ConvexAuthAdapterContext);
+  if (!adapter) {
+    throw new Error('useAuthAdapter must be used inside AuthAdapterProvider.');
+  }
+  return adapter;
 }
