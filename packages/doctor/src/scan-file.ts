@@ -9,7 +9,7 @@ import {
 } from './checks/index.js';
 import { createReport } from './reporter.js';
 import type { DoctorReport, ScanFileOptions } from './types.js';
-import { pathExists } from './utils.js';
+import { pathExists, readPackageJson } from './utils.js';
 
 export async function scanFile(
   filePath: string,
@@ -28,14 +28,15 @@ export async function scanFile(
     ]);
   }
 
+  const packageJson = await readPackageJson(path.join(projectPath, 'package.json'));
   const checks = await Promise.all([
     scanFileEnvHygiene(projectPath, resolvedFilePath),
     scanFileSsrSafety(projectPath, resolvedFilePath),
-    scanFileAppArchitecture(projectPath, resolvedFilePath),
+    scanFileAppArchitecture(projectPath, resolvedFilePath, packageJson ?? undefined),
     scanFileAnimationPerformance(projectPath, resolvedFilePath),
   ]);
 
-  return createReport(projectPath, 'fast', checks);
+  return createReport(projectPath, 'fast', checks, false);
 }
 
 function findProjectRoot(filePath: string): string {

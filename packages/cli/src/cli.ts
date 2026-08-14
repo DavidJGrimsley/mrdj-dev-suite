@@ -4,7 +4,13 @@ import chalk from 'chalk';
 import { hideBin } from 'yargs/helpers';
 import yargs from 'yargs';
 
-import { fixDoctor, runDoctor } from '@mr.dj2u/doctor';
+import {
+  DEFAULT_DOCTOR_MODE,
+  FULL_MODE_GUIDANCE,
+  fixDoctor,
+  formatModeHelp,
+  runDoctor,
+} from '@mr.dj2u/doctor';
 import { runAgentCommand } from './commands/agent.js';
 import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
@@ -61,9 +67,10 @@ async function main(): Promise<void> {
     .scriptName('mds')
     .command(
       'doctor [path]',
-      'Run production doctor checks on an Expo project',
+      `Run production doctor checks on an Expo project (default: ${DEFAULT_DOCTOR_MODE})`,
       (builder) =>
         builder
+          .epilog(formatModeHelp())
           .positional('path', {
             describe: 'Project path to scan',
             type: 'string',
@@ -80,17 +87,17 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('ci', {
-            describe: 'Run the CI-equivalent profile: lint, typecheck, tests, doctor, build',
+            describe: 'Run the CI-equivalent profile: lint, typecheck, tests, Expo Doctor, release build',
             type: 'boolean',
             default: false,
           })
           .option('full', {
-            describe: 'Run the full profile, including the broadest available build script',
+            describe: `Run the full profile. ${FULL_MODE_GUIDANCE}`,
             type: 'boolean',
             default: false,
           })
           .option('fast', {
-            describe: 'Run the fast profile: static checks, lint, typecheck',
+            describe: 'Run the fast profile: static checks plus lint/typecheck; skips tests, Expo Doctor, and builds',
             type: 'boolean',
             default: false,
           })
@@ -854,15 +861,23 @@ async function handleDoctor(argv: DoctorArgv): Promise<void> {
 }
 
 function resolveDoctorMode(argv: DoctorArgv): DoctorMode {
+  const selectedModes = [argv.full, argv.ci, argv.fast].filter(Boolean).length;
+  if (selectedModes > 1) {
+    throw new Error('Choose only one Doctor mode flag: --fast, --ci, or --full.');
+  }
   if (argv.full) return 'full';
   if (argv.ci) return 'ci';
   if (argv.fast) return 'fast';
-  return 'fast';
+  return DEFAULT_DOCTOR_MODE;
 }
 
 function printDoctorReport(report: DoctorReport): void {
   console.log(chalk.bold(`mds doctor (${report.mode})`));
   console.log(chalk.dim(report.projectPath));
+  console.log(chalk.dim(`mode: ${report.selection.description}`));
+  console.log(chalk.dim(`default: ${report.selection.defaultMode}`));
+  console.log(chalk.dim(`scripts: ${report.selection.runScripts ? 'enabled' : 'disabled'}`));
+  console.log(chalk.dim(`full mode: ${report.selection.fullModeGuidance}`));
   console.log();
 
   for (const check of report.checks) {

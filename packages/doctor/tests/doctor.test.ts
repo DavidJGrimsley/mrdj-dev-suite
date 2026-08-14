@@ -39,6 +39,54 @@ describe('runDoctor', () => {
     expect(report.checks.find((check) => check.name === 'package scripts')?.status).toBe('pass');
   });
 
+  it('defaults to fast mode and reports script checks skipped by mode', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'fast-default',
+      dependencies: {
+        expo: '^56.0.0',
+      },
+      scripts: {},
+    });
+
+    const report = await runDoctor(projectPath, { runScripts: true });
+
+    expect(report.mode).toBe('fast');
+    expect(report.selection.defaultMode).toBe('fast');
+    expect(report.checks.find((check) => check.name === 'tests')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'expo doctor')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'production build')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'full build profile')?.status).toBe(
+      'skip'
+    );
+  });
+
+  it('reports package script checks skipped when scripts are disabled', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'no-scripts',
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        typecheck: 'node -e "process.exit(0)"',
+      },
+    });
+
+    it('preserves disabled scripts in a report without package.json', async () => {
+      const projectPath = await createTempProject();
+
+      const report = await runDoctor(projectPath, { runScripts: false });
+
+      expect(report.selection?.runScripts).toBe(false);
+    });
+
+    const report = await runDoctor(projectPath, { mode: 'ci', runScripts: false });
+
+    expect(report.selection.runScripts).toBe(false);
+    expect(report.checks.find((check) => check.name === 'lint')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'typecheck')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'tests')?.status).toBe('skip');
+  });
+
   it('accepts MDS script aliases for Doctor and production builds', async () => {
     const projectPath = await createTempProject();
     await writeProjectFile(projectPath, 'package.json', {
@@ -205,6 +253,120 @@ describe('seo metadata check', () => {
   });
 });
 
+describe('Expo API route detection', () => {
+  it('warns for real Expo Router API routes when web output is not server', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'api-output-warning',
+      main: 'expo-router/entry',
+      dependencies: {
+        expo: '^56.0.0',
+        'expo-router': '^6.0.0',
+      },
+      scripts: {},
+    });
+    await writeProjectFile(projectPath, 'app.json', {
+      expo: {
+        platforms: ['web'],
+        web: { output: 'static' },
+      },
+    });
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'),
+      'export function GET() { return Response.json({ ok: true }); }\n',
+      'utf8'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'expo configuration');
+
+    expect(check?.status).toBe('warn');
+    expect(check?.details).toMatchObject({
+      warnings: [expect.stringContaining('Expo API routes found')],
+    });
+  });
+
+  it('passes for real Expo Router API routes when web output is server', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'src', 'app', 'api'), { recursive: true });
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'api-output-server',
+      main: 'expo-router/entry',
+      dependencies: {
+        expo: '^56.0.0',
+        'expo-router': '^6.0.0',
+      },
+      scripts: {},
+    });
+    await writeProjectFile(projectPath, 'app.json', {
+      expo: {
+        platforms: ['web'],
+        web: { output: 'server' },
+      },
+    });
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'api', '[...segments]+api.ts'),
+      'export function GET() { return Response.json({ ok: true }); }\n',
+      'utf8'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'expo configuration');
+
+    expect(check?.status).toBe('pass');
+  });
+
+  it('does not warn for +api files outside real Expo Router projects', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'server'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'not-expo-router',
+      scripts: {},
+    });
+    await writeFile(
+      path.join(projectPath, 'server', 'health+api.ts'),
+      'export function GET() { return null; }\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'mock+api.ts'),
+      'export function GET() { return null; }\n',
+      'utf8'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'expo configuration');
+
+    expect(check?.status).toBe('skip');
+    expect(check?.message).toBe('No Expo Router signals detected.');
+  });
+
+  it('does not treat TSX files as Expo Router API routes', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'app', 'api'), { recursive: true });
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'tsx-api-file',
+      main: 'expo-router/entry',
+      dependencies: {
+        'expo-router': '^6.0.0',
+      },
+      scripts: {},
+    });
+    await writeFile(
+      path.join(projectPath, 'app', 'api', 'foo+api.tsx'),
+      'export default function ApiLike() { return null; }\n',
+      'utf8'
+    );
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+    const check = report.checks.find((entry) => entry.name === 'expo configuration');
+
+    expect(check?.status).toBe('pass');
+  });
+});
+
 describe('scanFile', () => {
   it('detects public secret-looking env names in a focused file scan', async () => {
     const projectPath = await createTempProject();
@@ -217,6 +379,54 @@ describe('scanFile', () => {
 
     expect(report.summary.errors).toBe(1);
     expect(report.checks.find((check) => check.name === 'env hygiene')?.status).toBe('error');
+  });
+
+  it('detects hardcoded credential values without reporting the secret value', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, 'src', 'config.ts');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const secretValue = 'sk_live_' + 'A'.repeat(24);
+    await writeFile(filePath, `export const stripeSecretKey = "${secretValue}";\n`, 'utf8');
+
+    const report = await scanFile(filePath, { projectPath });
+    const check = report.checks.find((entry) => entry.name === 'env hygiene');
+    const serializedDetails = JSON.stringify(check?.details);
+
+    expect(check?.status).toBe('error');
+    expect(serializedDetails).toContain('stripeSecretKey');
+    expect(serializedDetails).toContain('stripe-key-shape');
+    expect(serializedDetails).not.toContain(secretValue);
+  });
+
+  it('detects quoted JSON credential fields and private-key headers without leaking values', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, 'config.json');
+    const secretValue = 'sk_live_' + 'B'.repeat(24);
+    await writeFile(
+      filePath,
+      `{"apiKey":"${secretValue}"}\n-----BEGIN PRIVATE KEY-----\n`,
+      'utf8'
+    );
+
+    const report = await scanFile(filePath, { projectPath });
+    const check = report.checks.find((entry) => entry.name === 'env hygiene');
+    const serializedDetails = JSON.stringify(check?.details);
+
+    expect(check?.status).toBe('error');
+    expect(serializedDetails).toContain('apiKey');
+    expect(serializedDetails).toContain('private key');
+    expect(serializedDetails).not.toContain(secretValue);
+  });
+
+  it('ignores placeholder credential examples', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, '.env.example');
+    await writeFile(filePath, 'STRIPE_SECRET_KEY=sk_test_your-secret-here\n', 'utf8');
+
+    const report = await scanFile(filePath, { projectPath });
+    const check = report.checks.find((entry) => entry.name === 'env hygiene');
+
+    expect(check?.status).toBe('pass');
   });
 
   it('skips animation warnings for files without animation-heavy code', async () => {

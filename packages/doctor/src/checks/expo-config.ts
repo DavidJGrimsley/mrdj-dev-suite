@@ -1,17 +1,17 @@
 import path from 'node:path';
 
 import type { DoctorCheckResult, PackageJson } from '../types.js';
-import { findFiles, isRecord, readNestedString, readOptionalText } from '../utils.js';
+import {
+  findExpoRouterApiRouteFiles,
+  hasExpoRouterSignal,
+} from '../expo-router.js';
+import { isRecord, readNestedString, readOptionalText } from '../utils.js';
 
 export async function checkExpoConfiguration(
   packageJson: PackageJson,
   projectPath: string
 ): Promise<DoctorCheckResult> {
-  const deps = {
-    ...packageJson.dependencies,
-    ...packageJson.devDependencies,
-  };
-  const hasExpoRouter = 'expo-router' in deps;
+  const hasExpoRouter = hasExpoRouterSignal(packageJson);
   const errors: string[] = [];
   const warnings: string[] = [];
   const appJson = await readAppJson(projectPath);
@@ -30,7 +30,7 @@ export async function checkExpoConfiguration(
     warnings.push('expo-router is installed but package.json main is not expo-router/entry.');
   }
 
-  const apiRouteFiles = await findFiles(projectPath, (filePath) => filePath.endsWith('+api.ts'));
+  const apiRouteFiles = await findExpoRouterApiRouteFiles(projectPath, packageJson);
   if (apiRouteFiles.length > 0) {
     const webOutput = readNestedString(appJson, ['expo', 'web', 'output']);
     const targetsWeb = platformList.length === 0 || platformList.includes('web');

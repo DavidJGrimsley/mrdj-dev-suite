@@ -8,7 +8,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
-import { runDoctor, scanFile } from '@mr.dj2u/doctor';
+import {
+  DEFAULT_DOCTOR_MODE,
+  FULL_MODE_GUIDANCE,
+  runDoctor,
+  scanFile,
+} from '@mr.dj2u/doctor';
 import {
   buildCessIntakeStep,
   buildCreateExpoSuperStackArgv,
@@ -164,7 +169,7 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'doctor_scan_project',
-      description: 'Run MDS Doctor checks against a project folder.',
+      description: `Run MDS Doctor checks against a project folder. Default mode is ${DEFAULT_DOCTOR_MODE}; use ci for PR/release gates and full for broad build verification. ${FULL_MODE_GUIDANCE}`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -612,7 +617,7 @@ function registerTools(server: McpServer): void {
     'doctor_scan_project',
     {
       title: 'Doctor Scan Project',
-      description: 'Run MDS Doctor checks against a project folder.',
+      description: `Run MDS Doctor checks against a project folder. Default mode is ${DEFAULT_DOCTOR_MODE}; ci includes tests/Expo Doctor/release build, and full adds broad build candidates. ${FULL_MODE_GUIDANCE}`,
       inputSchema: {
         projectPath: z.string(),
         mode: z.enum(['fast', 'ci', 'full']).optional(),
@@ -620,7 +625,7 @@ function registerTools(server: McpServer): void {
       },
     },
     async ({ projectPath, mode, runScripts }) => {
-      const report = await runDoctor(projectPath, { mode: mode ?? 'fast', runScripts });
+      const report = await runDoctor(projectPath, { mode: mode ?? DEFAULT_DOCTOR_MODE, runScripts });
       return toolJson(report);
     }
   );
