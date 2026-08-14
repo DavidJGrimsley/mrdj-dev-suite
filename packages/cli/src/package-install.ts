@@ -45,6 +45,7 @@ export class PackageInstallError extends Error {
   readonly cwd: string;
   readonly code: number | null;
   readonly signal: string | null;
+  readonly cause?: unknown;
 
   constructor(input: {
     display: string;
@@ -63,6 +64,7 @@ export class PackageInstallError extends Error {
     this.cwd = input.cwd;
     this.code = input.code ?? null;
     this.signal = input.signal ?? null;
+    this.cause = input.cause;
   }
 }
 
@@ -431,9 +433,12 @@ function quoteWindowsShellArg(value: string): string {
   if (value.length === 0) {
     return '""';
   }
-  const escaped = value.replace(/(["^&|<>])/gu, '^$1');
+  if (/\r|\n/u.test(value)) {
+    throw new Error('Windows shell arguments cannot contain line breaks.');
+  }
+  const escaped = value.replace(/([()%!^&|<>])/gu, '^$1');
   if (/^[A-Za-z0-9_./:@+=,~-]+$/u.test(escaped)) {
     return escaped;
   }
-  return `"${escaped}"`;
+  return `"${escaped.replace(/"/gu, '""')}"`;
 }

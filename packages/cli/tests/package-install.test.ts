@@ -141,6 +141,22 @@ describe('package-install helper', () => {
     expect(spec.shell).toBe(false);
   });
 
+  it('escapes cmd metacharacters in wrapped Windows commands', () => {
+    const spec = prepareCommandForSpawn(
+      {
+        command: 'npx',
+        args: ['expo', 'install', 'demo%USERPROFILE%', 'pkg!(1)'],
+        display: 'npx expo install demo%USERPROFILE% pkg!(1)',
+      },
+      { platform: 'win32', comSpec: 'C:\\Windows\\System32\\cmd.exe' }
+    );
+
+    expect(spec.command).toBe('C:\\Windows\\System32\\cmd.exe');
+    expect(spec.args.join(' ')).toContain('^%USERPROFILE^%');
+    expect(spec.args.join(' ')).toContain('^!');
+    expect(spec.args.join(' ')).toContain('^(');
+  });
+
   it('wraps runner failures in PackageInstallError', async () => {
     const runner = vi.fn(async () => {
       throw new Error('spawn exploded');
