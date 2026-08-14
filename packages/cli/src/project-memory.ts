@@ -247,8 +247,13 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
   }
 }
 
-function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
+function detectLineEnding(source: string): '\r\n' | '\n' {
+  return source.match(/\r?\n/u)?.[0] === '\r\n' ? '\r\n' : '\n';
+}
+
+export function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
   const completion = onboardingCompletionConfig(answers);
+  const lineEnding = detectLineEnding(source);
   const replacement = [
     '  completion: {',
     `    mode: '${completion.mode}',`,
@@ -256,10 +261,10 @@ function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers
     `    label: ${JSON.stringify(completion.label)},`,
     `    helperText: ${JSON.stringify(completion.helperText)},`,
     '  },',
-  ].join('\n');
+  ].join(lineEnding);
 
   const completionPattern =
-    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u;
+    /[ ]{2}completion: \{\r?\n[ ]{4}mode: '[^']+',\r?\n[ ]{4}route: '[^']+' as Href,\r?\n[ ]{4}label: [^\r\n]+,\r?\n[ ]{4}helperText: [^\r\n]+,\r?\n[ ]{2}\},/u;
 
   if (!completionPattern.test(source)) {
     throw new Error(
