@@ -48,6 +48,10 @@ describe('command parsing', () => {
       command: 'pnpm',
       args: ['run', 'lint', '--', '--fix'],
     });
+    expect(resolveShellCommandInvocation('pnpm run lint -- --fix', 'win32', '')).toEqual({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'pnpm run lint -- --fix'],
+    });
   });
 });
 

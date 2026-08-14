@@ -53,5 +53,9 @@ describe('dev tools port helpers', () => {
       display: 'pnpm exec expo start --clear',
     });
     expect(resolveStructuredCommandInvocation(invocation, 'linux')).toEqual(invocation);
+    expect(resolveStructuredCommandInvocation(invocation, 'win32', '')).toMatchObject({
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'pnpm exec expo start --clear'],
+    });
   });
 });

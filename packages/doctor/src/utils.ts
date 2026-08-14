@@ -174,12 +174,12 @@ export function parseCommandLine(command: string): { command: string; args: stri
 export function resolveShellCommandInvocation(
   command: string,
   platform: typeof process.platform = process.platform,
-  commandShell = process.env.ComSpec ?? 'cmd.exe'
+  commandShell = process.env.ComSpec
 ): { command: string; args: string[] } {
   if (platform === 'win32') {
     // Package-manager executables are Windows .cmd shims, so invoke cmd.exe explicitly.
     return {
-      command: commandShell,
+      command: commandShell || 'cmd.exe',
       args: ['/d', '/s', '/c', command],
     };
   }

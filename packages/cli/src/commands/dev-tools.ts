@@ -336,7 +336,7 @@ export function buildExpoStartCommandInvocation(packageManager: PackageManager):
 export function resolveStructuredCommandInvocation(
   invocation: CommandInvocation,
   platform: typeof process.platform = process.platform,
-  commandShell = process.env.ComSpec ?? 'cmd.exe'
+  commandShell = process.env.ComSpec
 ): CommandInvocation {
   if (platform !== 'win32') {
     return invocation;
@@ -344,7 +344,7 @@ export function resolveStructuredCommandInvocation(
 
   // Package-manager executables are Windows .cmd shims, so invoke cmd.exe explicitly.
   return {
-    command: commandShell,
+    command: commandShell || 'cmd.exe',
     args: ['/d', '/s', '/c', invocation.display],
     display: invocation.display,
   };
