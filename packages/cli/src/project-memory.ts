@@ -247,22 +247,26 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
   }
 }
 
-function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
-  const completion = onboardingCompletionConfig(answers);
-  const lineEnding = source.includes('\r\n') ? '\r\n' : '\n';
-  const replacement = [
-    '  completion: {',
-    `    mode: '${completion.mode}',`,
-    `    route: '${completion.route}' as Href,`,
-    `    label: ${JSON.stringify(completion.label)},`,
-    `    helperText: ${JSON.stringify(completion.helperText)},`,
-    '  },',
-  ].join(lineEnding);
+function detectLineEnding(source: string): '\r\n' | '\n' {
+ return source.match(/\r?\n/u)?.[0] === '\r\n' ? '\r\n' : '\n';
+}
 
-  const completionPattern = new RegExp(
-    String.raw`[ \t]{2}completion: \{\r?\n[ \t]{4}mode: ['"][^'"]+['"],\r?\n[ \t]{4}route: ['"][^'"]+['"] as Href,\r?\n[ \t]{4}label: [^\r\n]+,\r?\n[ \t]{4}helperText: [^\r\n]+,\r?\n[ \t]{2}\},`,
-    'u'
-  );
+export function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
+ const completion = onboardingCompletionConfig(answers);
+ const lineEnding = detectLineEnding(source);
+ const replacement = [
+   '  completion: {',
+   `    mode: '${completion.mode}',`,
+   `    route: '${completion.route}' as Href,`,
+   `    label: ${JSON.stringify(completion.label)},`,
+   `    helperText: ${JSON.stringify(completion.helperText)},`,
+   '  },',
+ ].join(lineEnding);
+
+ const completionPattern = new RegExp(
+   String.raw`[ \t]{2}completion: \{\r?\n[ \t]{4}mode: ['"][^'"]+['"],\r?\n[ \t]{4}route: ['"][^'"]+['"] as Href,\r?\n[ \t]{4}label: [^\r\n]+,\r?\n[ \t]{4}helperText: [^\r\n]+,\r?\n[ \t]{2}\},`,
+   'u'
+ );
 
   if (!completionPattern.test(source)) {
     throw new Error(

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { rm, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -19,6 +19,12 @@ export interface ClearExpoStartArgv {
 }
 
 type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+
+export interface CommandInvocation {
+  command: string;
+  args: string[];
+  display: string;
+}
 
 export async function runKillPortCommand(argv: KillPortArgv): Promise<void> {
   const ports = normalizePorts([...(argv.ports ?? []), ...(argv.port ?? [])], [8081]);
@@ -64,9 +70,9 @@ export async function runClearExpoStartCommand(argv: ClearExpoStartArgv): Promis
 
   await runProjectStartRepairs(projectPath);
 
-  const command = buildExpoStartCommand(await detectPackageManager(projectPath));
-  console.log(chalk.cyan(`Starting: ${command}`));
-  await runInheritedShellCommand(command, projectPath);
+  const invocation = buildExpoStartCommandInvocation(await detectPackageManager(projectPath));
+  console.log(chalk.cyan(`Starting: ${invocation.display}`));
+  await runStructuredCommand(invocation, projectPath);
 }
 
 interface KilledProcess {
@@ -294,34 +300,72 @@ async function detectPackageManager(projectPath: string): Promise<PackageManager
   return 'npm';
 }
 
-function buildExpoStartCommand(packageManager: PackageManager): string {
+export function buildExpoStartCommand(packageManager: PackageManager): string {
+  return buildExpoStartCommandInvocation(packageManager).display;
+}
+
+export function buildExpoStartCommandInvocation(packageManager: PackageManager): CommandInvocation {
   switch (packageManager) {
     case 'pnpm':
-      return 'pnpm exec expo start --clear';
+      return {
+        command: 'pnpm',
+        args: ['exec', 'expo', 'start', '--clear'],
+        display: 'pnpm exec expo start --clear',
+      };
     case 'yarn':
-      return 'yarn expo start --clear';
+      return {
+        command: 'yarn',
+        args: ['expo', 'start', '--clear'],
+        display: 'yarn expo start --clear',
+      };
     case 'bun':
-      return 'bunx expo start --clear';
+      return {
+        command: 'bunx',
+        args: ['expo', 'start', '--clear'],
+        display: 'bunx expo start --clear',
+      };
     case 'npm':
-      return 'npx expo start --clear';
+      return {
+        command: 'npx',
+        args: ['expo', 'start', '--clear'],
+        display: 'npx expo start --clear',
+      };
   }
 }
 
-async function runInheritedShellCommand(command: string, cwd: string): Promise<void> {
-  const { spawn } = await import('node:child_process');
+export function resolveStructuredCommandInvocation(
+  invocation: CommandInvocation,
+  platform: typeof process.platform = process.platform,
+  commandShell = process.env.ComSpec
+): CommandInvocation {
+  if (platform !== 'win32') {
+    return invocation;
+  }
+
+  // Package-manager executables are Windows .cmd shims, so invoke cmd.exe explicitly.
+  return {
+    command: commandShell || 'cmd.exe',
+    args: ['/d', '/s', '/c', invocation.display],
+    display: invocation.display,
+  };
+}
+
+async function runStructuredCommand(invocation: CommandInvocation, cwd: string): Promise<void> {
+  const resolvedInvocation = resolveStructuredCommandInvocation(invocation);
+
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, {
+    const child = spawn(resolvedInvocation.command, resolvedInvocation.args, {
       cwd,
-      shell: true,
       stdio: 'inherit',
       windowsHide: true,
+      shell: false,
     });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`${command} exited with code ${code ?? 'unknown'}.`));
+        reject(new Error(`${invocation.display} exited with code ${code ?? 'unknown'}.`));
       }
     });
   });
