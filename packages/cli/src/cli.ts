@@ -872,12 +872,19 @@ function resolveDoctorMode(argv: DoctorArgv): DoctorMode {
 }
 
 function printDoctorReport(report: DoctorReport): void {
+  const selection = report.selection ?? {
+    defaultMode: 'fast',
+    runScripts: false,
+    description: 'No selection metadata available.',
+    fullModeGuidance: '',
+  };
+
   console.log(chalk.bold(`mds doctor (${report.mode})`));
   console.log(chalk.dim(report.projectPath));
-  console.log(chalk.dim(`mode: ${report.selection.description}`));
-  console.log(chalk.dim(`default: ${report.selection.defaultMode}`));
-  console.log(chalk.dim(`scripts: ${report.selection.runScripts ? 'enabled' : 'disabled'}`));
-  console.log(chalk.dim(`full mode: ${report.selection.fullModeGuidance}`));
+  console.log(chalk.dim(`mode: ${selection.description}`));
+  console.log(chalk.dim(`default: ${selection.defaultMode}`));
+  console.log(chalk.dim(`scripts: ${selection.runScripts ? 'enabled' : 'disabled'}`));
+  console.log(chalk.dim(`full mode: ${selection.fullModeGuidance}`));
   console.log();
 
   for (const check of report.checks) {
