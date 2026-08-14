@@ -3,6 +3,18 @@
 **Goal:** Foundation, knowledge harvest, Doctor, onboarding, and GitHub automation.
 **Target:** End of May 2026.
 
+## Active branch rollout (as of 2026-08-14)
+
+- Main is clean and tracking `origin/main`.
+- Wave 0 release work is merged into the refreshed release branch; follow-up work stays in dedicated feature/fix branches instead of accumulating on main.
+- Active follow-up branches are:
+  - `feat/continue-expo-upgrade-routing`
+  - `fix/doctor-dogfood`
+  - `feat/library-install-validation`
+  - `feat/onboarding-persistence`
+  - `chore/roadmap-reconciliation`
+- This branch keeps the roadmap synchronized with the live branch map and ensures remaining work is tracked without reintroducing stale or duplicate phases.
+
 ## Sprint 1: Foundation
 
 ### Completed
