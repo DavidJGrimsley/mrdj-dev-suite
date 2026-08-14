@@ -25,7 +25,7 @@ export async function scanFile(
         status: 'error',
         message: `File path does not exist: ${resolvedFilePath}`,
       },
-    ]);
+    ], false);
   }
 
   const packageJson = await readPackageJson(path.join(projectPath, 'package.json'));

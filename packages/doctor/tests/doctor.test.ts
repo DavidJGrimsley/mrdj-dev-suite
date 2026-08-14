@@ -71,20 +71,20 @@ describe('runDoctor', () => {
       },
     });
 
-    it('preserves disabled scripts in a report without package.json', async () => {
-      const projectPath = await createTempProject();
-
-      const report = await runDoctor(projectPath, { runScripts: false });
-
-      expect(report.selection?.runScripts).toBe(false);
-    });
-
     const report = await runDoctor(projectPath, { mode: 'ci', runScripts: false });
 
     expect(report.selection.runScripts).toBe(false);
     expect(report.checks.find((check) => check.name === 'lint')?.status).toBe('skip');
     expect(report.checks.find((check) => check.name === 'typecheck')?.status).toBe('skip');
     expect(report.checks.find((check) => check.name === 'tests')?.status).toBe('skip');
+  });
+
+  it('preserves disabled scripts in a report without package.json', async () => {
+    const projectPath = await createTempProject();
+
+    const report = await runDoctor(projectPath, { runScripts: false });
+
+    expect(report.selection?.runScripts).toBe(false);
   });
 
   it('accepts MDS script aliases for Doctor and production builds', async () => {
