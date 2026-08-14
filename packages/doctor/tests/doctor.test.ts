@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { checkSeoMetadata, checkStylingDependencies } from '../src/checks/index.js';
 import { runDoctor, scanFile } from '../src/index.js';
+import { parseCommandLine, resolveShellCommandInvocation } from '../src/utils.js';
 
 const tempDirs: string[] = [];
 const FIXTURE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -14,6 +15,40 @@ const FIXTURE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fi
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
   tempDirs.length = 0;
+});
+
+describe('command parsing', () => {
+  it('splits package manager commands into explicit executable and argument lists', () => {
+    expect(parseCommandLine('pnpm run lint -- --fix')).toEqual({
+      command: 'pnpm',
+      args: ['run', 'lint', '--', '--fix'],
+    });
+    expect(parseCommandLine('npx -y -p @mr.dj2u/cli@latest mds doctor')).toEqual({
+      command: 'npx',
+      args: ['-y', '-p', '@mr.dj2u/cli@latest', 'mds', 'doctor'],
+    });
+    expect(parseCommandLine('"node" --eval "console.log(\'hi\')"')).toEqual({
+      command: 'node',
+      args: ['--eval', "console.log('hi')"],
+    });
+  });
+
+  it('uses an explicit cmd.exe wrapper for Windows package-manager shims', () => {
+    expect(
+      resolveShellCommandInvocation(
+        'pnpm run lint -- --fix',
+        'win32',
+        'C:\\Windows\\System32\\cmd.exe'
+      )
+    ).toEqual({
+      command: 'C:\\Windows\\System32\\cmd.exe',
+      args: ['/d', '/s', '/c', 'pnpm run lint -- --fix'],
+    });
+    expect(resolveShellCommandInvocation('pnpm run lint -- --fix', 'linux')).toEqual({
+      command: 'pnpm',
+      args: ['run', 'lint', '--', '--fix'],
+    });
+  });
 });
 
 describe('runDoctor', () => {

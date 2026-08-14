@@ -113,15 +113,91 @@ export async function detectPackageManager(
   return 'npm';
 }
 
+export function parseCommandLine(command: string): { command: string; args: string[] } {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (char === undefined) {
+      continue;
+    }
+
+    if (quote) {
+      if (char === '\\' && index + 1 < command.length) {
+        const next = command[index + 1];
+        if (next === quote || next === '\\') {
+          current += next;
+          index += 1;
+          continue;
+        }
+      }
+
+      if (char === quote) {
+        quote = null;
+        continue;
+      }
+
+      current += char;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/u.test(char)) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current) {
+    tokens.push(current);
+  }
+
+  const executable = tokens[0];
+  if (!executable) {
+    throw new Error('Command string was empty.');
+  }
+
+  return { command: executable, args: tokens.slice(1) };
+}
+
+export function resolveShellCommandInvocation(
+  command: string,
+  platform: typeof process.platform = process.platform,
+  commandShell = process.env.ComSpec ?? 'cmd.exe'
+): { command: string; args: string[] } {
+  if (platform === 'win32') {
+    // Package-manager executables are Windows .cmd shims, so invoke cmd.exe explicitly.
+    return {
+      command: commandShell,
+      args: ['/d', '/s', '/c', command],
+    };
+  }
+
+  return parseCommandLine(command);
+}
+
 export async function runShellCommand(
   command: string,
   cwd: string,
   timeoutMs: number
 ): Promise<CommandResult> {
+  const { command: executable, args } = resolveShellCommandInvocation(command);
+
   return new Promise((resolve) => {
-    const child = spawn(command, {
+    const child = spawn(executable, args, {
       cwd,
-      shell: true,
+      shell: false,
       windowsHide: true,
       env: { ...process.env, CI: 'true' },
     });
