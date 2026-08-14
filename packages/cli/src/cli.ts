@@ -301,6 +301,12 @@ async function main(): Promise<void> {
             describe:
               'Persist selected onboarding defaults globally for future app generation (interactive runs ask unless this is set)',
             type: 'boolean',
+          })
+          .option('install', {
+            describe:
+              'Install newly declared dependencies immediately (disable with --no-install)',
+            type: 'boolean',
+            default: true,
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);

@@ -149,8 +149,9 @@ describe('mds MCP helpers', () => {
     expect(planTool?.description).toContain('Before applying any library item');
     const addTool = tools.find((tool) => tool.name === 'library_add');
     expect(addTool?.description).toContain('named the app placement/integration point');
+    expect(addTool?.description).toContain('defaults to true');
     const addSchema = addTool?.inputSchema as {
-      properties?: Record<string, { const?: unknown; type?: string }>;
+      properties?: Record<string, { const?: unknown; type?: string; description?: string }>;
       required?: string[];
     };
     expect(addSchema.required).toEqual(
@@ -163,6 +164,7 @@ describe('mds MCP helpers', () => {
     expect(addSchema.properties?.installDependencies).toMatchObject({
       type: 'boolean',
     });
+    expect(addSchema.properties?.installDependencies?.description).toContain('Defaults to true');
   });
 
   it('searches and resolves MDS Library items with optional project compatibility context', async () => {

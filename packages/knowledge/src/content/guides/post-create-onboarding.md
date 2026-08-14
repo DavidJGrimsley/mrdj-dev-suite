@@ -20,8 +20,13 @@ onboarding pass.
    local data guidance, MCP/Codex/Claude instructions, and CI/release safeguards.
 6. Scaffold only selected pieces.
 7. Add generated cleanup scripts such as `clear-expo-start` and `free-port`.
-8. Install added dependencies, run `expo install --fix`, install known missing
-   Expo peers such as `expo-font` for `@expo/vector-icons`, then run Doctor.
+8. Install added dependencies immediately with the project's package manager,
+   then validate that newly declared packages exist in `node_modules`. Standalone
+   `mds onboard` does this lockfile install unless `--no-install` is passed.
+   `create-expo-super-stack` then continues with create-time Expo repair:
+   `expo install --fix`, known missing Expo peers such as `expo-font` for
+   `@expo/vector-icons`, and Expo Doctor. Do not treat onboarding as complete if
+   install failed or was explicitly skipped.
 
 ## Agentic Onboarding (MCP)
 

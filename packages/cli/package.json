@@ -44,6 +44,10 @@
     "./library": {
       "import": "./dist/library.js",
       "types": "./dist/library.d.ts"
+    },
+    "./package-install": {
+      "import": "./dist/package-install.js",
+      "types": "./dist/package-install.d.ts"
     }
   },
   "main": "./dist/cli.js",

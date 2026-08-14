@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DATA_START_EXPLANATION,
@@ -57,6 +57,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Sample App',
       defaults: 'project-docs,uniwind,doctor',
     });
@@ -683,6 +684,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Memory App',
       audience: 'Bowling league captains',
       coreFlows: 'Create league, invite players, publish brackets',
@@ -788,6 +790,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Tailwind App',
       defaults: 'uniwind',
     });
@@ -828,6 +831,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       rich: false,
       appName: 'Template App',
       guidelinesTemplate: true,
@@ -897,6 +901,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Src App',
       appDirectory: 'src',
       platformLayouts: 'platform-specific',
@@ -951,6 +956,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Tabs App',
       createExpoComponents: false,
     });
@@ -1071,6 +1077,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Drawer Tabs App',
       createExpoComponents: false,
     });
@@ -1120,6 +1127,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Supabase App',
       dataStart: 'supabase',
       testToMain: false,
@@ -1176,6 +1184,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Auth App',
       authProvider: 'supabase',
       onboardingCompletionMode: 'auth',
@@ -1252,6 +1261,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'Legal Gate App',
       legalDocumentMode: 'none',
       legalUpdateGate: 'material-required',
@@ -1305,6 +1315,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'NativeWindUI App',
       defaults: 'project-docs,uniwind,nativewindui',
     });
@@ -1382,6 +1393,7 @@ describe('runOnboardCommand', () => {
     await runOnboardCommand({
       project: projectPath,
       yes: true,
+      noInstall: true,
       appName: 'NativeWindUI React Nav App',
       defaults: 'project-docs,uniwind,nativewindui',
     });
@@ -1398,6 +1410,80 @@ describe('runOnboardCommand', () => {
     await expect(
       access(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'))
     ).rejects.toThrow();
+  });
+
+  it('installs newly declared packages by default and validates their presence', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-install-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'install-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+
+    const installRunner = vi.fn(async (_command, _args, options) => {
+      const packageJson = JSON.parse(
+        await readFile(path.join(options.cwd, 'package.json'), 'utf8')
+      ) as {
+        dependencies?: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      const names = [
+        ...Object.keys(packageJson.dependencies ?? {}),
+        ...Object.keys(packageJson.devDependencies ?? {}),
+      ];
+      for (const name of names) {
+        await mkdir(path.join(options.cwd, 'node_modules', ...name.split('/')), { recursive: true });
+      }
+    });
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Install App',
+      defaults: 'project-docs,uniwind,doctor',
+      installRunner,
+    });
+
+    expect(installRunner).toHaveBeenCalledTimes(1);
+    expect(installRunner.mock.calls[0]?.[0]).toBe('npm');
+    expect(installRunner.mock.calls[0]?.[1]).toEqual(['install']);
+    await expect(access(path.join(projectPath, 'node_modules', 'uniwind'))).resolves.toBeUndefined();
+  });
+
+  it('skips install when --no-install is set and prints the pending command instead', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-no-install-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'no-install-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    const installRunner = vi.fn();
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      noInstall: true,
+      appName: 'No Install App',
+      defaults: 'project-docs,uniwind,doctor',
+      installRunner,
+    });
+
+    expect(installRunner).not.toHaveBeenCalled();
+    await expect(access(path.join(projectPath, 'node_modules'))).rejects.toThrow();
   });
 
   it('keeps prompt helpers explicit about defaults, explanations, and server wording', () => {

@@ -407,7 +407,7 @@ export function listTools(): MCPTool[] {
     {
       name: 'library_add',
       description:
-        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
+        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Installs planned dependencies immediately (defaults to true) unless installDependencies is false. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -416,7 +416,11 @@ export function listTools(): MCPTool[] {
           variant: { type: 'string' },
           planHash: { type: 'string' },
           confirmed: { type: 'boolean', const: true },
-          installDependencies: { type: 'boolean' },
+          installDependencies: {
+            type: 'boolean',
+            description:
+              'Install planned dependencies immediately. Defaults to true. Pass false only for an explicit no-install copy; the returned pendingCommands both declare and install those packages.',
+          },
         },
         required: ['id', 'projectPath', 'planHash', 'confirmed'],
       },
@@ -919,14 +923,19 @@ function registerTools(server: McpServer): void {
     {
       title: 'Add MDS Library Item',
       description:
-        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
+        'Apply an unchanged MDS Library add plan after explicit confirmation, without overwriting customized files. Installs planned dependencies immediately (defaults to true) unless installDependencies is false. Use only after the developer has approved the source-copy plan and either named the app placement/integration point or accepted the default source-copy fallback.',
       inputSchema: {
         id: z.string(),
         projectPath: z.string(),
         variant: z.string().optional(),
         planHash: z.string(),
         confirmed: z.literal(true),
-        installDependencies: z.boolean().optional(),
+        installDependencies: z
+          .boolean()
+          .optional()
+          .describe(
+            'Install planned dependencies immediately. Defaults to true. Pass false only for an explicit no-install copy; the returned pendingCommands both declare and install those packages.'
+          ),
       },
     },
     async (input) => toolJson(await addMdsLibraryItem(input))
@@ -1379,7 +1388,7 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '  Always append: --yes',
     '  Project path: pass --project=<absolute path to the app folder>',
     '',
-    'After it completes, run `mds doctor` and surface any errors/warnings.',
+    'After it completes, check the CLI output for a skipped or failed package install. If dependencies were not installed, print the pending install command and do not treat onboarding as complete. Then run `mds doctor` and surface any errors/warnings.',
     '',
     'Rules:',
     '- Never bypass PHASE 0. The marker check is non-negotiable; the user can clear it in seconds by deleting lines.',

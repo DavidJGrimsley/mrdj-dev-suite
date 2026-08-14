@@ -18,6 +18,11 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 - Confirm blockers/context markers are resolved before feature implementation.
 - Confirm any deferral includes a clear reason and destination note.
 - Re-run Doctor/checks after significant phase tasks are completed.
+- When this MDS workflow itself adds a package, use an MDS-owned tool
+  (`mds library add` for catalog items) or immediately run the project's
+  package manager, then confirm `node_modules` contains the new package.
+  Do not treat the task as complete if install failed. MDS cannot install
+  packages added by a third-party agent outside those tools.
 
 ## Preferred structure
 

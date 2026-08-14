@@ -259,7 +259,7 @@ function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers
   ].join('\n');
 
   const completionPattern =
-    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u;
+    /[ ]{2}completion: \{\r?\n[ ]{4}mode: '[^']+',\r?\n[ ]{4}route: '[^']+' as Href,\r?\n[ ]{4}label: [^\n\r]+,\r?\n[ ]{4}helperText: [^\n\r]+,\r?\n[ ]{2}\},/u;
 
   if (!completionPattern.test(source)) {
     throw new Error(
@@ -1343,6 +1343,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '## Workflow',
     '',
     '- If the user says `mds continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
+    '- After adding a package, immediately run the project package manager. Prefer `mds library add` for MDS Library catalog items. Do not treat the task as complete if install failed. MDS cannot install packages added outside MDS-owned flows.',
     '- Run `mds doctor --ci` before pushing.',
     '- Use `mds clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards

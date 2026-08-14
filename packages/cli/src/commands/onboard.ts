@@ -6,9 +6,19 @@ import path from 'node:path';
 import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } from '@clack/prompts';
 import chalk from 'chalk';
 
+import {
+  buildLockfileInstallCommand,
+  detectPackageManager,
+  diffDeclaredPackageNames,
+  runProjectCommand,
+  shouldInstallProjectDependencies,
+  validateInstalledPackages,
+} from '../package-install.js';
 import { scaffoldProjectMemory } from '../project-memory.js';
 import { generateProjectRoadmap } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
+
+import type { PackageCommandRunner, PackageJsonSubset } from '../package-install.js';
 
 import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
 import type { Option } from '@clack/prompts';
@@ -68,6 +78,9 @@ export interface OnboardArgv {
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMain?: boolean;
   saveDefaults?: boolean;
+  noInstall?: boolean;
+  install?: boolean;
+  installRunner?: PackageCommandRunner;
 }
 
 export interface OnboardPlan {
@@ -181,12 +194,16 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   const plan = argv.yes
     ? defaultOnboardPlan(argv, projectPath)
     : await collectOnboardPlan(argv, projectPath);
+  const packageJsonPath = path.join(projectPath, 'package.json');
+  const beforePackageJson = await readOptionalPackageJson(packageJsonPath);
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
     force: Boolean(argv.force),
     guidelinesTemplate: plan.guidelinesTemplate,
     guidelinesTemplatePath: plan.guidelinesTemplatePath,
     richBoilerplate: plan.richBoilerplate,
   });
+  const afterPackageJson = await readOptionalPackageJson(packageJsonPath);
+  const addedPackages = diffDeclaredPackageNames(beforePackageJson, afterPackageJson);
 
   await writeMcpJsonToProject(projectPath);
 
@@ -204,7 +221,9 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
       console.log(chalk.dim(`Saved personal onboarding defaults: ${defaultsPath}`));
     }
   }
-  printOnboardingNextSteps();
+
+  const installOutcome = await installOnboardedPackages(projectPath, afterPackageJson, addedPackages, argv);
+  printOnboardingNextSteps(installOutcome);
 
   const roadmapStatus = await generateProjectRoadmap(projectPath, {
     write: false,
@@ -1183,7 +1202,21 @@ export function normalizePromptText(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function printOnboardingNextSteps(): void {
+function printOnboardingNextSteps(installOutcome?: OnboardInstallOutcome): void {
+  if (installOutcome?.skipped && installOutcome.pendingCommand) {
+    console.log();
+    console.log(chalk.yellow('Dependencies were not installed.'));
+    console.log(`Run this from the project root before treating onboarding as complete:`);
+    console.log(`  ${installOutcome.pendingCommand}`);
+    if (installOutcome.addedPackages.length > 0) {
+      console.log(chalk.dim(`Newly declared packages: ${installOutcome.addedPackages.join(', ')}`));
+    }
+  } else if (installOutcome?.executedCommand) {
+    console.log();
+    console.log(`${chalk.green('RAN')} ${installOutcome.executedCommand}`);
+  }
+
+  console.log();
   console.log('Onboarding Phase 0 checklist:');
   console.log('1. Browse exposition pages to understand included base packages.');
   console.log("2. Review styling in the 'Stylist' page and save theme tokens.");
@@ -1195,6 +1228,59 @@ function printOnboardingNextSteps(): void {
     '5. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
+}
+
+interface OnboardInstallOutcome {
+  skipped: boolean;
+  addedPackages: string[];
+  executedCommand?: string;
+  pendingCommand?: string;
+}
+
+async function installOnboardedPackages(
+  projectPath: string,
+  packageJson: PackageJsonSubset | null,
+  addedPackages: string[],
+  argv: OnboardArgv
+): Promise<OnboardInstallOutcome> {
+  if (!packageJson || addedPackages.length === 0) {
+    return { skipped: false, addedPackages };
+  }
+
+  const packageManager = await detectPackageManager(projectPath, packageJson);
+  const installCommand = buildLockfileInstallCommand(packageManager);
+  if (!shouldInstallProjectDependencies(argv.noInstall ? false : argv.install)) {
+    return {
+      skipped: true,
+      addedPackages,
+      pendingCommand: installCommand.display,
+    };
+  }
+
+  console.log();
+  console.log(`Installing ${addedPackages.length} newly declared package(s) with ${packageManager}.`);
+  await runProjectCommand(installCommand, {
+    cwd: projectPath,
+    runner: argv.installRunner,
+  });
+  await validateInstalledPackages(projectPath, addedPackages);
+  return {
+    skipped: false,
+    addedPackages,
+    executedCommand: installCommand.display,
+  };
+}
+
+async function readOptionalPackageJson(packageJsonPath: string): Promise<PackageJsonSubset | null> {
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as PackageJsonSubset;
+  } catch {
+    return null;
+  }
 }
 
 function toOptions(values: string[]): Array<{ value: string; label: string }> {

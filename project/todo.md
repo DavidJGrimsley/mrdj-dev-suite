@@ -334,7 +334,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Add `/wrap-up` prompt for post-testing release preflight: mark completed todo items, run `mds doctor --ci`, review `git status`, and confirm intentionally omitted files before publish flow.
 - [x] Route `/wrap-up` GitHub work through `github` (context), `yeet` (publish), `gh-fix-ci` (failed checks), and `gh-address-comments` (blocking review threads), with a max of 5 fix/poll cycles before human handoff.
 - [x] Add optional repo merge policy config for `/wrap-up` with defaults: auto-merge to `test`, per-repo override support, and never auto-merge to `main`.
-- [ ] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
+- [x] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
 - [x] Enhance the style guide component (rename to 'Stylist') to have a color picker (I think swmansion has one that we can use...) that can change the ui of that page and then a save button that will let the user save that color scheme to the project style file which will create an immediate todo task to switch the app's theme over. A canonical theme source of truth would be awesome here. One that is editable by editing the style.md file directly or through the style guide page. This style guide component should also have a way to edit the typography styles and maybe some basic layout styles like border radius and spacing scale. This would be a great example of how the style.md file can be used as a source of truth for both the agent and the dev to shape the app's design.
 - [ ] Ensure the style guide is using the information in the style.md to generate the app and that the Stylist uses that theme on launch, even before the user has ever opened the app or if they have. This will be from the Style.md that they added to the project/style.md.
 - [x] Go through generated exposition pages and fix any bugs.
@@ -353,7 +353,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Dogfood the SEO workflow against the pre-MDS DJsPortfolio: verify data-loader pages and API/MCP detail pages render server-visible content and emit appropriate JSON-LD; extend MDS SEO knowledge and checks for any gap found.
 
 ### Branch: `dogfood-agent-and-release-workflow`
-- [ ] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
+- [x] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
 - [ ] Have MDS proactively create the small GitHub setup changes it can authenticate for, such as an initial PR that enables or refreshes CI; otherwise provide an exact CLI and GitHub UI procedure, including branch-ruleset setup.
 - [ ] Make `/push-merge-loop` poll Copilot and Codex review threads as well as status checks, address actionable findings, push updates, and repeat until the PR is ready or the retry limit is reached.
 - [ ] Provide a `test` branch-ruleset preset that does not require a human review when automated test-branch merging is enabled.

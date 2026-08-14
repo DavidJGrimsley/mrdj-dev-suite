@@ -33,6 +33,7 @@ import {
   parseExpoSdkMajor,
   shouldInstallExpoFontPeerFromPackageJson,
   shouldRunExpoLatestSdkCommandFromPackageJson,
+  shouldRunExpoProjectChecks,
   toExpoScheme,
   toExpoSlug,
   validateCreateExpoStackArgs,
@@ -400,6 +401,18 @@ describe("create-expo-super-stack CLI helpers", () => {
   it("supports explicit opt-out for the bundled guidelines template", () => {
     const parsed = parseArgs(["demo-app", "--mds-no-guidelines-template"]);
     expect(parsed.mds.guidelinesTemplate).toBe(false);
+  });
+
+  it("skips Super Stack install and Expo repair for explicit no-install and skip flags", () => {
+    const parsed = parseArgs(["demo-app", "--expo-router"]);
+    expect(shouldRunExpoProjectChecks(parsed, false)).toBe(true);
+    expect(shouldRunExpoProjectChecks(parsed, true)).toBe(false);
+
+    const skipFix = parseArgs(["demo-app", "--mds-skip-expo-fix"]);
+    expect(shouldRunExpoProjectChecks(skipFix, false)).toBe(false);
+
+    const skipCreate = parseArgs(["demo-app", "--mds-skip-create"]);
+    expect(shouldRunExpoProjectChecks(skipCreate, false)).toBe(false);
   });
 
   it("preserves create-expo-stack install behavior unless user explicitly passes --no-install", () => {
