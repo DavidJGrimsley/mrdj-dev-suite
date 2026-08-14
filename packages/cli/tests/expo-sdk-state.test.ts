@@ -115,19 +115,25 @@ describe('classifyExpoSdkUpgrade', () => {
     expect(snapshot.status).toBe('current');
   });
 
-  it('does not infer SDK state from independently versioned Expo packages', () => {
+  it('ignores independently versioned Expo packages when evaluating preview-only status', () => {
+    const previewCatalog = parseExpoVersionsCatalog({
+      sdkVersions: {
+        '56.0.0': { expoVersion: '~56.0.19', facebookReactNativeVersion: '0.85.3' },
+        '57.0.0': { expoVersion: '57.0.0-preview.2', facebookReactNativeVersion: '0.86.0' },
+      },
+    });
     const snapshot = classifyExpoSdkUpgrade(
       detectProjectExpoSdk({
         dependencies: {
-          expo: '~57.0.12',
+          expo: '~56.0.19',
           'expo-router': '~6.0.18',
-          'react-native': '0.86.2',
+          'react-native': '0.85.3',
         },
       }),
-      catalog
+      previewCatalog
     );
 
-    expect(snapshot.status).toBe('current');
+    expect(snapshot.status).toBe('preview-only');
   });
 
   it('classifies latest expo with previous React Native as in-progress', () => {

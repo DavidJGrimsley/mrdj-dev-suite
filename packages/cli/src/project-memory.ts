@@ -249,6 +249,7 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
 
 function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
   const completion = onboardingCompletionConfig(answers);
+  const lineEnding = source.includes('\r\n') ? '\r\n' : '\n';
   const replacement = [
     '  completion: {',
     `    mode: '${completion.mode}',`,
@@ -256,10 +257,12 @@ function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers
     `    label: ${JSON.stringify(completion.label)},`,
     `    helperText: ${JSON.stringify(completion.helperText)},`,
     '  },',
-  ].join('\n');
+  ].join(lineEnding);
 
-  const completionPattern =
-    /[ ]{2}completion: \{\n[ ]{4}mode: '[^']+',\n[ ]{4}route: '[^']+' as Href,\n[ ]{4}label: [^\n]+,\n[ ]{4}helperText: [^\n]+,\n[ ]{2}\},/u;
+  const completionPattern = new RegExp(
+    String.raw`[ \t]{2}completion: \{\r?\n[ \t]{4}mode: ['"][^'"]+['"],\r?\n[ \t]{4}route: ['"][^'"]+['"] as Href,\r?\n[ \t]{4}label: [^\r\n]+,\r?\n[ \t]{4}helperText: [^\r\n]+,\r?\n[ \t]{2}\},`,
+    'u'
+  );
 
   if (!completionPattern.test(source)) {
     throw new Error(
