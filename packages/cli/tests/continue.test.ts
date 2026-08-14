@@ -286,31 +286,31 @@ describe('MDS Continue', () => {
       todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
     });
 
-    it('blocks stale todo selection when the official Expo catalog is unavailable', async () => {
-      const projectPath = await createOnboardedProject({
-        packageJson: {
-          name: 'sdk-catalog-unavailable-app',
-          dependencies: { expo: '~56.0.19' },
-        },
-        todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
-      });
-
-      const brief = await buildContinueSessionBrief(projectPath, {
-        resolveExpoVersions: async () => null,
-      });
-
-      expect(brief.expoSdk?.status).toBe('unavailable');
-      expect(brief.recommendation.priority).toBe('expo-sdk-upgrade');
-      expect(brief.recommendation.plan.join('\n')).toContain('upgrading-expo');
-      expect(brief.recommendation.plan.join('\n')).toContain('could not be compared');
-    });
-
     const brief = await buildContinueSessionBrief(projectPath, {
       resolveExpoVersions: async () => STABLE_57_CATALOG,
     });
 
     expect(brief.expoSdk).toBeNull();
     expect(brief.recommendation.priority).toBe('todo');
+  });
+
+  it('blocks stale todo selection when the official Expo catalog is unavailable', async () => {
+    const projectPath = await createOnboardedProject({
+      packageJson: {
+        name: 'sdk-catalog-unavailable-app',
+        dependencies: { expo: '~56.0.19' },
+      },
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath, {
+      resolveExpoVersions: async () => null,
+    });
+
+    expect(brief.expoSdk?.status).toBe('unavailable');
+    expect(brief.recommendation.priority).toBe('expo-sdk-upgrade');
+    expect(brief.recommendation.plan.join('\n')).toContain('upgrading-expo');
+    expect(brief.recommendation.plan.join('\n')).toContain('could not be compared');
   });
 
   it('keeps hygiene gates ahead of an Expo SDK upgrade', async () => {
@@ -370,7 +370,7 @@ describe('MDS Continue', () => {
     expect(parsed.expoSdk).toEqual(
       expect.objectContaining({
         detectedMajor: 56,
-        status: 'unknown',
+        status: 'unavailable',
         officialSkill: 'upgrading-expo',
       })
     );

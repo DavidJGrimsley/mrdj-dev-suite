@@ -16,14 +16,14 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 1. Confirm the `mds` MCP server is available.
 2. Call `continue_project` first to get the active-phase brief.
 3. Pull `get_skill` for `continue-development` to enforce phase-first sequencing.
-4. If `continue_project` returns `recommendation.priority: expo-sdk-upgrade`, load the official Expo skill `expo-upgrade` (also published as `upgrading-expo`). Do not call MDS `get_skill` for an upgrade skill. Do not implement the next todo or run `generate_project_roadmap` for feature work until the user declines or the upgrade is done.
+4. If `continue_project` returns `recommendation.priority: expo-sdk-upgrade`, load the official Expo skill `upgrading-expo`. Do not call MDS `get_skill` for an upgrade skill. Do not implement the next todo or run `generate_project_roadmap` for feature work until the user declines or the upgrade is done.
 5. If blockers appear, use `doctor_scan_project` and `doctor_explain_result` for targeted remediation before feature work.
 
 ## MDS Routing Guardrails
 
 - Treat a request to continue development with MDS as a request for the MDS MCP tool and phase rules first.
 - Do not jump directly into app edits until `continue_project` or the CLI fallback has identified the active phase and blockers.
-- When continue reports an Expo SDK upgrade from project state, follow official `expo-upgrade` instead of the next unchecked todo.
+- When continue reports an Expo SDK upgrade from project state, follow official `upgrading-expo` instead of the next unchecked todo.
 - Never invoke `@mrdj/cli`; that package name is wrong. The published CLI package is `@mr.dj2u/cli` and its executable is `mds`.
 
 ## CLI / Manual Fallback
