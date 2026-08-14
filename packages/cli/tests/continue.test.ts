@@ -6,7 +6,12 @@ import { promisify } from 'node:util';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildContinueSessionBrief, runContinueCommand } from '../src/commands/continue.js';
+import {
+  buildContinueSessionBrief,
+  renderContinueSessionBrief,
+  runContinueCommand,
+} from '../src/commands/continue.js';
+import { parseExpoVersionsCatalog, type ExpoVersionsCatalog } from '../src/expo-sdk-state.js';
 
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
@@ -190,7 +195,194 @@ describe('MDS Continue', () => {
     expect(parsed.recommendation.requiresApproval).toBe(true);
     expect(parsed.handoff).toContain('lower token usage and lower cost');
   });
+
+  it('routes behind Expo SDK state to the official upgrade skill instead of a stale todo', async () => {
+    const projectPath = await createOnboardedProject({
+      packageJson: {
+        name: 'sdk-behind-app',
+        dependencies: {
+          expo: '~56.0.19',
+          'react-native': '0.85.3',
+        },
+      },
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath, {
+      resolveExpoVersions: async () => STABLE_57_CATALOG,
+    });
+    const plan = brief.recommendation.plan.join('\n');
+
+    expect(brief.expoSdk?.status).toBe('behind');
+    expect(brief.expoSdk?.officialSkill).toBe('upgrading-expo');
+    expect(brief.nextTodo?.text).toBe('Build the app shell.');
+    expect(brief.recommendation.priority).toBe('expo-sdk-upgrade');
+    expect(brief.recommendation.title).toContain('56 → 57');
+    expect(plan).toContain('upgrading-expo');
+    expect(plan).toContain('Do not call MDS `get_skill` for an upgrade skill');
+    expect(plan).toContain('Phase 1: App Shell - Build the app shell.');
+    expect(plan).not.toContain('npx expo install');
+    expect(renderContinueSessionBrief(brief)).toContain('Expo SDK: 56 (latest stable 57; behind)');
+  });
+
+  it('does not route independent Expo package versions as an SDK upgrade', async () => {
+    const projectPath = await createOnboardedProject({
+      packageJson: {
+        name: 'sdk-current-router-app',
+        dependencies: {
+          expo: '~57.0.12',
+          'expo-router': '~6.0.18',
+          'react-native': '0.86.2',
+        },
+      },
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath, {
+      resolveExpoVersions: async () => STABLE_57_CATALOG,
+    });
+
+    expect(brief.expoSdk?.status).toBe('current');
+    expect(brief.recommendation.priority).toBe('todo');
+  });
+
+  it('keeps current SDK projects on the next todo', async () => {
+    const projectPath = await createOnboardedProject({
+      packageJson: {
+        name: 'sdk-current-app',
+        dependencies: {
+          expo: '~57.0.12',
+          'react-native': '0.86.2',
+        },
+      },
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath, {
+      resolveExpoVersions: async () => STABLE_57_CATALOG,
+    });
+
+    expect(brief.expoSdk?.status).toBe('current');
+    expect(brief.recommendation.priority).toBe('todo');
+    expect(brief.nextTodo?.text).toBe('Build the app shell.');
+  });
+
+  it('does not override todos when no expo dependency is present', async () => {
+    const projectPath = await createOnboardedProject({
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+
+    it('blocks stale todo selection when the official Expo catalog is unavailable', async () => {
+      const projectPath = await createOnboardedProject({
+        packageJson: {
+          name: 'sdk-catalog-unavailable-app',
+          dependencies: { expo: '~56.0.19' },
+        },
+        todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+      });
+
+      const brief = await buildContinueSessionBrief(projectPath, {
+        resolveExpoVersions: async () => null,
+      });
+
+      expect(brief.expoSdk?.status).toBe('unavailable');
+      expect(brief.recommendation.priority).toBe('expo-sdk-upgrade');
+      expect(brief.recommendation.plan.join('\n')).toContain('upgrading-expo');
+      expect(brief.recommendation.plan.join('\n')).toContain('could not be compared');
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath, {
+      resolveExpoVersions: async () => STABLE_57_CATALOG,
+    });
+
+    expect(brief.expoSdk).toBeNull();
+    expect(brief.recommendation.priority).toBe('todo');
+  });
+
+  it('keeps hygiene gates ahead of an Expo SDK upgrade', async () => {
+    const markerProject = await createOnboardedProject({
+      packageJson: { name: 'marker-app', dependencies: { expo: '~56.0.19' } },
+      info: '# Info\n\n# TodoForContext(optional): Add product goals.\n',
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+    const doctorProject = await createOnboardedProject({
+      packageJson: {
+        name: 'doctor-error-upgrade-app',
+        dependencies: { expo: '~56.0.19' },
+        scripts: { lint: 'node missing-script-target.js' },
+      },
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+    const dirtyProject = await createOnboardedProject({
+      packageJson: { name: 'dirty-upgrade-app', dependencies: { expo: '~56.0.19' } },
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+    await execFileAsync('git', ['init'], { cwd: dirtyProject, windowsHide: true });
+    const phase0Project = await createOnboardedProject({
+      packageJson: { name: 'phase0-upgrade-app', dependencies: { expo: '~56.0.19' } },
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 0: Orientation',
+        '',
+        '- [ ] Confirm visual direction.',
+        '',
+      ].join('\n'),
+    });
+
+    const resolveExpoVersions = async () => STABLE_57_CATALOG;
+    const markerBrief = await buildContinueSessionBrief(markerProject, { resolveExpoVersions });
+    const doctorBrief = await buildContinueSessionBrief(doctorProject, { resolveExpoVersions });
+    const dirtyBrief = await buildContinueSessionBrief(dirtyProject, { resolveExpoVersions });
+    const phase0Brief = await buildContinueSessionBrief(phase0Project, { resolveExpoVersions });
+
+    expect(markerBrief.recommendation.priority).toBe('todo-for-context');
+    expect(doctorBrief.recommendation.priority).toBe('doctor-errors');
+    expect(dirtyBrief.recommendation.priority).toBe('dirty-git');
+    expect(dirtyBrief.recommendation.plan.join('\n')).toContain('upgrading-expo');
+    expect(phase0Brief.recommendation.priority).toBe('phase-0-user-review');
+  });
+
+  it('includes expoSdk in JSON output when Expo is declared', async () => {
+    const projectPath = await createOnboardedProject({
+      packageJson: { name: 'json-upgrade-app', dependencies: { expo: '~56.0.19' } },
+      todo: '# Todo\n\n## Phase 1\n\n- [ ] Build the shell.\n',
+    });
+    const output = await captureConsole(async () => {
+      await runContinueCommand({ path: projectPath, json: true });
+    });
+    const parsed = JSON.parse(output) as Awaited<ReturnType<typeof buildContinueSessionBrief>>;
+
+    expect(parsed.expoSdk).toEqual(
+      expect.objectContaining({
+        detectedMajor: 56,
+        status: 'unknown',
+        officialSkill: 'upgrading-expo',
+      })
+    );
+  });
 });
+
+const STABLE_57_CATALOG = parseExpoVersionsCatalog({
+  sdkVersions: {
+    '56.0.0': { expoVersion: '~56.0.19', facebookReactNativeVersion: '0.85.3' },
+    '57.0.0': { expoVersion: '~57.0.12', facebookReactNativeVersion: '0.86.2' },
+  },
+}) as ExpoVersionsCatalog;
 
 async function createOnboardedProject(options: {
   packageJson?: Record<string, unknown>;

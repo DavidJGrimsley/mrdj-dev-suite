@@ -11,6 +11,7 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 - Confirm project memory files are present and current before task selection.
 - Identify the active phase and incomplete tasks in `project/todo.md`.
 - Confirm blockers/context markers are resolved before feature implementation.
+- If `continue_project` or `mds continue` reports `priority: expo-sdk-upgrade`, load the official Expo skill `upgrading-expo`. Do not call MDS `get_skill` for an upgrade skill, and do not take the next todo until the user declines or the upgrade is done.
 - Confirm any deferral includes a clear reason and destination note.
 - Re-run Doctor/checks after significant phase tasks are completed.
 
@@ -24,6 +25,8 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 
 - Problem: Agent jumps to a later phase feature while current phase has unresolved blockers.
 - Fix: Return to active phase tasks, complete or formally defer blockers, then proceed to later phase work.
+- Problem: Agent picks the first unchecked todo while the app's declared Expo SDK is a major behind official latest stable.
+- Fix: Honor `expo-sdk-upgrade` from `continue_project` / `mds continue` and load official `upgrading-expo` instead of implementing the stale todo.
 
 ## Agent behavior
 
