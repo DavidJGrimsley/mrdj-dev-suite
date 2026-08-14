@@ -263,18 +263,31 @@ export function renderGeneratedOnboardingConfig(source: string, answers: Onboard
    '  },',
  ].join(lineEnding);
 
- const completionPattern = new RegExp(
-   String.raw`[ \t]{2}completion: \{\r?\n[ \t]{4}mode: ['"][^'"]+['"],\r?\n[ \t]{4}route: ['"][^'"]+['"] as Href,\r?\n[ \t]{4}label: [^\r\n]+,\r?\n[ \t]{4}helperText: [^\r\n]+,\r?\n[ \t]{2}\},`,
-   'u'
- );
+ const lines = source.split(/\r?\n/u);
+ const startIndex = lines.findIndex((line) => line.includes('completion: {'));
 
-  if (!completionPattern.test(source)) {
-    throw new Error(
-      'Unable to update onboarding completion config; template did not match the expected completion block.'
-    );
-  }
+ if (startIndex === -1) {
+   throw new Error(
+     'Unable to update onboarding completion config; template did not match the expected completion block.'
+   );
+ }
 
-  return source.replace(completionPattern, replacement);
+ let endIndex = startIndex + 1;
+ while (endIndex < lines.length && lines[endIndex].trim() !== '},') {
+   endIndex += 1;
+ }
+
+ if (endIndex >= lines.length) {
+   throw new Error(
+     'Unable to update onboarding completion config; template did not match the expected completion block.'
+   );
+ }
+
+ return [
+   ...lines.slice(0, startIndex),
+   ...replacement.split(lineEnding),
+   ...lines.slice(endIndex + 1),
+ ].join(lineEnding);
 }
 
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
