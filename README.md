@@ -46,7 +46,8 @@ The suite is designed around short, repeatable workflows. You can use the CLI di
 2. Create a new app or onboard an existing app:
 
    - New app: scaffold with `npx create-expo-super-stack`.
-   - Existing app: run `mds onboard` from the app root after the app exists.
+   - Existing app: run `mds onboard` from the app root after the app exists, or pass
+     `--project /path/to/expo-app` when running it from elsewhere.
 
    ```bash
    npx create-expo-super-stack my-app --expo-router
