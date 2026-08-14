@@ -48,6 +48,8 @@ describe("MDS Library catalog", () => {
       "mds/auth",
       "mds/legal-documents",
       "mds/onboarding",
+      "mds/onboarding-state",
+      "mds/onboarding-auth-supabase",
       "mds/settings",
       "mds/stylist",
       "mds/data-local",
@@ -85,7 +87,7 @@ describe("MDS Library catalog", () => {
       "multi-screen-with-legal",
     ]);
     expect(item?.integration.notes?.join(" ")).toContain(
-      "does not implement authentication",
+      "Onboarding UI does not import Zustand or Supabase directly",
     );
     expect(getLibraryItem("missing/item")).toBeUndefined();
   });
@@ -596,7 +598,7 @@ describe("library resolution", () => {
     expect(withLegal.compatible).toBe(true);
     expect(withLegal.variant?.id).toBe("multi-screen-with-legal");
     expect(withLegal.items.map((item) => item.id)).toEqual(
-      expect.arrayContaining(["mds/legal-documents", "mds/onboarding"]),
+      expect.arrayContaining(["mds/legal-documents", "mds/onboarding", "mds/onboarding-state"]),
     );
     expect(withLegal.assets).toEqual(
       expect.arrayContaining([
@@ -608,6 +610,12 @@ describe("library resolution", () => {
         }),
         expect.objectContaining({
           destination: "src/features/legal/legal-document-modal.tsx",
+        }),
+        expect.objectContaining({
+          destination: "src/features/legal/legal-acceptance-adapter.ts",
+        }),
+        expect.objectContaining({
+          destination: "src/features/onboarding-state/onboarding-state-adapter.ts",
         }),
         expect.objectContaining({ destination: "src/app/onboarding/features.tsx" }),
         expect.objectContaining({ destination: "src/app/onboarding/legal.tsx" }),
@@ -628,6 +636,88 @@ describe("library resolution", () => {
     expect(withLegal.assets.some((asset) => asset.destination === "src/app/onboarding/complete.tsx")).toBe(
       false,
     );
+  });
+
+  it("resolves onboarding persistence variants and the supabase composition", async () => {
+    const memory = resolveLibraryItem("mds/onboarding-state", routerContext);
+    const zustandLocal = resolveLibraryItem("mds/onboarding-state", routerContext, {
+      variant: "zustand-local",
+    });
+    const supabase = resolveLibraryItem("mds/onboarding-state", routerContext, {
+      variant: "supabase",
+    });
+    const zustandSupabase = resolveLibraryItem("mds/onboarding-state", routerContext, {
+      variant: "zustand-supabase",
+    });
+    const composition = resolveLibraryItem("mds/onboarding-auth-supabase", routerContext);
+
+    expect(memory.variant?.id).toBe("memory");
+    expect(getLibraryItem("mds/onboarding-state")?.variants.map((variant) => variant.id)).toEqual([
+      "memory",
+      "zustand-local",
+      "supabase",
+      "zustand-supabase",
+    ]);
+    expect(zustandLocal.dependencies).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "zustand" })]),
+    );
+    expect(supabase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/onboarding-state/onboarding-state-supabase.ts",
+        }),
+      ]),
+    );
+    expect(zustandSupabase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/onboarding-state/onboarding-state-zustand-supabase.ts",
+        }),
+      ]),
+    );
+    expect(composition.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        "mds/onboarding",
+        "mds/legal-documents",
+        "mds/auth",
+        "mds/onboarding-state",
+      ]),
+    );
+    expect(composition.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "src/features/onboarding/onboarding-persistence-sync.tsx",
+        }),
+      ]),
+    );
+    const sql = supabase.assets.find((asset) =>
+      asset.destination.endsWith("0001_mds_auth_onboarding.sql"),
+    );
+    expect(sql).toBeUndefined();
+
+    const authSupabase = resolveLibraryItem("mds/auth", routerContext, {
+      variant: "with-supabase",
+    });
+    const sqlAsset = authSupabase.assets.find(
+      (asset) => asset.destination === "supabase/migrations/0001_mds_auth_onboarding.sql",
+    );
+    expect(sqlAsset).toBeDefined();
+    const sqlSource = (await readLibraryAsset(sqlAsset!)).toString("utf8");
+    expect(sqlSource).toContain("document_version");
+    expect(sqlSource).toContain("flow_version");
+    expect(sqlSource).toContain("Users can insert their onboarding state");
+    expect(sqlSource).not.toContain("for all");
+    expect(sqlSource).not.toContain("service_role");
+    expect(sqlSource).not.toContain("sb_secret");
+
+    const firebase = resolveLibraryItem("mds/auth", routerContext, {
+      variant: "with-firebase",
+    });
+    expect(
+      firebase.assets.some((asset) =>
+        asset.destination.includes("onboarding-state-supabase"),
+      ),
+    ).toBe(false);
   });
 
   it("restores the completed NativeWindUI exposition with its component graph", () => {

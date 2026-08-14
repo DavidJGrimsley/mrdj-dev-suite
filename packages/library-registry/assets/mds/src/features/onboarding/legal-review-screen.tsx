@@ -10,6 +10,7 @@ import {
 } from '../legal/legal-acceptance-adapter';
 import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
+import { markOnboardingComplete } from '../onboarding-state/onboarding-state';
 import { onboardingConfig } from './onboarding-config';
 
 const requiredDocuments = getRequiredMaterialLegalDocuments();
@@ -112,7 +113,11 @@ export default function OnboardingLegalReviewScreen() {
       <Pressable
         accessibilityRole="button"
         disabled={!hasAcceptedRequiredDocuments || Boolean(savingDocumentId)}
-        onPress={() => router.replace(onboardingConfig.completion.route)}
+        onPress={() => {
+          void markOnboardingComplete().then(() => {
+            router.replace(onboardingConfig.completion.route);
+          });
+        }}
         style={[
           styles.primaryButton,
           {

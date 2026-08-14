@@ -454,7 +454,7 @@ const mdsItems: LibraryItem[] = [
       runtime("react-native-safe-area-context", "~5.7.0", "expo"),
     ],
     composedItems: ["mds/theme-support"],
-    relatedItems: ["mds/onboarding", "mds/settings"],
+    relatedItems: ["mds/onboarding", "mds/onboarding-state", "mds/settings"],
     variants: [
       {
         id: "public-routes",
@@ -538,18 +538,13 @@ const mdsItems: LibraryItem[] = [
             "route",
           ),
           mdsAsset(
-            "src/features/legal/legal-acceptance-adapter.ts",
-            "{{featuresDir}}/legal/legal-acceptance-adapter.ts",
-            "support",
-          ),
-          mdsAsset(
             "src/features/legal/legal-update-screen.tsx",
             "{{featuresDir}}/legal/legal-update-screen.tsx",
           ),
         ],
         integration: [
           "Keep /terms, /privacy, and /legal/updates public, then wrap app routes in Stack.Protected or Tabs.Protected with a guard that includes legalGateStatus === \"complete\".",
-          "Replace the default localLegalAcceptanceAdapter with app-scoped persistence, such as Supabase user acceptance rows, before hosted production use.",
+          "Replace the default memory legal adapter with mds/onboarding-state before hosted production use. Supabase user acceptance rows are the production path.",
           "Mark only material legal updates with requiresReacceptance: true; minor copy edits can update public documents without blocking app entry.",
         ],
       },
@@ -578,6 +573,16 @@ const mdsItems: LibraryItem[] = [
         "{{featuresDir}}/legal/use-legal-acceptance.ts",
         "support",
       ),
+      mdsAsset(
+        "src/features/legal/legal-acceptance-config.ts",
+        "{{featuresDir}}/legal/legal-acceptance-config.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/legal/legal-acceptance-adapter.ts",
+        "{{featuresDir}}/legal/legal-acceptance-adapter.ts",
+        "support",
+      ),
     ],
     integration: {
       summary:
@@ -590,8 +595,9 @@ const mdsItems: LibraryItem[] = [
       ],
       notes: [
         "The bundled placeholder copy is not legal advice and must be reviewed before production.",
-        "The local acceptance hook is intentionally lightweight; replace or adapt it when onboarding needs persistence or backend audit records.",
-        "The legal update gate adapter defaults to browser localStorage with an in-memory fallback for generated demos; hosted apps should configure user-scoped backend persistence.",
+        "The default legal adapter is memory-only and is not a hosted audit record.",
+        "Use mds/onboarding-state or mds/onboarding-auth-supabase to persist completion and versioned legal acceptance.",
+        "Hosted apps should configure user-scoped Supabase persistence and write legal acceptance after sign-in.",
         "AppThemeProvider follows the system color scheme by default; pass scheme=\"light\", scheme=\"dark\", or scheme=\"preview\" when a screen needs a fixed theme.",
       ],
     },
@@ -618,7 +624,7 @@ const mdsItems: LibraryItem[] = [
     compatibility: SDK_56_ROUTER,
     dependencies: [runtime("expo-router", "~56.2.6", "expo")],
     composedItems: ["mds/theme-support"],
-    relatedItems: ["mds/onboarding", "mds/legal-documents", "mds/settings"],
+    relatedItems: ["mds/onboarding", "mds/onboarding-state", "mds/legal-documents", "mds/settings"],
     variants: [
       {
         id: "base",
@@ -788,8 +794,8 @@ const mdsItems: LibraryItem[] = [
     tags: ["onboarding", "multi-screen", "without-auth", "eject:onboarding"],
     categories: ["onboarding", "flows"],
     compatibility: SDK_56_ROUTER,
-    composedItems: ["mds/theme-support"],
-    relatedItems: ["mds/legal-documents", "mds/settings"],
+    composedItems: ["mds/theme-support", "mds/onboarding-state"],
+    relatedItems: ["mds/legal-documents", "mds/onboarding-state", "mds/settings"],
     variants: [
       {
         id: "multi-screen",
@@ -823,7 +829,7 @@ const mdsItems: LibraryItem[] = [
         ],
         integration: [
           "Edit onboarding-config.ts to change copy, feature highlights, completion label, completion mode, and final route.",
-          "Wire completion into real app or session state when auth/profile persistence is available.",
+          "Completion calls the copied onboarding-state adapter. Replace the memory adapter before hosted production use.",
         ],
       },
       {
@@ -833,7 +839,7 @@ const mdsItems: LibraryItem[] = [
           "Adds welcome, feature highlights, and a final legal review step powered by mds/legal-documents.",
         compatibility: { navigation: ["expo-router"], aliases: ["@"] },
         dependencies: [runtime("expo-router", "~56.2.6", "expo")],
-        composedItems: ["mds/legal-documents"],
+        composedItems: ["mds/legal-documents", "mds/onboarding-state"],
         assets: [
           mdsAsset(
             "src/features/onboarding/onboarding-config-with-legal.ts",
@@ -878,10 +884,11 @@ const mdsItems: LibraryItem[] = [
       summary: "Add production onboarding routes to an Expo Router stack.",
       instructions: [
         "Start users at /onboarding, then replace or extend the copied screens as the product flow matures.",
-        "Keep onboarding completion lightweight until the auth/profile branch wires the final route into real state.",
+        "Use mds/onboarding-state to choose memory, Zustand-local, or Supabase persistence without changing the screens.",
       ],
       notes: [
-        "This flow does not implement authentication or persisted onboarding state.",
+        "Onboarding UI does not import Zustand or Supabase directly.",
+        "The default composed persistence adapter is memory-only and is not a hosted legal audit record.",
         "Preference/profile intake is intentionally omitted until the app can store the responses or change behavior from them.",
         "Use a with-legal variant when onboarding needs legal review from mds/legal-documents.",
       ],
@@ -889,6 +896,201 @@ const mdsItems: LibraryItem[] = [
     preview: {
       description:
         "Welcome, feature highlights, optional legal review, and editable completion handoff.",
+    },
+  }),
+  defineItem({
+    id: "mds/onboarding-state",
+    name: "Onboarding persistence adapters",
+    description:
+      "Completion and legal-acceptance adapters for memory, Zustand-local, Supabase, or Zustand cache plus Supabase sync.",
+    kind: "integration",
+    tags: ["onboarding", "persistence", "adapter", "legal"],
+    categories: ["onboarding", "support"],
+    compatibility: SDK_56_ALIAS,
+    relatedItems: ["mds/onboarding", "mds/legal-documents", "mds/auth"],
+    variants: [
+      {
+        id: "memory",
+        name: "Memory adapter",
+        description:
+          "In-process completion and legal acceptance. Useful for clean apps and demos, not hosted legal records.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        assets: [
+          mdsAsset(
+            "src/features/onboarding-state/adapters/memory-onboarding-state-adapter.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-adapter.ts",
+            "support",
+          ),
+        ],
+      },
+      {
+        id: "zustand-local",
+        name: "Zustand local adapter",
+        description:
+          "Persists onboarding completion and legal acceptance on-device with Zustand. Not a hosted audit trail.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [
+          runtime("zustand", "^5.0.8"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+        ],
+        assets: [
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-store.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-store.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-state-zustand.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-zustand.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/adapters/zustand-onboarding-state-adapter.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-adapter.ts",
+            "support",
+          ),
+        ],
+      },
+      {
+        id: "supabase",
+        name: "Supabase adapter",
+        description:
+          "Uses user_onboarding_state and user_legal_acceptances as the source of truth after sign-in.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [runtime("@supabase/supabase-js", "^2.112.3")],
+        assets: [
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-state-supabase.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-supabase.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/adapters/supabase-onboarding-state-adapter.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-adapter.ts",
+            "support",
+          ),
+        ],
+        integration: [
+          "Apply supabase/migrations/0001_mds_auth_onboarding.sql before relying on remote persistence.",
+          "Legal writes require a signed-in user id. Pre-auth local acceptance is not a hosted record.",
+        ],
+      },
+      {
+        id: "zustand-supabase",
+        name: "Zustand cache plus Supabase",
+        description:
+          "Zustand is the local cache and pending queue. Supabase remains the canonical store.",
+        compatibility: { navigation: ["expo-router"], aliases: ["@"] },
+        dependencies: [
+          runtime("zustand", "^5.0.8"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+          runtime("@supabase/supabase-js", "^2.112.3"),
+        ],
+        assets: [
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-store.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-store.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-state-supabase.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-supabase.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/onboarding-state-zustand-supabase.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-zustand-supabase.ts",
+            "support",
+          ),
+          mdsAsset(
+            "src/features/onboarding-state/adapters/zustand-supabase-onboarding-state-adapter.ts",
+            "{{featuresDir}}/onboarding-state/onboarding-state-adapter.ts",
+            "support",
+          ),
+        ],
+        integration: [
+          "Apply supabase/migrations/0001_mds_auth_onboarding.sql before relying on remote persistence.",
+          "Zustand must not be treated as the legal source of truth when this variant is selected.",
+        ],
+      },
+    ],
+    assets: [
+      mdsAsset(
+        "src/features/onboarding-state/onboarding-state-types.ts",
+        "{{featuresDir}}/onboarding-state/onboarding-state-types.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/onboarding-state/onboarding-state-core.ts",
+        "{{featuresDir}}/onboarding-state/onboarding-state-core.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/onboarding-state/onboarding-state-memory.ts",
+        "{{featuresDir}}/onboarding-state/onboarding-state-memory.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/onboarding-state/onboarding-state.ts",
+        "{{featuresDir}}/onboarding-state/onboarding-state.ts",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/legal/legal-acceptance-config.ts",
+        "{{featuresDir}}/legal/legal-acceptance-config.ts",
+        "support",
+      ),
+    ],
+    integration: {
+      summary:
+        "Copy adapter contracts and one persistence implementation for onboarding completion and legal acceptance.",
+      instructions: [
+        "Choose exactly one variant so onboarding-state-adapter.ts has a single implementation.",
+        "Import the copied onboarding-state module from screens and legal hooks instead of Zustand or Supabase.",
+        "Memory and Zustand-local are not hosted legal audit records.",
+      ],
+      notes: [
+        "Supabase variants write user-scoped, version-aware legal rows and do not update or delete those rows from the client.",
+        "Zustand is canonical only for the zustand-local variant. With Supabase it is cache-only.",
+      ],
+    },
+  }),
+  defineItem({
+    id: "mds/onboarding-auth-supabase",
+    name: "Onboarding plus Supabase auth composition",
+    description:
+      "Wires onboarding, legal documents, Supabase auth, and user-scoped onboarding persistence.",
+    kind: "integration",
+    tags: ["onboarding", "auth", "supabase", "persistence", "with-auth"],
+    categories: ["onboarding", "auth", "flows"],
+    compatibility: SDK_56_ROUTER,
+    composedItems: [
+      "mds/onboarding",
+      "mds/legal-documents",
+      "mds/auth",
+      "mds/onboarding-state",
+    ],
+    relatedItems: ["mds/settings"],
+    assets: [
+      mdsAsset(
+        "src/features/onboarding/onboarding-persistence-sync.tsx",
+        "{{featuresDir}}/onboarding/onboarding-persistence-sync.tsx",
+        "support",
+      ),
+    ],
+    integration: {
+      summary:
+        "Compose onboarding, legal documents, and Supabase auth, then replace the default memory persistence adapter with a Supabase-backed adapter.",
+      instructions: [
+        "Install mds/onboarding-state --variant supabase or zustand-supabase so hosted legal acceptance is user-scoped.",
+        "Keep /sign-in, /sign-up, /terms, /privacy, and /legal/updates public.",
+        "Prefer intro, features, auth, then legal so legal rows are written with a known user id.",
+        "Apply supabase/migrations/0001_mds_auth_onboarding.sql and set EXPO_PUBLIC_SUPABASE_* values in .env.local.",
+      ],
+      notes: [
+        "This composition does not add mds/db and does not install Firebase or Convex persistence.",
+        "Zustand remains a cache when both Zustand and Supabase are selected.",
+      ],
     },
   }),
   defineItem({
