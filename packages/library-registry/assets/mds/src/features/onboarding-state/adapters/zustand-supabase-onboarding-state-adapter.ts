@@ -1,18 +1,18 @@
 import { useEffect } from 'react';
 
-import { useAuth } from '../../auth/auth-provider';
-import { configureLegalAcceptanceAdapter } from '../../legal/legal-acceptance-config';
-import { getSupabaseClient } from '../../../services/supabase';
-import { configureOnboardingStateAdapter, getOnboardingStateAdapter } from '../onboarding-state-core';
-import type { SupabaseClientFactory } from '../onboarding-state-supabase';
+import { useAuth } from '../auth/auth-provider';
+import { configureLegalAcceptanceAdapter } from '../legal/legal-acceptance-config';
+import { getSupabaseClient } from '../../services/supabase';
+import { configureOnboardingStateAdapter, getOnboardingStateAdapter } from './onboarding-state-core';
+import type { SupabaseClientFactory } from './onboarding-state-supabase';
 import {
   getPersistedOnboardingState,
   setPersistedOnboardingState,
-} from '../onboarding-store';
+} from './onboarding-store';
 import {
   createZustandSupabaseLegalAcceptanceAdapter,
   createZustandSupabaseOnboardingStateAdapter,
-} from '../onboarding-state-zustand-supabase';
+} from './onboarding-state-zustand-supabase';
 
 const cache = {
   getState: getPersistedOnboardingState,

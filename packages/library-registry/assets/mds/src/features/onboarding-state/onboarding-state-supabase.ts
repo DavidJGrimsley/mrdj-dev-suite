@@ -212,7 +212,9 @@ export function createSupabaseLegalAcceptanceAdapter(
         document_version: document.acceptanceVersion,
         flow_id: input?.flowId ?? DEFAULT_ONBOARDING_FLOW_ID,
         accepted_at: new Date().toISOString(),
-        metadata: {},
+        metadata: {
+          flowVersion: input?.flowVersion ?? DEFAULT_ONBOARDING_FLOW_VERSION,
+        },
       });
       if (result.error && !/duplicate|unique/i.test(result.error.message)) {
         throw new Error(result.error.message);

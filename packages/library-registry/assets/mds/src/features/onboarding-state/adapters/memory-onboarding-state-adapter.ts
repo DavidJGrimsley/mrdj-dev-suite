@@ -1,6 +1,6 @@
-import { configureLegalAcceptanceAdapter } from '../../legal/legal-acceptance-config';
-import { configureOnboardingStateAdapter } from '../onboarding-state-core';
-import { createMemoryOnboardingPersistence } from '../onboarding-state-memory';
+import { configureLegalAcceptanceAdapter } from '../legal/legal-acceptance-config';
+import { configureOnboardingStateAdapter } from './onboarding-state-core';
+import { createMemoryOnboardingPersistence } from './onboarding-state-memory';
 
 const persistence = createMemoryOnboardingPersistence();
 

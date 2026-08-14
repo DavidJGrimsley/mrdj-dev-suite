@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 
-import { useAuth } from '../../auth/auth-provider';
-import { configureLegalAcceptanceAdapter } from '../../legal/legal-acceptance-config';
-import { getSupabaseClient } from '../../../services/supabase';
-import { configureOnboardingStateAdapter, getOnboardingStateAdapter } from '../onboarding-state-core';
+import { useAuth } from '../auth/auth-provider';
+import { configureLegalAcceptanceAdapter } from '../legal/legal-acceptance-config';
+import { getSupabaseClient } from '../../services/supabase';
+import { configureOnboardingStateAdapter, getOnboardingStateAdapter } from './onboarding-state-core';
 import {
   createSupabaseLegalAcceptanceAdapter,
   createSupabaseOnboardingStateAdapter,
   type SupabaseClientFactory,
-} from '../onboarding-state-supabase';
+} from './onboarding-state-supabase';
 
 const getClient: SupabaseClientFactory = () =>
   getSupabaseClient() as ReturnType<SupabaseClientFactory>;

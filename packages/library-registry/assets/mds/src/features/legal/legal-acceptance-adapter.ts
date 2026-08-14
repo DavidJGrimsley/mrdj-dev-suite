@@ -113,7 +113,9 @@ export function useLegalUpdateGateSnapshot(
           flowId: input?.flowId,
           flowVersion: input?.flowVersion,
         });
-        notifyLegalAcceptanceChanged();
+        if (adapter !== memoryLegalAcceptanceAdapter) {
+          notifyLegalAcceptanceChanged();
+        }
         return await refresh();
       } finally {
         setSavingDocumentId(null);
