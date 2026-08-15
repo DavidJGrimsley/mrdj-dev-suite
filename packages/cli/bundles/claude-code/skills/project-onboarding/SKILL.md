@@ -17,6 +17,10 @@ Establish project memory and workflow defaults first, then scaffold only the sel
 - Confirm unresolved context markers are cleared before deep implementation work.
 - Confirm selected defaults (styling, state, data, CI, route placement) are documented in project memory.
 - Run Doctor after onboarding changes to validate baseline health.
+- Confirm `mds onboard` installed newly declared packages, or that
+  `--no-install` was explicit and the printed install command is still
+  pending. Do not treat onboarding as complete while those modules are
+  missing.
 
 ## Preferred structure
 

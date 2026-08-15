@@ -25,6 +25,11 @@ import { scaffoldProjectMemory } from "@mr.dj2u/cli/project-memory";
 import {
   generateProjectRoadmap,
 } from "@mr.dj2u/cli/roadmap";
+import {
+  buildLockfileInstallCommand,
+  prepareCommandForSpawn as prepareSharedCommandForSpawn,
+  runProjectCommand as runSharedProjectCommand,
+} from "@mr.dj2u/cli/package-install";
 
 import type { OnboardArgv } from "@mr.dj2u/cli/onboarding";
 
@@ -106,31 +111,7 @@ export function prepareCommandForSpawn(
     comSpec = process.env.ComSpec,
   }: { platform?: typeof process.platform; comSpec?: string | undefined } = {},
 ): CommandSpec {
-  if (platform !== "win32" || spec.shell === false) {
-    return { ...spec, shell: spec.shell ?? false };
-  }
-
-  return {
-    ...spec,
-    command: comSpec || "cmd.exe",
-    args: ["/d", "/s", "/c", buildWindowsShellCommand(spec.command, spec.args)],
-    shell: false,
-  };
-}
-
-function buildWindowsShellCommand(command: string, args: string[]): string {
-  return [command, ...args].map(quoteWindowsShellArg).join(" ");
-}
-
-function quoteWindowsShellArg(value: string): string {
-  if (value.length === 0) {
-    return '""';
-  }
-  const escaped = value.replace(/(["^&|<>])/g, "^$1");
-  if (/^[A-Za-z0-9_./:@+=,~-]+$/u.test(escaped)) {
-    return escaped;
-  }
-  return `"${escaped}"`;
+  return prepareSharedCommandForSpawn(spec, { platform, comSpec });
 }
 
 export async function main(): Promise<void> {
@@ -960,26 +941,7 @@ async function runProjectCommand(
   spec: CommandSpec,
 ): Promise<void> {
   console.log(`  ${spec.display}`);
-  await new Promise<void>((resolve, reject) => {
-    const spawnSpec = prepareCommandForSpawn(spec);
-    const child = spawn(spawnSpec.command, spawnSpec.args, {
-      cwd: projectPath,
-      shell: spawnSpec.shell ?? false,
-      stdio: "inherit",
-      env: spec.env ? { ...process.env, ...spec.env } : process.env,
-      windowsHide: true,
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          new Error(`${spec.display} exited with code ${code ?? "unknown"}.`),
-        );
-      }
-    });
-  });
+  await runSharedProjectCommand(spec, { cwd: projectPath });
 }
 
 async function resolveCreateExpoStackCommand(
@@ -1987,7 +1949,7 @@ async function detectPackageManager(
   return "npm";
 }
 
-function shouldRunExpoProjectChecks(
+export function shouldRunExpoProjectChecks(
   parsed: ParsedArgs,
   noInstallRequested: boolean,
 ): boolean {
@@ -2011,38 +1973,7 @@ function hasNoInstallFlag(args: string[]): boolean {
 export function buildInstallCommand(
   packageManager: PackageManager,
 ): CommandSpec {
-  switch (packageManager) {
-    case "pnpm":
-      return {
-        command: "pnpm",
-        args: [
-          "install",
-          "--config.strict-dep-builds=false",
-          "--ignore-workspace",
-        ],
-        display:
-          "pnpm install --config.strict-dep-builds=false --ignore-workspace",
-        env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
-      };
-    case "yarn":
-      return {
-        command: "yarn",
-        args: ["install"],
-        display: "yarn install",
-      };
-    case "bun":
-      return {
-        command: "bun",
-        args: ["install"],
-        display: "bun install",
-      };
-    case "npm":
-      return {
-        command: "npm",
-        args: ["install"],
-        display: "npm install",
-      };
-  }
+  return buildLockfileInstallCommand(packageManager);
 }
 
 export function buildExpoInstallFixCommand(

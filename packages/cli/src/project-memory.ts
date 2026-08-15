@@ -1463,6 +1463,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '## Workflow',
     '',
     '- If the user says `mds continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
+    '- After adding a package, immediately run the project package manager. Prefer `mds library add` for MDS Library catalog items. Do not treat the task as complete if install failed. MDS cannot install packages added outside MDS-owned flows.',
     '- Run `mds doctor --ci` before pushing.',
     '- Use `mds clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards

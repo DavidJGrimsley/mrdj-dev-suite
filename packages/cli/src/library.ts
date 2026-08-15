@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
 import {
   access,
   lstat,
@@ -17,6 +16,16 @@ import {
   readLibraryAsset,
   resolveLibraryItem,
 } from '@mr.dj2u/library-registry';
+import {
+  buildAddCommand,
+  buildExpoInstallCommand,
+  detectPackageManager,
+  runProjectCommand,
+  shouldInstallProjectDependencies,
+  validateInstalledPackages,
+} from './package-install.js';
+
+import type { PackageManager } from './package-install.js';
 
 import type {
   LibraryAsset,
@@ -31,7 +40,7 @@ import type {
   LibraryStyling,
 } from '@mr.dj2u/library-registry';
 
-export type LibraryPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export type LibraryPackageManager = PackageManager;
 
 export type LibraryNavigationLayout = RegistryLibraryNavigationLayout;
 
@@ -236,7 +245,9 @@ export async function inspectLibraryProject(projectPath = '.'): Promise<LibraryP
 
   return {
     projectPath: resolvedProjectPath,
-    packageManager: await detectPackageManager(resolvedProjectPath, packageJson),
+    packageManager: await detectPackageManager(resolvedProjectPath, {
+      packageManager: packageJson.packageManager,
+    }),
     projectName:
       projectInfo.name ??
       readString(appConfig?.expo?.name) ??
@@ -440,13 +451,21 @@ export async function applyLibraryAdd(
     throw new Error(`Library add could not complete safely; created files were rolled back: ${message}`);
   }
 
-  const shouldInstallDependencies = options.installDependencies !== false;
-  const runner = options.runner ?? runLibraryCommand;
+  const shouldInstallDependencies = shouldInstallProjectDependencies(options.installDependencies);
   const executedCommands: string[] = [];
   if (shouldInstallDependencies) {
     for (const command of plan.commands) {
-      await runner(command.command, command.args, { cwd: plan.projectPath });
+      await runProjectCommand(command, {
+        cwd: plan.projectPath,
+        runner: options.runner,
+      });
       executedCommands.push(command.display);
+    }
+    const installedNames = plan.dependencies
+      .filter((dependency) => dependency.action === 'install')
+      .map((dependency) => dependency.name);
+    if (installedNames.length > 0) {
+      await validateInstalledPackages(plan.projectPath, installedNames);
     }
   }
 
@@ -662,31 +681,14 @@ export async function runLibraryCommand(
   args: readonly string[],
   options: LibraryCommandRunnerOptions
 ): Promise<void> {
-  const windowsCommand = process.platform === 'win32'
-    ? buildWindowsCommandInvocation(command, args)
-    : null;
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(windowsCommand?.command ?? command, windowsCommand?.args ?? [...args], {
-      cwd: options.cwd,
-      stdio: 'inherit',
-      windowsHide: true,
-      shell: false,
-    });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(
-        new Error(
-          `${command} ${args.join(' ')} failed${
-            signal ? ` with signal ${signal}` : ` with exit code ${code ?? 'unknown'}`
-          }.`
-        )
-      );
-    });
-  });
+  await runProjectCommand(
+    {
+      command,
+      args: [...args],
+      display: [command, ...args].join(' '),
+    },
+    { cwd: options.cwd }
+  );
 }
 
 async function planFiles(
@@ -853,84 +855,38 @@ function buildDependencyCommands(
       const specifications = group.map(formatDependencySpecification);
       commands.push(
         installer === 'expo'
-          ? buildExpoDependencyCommand(packageManager, kind, specifications)
-          : buildPackageManagerDependencyCommand(packageManager, kind, specifications)
+          ? toLibraryDependencyCommand(
+              buildExpoInstallCommand(packageManager, kind, specifications),
+              installer,
+              kind,
+              specifications
+            )
+          : toLibraryDependencyCommand(
+              buildAddCommand(packageManager, kind, specifications),
+              installer,
+              kind,
+              specifications
+            )
       );
     }
   }
   return commands;
 }
 
-function buildExpoDependencyCommand(
-  packageManager: LibraryPackageManager,
-  kind: 'runtime' | 'development',
-  dependencies: string[]
-): LibraryDependencyCommand {
-  const devFlag = kind === 'development' ? ['--dev'] : [];
-  switch (packageManager) {
-    case 'pnpm':
-      return commandSpec('pnpm', ['exec', 'expo', 'install', ...devFlag, ...dependencies], 'expo', kind, dependencies);
-    case 'yarn':
-      return commandSpec('yarn', ['expo', 'install', ...devFlag, ...dependencies], 'expo', kind, dependencies);
-    case 'bun':
-      return commandSpec('bunx', ['expo', 'install', ...devFlag, ...dependencies], 'expo', kind, dependencies);
-    case 'npm':
-      return commandSpec('npx', ['expo', 'install', ...devFlag, ...dependencies], 'expo', kind, dependencies);
-  }
-}
-
-function buildPackageManagerDependencyCommand(
-  packageManager: LibraryPackageManager,
-  kind: 'runtime' | 'development',
-  dependencies: string[]
-): LibraryDependencyCommand {
-  switch (packageManager) {
-    case 'pnpm':
-      return commandSpec(
-        'pnpm',
-        ['add', ...(kind === 'development' ? ['--save-dev'] : []), ...dependencies],
-        'package-manager',
-        kind,
-        dependencies
-      );
-    case 'yarn':
-      return commandSpec(
-        'yarn',
-        ['add', ...(kind === 'development' ? ['--dev'] : []), ...dependencies],
-        'package-manager',
-        kind,
-        dependencies
-      );
-    case 'bun':
-      return commandSpec(
-        'bun',
-        ['add', ...(kind === 'development' ? ['--dev'] : []), ...dependencies],
-        'package-manager',
-        kind,
-        dependencies
-      );
-    case 'npm':
-      return commandSpec(
-        'npm',
-        ['install', ...(kind === 'development' ? ['--save-dev'] : []), ...dependencies],
-        'package-manager',
-        kind,
-        dependencies
-      );
-  }
-}
-
-function commandSpec(
-  command: string,
-  args: string[],
+function toLibraryDependencyCommand(
+  spec: {
+    command: string;
+    args: string[];
+    display: string;
+  },
   installer: 'expo' | 'package-manager',
   kind: 'runtime' | 'development',
   dependencies: string[]
 ): LibraryDependencyCommand {
   return {
-    command,
-    args,
-    display: [command, ...args].map(quoteCommandArgument).join(' '),
+    command: spec.command,
+    args: spec.args,
+    display: spec.display,
     installer,
     kind,
     dependencies,
@@ -1506,23 +1462,6 @@ function detectPlatforms(
   return [];
 }
 
-async function detectPackageManager(
-  projectPath: string,
-  packageJson: PackageJsonSubset
-): Promise<LibraryPackageManager> {
-  const declared = readString(packageJson.packageManager)?.split('@')[0];
-  if (isPackageManager(declared)) return declared;
-  if (await pathExists(path.join(projectPath, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await pathExists(path.join(projectPath, 'yarn.lock'))) return 'yarn';
-  if (
-    (await pathExists(path.join(projectPath, 'bun.lock'))) ||
-    (await pathExists(path.join(projectPath, 'bun.lockb')))
-  ) {
-    return 'bun';
-  }
-  return 'npm';
-}
-
 function readDependencyRecord(value: unknown): Record<string, string> {
   if (!isRecord(value)) return {};
   return Object.fromEntries(
@@ -1586,27 +1525,6 @@ function formatDependencySpecification(dependency: LibraryDependency): string {
   return `${dependency.name}@${dependency.version}`;
 }
 
-function quoteCommandArgument(value: string): string {
-  return /\s/.test(value) ? JSON.stringify(value) : value;
-}
-
-function buildWindowsCommandInvocation(
-  command: string,
-  args: readonly string[]
-): { command: string; args: string[] } {
-  const safeToken = /^[A-Za-z0-9@/._~^*+=:-]+$/;
-  if (!safeToken.test(command) || !args.every((argument) => safeToken.test(argument))) {
-    throw new Error('Refusing to execute a dependency command containing unsafe shell characters.');
-  }
-  const commandLine = [command, ...args]
-    .map((argument) => argument.replace(/\^/g, '^^'))
-    .join(' ');
-  return {
-    command: process.env.ComSpec ?? 'cmd.exe',
-    args: ['/d', '/s', '/c', commandLine],
-  };
-}
-
 function stableStringify(value: unknown): string {
   return JSON.stringify(sortForStableSerialization(value));
 }
@@ -1659,10 +1577,6 @@ function pathIsWithin(parentPath: string, candidatePath: string): boolean {
 
 function isLibraryPlatform(value: unknown): value is LibraryPlatform {
   return value === 'android' || value === 'ios' || value === 'web';
-}
-
-function isPackageManager(value: string | undefined): value is LibraryPackageManager {
-  return value === 'npm' || value === 'pnpm' || value === 'yarn' || value === 'bun';
 }
 
 function readString(value: unknown): string | undefined {

@@ -77,6 +77,10 @@ it for the app before treating it as final.
 
 ## Workflow
 
+- After adding a package, immediately run the project package manager.
+  Prefer `mds library add` for MDS Library catalog items. Do not treat
+  the task as complete if install failed. MDS cannot install packages
+  added outside MDS-owned flows.
 - Run `mds doctor --ci` before pushing.
 - Use `mds clear-expo-start` when Metro or server ports get wedged.
 - When enabled, develop through feature branches into `test`, then promote

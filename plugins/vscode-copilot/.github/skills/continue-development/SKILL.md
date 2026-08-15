@@ -19,6 +19,11 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 - If `continue_project` or `mds continue` reports `priority: expo-sdk-upgrade`, load the official Expo skill `upgrading-expo`. Do not call MDS `get_skill` for an upgrade skill, and do not take the next todo until the user declines or the upgrade is done.
 - Confirm any deferral includes a clear reason and destination note.
 - Re-run Doctor/checks after significant phase tasks are completed.
+- When this MDS workflow itself adds a package, use an MDS-owned tool
+  (`mds library add` for catalog items) or immediately run the project's
+  package manager, then confirm `node_modules` contains the new package.
+  Do not treat the task as complete if install failed. MDS cannot install
+  packages added by a third-party agent outside those tools.
 
 ## Preferred structure
 

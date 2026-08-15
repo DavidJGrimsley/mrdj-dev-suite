@@ -193,7 +193,7 @@ node packages/cli/dist/cli.js library add swmansion/animated-pressable /path/to/
 node packages/cli/dist/cli.js library add swmansion/animated-pressable /path/to/expo-app
 ```
 
-Library add operations preflight the whole item. Identical files are skipped, while customized files, incompatible dependencies, unsafe destinations, and unsupported project variants stop the operation without overwriting source. Use `--no-install` to copy source without running dependency installation, or `--json` for agent-friendly output.
+Library add operations preflight the whole item. Identical files are skipped, while customized files, incompatible dependencies, unsafe destinations, and unsupported project variants stop the operation without overwriting source. By default the add runs the planned package-manager or `expo install` commands immediately and checks that those packages exist in `node_modules`. Use `--no-install` to copy source without declaring or installing dependencies (then run the printed pending commands), or `--json` for agent-friendly output. `mds onboard` also installs newly declared packages unless `--no-install` is passed.
 
 The source-copy destination is only the safe default home for reusable code. When an agent is adding any library item, it should ask where or how the developer wants it used in the app, then import/use or wire it into that screen, route, provider boundary, or setup location after copying. If the developer is not sure, leave the source in the default catalog destination and report the import path as the fallback.
 

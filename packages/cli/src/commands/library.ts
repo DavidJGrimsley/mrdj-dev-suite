@@ -269,7 +269,11 @@ function printLibraryAddResult(result: LibraryAddResult, json = false, placement
   for (const command of result.executedCommands) console.log(`${chalk.green('RAN')} ${command}`);
   for (const command of result.pendingCommands) console.log(`${chalk.yellow('RUN')} ${command}`);
   if (result.pendingCommands.length > 0) {
-    console.log(chalk.yellow('Dependencies were not installed. Run the commands above from the project root.'));
+    console.log(
+      chalk.yellow(
+        'Dependencies were not declared or installed. Run the commands above from the project root; a bare package-manager install is not enough.'
+      )
+    );
   }
   if (result.plan.integration.length > 0) {
     console.log();

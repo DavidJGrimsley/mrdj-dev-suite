@@ -366,6 +366,64 @@ describe('MDS Library CLI services', () => {
     );
   });
 
+  it('runs planned dependency commands by default and validates installed modules', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'swmansion/svg-mark');
+    const runner = vi.fn(async () => {
+      await mkdir(path.join(projectPath, 'node_modules', 'react-native-svg'), { recursive: true });
+    });
+
+    const result = await applyLibraryAdd(projectPath, 'swmansion/svg-mark', {
+      confirmed: true,
+      planHash: plan.planHash,
+      runner,
+    });
+
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(runner).toHaveBeenCalledWith(
+      'pnpm',
+      ['exec', 'expo', 'install', 'react-native-svg@15.15.4'],
+      { cwd: projectPath, env: undefined }
+    );
+    expect(result.executedCommands).toEqual(['pnpm exec expo install react-native-svg@15.15.4']);
+    expect(result.pendingCommands).toEqual([]);
+    expect(result.dependenciesInstalled).toBe(true);
+  });
+
+  it('fails the add when a dependency command throws', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'swmansion/svg-mark');
+    const runner = vi.fn(async () => {
+      throw new Error('pnpm exploded');
+    });
+
+    await expect(
+      applyLibraryAdd(projectPath, 'swmansion/svg-mark', {
+        confirmed: true,
+        planHash: plan.planHash,
+        runner,
+      })
+    ).rejects.toThrow(/pnpm exec expo install react-native-svg@15.15.4 failed/u);
+    await expect(
+      access(path.join(projectPath, 'src', 'components', 'swmansion', 'svg-mark.tsx'))
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails the add when install exits successfully but the module is missing', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'swmansion/svg-mark');
+    const runner = vi.fn(async () => undefined);
+
+    await expect(
+      applyLibraryAdd(projectPath, 'swmansion/svg-mark', {
+        confirmed: true,
+        planHash: plan.planHash,
+        runner,
+      })
+    ).rejects.toThrow(/missing from node_modules[\s\S]*react-native-svg/u);
+    expect(runner).toHaveBeenCalledTimes(1);
+  });
+
   it('copies source without running dependencies when installation is disabled', async () => {
     const projectPath = await createExpoProject();
     const plan = await planLibraryAdd(projectPath, 'swmansion/svg-mark');

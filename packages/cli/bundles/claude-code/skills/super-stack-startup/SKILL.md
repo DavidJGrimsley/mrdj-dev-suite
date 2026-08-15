@@ -15,6 +15,10 @@ Run generator + onboarding as one guided flow, keep agent-facing wording sourced
 - Confirm command runs from a parent directory where the app folder does not already exist.
 - Confirm stack choices and MDS intake values are captured before generation.
 - Confirm generated app includes project memory and onboarding next-step output.
+- Confirm Super Stack ran the package-manager install unless the user
+  passed an explicit skip (`--no-install`, `--mds-skip-expo-fix`, or
+  `--mds-skip-create`). If install was skipped or failed, surface that
+  before handing the app to `mds continue`.
 - Confirm prompt and skill text stay thin and defer detailed behavior to the canonical knowledge package.
 - Confirm unresolved context markers are resolved before coding begins.
 - Confirm follow-up uses `mds continue` from inside the generated app folder.
