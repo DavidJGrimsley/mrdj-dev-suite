@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
+import { markOnboardingComplete } from '../onboarding-state/onboarding-state';
 import { onboardingConfig } from './onboarding-config';
 
 export default function OnboardingCompleteScreen() {
@@ -10,6 +12,20 @@ export default function OnboardingCompleteScreen() {
   const theme = useAppTheme();
   const colors = theme.activeColors;
   const primaryForeground = getReadableTextColor(colors.primary, theme.colors.light.text);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const finishOnboarding = async () => {
+    if (isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await markOnboardingComplete();
+      router.replace(onboardingConfig.completion.route);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -44,7 +60,8 @@ export default function OnboardingCompleteScreen() {
         </Text>
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.replace(onboardingConfig.completion.route)}
+          disabled={isSaving}
+          onPress={() => void finishOnboarding()}
           style={[
             styles.primaryButton,
             { backgroundColor: colors.primary, borderRadius: theme.layout.radius },

@@ -27,7 +27,7 @@ import {
   savePersonalOnboardDefaults,
   validateRequiredInput,
 } from '../src/commands/onboard.js';
-import { renderTodo, scaffoldProjectMemory } from '../src/project-memory.js';
+import { deriveOnboardingPersistence, renderTodo, scaffoldProjectMemory } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
 
@@ -1220,6 +1220,17 @@ describe('runOnboardCommand', () => {
     expect(rootLayout).toContain(
       '<Stack.Protected guard={auth.isAuthenticated && legalGateStatus === "complete"}>'
     );
+    expect(rootLayout).toContain('OnboardingPersistenceSync');
+    expect(rootLayout).toContain('useLegalUpdateGateStatus(undefined, auth.user?.id)');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('createSupabaseOnboardingStateAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.toContain('- Onboarding Persistence: supabase');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
@@ -1285,6 +1296,105 @@ describe('runOnboardCommand', () => {
     expect(rootLayout).toContain('<Stack.Screen name="legal/updates"');
     expect(rootLayout).toContain('<Stack.Protected guard={legalGateStatus === "complete"}>');
     expect(rootLayout).toContain('<Stack.Screen name="settings"');
+  });
+
+  it('generates a memory onboarding adapter for local-only apps and a compile-ready legal review', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-persist-local-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'persist-local-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Persist Local App',
+      legalDocumentMode: 'onboarding-agreement',
+    });
+
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.toContain('- Onboarding Persistence: memory');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('createMemoryOnboardingPersistence');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'legal-review-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('legal-acceptance-adapter');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('LegalAcceptanceAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(path.join(projectPath, 'supabase', 'migrations', '0001_mds_auth_onboarding.sql'), 'utf8')
+    ).rejects.toThrow();
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as { dependencies: Record<string, string> };
+    expect(packageJson.dependencies.zustand).toBeUndefined();
+    expect(packageJson.dependencies['@supabase/supabase-js']).toBeUndefined();
+  });
+
+  it('generates zustand-local persistence without supabase imports in onboarding files', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-persist-zustand-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'persist-zustand-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      appName: 'Persist Zustand App',
+      generatorStateManagement: 'zustand',
+    });
+
+    const adapter = await readFile(
+      path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
+      'utf8'
+    );
+    const completeScreen = await readFile(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'complete-screen.tsx'),
+      'utf8'
+    );
+    expect(adapter).toContain('createZustandOnboardingStateAdapter');
+    expect(adapter).not.toContain('@supabase/supabase-js');
+    expect(completeScreen).toContain('markOnboardingComplete');
+    expect(completeScreen).not.toContain('@supabase/supabase-js');
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as { dependencies: Record<string, string> };
+    expect(packageJson.dependencies.zustand).toBe('^5.0.8');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
+    ).resolves.toContain('- Onboarding Persistence: zustand-local');
   });
 
   it('generates the NativeWindUI exposition route when NativeWindUI is selected', async () => {
@@ -1640,6 +1750,36 @@ describe('normalizePromptText', () => {
 
   it('trims string prompt answers', () => {
     expect(normalizePromptText('  Home, settings  ')).toBe('Home, settings');
+  });
+
+  it('derives onboarding persistence from the existing stack instead of a new prompt', () => {
+    expect(deriveOnboardingPersistence(sampleAnswers('Local'))).toBe('memory');
+    expect(
+      deriveOnboardingPersistence({
+        ...sampleAnswers('Zustand'),
+        generatorStateManagement: 'zustand',
+      })
+    ).toBe('zustand-local');
+    expect(
+      deriveOnboardingPersistence({
+        ...sampleAnswers('Supabase'),
+        authProvider: 'supabase',
+      })
+    ).toBe('supabase');
+    expect(
+      deriveOnboardingPersistence({
+        ...sampleAnswers('Both'),
+        authProvider: 'supabase',
+        generatorStateManagement: 'zustand',
+      })
+    ).toBe('zustand-supabase');
+    expect(
+      deriveOnboardingPersistence({
+        ...sampleAnswers('Firebase'),
+        authProvider: 'firebase',
+        generatorStateManagement: 'zustand',
+      })
+    ).toBe('zustand-local');
   });
 });
 

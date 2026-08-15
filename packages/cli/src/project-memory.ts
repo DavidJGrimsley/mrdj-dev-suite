@@ -17,6 +17,11 @@ export type LegalDocumentMode = 'none' | 'public-routes' | 'onboarding-agreement
 export type OnboardingCompletionMode = 'enter-app' | 'auth' | 'account-setup' | 'custom';
 export type LegalUpdateGate = 'none' | 'material-required';
 export type AuthProviderChoice = 'none' | 'base' | 'supabase' | 'firebase' | 'convex';
+export type OnboardingPersistenceMode =
+  | 'memory'
+  | 'zustand-local'
+  | 'supabase'
+  | 'zustand-supabase';
 
 export interface OnboardAnswers {
   appName: string;
@@ -198,7 +203,43 @@ function shouldGenerateStandaloneLegalDocuments(answers: OnboardAnswers): boolea
 }
 
 function shouldGenerateLegalUpdateGate(answers: OnboardAnswers): boolean {
-  return answers.legalUpdateGate === 'material-required';
+  return (
+    answers.legalUpdateGate === 'material-required' ||
+    ((answers.authProvider ?? 'none') === 'supabase' &&
+      answers.legalDocumentMode === 'onboarding-agreement')
+  );
+}
+
+export function deriveOnboardingPersistence(answers: OnboardAnswers): OnboardingPersistenceMode {
+  const supabaseAuth = (answers.authProvider ?? 'none') === 'supabase';
+  const zustand = answers.generatorStateManagement === 'zustand';
+  if (supabaseAuth && zustand) {
+    return 'zustand-supabase';
+  }
+  if (supabaseAuth) {
+    return 'supabase';
+  }
+  if (zustand) {
+    return 'zustand-local';
+  }
+  return 'memory';
+}
+
+function shouldGenerateOnboardingState(answers: OnboardAnswers): boolean {
+  return shouldGenerateOnboarding(answers) || shouldGenerateLegalUpdateGate(answers);
+}
+
+function onboardingStateLibraryVariant(
+  answers: OnboardAnswers
+): OnboardingPersistenceMode {
+  return deriveOnboardingPersistence(answers);
+}
+
+function shouldGenerateOnboardingAuthSupabase(answers: OnboardAnswers): boolean {
+  return (
+    (answers.authProvider ?? 'none') === 'supabase' &&
+    (shouldGenerateOnboarding(answers) || shouldGenerateLegalUpdateGate(answers))
+  );
 }
 
 function legalDocumentsLibraryVariant(
@@ -331,6 +372,10 @@ const UNIWIND_DEPENDENCIES = {
 const STYLIST_DEPENDENCIES = {
   '@react-native-async-storage/async-storage': '2.2.0',
   'reanimated-color-picker': '^4.2.0',
+} as const;
+
+const ZUSTAND_DEPENDENCIES = {
+  zustand: '^5.0.8',
 } as const;
 
 const STYLIST_DEV_DEPENDENCIES = {
@@ -508,6 +553,18 @@ export async function scaffoldRichBoilerplate(
           legalDocumentsLibraryVariant(answers)
         )
       : undefined;
+  const onboardingStateAssets =
+    navigationShell.library === 'expo-router' && shouldGenerateOnboardingState(answers)
+      ? await loadLibraryTextAssets(
+          'mds/onboarding-state',
+          libraryContext,
+          onboardingStateLibraryVariant(answers)
+        )
+      : undefined;
+  const onboardingAuthSupabaseAssets =
+    navigationShell.library === 'expo-router' && shouldGenerateOnboardingAuthSupabase(answers)
+      ? await loadLibraryTextAssets('mds/onboarding-auth-supabase', libraryContext)
+      : undefined;
   const settingsAssets =
     navigationShell.library === 'expo-router'
       ? await loadLibraryTextAssets('mds/settings', libraryContext)
@@ -545,6 +602,9 @@ export async function scaffoldRichBoilerplate(
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), {
+    recursive: true,
+  });
+  await mkdir(path.join(projectPath, 'src', 'features', 'onboarding-state'), {
     recursive: true,
   });
   await mkdir(path.join(projectPath, 'src', 'features', 'legal'), {
@@ -933,6 +993,16 @@ export async function scaffoldRichBoilerplate(
     results.push(...(await writeLibraryAssetMap(projectPath, authAssets, force)));
   }
 
+  if (onboardingStateAssets) {
+    results.push(...(await writeLibraryAssetMap(projectPath, onboardingStateAssets, force)));
+  }
+
+  if (onboardingAuthSupabaseAssets) {
+    results.push(
+      ...(await writeLibraryAssetMap(projectPath, onboardingAuthSupabaseAssets, force))
+    );
+  }
+
   if (answers.dataStart === 'local') {
     results.push(
       await writeIfAllowed(
@@ -987,12 +1057,19 @@ export async function scaffoldRichBoilerplate(
     await mkdir(path.join(projectPath, 'supabase', 'migrations'), {
       recursive: true,
     });
+    const authAlreadyWroteSupabaseClient = Boolean(
+      authAssets?.has('src/services/supabase.ts')
+    );
     results.push(
-      await writeIfAllowed(
-        path.join(projectPath, 'src', 'services', 'supabase.ts'),
-        renderSupabaseClient(),
-        force
-      ),
+      ...(authAlreadyWroteSupabaseClient
+        ? []
+        : [
+            await writeIfAllowed(
+              path.join(projectPath, 'src', 'services', 'supabase.ts'),
+              renderSupabaseClient(),
+              force
+            ),
+          ]),
       await writeIfAllowed(
         path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'),
         renderSupabaseDemoDataService(),
@@ -1151,6 +1228,7 @@ export function renderInfo(
     `- Legal Documents: ${formatLegalDocumentMode(answers.legalDocumentMode)}`,
     `- Onboarding Completion: ${formatOnboardingCompletionMode(answers.onboardingCompletionMode)}`,
     `- Legal Update Gate: ${formatLegalUpdateGate(answers.legalUpdateGate)}`,
+    `- Onboarding Persistence: ${formatOnboardingPersistence(deriveOnboardingPersistence(answers))}`,
     `- Data Categories: ${answers.dataNeeds}`,
     `- Starting Data mode: ${formatDataStart(answers.dataStart)}.`,
     '',
@@ -1188,6 +1266,24 @@ export function renderTodo(answers: OnboardAnswers): string {
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
     ...((answers.authProvider ?? 'none') !== 'none'
       ? ['- [ ] Review `project/auth.md` and finish provider-specific auth setup.']
+      : []),
+    ...(deriveOnboardingPersistence(answers) === 'memory' &&
+    (answers.legalDocumentMode !== 'none' || shouldGenerateLegalUpdateGate(answers))
+      ? [
+          '- [ ] Replace the memory onboarding/legal adapter before production legal acceptance. Local memory is not a hosted audit record.',
+        ]
+      : []),
+    ...(deriveOnboardingPersistence(answers) === 'zustand-local' &&
+    (answers.legalDocumentMode !== 'none' || shouldGenerateLegalUpdateGate(answers))
+      ? [
+          '- [ ] Zustand-local legal acceptance is device-only. Add a hosted adapter before treating it as an audit record.',
+        ]
+      : []),
+    ...(deriveOnboardingPersistence(answers) === 'supabase' ||
+    deriveOnboardingPersistence(answers) === 'zustand-supabase'
+      ? [
+          '- [ ] Apply `supabase/migrations/0001_mds_auth_onboarding.sql` before relying on persisted onboarding or legal acceptance.',
+        ]
       : []),
     '',
     '## Phase 1: App Shell And First Flow',
@@ -1634,6 +1730,17 @@ async function ensurePackageJson(
     };
   }
 
+  const onboardingPersistence = deriveOnboardingPersistence(answers);
+  if (
+    onboardingPersistence === 'zustand-local' ||
+    onboardingPersistence === 'zustand-supabase'
+  ) {
+    packageJson.dependencies = {
+      ...ZUSTAND_DEPENDENCIES,
+      ...packageJson.dependencies,
+    };
+  }
+
   if (answers.usesExpoUi) {
     packageJson.dependencies = {
       ...EXPO_UI_DEPENDENCIES,
@@ -1777,6 +1884,10 @@ function formatOnboardingCompletionMode(value: OnboardingCompletionMode): string
 
 function formatLegalUpdateGate(value: LegalUpdateGate): string {
   return value === 'material-required' ? 'material-required' : 'none';
+}
+
+function formatOnboardingPersistence(value: OnboardingPersistenceMode): string {
+  return value;
 }
 
 function deriveServeProdScript(answers: OnboardAnswers): string {
@@ -3197,12 +3308,18 @@ function renderRichRootLayout(
     appDir,
     path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter')
   );
+  const onboardingPersistenceImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter')
+  );
   const authProviderImport = toRelativeImportPath(
     appDir,
     path.join(projectPath, 'src', 'features', 'auth', 'auth-provider')
   );
   const legalGateEnabled =
     navigationShell.library === 'expo-router' && shouldGenerateLegalUpdateGate(answers);
+  const persistenceEnabled =
+    navigationShell.library === 'expo-router' && shouldGenerateOnboardingState(answers);
   const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
@@ -3303,6 +3420,9 @@ function renderRichRootLayout(
     ...(legalGateEnabled
       ? [`import { useLegalUpdateGateStatus } from '${legalAcceptanceAdapterImport}';`]
       : []),
+    ...(persistenceEnabled
+      ? [`import { OnboardingPersistenceSync } from '${onboardingPersistenceImport}';`]
+      : []),
     ...(authEnabled ? [`import { AuthProvider, useAuth } from '${authProviderImport}';`] : []),
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
@@ -3340,7 +3460,13 @@ function renderRichRootLayout(
     'function LayoutInner() {',
     '  const theme = useAppTheme();',
     ...(authEnabled ? ['  const auth = useAuth();'] : []),
-    ...(legalGateEnabled ? ['  const legalGateStatus = useLegalUpdateGateStatus();'] : []),
+    ...(legalGateEnabled
+      ? [
+          authEnabled
+            ? '  const legalGateStatus = useLegalUpdateGateStatus(undefined, auth.user?.id);'
+            : '  const legalGateStatus = useLegalUpdateGateStatus();',
+        ]
+      : []),
     ...(authEnabled ? ['', '  if (auth.isLoading) {', '    return null;', '  }'] : []),
     '  const shellColor = theme.activeColors.background;',
     '  return (',
@@ -3393,8 +3519,15 @@ function renderRichRootLayout(
     '  return (',
     '    <AppThemeProvider>',
     ...(authEnabled
-      ? ['      <AuthProvider>', '        <LayoutInner />', '      </AuthProvider>']
-      : ['      <LayoutInner />']),
+      ? [
+          '      <AuthProvider>',
+          ...(persistenceEnabled ? ['        <OnboardingPersistenceSync />'] : []),
+          '        <LayoutInner />',
+          '      </AuthProvider>',
+        ]
+      : persistenceEnabled
+        ? ['      <OnboardingPersistenceSync />', '      <LayoutInner />']
+        : ['      <LayoutInner />']),
     '    </AppThemeProvider>',
     '  );',
     '}',

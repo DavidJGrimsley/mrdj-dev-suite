@@ -18,6 +18,7 @@ import {
 
 import type { OnboardArgv } from './commands/onboard.js';
 import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from './project-memory.js';
+import { deriveOnboardingPersistence } from './project-memory.js';
 
 export type CessScriptLanguage = 'typescript' | 'javascript';
 export type CessPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
@@ -2286,6 +2287,11 @@ export function buildCessSummaryLines(
     `legal documents: ${onboardAnswers.legalDocumentMode}`,
     `completion: ${onboardAnswers.onboardingCompletionMode}`,
     `legal update gate: ${onboardAnswers.legalUpdateGate}`,
+    `persistence: ${deriveOnboardingPersistence({
+      ...onboardAnswers,
+      generatorStateManagement: answers.stateManagement ?? onboardAnswers.generatorStateManagement,
+      authProvider: answers.authBackend ?? onboardAnswers.authProvider,
+    })}`,
   ].join(', ');
 
   return [

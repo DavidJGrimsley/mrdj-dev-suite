@@ -1,9 +1,12 @@
 create table if not exists public.user_onboarding_state (
   user_id uuid primary key references auth.users(id) on delete cascade,
   flow_id text not null default 'mds/onboarding',
+  flow_version integer not null default 1,
   status text not null default 'not_started',
   current_step text,
   completed_at timestamptz,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
@@ -17,9 +20,17 @@ to authenticated
 using (auth.uid() = user_id);
 
 drop policy if exists "Users can upsert their onboarding state" on public.user_onboarding_state;
-create policy "Users can upsert their onboarding state"
+drop policy if exists "Users can insert their onboarding state" on public.user_onboarding_state;
+create policy "Users can insert their onboarding state"
 on public.user_onboarding_state
-for all
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update their onboarding state" on public.user_onboarding_state;
+create policy "Users can update their onboarding state"
+on public.user_onboarding_state
+for update
 to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
@@ -28,10 +39,11 @@ create table if not exists public.user_legal_acceptances (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   document_id text not null,
-  acceptance_version text not null,
+  document_version text not null,
+  flow_id text,
   accepted_at timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb,
-  unique (user_id, document_id, acceptance_version)
+  unique (user_id, document_id, document_version)
 );
 
 alter table public.user_legal_acceptances enable row level security;

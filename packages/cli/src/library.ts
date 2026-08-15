@@ -472,15 +472,71 @@ export async function applyLibraryAdd(
 }
 
 async function runPostLibraryAddRepairs(plan: LibraryAddPlan): Promise<string[]> {
-  if (plan.id !== 'mds/auth') {
-    return [];
+  const repairedFiles: string[] = [];
+  if (plan.id === 'mds/auth' || plan.id === 'mds/onboarding-auth-supabase') {
+    const layoutPath = path.join(
+      plan.projectPath,
+      plan.context.appDirectory === 'src/app' ? 'src/app/_layout.tsx' : 'app/_layout.tsx'
+    );
+    const repaired = await wireAuthIntoMdsRootLayout(layoutPath, plan.context);
+    if (repaired) {
+      repairedFiles.push(path.relative(plan.projectPath, layoutPath).replace(/\\/g, '/'));
+    }
   }
-  const layoutPath = path.join(
-    plan.projectPath,
-    plan.context.appDirectory === 'src/app' ? 'src/app/_layout.tsx' : 'app/_layout.tsx'
-  );
-  const repaired = await wireAuthIntoMdsRootLayout(layoutPath, plan.context);
-  return repaired ? [path.relative(plan.projectPath, layoutPath).replace(/\\/g, '/')] : [];
+
+  if (plan.id === 'mds/onboarding-auth-supabase') {
+    const persistenceRepaired = await writeSupabaseOnboardingAdapter(plan);
+    if (persistenceRepaired) {
+      repairedFiles.push(persistenceRepaired);
+    }
+  }
+
+  return repairedFiles;
+}
+
+async function writeSupabaseOnboardingAdapter(
+  plan: LibraryAddPlan
+): Promise<string | undefined> {
+  const usesZustand = Boolean(plan.context.dependencies?.zustand);
+  const resolutions = [
+    resolveLibraryItem('mds/onboarding-state', plan.context, {
+      variant: usesZustand ? 'zustand-supabase' : 'supabase',
+    }),
+    resolveLibraryItem('mds/auth', plan.context, { variant: 'with-supabase' }),
+  ];
+  const overwriteSuffixes = [
+    'onboarding-state/onboarding-state-adapter.ts',
+    'auth/auth-adapter.tsx',
+  ];
+  let wroteAdapter: string | undefined;
+
+  for (const resolution of resolutions) {
+    for (const asset of resolution.assets) {
+      if (asset.encoding !== 'utf8') {
+        continue;
+      }
+      const destination = path.join(plan.projectPath, ...asset.destination.split('/'));
+      const shouldOverwrite = overwriteSuffixes.some((suffix) =>
+        asset.destination.endsWith(suffix)
+      );
+      try {
+        await access(destination);
+        if (!shouldOverwrite) {
+          continue;
+        }
+      } catch {
+        // File is missing and should be created.
+      }
+      const contents = (await readLibraryAsset(asset)).toString('utf8');
+      await mkdir(path.dirname(destination), { recursive: true });
+      await writeFile(destination, contents, 'utf8');
+      if (asset.destination.endsWith('onboarding-state/onboarding-state-adapter.ts')) {
+        wroteAdapter = asset.destination;
+      }
+    }
+  }
+
+  return wroteAdapter;
 }
 
 async function wireAuthIntoMdsRootLayout(
