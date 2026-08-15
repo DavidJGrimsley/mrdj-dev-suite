@@ -40,11 +40,22 @@ export async function runReportCommand(argv: ReportArgv): Promise<void> {
 }
 
 export function renderMarkdownReport(report: DoctorReport): string {
+  const selection = report.selection ?? {
+    defaultMode: 'fast',
+    runScripts: false,
+    description: 'No selection metadata available.',
+    fullModeGuidance: '',
+  };
+
   return [
     '# MDS Doctor Report',
     '',
     `- Project: ${report.projectPath}`,
     `- Mode: ${report.mode}`,
+    `- Default mode: ${selection.defaultMode}`,
+    `- Script checks: ${selection.runScripts ? 'enabled' : 'disabled'}`,
+    `- Mode description: ${selection.description}`,
+    `- Full mode guidance: ${selection.fullModeGuidance}`,
     `- Timestamp: ${report.timestamp}`,
     `- Summary: ${report.summary.errors} errors, ${report.summary.warnings} warnings, ${report.summary.passed} passed, ${report.summary.skipped} skipped`,
     '',

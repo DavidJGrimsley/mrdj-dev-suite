@@ -1,4 +1,5 @@
 import type { DoctorCheckResult, DoctorMode, PackageJson } from '../types.js';
+import { createSkippedCheck } from '../modes.js';
 import {
   buildRunScriptCommand,
   commandResultToCheck,
@@ -14,8 +15,19 @@ export async function runScriptChecks(args: {
   projectPath: string;
   mode: DoctorMode;
   fix: boolean;
+  runScripts: boolean;
   timeoutMs: number;
 }): Promise<DoctorCheckResult[]> {
+  if (!args.runScripts) {
+    return [
+      createScriptDisabledSkip('lint'),
+      createScriptDisabledSkip('typecheck'),
+      createScriptDisabledSkip('tests'),
+      createScriptDisabledSkip('expo doctor'),
+      createScriptDisabledSkip('production build'),
+    ];
+  }
+
   const checks: DoctorCheckResult[] = [];
   for (const check of [
     await runEslintCheck(args),
@@ -23,6 +35,7 @@ export async function runScriptChecks(args: {
     await runTestsCheck(args),
     await runExpoDoctorCheck(args),
     await runProductionBuildCheck(args),
+    runFullBuildProfileSkip(args),
   ]) {
     if (check) {
       checks.push(check);
@@ -32,6 +45,14 @@ export async function runScriptChecks(args: {
   return checks;
 }
 
+function createScriptDisabledSkip(name: string): DoctorCheckResult {
+  return createSkippedCheck(
+    name,
+    'Skipped because package script execution is disabled.',
+    { reason: 'runScripts=false' }
+  );
+}
+
 async function runTestsCheck(args: {
   packageJson: PackageJson;
   projectPath: string;
@@ -39,16 +60,22 @@ async function runTestsCheck(args: {
   timeoutMs: number;
 }): Promise<DoctorCheckResult | null> {
   const candidates = ['test', 'test:ci'];
+  if (args.mode === 'fast') {
+    return createSkippedCheck(
+      'tests',
+      'Skipped in fast mode; run --ci or --full to include tests.',
+      { reason: 'fast mode', candidates }
+    );
+  }
+
   const scriptName = findScript(args.packageJson, candidates);
   if (!scriptName) {
-    return args.mode === 'fast'
-      ? null
-      : {
-          name: 'tests',
-          status: 'warn',
-          message: 'No package script found for tests.',
-          details: { candidates },
-        };
+    return {
+      name: 'tests',
+      status: 'warn',
+      message: 'No package script found for tests.',
+      details: { candidates },
+    };
   }
 
   const packageManager = await detectPackageManager(args.projectPath, args.packageJson);
@@ -73,7 +100,11 @@ async function runProductionBuildCheck(args: {
         ? ['build:web:deploy', 'build:web', 'build:prod', 'build']
         : [];
   if (candidates.length === 0) {
-    return null;
+    return createSkippedCheck(
+      'production build',
+      'Skipped in fast mode; run --ci to include release build checks or --full for the broadest build profile.',
+      { reason: 'fast mode', fullModeGuidance: 'Run --full to include preview/development build candidates.' }
+    );
   }
 
   const scriptName = findScript(args.packageJson, candidates);
@@ -92,5 +123,17 @@ async function runProductionBuildCheck(args: {
     'production build',
     command,
     await runShellCommand(command, args.projectPath, args.timeoutMs)
+  );
+}
+
+function runFullBuildProfileSkip(args: { mode: DoctorMode }): DoctorCheckResult | null {
+  if (args.mode === 'full') {
+    return null;
+  }
+
+  return createSkippedCheck(
+    'full build profile',
+    'Skipped because this mode does not include preview/development build candidates; run --full when release approval needs the broadest build profile.',
+    { reason: `${args.mode} mode`, requiredMode: 'full' }
   );
 }

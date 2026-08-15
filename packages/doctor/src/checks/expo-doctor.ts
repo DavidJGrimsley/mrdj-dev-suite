@@ -1,4 +1,5 @@
 import type { DoctorCheckResult, DoctorMode, PackageJson } from '../types.js';
+import { createSkippedCheck } from '../modes.js';
 import {
   buildRunScriptCommand,
   commandResultToCheck,
@@ -16,8 +17,19 @@ export async function runExpoDoctorCheck(args: {
   const hasExpo = Boolean(
     args.packageJson.dependencies?.expo ?? args.packageJson.devDependencies?.expo
   );
-  if (!hasExpo || args.mode === 'fast') {
-    return null;
+  if (!hasExpo) {
+    return createSkippedCheck(
+      'expo doctor',
+      'Skipped because no Expo dependency was detected.',
+      { reason: 'non-expo project' }
+    );
+  }
+  if (args.mode === 'fast') {
+    return createSkippedCheck(
+      'expo doctor',
+      'Skipped in fast mode; run --ci or --full to include Expo Doctor.',
+      { reason: 'fast mode' }
+    );
   }
 
   const candidates = ['expo-doctor', 'doctor'];
