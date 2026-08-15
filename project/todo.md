@@ -3,6 +3,22 @@
 **Goal:** Foundation, knowledge harvest, Doctor, onboarding, and GitHub automation.
 **Target:** End of May 2026.
 
+## Active branch rollout (as of 2026-08-15)
+
+- Main is clean and tracking `origin/main`.
+- Wave 0 (`fix/auth-library-release-changeset`, `fix/onboarding-crlf-regression`,
+  `fix/node24-shell-invocation`, `docs/recommended-mds-workflow`) and Wave 1
+  (`feat/continue-expo-upgrade-routing`, `feat/onboarding-persistence`,
+  `fix/doctor-dogfood`, `feat/library-install-validation`) are all merged into `main`.
+  A follow-up hotfix (`fix/onboard-test-real-install-timeout`) is also merged.
+- This branch (`chore/roadmap-reconciliation`) closes out the coordination wave: it
+  reconciles stale checkboxes against merged evidence, deduplicates repeated items,
+  and records the remaining branch map so future work doesn't drift or re-litigate
+  what already shipped.
+- Next up, in dependency order: Wave 2 (generator styling/ejection sequence), Wave 3
+  (library and monorepo evolution), Wave 4 (Doctor capability expansion), and the I^2
+  IDE epic once its host/contract decision is made. See "Planned Branch Map" below.
+
 ## Sprint 1: Foundation
 
 ### Completed
@@ -51,9 +67,9 @@
 - [x] Test Doctor against `time2pay`, `DJsPortfolio`, `PokePages`, `expo-super-template`, and `core-monorepo`.
 
 ### Dogfood Follow-Ups
-- [ ] Make Doctor's default, `--fast`, `--full`, and `--ci` check selection explicit in help and reports, including skipped checks and when full mode is required.
-- [ ] Detect hardcoded credential values in source and configuration files, including API keys that are not exposed through `EXPO_PUBLIC_*` variables.
-- [ ] Fix Expo API-route detection so the server-output warning appears only for real Expo Router API route files, with regression coverage for non-Expo repositories.
+- [x] Make Doctor's default, `--fast`, `--full`, and `--ci` check selection explicit in help and reports, including skipped checks and when full mode is required.
+- [x] Detect hardcoded credential values in source and configuration files, including API keys that are not exposed through `EXPO_PUBLIC_*` variables.
+- [x] Fix Expo API-route detection so the server-output warning appears only for real Expo Router API route files, with regression coverage for non-Expo repositories.
 
 ## Sprint 4: Ship/Test Workflow
 
@@ -169,7 +185,14 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 
 ### Phase 2: Build The Doctor
 
-- [ ] Make Doctor usable in four places: CLI, MCP, CI/GitHub Actions, and later a GUI/dashboard.
+- [x] Make Doctor usable in three places today: CLI, MCP, and CI/GitHub Actions
+  (composite Action + `mds report`/`mds doctor` defaults now explicit per the
+  Sprint 3 dogfood follow-ups). A GUI/dashboard is intentionally future work, not
+  a gap in the current CLI/MCP/CI baseline; see `feat/doctor-gui-contract` in the
+  planned branch map below.
+- [x] Ship baseline architecture, browser-global SSR, `EXPO_PUBLIC_` secret-name,
+  basic SEO, Expo configuration, lint, typecheck, test, Expo Doctor, and build
+  checks (already implemented and tested in `packages/doctor`).
 - [ ] Add app folder architecture checks for large route files, business logic in `app/`, direct database calls from screens, heavy form logic, duplicated UI chunks, and deeply nested route code.
 - [ ] Add SSR safety checks for `window`, `document`, `localStorage`, `sessionStorage`, `navigator`, native-only imports in server paths, and client-only packages imported by server code.
 - [ ] Add env hygiene checks for secret-looking `EXPO_PUBLIC_` variables, Supabase service role exposure, Stripe secret exposure, private tokens in client code, missing required env vars, and undocumented runtime/build-time env differences.
@@ -177,6 +200,12 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [ ] Add Expo Router best-practice checks for confusing route groups, missing layouts, overloaded root layout, improper API route naming, mixed route concerns, and bad navigation patterns.
 - [ ] Add API route safety checks for auth, request validation, Zod schemas, arbitrary JSON bodies, service role usage, method restrictions, and rate-limit strategy.
 - [ ] Add package compatibility checks for SSR, edge runtime, Node runtime, and native-only packages imported from web/server paths.
+
+> The seven unchecked items above are deeper capability expansion, not baseline
+> gaps. They are sequenced as Wave 4 (`feat/doctor-runtime-security`,
+> `feat/doctor-router-and-api-safety`, `feat/doctor-web-metadata-depth`,
+> `feat/doctor-gui-contract`, `doctor/react-doctor-integration`) after
+> `fix/doctor-dogfood`, which already shipped.
 
 ### Phase 3: Create The CLI
 
@@ -347,10 +376,11 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 > Complete each branch-scoped subsection in one branch. Split it only if implementation planning shows the scope cannot be reviewed or validated safely as a unit.
 
 ### Branch: `dogfood-doctor`
-- [ ] Make Doctor's default, `--fast`, `--full`, and `--ci` check selection explicit in help and reports, including skipped checks and when full mode is required.
-- [ ] Detect hardcoded credential values in source and configuration files, including API keys that are not exposed through `EXPO_PUBLIC_*` variables.
-- [ ] Fix Expo API-route detection so the server-output warning appears only for real Expo Router API route files, with regression coverage for non-Expo repositories.
-- [ ] Dogfood the SEO workflow against the pre-MDS DJsPortfolio: verify data-loader pages and API/MCP detail pages render server-visible content and emit appropriate JSON-LD; extend MDS SEO knowledge and checks for any gap found.
+- [x] Mode-selection explicitness, hardcoded-credential detection, and Expo API-route
+  regression scoping shipped via `fix/doctor-dogfood`; see the completed Sprint 3
+  Dogfood Follow-Ups above (kept there as the single source of truth to avoid
+  duplicate tracking).
+- [ ] Dogfood the SEO workflow against the pre-MDS DJsPortfolio: verify data-loader pages and API/MCP detail pages render server-visible content and emit appropriate JSON-LD; extend MDS SEO knowledge and checks for any gap found. (Sequenced as Wave 4 `feat/doctor-web-metadata-depth`, after `fix/doctor-dogfood`.)
 
 ### Branch: `dogfood-agent-and-release-workflow`
 - [x] When an agent adds a package, run the project's package-manager install immediately, report any install failure, and validate before treating the task as complete.
@@ -396,7 +426,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 ### MDS Library Later Roadmap
 
 - [ ] Follow `project/feature-onboarding-auth-library-plan.md` for the two-part onboarding/auth library rollout.
-- [ ] Add the redesigned onboarding flow to MDS Library from its dedicated feature branch.
+- [x] Add the redesigned onboarding flow to MDS Library from its dedicated feature branch. (Shipped via `feat/onboarding-persistence`, PR #36: adapter-based completion/legal-acceptance persistence for memory, Zustand-local, Supabase, and Zustand+Supabase-sync variants.)
 - [x] Add the material legal update gate variant to `mds/legal-documents`, including `/legal/updates`, document acceptance metadata, and generated protected-route scaffolding.
 - [ ] Add optional onboarding intent/profile-intake variants only when responses are persisted or directly change app behavior; avoid choice-only onboarding pages.
 - [x] Add completed sign-in and sign-up screens/flows as `mds/auth` variants (`base`, `with-supabase`, `with-firebase`, `with-convex`); do not treat the current account-setup placeholder as auth.
@@ -440,7 +470,7 @@ env:...
 › Installing 1 other package using npm
 › Using ~56.0.6 instead of ~56.0.8 for expo because this version was explicitly provided. Packages excluded from dependency validation should be listed in expo.install.exclude in package.json
 ```
-- [ ] Fix issue around 'On Node 24, that now emits [DEP0190] when you pass args with shell: true, because Node concatenates them for the shell instead of escaping them safely.
+- [x] Fix issue around 'On Node 24, that now emits [DEP0190] when you pass args with shell: true, because Node concatenates them for the shell instead of escaping them safely. (Shipped via `fix/node24-shell-invocation`, PR #33.)
 - [ ] Integrate npx react-doctor@latest into the doctor workflow and/or as referenced here: https://www.linkedin.com/posts/lukebrandonfarrell_reactnative-reactscan-developertools-share-7473665720728403969-5xMg/?highlightedUpdateUrn=urn%3Ali%3Aactivity%3A7473665721806340097&origin=SOCIAL_SHARE&utm_source=share&utm_medium=member_desktop&rcm=ACoAADYlT3gBZq1-0LP97LSzLp7orFbYo1Rwzc8
 
 ## Future Goals
@@ -450,5 +480,65 @@ env:...
 - [ ] Revisit the Stylist save flow to see if we can make it more designer friendly with less duplication and unused fields. Maybe the style.md template should include a json Style section and we'll just have to educate on how to edit it. The better experience would be if the Stylist was something that the dev could share with the rest of the nontechnical team so they could set it themselves. This could easily be done locally but remotely would present challenges. Maybe we could have a shareable link Or I could just host the stylist in a generic way on my portfolio website or expostylist.com that would let them edit the style and then save it back to the project style file/download the save configuration and email it to the dev. This would be super cool for collaboration and also for making it easier for non-technical team members to contribute to the design of the app.
 
 ## I^2(Infinite Intelligence) - An Agentic IDE based on MDS.
-- [ ] When starting a session, the agent should create a checklist within it's ui for each facet that the dev should actually test. Even if the agent has powers to view and click around the app, the human dev should have to test the feature in a multitude of ways (the agent can provide a list but the human should try to think of even more ways to break it) .Such as a new feature or page. Then the dev could either tell the agent or check the box and then the agent would ask if the dev is ready for a 'wrap-up' and 'pr-merge-loop' or wrap up and commit or something else.
-- [ ] Blitz mode - this will scan the project todo and identify unfinished tasks, group them into scoped branches, open a worktree for each and then use sub agents to complete each task in each branch at the same time and open PRs in order based on merge conflicts and progression of functionality of course. Full Blitz would merge all of those into test one by one and alert the user when they are all done. Standard blitz will load the app in each branch for testing. During the Blitz work, each worktree will appear as a window in the Blitz Widget and when the user clicks on a window, it will open that worktree IDE window but you can see them all working in real time even before clicking. Each window is a copy of the IDE basically with the mother IDE hosting them but the user probably won't see the difference.
+
+> The untracked dual-screen Figma/Vite prototype (`temp/I Squared Dual-Screen IDE
+> Design`) is a valid product north star and is promoted into the roadmap here, but
+> it is not copied wholesale into this monorepo. No worktree exists yet: the epic is
+> blocked on an explicit host/contract decision (VS Code extension, Electron/desktop
+> shell, or browser client plus local service; workspace access, terminal execution,
+> emulator telemetry, session storage, and agent/host boundaries). Sequence below,
+> each item depending on the ones before it:
+
+1. `discovery/i2-host-and-contract` - choose the host and define the access/session/boundary contract above.
+2. `feat/i2-minimal-shell` - open a workspace, dual-screen layout, and invoke existing MDS tooling.
+3. `feat/i2-session-and-human-test-loop` - project goal, session state, checklist, human-test acknowledgement, wrap-up/PR-loop handoff.
+   - [ ] When starting a session, the agent should create a checklist within its UI for each facet the dev should actually test. Even if the agent can view and click around the app, the human dev should still test the feature in a multitude of ways (the agent can suggest a list, but the human should try to think of even more ways to break it), such as for a new feature or page. The dev can either tell the agent or check the box, then the agent asks if the dev is ready for a `wrap-up` and `push-merge-loop`, or to wrap up and commit, or something else.
+4. `feat/i2-private-learning-pipeline` - append-only raw capture, redaction, limbo, candidate extraction, human approval, and canonical knowledge promotion.
+5. `feat/i2-library-widget` - consume registry APIs with previews and project compatibility state.
+6. `feat/i2-workspace-adapters` - multi-project/framework adapters after the single-workspace flow is stable.
+7. `feat/i2-blitz-orchestration` - only after the preceding layers are stable; this is the future UI/product home for worktree coordination, live task windows, review, merge ordering, and Standard versus Full Blitz behavior.
+   - [ ] Blitz mode - scan the project todo and identify unfinished tasks, group them into scoped branches, open a worktree for each, then use sub agents to complete each task in each branch at the same time and open PRs in order based on merge conflicts and progression of functionality. Full Blitz would merge all of those into `test` one by one and alert the user when they are all done. Standard Blitz will load the app in each branch for testing. During Blitz work, each worktree appears as a window in the Blitz Widget; clicking a window opens that worktree's IDE window, but you can see them all working in real time even before clicking. Each window is effectively a copy of the IDE, with the mother IDE hosting them, though the user probably won't see the difference.
+   - Note: this coordination session (branches/worktrees/PR review done from chat) is the manual precursor to this future in-product Blitz orchestrator.
+
+## Planned Branch Map (Waves 2-4, post-reconciliation)
+
+> Recorded here so later sessions do not re-derive or duplicate this sequencing.
+> Every branch below starts only after its listed dependency has merged to `main`
+> and the worktree owner has rebased onto current `main`.
+
+### Wave 2: generator styling and ejection sequence
+- `fix/no-uniwind-contract` (depends on `fix/onboarding-crlf-regression`, merged): derive styling artifacts from the selected system; remove unwanted Uniwind/Tailwind/NativeWind defaults; add a true no-styling-library fixture.
+- `fix/theme-runtime-and-links` (depends on `fix/onboarding-crlf-regression`, merged): hydrate Stylist from canonical theme data, initialize preview from system state without removing the user toggle, replace hard-coded link colors with semantic theme tokens.
+- `feat/phase0-style-strategy` (depends on `fix/no-uniwind-contract`): persist a reconciled UI/component strategy, resolve Expo UI/Universal Components/NativeTabs/style-library conflicts, gate Phase 0 on an explicit decision.
+- `feat/system-appearance` (depends on `fix/theme-runtime-and-links`): system light/dark behavior, SDK 56 splash/config assets, ejection-preservation coverage.
+- `feat/ejection-inventory-and-content-pass` (depends on the styling and system-appearance branches above): project-memory-aware ejection inventory, cleanup-task generation, Phase 0 ejection status, pre-release developer-copy report.
+- `test/experimemo-generator-fixture` (depends on the styling/system-appearance/ejection branches above): establish/import the fixture, repair the Link/Slot style-array crash, test mobile-style web modal presentation, use it as regression proof.
+- `feat/generated-project-guide-and-agent-parity` (depends on `feat/phase0-style-strategy`): generate project command guidance, guided help, deferred agent wrapper, CES/Super Stack/MCP parity matrix.
+- `feat/expo-mcp-onboarding` (depends on `feat/phase0-style-strategy`): optional Expo MCP local-capability intake/install flow using official Expo guidance.
+
+### Wave 3: library and monorepo evolution
+- `feat/library-db-contract` (depends on `feat/onboarding-persistence`, merged): provider-neutral `mds/db` assets and narrow database adapter contracts.
+- `feat/cess-separate-auth-db` (depends on `feat/library-db-contract`): split CESS auth selection from database/backend selection; compose only the required adapters.
+- `feat/library-settings-auth-surface` (depends on `feat/onboarding-persistence`, merged, and `feat/phase0-style-strategy`): complete a universal settings/auth surface with legal links and authenticated sign-out.
+- `test/library-dogfood-matrix` (depends on `feat/onboarding-persistence` merged, plus `feat/library-db-contract`, `feat/cess-separate-auth-db`, `feat/library-settings-auth-surface`): validate a clean generated app and Time2Pay; only then add behavior-changing optional onboarding/profile variants.
+- `feat/monorepo-intake-model` (depends on `feat/phase0-style-strategy`): add only the intake and project-memory model for app/site and other monorepo choices.
+- `feat/monorepo-target-onboarding` (depends on `feat/monorepo-intake-model`): make project-memory/rich boilerplate target-package-relative.
+- `feat/monorepo-target-doctor` (depends on `feat/monorepo-intake-model`): add target-package Doctor selection and monorepo aggregate reporting.
+
+### Wave 4: Doctor capability expansion
+- `feat/doctor-runtime-security` (depends on `fix/doctor-dogfood`, merged): expand SSR/server-import and credential/runtime checks without reintroducing false positives.
+- `feat/doctor-router-and-api-safety` (depends on `fix/doctor-dogfood`, merged): add route-group/layout/navigation and API auth/Zod/method/service-role/rate-limit checks.
+- `feat/doctor-web-metadata-depth` (depends on `fix/doctor-dogfood`, merged): dogfood DJsPortfolio and extend Open Graph, JSON-LD, dynamic metadata, sitemap/robots, and duplicate-title checks as justified by evidence.
+- `feat/doctor-gui-contract` (depends on the I^2 host decision): define a UI-safe Doctor data/interaction contract; the dashboard itself belongs with the chosen I^2 host.
+- `doctor/react-doctor-integration` (blocked on an explicit opt-in-vs-default policy decision): decide opt-in versus default behavior before adding any external diagnostic runner.
+
+### Decisions needed before a worktree can start (not discarded work)
+- GitHub tool ownership/ruleset policy, EAS/Apple credentials, and branch policy, before GitHub setup/bootstrap PRs, review-thread auto-polling, `test` sync-back automation, and app release CI.
+- Pinned supported Expo SDK versus floating `@latest` (see the `~56.0.6` vs `~56.0.8` example above), before changing the generator or its tests.
+- A reproducible icon generator, instead of hard-coding an external web tool.
+- Android shutdown semantics: all apps, one device, or the generated app package.
+- Whether React Doctor is opt-in, default, or documented-only.
+- NPM-backed library delivery, contributor submissions, licensing/attribution, fees, nonprofit/payout policy, and publishing Stylist: product/governance decisions.
+- The landing page: needs an approved content and ownership brief.
+- A Supabase-ready template: needs a safe credential/configuration policy; do not ship shared credentials.
+- The I^2 IDE host/contract decision above, gating both the I^2 sequence and `feat/doctor-gui-contract`.
