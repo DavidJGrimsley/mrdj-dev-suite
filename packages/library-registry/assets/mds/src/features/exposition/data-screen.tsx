@@ -51,7 +51,7 @@ export default function DataScreen() {
         onPress={addTask}
         style={[
           styles.button,
-          { backgroundColor: colors.primary, borderRadius: theme.layout.radius },
+          { backgroundColor: colors.secondary, borderRadius: theme.layout.radius },
         ]}>
         <Text style={styles.buttonText}>Insert a local task</Text>
       </Pressable>

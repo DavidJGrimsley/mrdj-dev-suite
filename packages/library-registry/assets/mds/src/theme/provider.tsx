@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
 
 import defaultThemeTokens, {
   type StylistColorPalette,
@@ -25,10 +25,17 @@ export type AppThemeColorOverrides = Partial<
   Record<StylistColorScheme, Partial<StylistColorPalette>>
 >;
 
+export function readSystemScheme(): StylistColorScheme | null {
+  const scheme = Appearance.getColorScheme();
+  return scheme === 'light' || scheme === 'dark' ? scheme : null;
+}
+
+const initialSystemScheme = readSystemScheme() ?? 'light';
+
 const AppThemeContext = createContext<AppThemeValue>({
   ...defaultThemeTokens,
-  activeScheme: defaultThemeTokens.colorSystem.previewScheme,
-  activeColors: defaultThemeTokens.colors[defaultThemeTokens.colorSystem.previewScheme],
+  activeScheme: initialSystemScheme,
+  activeColors: defaultThemeTokens.colors[initialSystemScheme],
 });
 const AppThemeSetterContext = createContext<Dispatch<SetStateAction<StylistThemeTokens>> | null>(
   null
@@ -42,10 +49,13 @@ function resolveActiveScheme(
   if (preference === 'light' || preference === 'dark') {
     return preference;
   }
-  if (preference === 'system' && (systemScheme === 'light' || systemScheme === 'dark')) {
+  if (preference === 'preview') {
+    return theme.colorSystem.previewScheme;
+  }
+  if (systemScheme === 'light' || systemScheme === 'dark') {
     return systemScheme;
   }
-  return theme.colorSystem.previewScheme;
+  return readSystemScheme() ?? 'light';
 }
 
 export function AppThemeProvider({

@@ -13,6 +13,7 @@ import {
   Text,
   TextInput,
   type TextStyle,
+  useColorScheme,
   View,
 } from 'react-native';
 import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker';
@@ -29,7 +30,7 @@ import defaultThemeTokens, {
   type StylistSemanticFamilies,
   type StylistThemeTokens,
 } from '../../theme/tokens';
-import { useSetAppTheme } from '../../theme/provider';
+import { readSystemScheme, useSetAppTheme } from '../../theme/provider';
 
 type SemanticColorKey = keyof StylistSemanticFamilies;
 type PaletteColorKey = keyof StylistColorPalette;
@@ -864,21 +865,45 @@ function ensureWebFontLoaded(fontFamily: string): void {
   loadedWebFonts.add(normalized);
 }
 
+function withPreviewScheme(
+  theme: ExtendedStylistThemeTokens,
+  scheme: StylistColorScheme
+): ExtendedStylistThemeTokens {
+  if (theme.colorSystem.previewScheme === scheme) {
+    return theme;
+  }
+
+  return {
+    ...theme,
+    colorSystem: {
+      ...theme.colorSystem,
+      previewScheme: scheme,
+    },
+  };
+}
+
+function createInitialStylistTheme(): ExtendedStylistThemeTokens {
+  const theme = withFontFamilyAlias(
+    normalizeThemeTypography(
+      reconcileTheme(stylistThemeTokens, 'picker', defaultBgFamilies, defaultBgFamilyShades)
+    )
+  );
+  const systemScheme = readSystemScheme();
+  return systemScheme ? withPreviewScheme(theme, systemScheme) : theme;
+}
+
 export default function StylistScreen() {
   const insets = useSafeAreaInsets();
   const setAppTheme = useSetAppTheme();
+  const systemScheme = useColorScheme();
+  const userOverrodePreview = useRef(false);
+  const previewSchemeInitializedFromSystem = useRef(readSystemScheme() !== null);
   const [colorInputMode, setColorInputMode] = useState<ColorInputMode>('picker');
   const [bgFamilies, setBgFamilies] =
     useState<Record<StylistColorScheme, PaletteFamilies>>(defaultBgFamilies);
   const [bgFamilyShades, setBgFamilyShades] =
     useState<Record<StylistColorScheme, PaletteShades>>(defaultBgFamilyShades);
-  const [theme, setTheme] = useState<ExtendedStylistThemeTokens>(
-    withFontFamilyAlias(
-      normalizeThemeTypography(
-        reconcileTheme(stylistThemeTokens, 'picker', defaultBgFamilies, defaultBgFamilyShades)
-      )
-    )
-  );
+  const [theme, setTheme] = useState<ExtendedStylistThemeTokens>(createInitialStylistTheme);
   const [selectedColor, setSelectedColor] = useState<PaletteColorKey>('primary');
   const [pickerHexDraft, setPickerHexDraft] = useState('#');
   const [livePickerPreview, setLivePickerPreview] = useState<LivePickerPreview | null>(null);
@@ -1007,13 +1032,27 @@ export default function StylistScreen() {
           return;
         }
         if (payload.theme) {
-          const nextTheme = withFontFamilyAlias(
+          const hydratedTheme = withFontFamilyAlias(
             normalizeThemeTypography(
               reconcileTheme(payload.theme, 'picker', defaultBgFamilies, defaultBgFamilyShades)
             )
           );
-          setTheme((prev) => (areThemesEqual(prev, nextTheme) ? prev : nextTheme));
-          setAppTheme(nextTheme);
+          const systemSchemeAtLoad = readSystemScheme();
+          setTheme((prev) => {
+            const resolvedScheme = userOverrodePreview.current
+              ? prev.colorSystem.previewScheme
+              : (systemSchemeAtLoad ?? prev.colorSystem.previewScheme);
+            if (!userOverrodePreview.current && systemSchemeAtLoad) {
+              previewSchemeInitializedFromSystem.current = true;
+            }
+            const nextTheme = withPreviewScheme(hydratedTheme, resolvedScheme);
+            return areThemesEqual(prev, nextTheme) ? prev : nextTheme;
+          });
+          setAppTheme(
+            systemSchemeAtLoad && !userOverrodePreview.current
+              ? withPreviewScheme(hydratedTheme, systemSchemeAtLoad)
+              : hydratedTheme
+          );
           setExplicitFontRoles({
             fontDisplay: true,
             fontTitle: true,
@@ -1053,6 +1092,17 @@ export default function StylistScreen() {
       cancelled = true;
     };
   }, [setAppTheme]);
+
+  useEffect(() => {
+    if (userOverrodePreview.current || previewSchemeInitializedFromSystem.current) {
+      return;
+    }
+    if (systemScheme !== 'light' && systemScheme !== 'dark') {
+      return;
+    }
+    previewSchemeInitializedFromSystem.current = true;
+    setTheme((prev) => withPreviewScheme(prev, systemScheme));
+  }, [systemScheme]);
 
   const activeScheme = theme.colorSystem.previewScheme;
   const basePreviewColors = theme.colors[activeScheme];
@@ -1353,6 +1403,7 @@ export default function StylistScreen() {
   }
 
   function updatePreviewScheme(scheme: StylistColorScheme) {
+    userOverrodePreview.current = true;
     updateTheme((prev) => ({
       ...prev,
       colorSystem: {
