@@ -71,6 +71,15 @@ describe('knowledge catalog expansion', () => {
     expect(prompt?.content).toContain('intentionally omitted files');
   });
 
+  it('routes continue-development to the official Expo upgrade skill when continue reports SDK lag', async () => {
+    const prompt = await readPromptSpec('continue-development');
+
+    expect(prompt).not.toBeNull();
+    expect(prompt?.content).toContain('expo-sdk-upgrade');
+    expect(prompt?.content).toContain('upgrading-expo');
+    expect(prompt?.content).toContain('Do not call MDS `get_skill` for an upgrade skill');
+  });
+
   it('reads the review-motion prompt with tool-first motion guidance', async () => {
     const prompt = await readPromptSpec('review-motion');
 
