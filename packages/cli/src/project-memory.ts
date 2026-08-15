@@ -273,11 +273,15 @@ export function renderGeneratedOnboardingConfig(source: string, answers: Onboard
  }
 
  let endIndex = startIndex + 1;
- while (endIndex < lines.length && lines[endIndex].trim() !== '},') {
+ while (endIndex < lines.length) {
+   const line = lines[endIndex];
+   if (line === undefined || line.trim() === '},') {
+     break;
+   }
    endIndex += 1;
  }
 
- if (endIndex >= lines.length) {
+ if (endIndex >= lines.length || lines[endIndex] === undefined) {
    throw new Error(
      'Unable to update onboarding completion config; template did not match the expected completion block.'
    );
