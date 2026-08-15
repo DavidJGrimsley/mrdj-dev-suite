@@ -265,6 +265,71 @@ describe('MDS Library CLI services', () => {
     expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
   });
 
+  it('adds onboarding-state variants and the supabase composition without overwriting custom files', async () => {
+    const projectPath = await createExpoProject({ mdsRootLayout: true });
+    const memoryPlan = await planLibraryAdd(projectPath, 'mds/onboarding-state');
+    expect(memoryPlan.variant).toBe('memory');
+    expect(memoryPlan.canApply).toBe(true);
+    await applyLibraryAdd(projectPath, 'mds/onboarding-state', {
+      confirmed: true,
+      installDependencies: false,
+      planHash: memoryPlan.planHash,
+    });
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('createMemoryOnboardingPersistence');
+
+    const supabasePlan = await planLibraryAdd(projectPath, 'mds/onboarding-state', {
+      variant: 'supabase',
+    });
+    expect(supabasePlan.canApply).toBe(false);
+    expect(supabasePlan.conflicts).toContainEqual(
+      expect.objectContaining({
+        path: 'src/features/onboarding-state/onboarding-state-adapter.ts',
+      })
+    );
+
+    const compositionProject = await createExpoProject({ mdsRootLayout: true });
+    const compositionPlan = await planLibraryAdd(
+      compositionProject,
+      'mds/onboarding-auth-supabase'
+    );
+    expect(compositionPlan.canApply).toBe(true);
+    const compositionResult = await applyLibraryAdd(
+      compositionProject,
+      'mds/onboarding-auth-supabase',
+      {
+        confirmed: true,
+        installDependencies: false,
+        planHash: compositionPlan.planHash,
+      }
+    );
+    expect(compositionResult.writtenFiles).toEqual(
+      expect.arrayContaining([
+        'src/features/onboarding/onboarding-persistence-sync.tsx',
+        'src/features/onboarding-state/onboarding-state-adapter.ts',
+      ])
+    );
+    await expect(
+      readFile(
+        path.join(
+          compositionProject,
+          'src',
+          'features',
+          'onboarding-state',
+          'onboarding-state-adapter.ts'
+        ),
+        'utf8'
+      )
+    ).resolves.toContain('createSupabaseOnboardingStateAdapter');
+    expect(compositionResult.repairedFiles).toEqual(
+      expect.arrayContaining(['src/app/_layout.tsx'])
+    );
+  });
+
   it('produces deterministic plans and exact dependency commands', async () => {
     const projectPath = await createExpoProject();
     const first = await planLibraryAdd(projectPath, 'swmansion/svg-mark');

@@ -26,20 +26,67 @@ After restarting Codex, type `@Mr. DJ's Dev Suite`, approve the install pop-up, 
 
 After restarting Claude Code, run `/mcp` to confirm `mr-djs-dev-suite`, then use the `mds` agent or MDS slash commands.
 
+### Recommended workflow
+
+The suite is designed around short, repeatable workflows. You can use the CLI directly or let the installed agent bundle / prompt layer route you to the right MCP tools, skills, and knowledge.
+
+1. Install MDS for your client:
+
+   ```bash
+   npm install -g @mr.dj2u/cli
+   mds agent install --client vscode
+   mds agent install --client codex
+   mds agent install --client claude
+   ```
+
+   - VS Code Copilot: `mds agent install --client vscode`
+   - Codex: `mds agent install --client codex`
+   - Claude Code: `mds agent install --client claude`
+
+2. Create a new app or onboard an existing app:
+
+   - New app: scaffold with `npx create-expo-super-stack`.
+   - Existing app: run `mds onboard` from the app root after the app exists, or pass
+     `--project /path/to/expo-app` when running it from elsewhere.
+
+   ```bash
+   npx create-expo-super-stack my-app --expo-router
+   mds onboard --project /path/to/expo-app
+   ```
+
+3. Run the routine checks:
+
+   ```bash
+   mds doctor /path/to/expo-app --fast
+   mds explain "env hygiene"
+   mds report /path/to/expo-app --mode ci --output report.md
+   ```
+
+   `mds doctor` runs the project health checks; `mds explain` explains a Doctor topic or bundled knowledge item; `mds report` writes a local Markdown or JSON report for easier handoff.
+
+4. Use bundled skills and workflows when you want guidance instead of ad hoc commands:
+
+   ```bash
+   mds skills list
+   mds skills show continue-development
+   ```
+
+   In agent hosts, the bundled workflows are exposed as prompts/skills such as `/wrap-up` and `/push-merge-loop`, but the repo still treats the GitHub loop as a manual/dry-run workflow unless you intentionally opt into the future execution path.
+
+5. Wrap up and push-merge loop:
+
+   ```bash
+   mds ship feature/my-change
+   mds push-merge-loop feature/my-change
+   ```
+
+   The current implementation is intentionally conservative: mutating git steps remain manual, and the `--execute` path is reserved for the future implementation. The repo docs still require `mds doctor --ci` before git work, and the loop is documented as a planning/PR-check workflow rather than an autonomous merge system.
+
 ### Use
-
-The suite is designed around MDS workflows. You invoke a prompt, slash command, or installed agent; that workflow tells the client which MCP tools to call, which agent skills to apply, and which bundled knowledge to fetch.
-
 
 - Codex: ``@Mr. DJ's Dev Suite <command name>``
 - Claude Code: `/<command name>`
 - VS Code Copilot: simply mention the tool.
-
-
-- Create a new Expo app with `create-expo-super-stack`
-- Onboard an existing app with `mds onboard`.
-- Get ready for pushing with `/wrap-up`.
-- Automate pushing, opening PR, polling, and fixing issues with `mds push-merge-loop`.
 
 ## Technical Overview, CLI Usage, and Product Workflows
 

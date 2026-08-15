@@ -626,7 +626,7 @@ describe('CESS intake contract', () => {
     expect(confirmStep.status).toBe('confirm');
     expect(confirmStep.summaryLines?.[0]).toContain('demo-app');
     expect(confirmStep.summaryLines).toContain(
-      'onboarding: multi-screen, legal documents: onboarding-agreement, completion: auth, legal update gate: material-required'
+      'onboarding: multi-screen, legal documents: onboarding-agreement, completion: auth, legal update gate: material-required, persistence: zustand-supabase'
     );
 
     const readyStep = buildCessIntakeStep({

@@ -358,7 +358,7 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [ ] Make `/push-merge-loop` poll Copilot and Codex review threads as well as status checks, address actionable findings, push updates, and repeat until the PR is ready or the retry limit is reached.
 - [ ] Provide a `test` branch-ruleset preset that does not require a human review when automated test-branch merging is enabled.
 - [ ] After each successful `test` to `main` promotion, offer or automate a `sync-main-into-test` PR using a merge commit so the next promotion starts from an up-to-date `test` branch.
-- [ ] Make `continue_project` recognize Expo SDK upgrade work from the active Time2Pay project state and route to the official Expo upgrade skill instead of selecting stale todo work.
+- [x] Make `continue_project` recognize Expo SDK upgrade work from the active Time2Pay project state and route to the official Expo upgrade skill instead of selecting stale todo work.
 - [ ] Generate and configure a release CI workflow when GitHub and EAS credentials are available: `test` deploys to TestFlight, `main` deploys to EAS production, and the production workflow includes the Apple submission step.
 - [ ] Expand generated App Store Connect guidance with the complete prerequisite, credential, TestFlight, production-submission, and troubleshooting steps needed to finish the release flow.
 - [ ] Add generated release metadata tasks for a consistent public app name and configured support, terms-of-service, and privacy-policy URLs across app config and store submissions.

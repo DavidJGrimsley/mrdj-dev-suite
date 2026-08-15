@@ -920,6 +920,9 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('Do not offer "skip markers and implement anyway."');
     expect(prompt).toContain('Ask EXACTLY ONE question per message');
     expect(prompt).toContain('write the answer into the file under the marker and delete the marker line');
+    expect(prompt).toContain('expo-sdk-upgrade');
+    expect(prompt).toContain('upgrading-expo');
+    expect(prompt).toContain('Do not call MDS `get_skill` for an upgrade skill');
   });
 
   it('builds a motion review prompt that requires the motion skill and guide', () => {

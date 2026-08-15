@@ -11,9 +11,11 @@ export default [
     languageOptions: {
       parser: tsParser,
       globals: {
+        AbortSignal: 'readonly',
         Buffer: 'readonly',
         clearTimeout: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
         process: 'readonly',
         setTimeout: 'readonly',
       },

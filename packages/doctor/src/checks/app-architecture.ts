@@ -1,18 +1,18 @@
 import path from 'node:path';
 
-import type { DoctorCheckResult } from '../types.js';
+import type { DoctorCheckResult, PackageJson } from '../types.js';
+import {
+  findExpoRouterAppDirs,
+  isExpoRouterApiRouteFile,
+} from '../expo-router.js';
 import { findSsrFindings } from './ssr-safety.js';
-import { findFiles, pathExists, readOptionalText, relative, SOURCE_EXTENSIONS } from '../utils.js';
+import { findFiles, readOptionalText, relative, SOURCE_EXTENSIONS } from '../utils.js';
 
-export async function checkAppArchitecture(projectPath: string): Promise<DoctorCheckResult> {
-  const appDirs = [path.join(projectPath, 'app'), path.join(projectPath, 'src', 'app')];
-  const existingAppDirs: string[] = [];
-
-  for (const appDir of appDirs) {
-    if (await pathExists(appDir)) {
-      existingAppDirs.push(appDir);
-    }
-  }
+export async function checkAppArchitecture(
+  packageJson: PackageJson,
+  projectPath: string
+): Promise<DoctorCheckResult> {
+  const existingAppDirs = await findExpoRouterAppDirs(projectPath);
 
   if (existingAppDirs.length === 0) {
     return {
@@ -26,7 +26,10 @@ export async function checkAppArchitecture(projectPath: string): Promise<DoctorC
   for (const appDir of existingAppDirs) {
     const routeFiles = await findFiles(appDir, (filePath) => {
       const extension = path.extname(filePath);
-      return SOURCE_EXTENSIONS.has(extension) && !filePath.endsWith('+api.ts');
+      return (
+        SOURCE_EXTENSIONS.has(extension) &&
+        !isExpoRouterApiRouteFile(projectPath, filePath, packageJson)
+      );
     });
 
     for (const filePath of routeFiles) {
@@ -52,8 +55,17 @@ export async function checkAppArchitecture(projectPath: string): Promise<DoctorC
 
 export async function scanFileAppArchitecture(
   projectPath: string,
-  filePath: string
+  filePath: string,
+  packageJson?: PackageJson
 ): Promise<DoctorCheckResult> {
+  if (packageJson && isExpoRouterApiRouteFile(projectPath, filePath, packageJson)) {
+    return {
+      name: 'app architecture',
+      status: 'skip',
+      message: 'Expo Router API route files are excluded from route-component architecture checks.',
+    };
+  }
+
   const findings = await scanRouteFileArchitecture(projectPath, filePath);
   return findings.length > 0
     ? {

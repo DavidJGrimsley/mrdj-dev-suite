@@ -45,6 +45,29 @@ describe('doctor CLI', () => {
     const result = await runDoctorCli([projectPath, '--ci', '--json', '--no-scripts']);
     expect(result.exitCode).toBe(1);
   });
+
+  it('preserves CI as the standalone Doctor CLI default', async () => {
+    const projectPath = await createTempProject();
+    const result = await runDoctorCli([projectPath, '--json', '--no-scripts']);
+    const parsed = JSON.parse(result.output) as { mode?: string; selection?: { defaultMode?: string } };
+
+    expect(parsed.mode).toBe('ci');
+    expect(parsed.selection?.defaultMode).toBe('ci');
+  });
+
+  it('prints mode help for standalone Doctor CLI', async () => {
+    const result = await runDoctorCli(['--help']);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('Default mode: ci');
+    expect(result.output).toContain('--full');
+  });
+
+  it('rejects multiple mode flags', async () => {
+    await expect(runDoctorCli(['--fast', '--ci'])).rejects.toThrow(
+      'Choose only one Doctor mode flag'
+    );
+  });
 });
 
 async function createTempProject(): Promise<string> {
@@ -60,4 +83,3 @@ async function createTempProject(): Promise<string> {
 async function writePackageJson(projectPath: string, value: Record<string, unknown>): Promise<void> {
   await writeFile(path.join(projectPath, 'package.json'), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
-

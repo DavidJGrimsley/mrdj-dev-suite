@@ -8,10 +8,21 @@ export interface DoctorCheckResult {
   details?: Record<string, unknown>;
 }
 
+export interface DoctorModeSelection {
+  defaultMode: DoctorMode;
+  mode: DoctorMode;
+  runScripts: boolean;
+  description: string;
+  includes: string[];
+  skips: string[];
+  fullModeGuidance: string;
+}
+
 export interface DoctorReport {
   projectPath: string;
   timestamp: string;
   mode: DoctorMode;
+  selection?: DoctorModeSelection;
   checks: DoctorCheckResult[];
   summary: {
     score: number;
@@ -27,6 +38,7 @@ export interface DoctorOptions {
   fix?: boolean;
   runScripts?: boolean;
   timeoutMs?: number;
+  selectionDefaultMode?: DoctorMode;
 }
 
 export interface ScanFileOptions {

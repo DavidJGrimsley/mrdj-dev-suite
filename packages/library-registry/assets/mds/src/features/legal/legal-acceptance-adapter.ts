@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  configureLegalAcceptanceAdapter as configureSharedLegalAcceptanceAdapter,
+  getLegalAcceptanceAdapter,
+  memoryLegalAcceptanceAdapter as sharedMemoryLegalAcceptanceAdapter,
+  notifyLegalAcceptanceChanged,
+  subscribeToLegalAcceptanceChanges,
+} from './legal-acceptance-config';
 import { legalDocuments, type LegalDocument, type LegalDocumentId } from './legal-documents';
 
 export type LegalGateStatus = 'checking' | 'needs-legal' | 'complete' | 'error';
@@ -20,17 +27,13 @@ export interface LegalAcceptanceSnapshot {
 
 export interface LegalAcceptanceAdapter {
   loadRequiredLegalAcceptances(
-    requiredDocuments: RequiredLegalDocument[]
+    requiredDocuments: RequiredLegalDocument[],
+    userId?: string,
   ): Promise<LegalAcceptanceSnapshot>;
-  acceptLegalDocument(document: RequiredLegalDocument): Promise<void>;
-}
-
-const STORAGE_KEY = 'mds.legal.acceptances.v1';
-const memoryAcceptedKeys = new Set<string>();
-const legalAcceptanceListeners = new Set<() => void>();
-
-function legalDocumentKey(document: RequiredLegalDocument): string {
-  return `${document.documentId}@${document.acceptanceVersion}`;
+  acceptLegalDocument(
+    document: RequiredLegalDocument,
+    input?: { userId?: string; flowId?: string; flowVersion?: number },
+  ): Promise<void>;
 }
 
 function toRequiredLegalDocument(document: LegalDocument): RequiredLegalDocument {
@@ -48,93 +51,21 @@ export function getRequiredMaterialLegalDocuments(): RequiredLegalDocument[] {
     .map(toRequiredLegalDocument);
 }
 
-function getBrowserStorage(): Storage | null {
-  if (typeof globalThis === 'undefined' || !('localStorage' in globalThis)) {
-    return null;
-  }
+export const memoryLegalAcceptanceAdapter =
+  sharedMemoryLegalAcceptanceAdapter as LegalAcceptanceAdapter;
 
-  try {
-    return globalThis.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readAcceptedKeys(): Set<string> {
-  const storage = getBrowserStorage();
-  if (!storage) {
-    return new Set(memoryAcceptedKeys);
-  }
-
-  try {
-    const parsed = JSON.parse(storage.getItem(STORAGE_KEY) ?? '[]') as unknown;
-    if (!Array.isArray(parsed)) {
-      return new Set(memoryAcceptedKeys);
-    }
-    return new Set(parsed.filter((value): value is string => typeof value === 'string'));
-  } catch {
-    return new Set(memoryAcceptedKeys);
-  }
-}
-
-function writeAcceptedKeys(keys: Set<string>): void {
-  memoryAcceptedKeys.clear();
-  for (const key of keys) {
-    memoryAcceptedKeys.add(key);
-  }
-
-  const storage = getBrowserStorage();
-  if (!storage) {
-    notifyLegalAcceptanceChanged();
-    return;
-  }
-
-  storage.setItem(STORAGE_KEY, JSON.stringify([...keys]));
-  notifyLegalAcceptanceChanged();
-}
-
-function notifyLegalAcceptanceChanged(): void {
-  for (const listener of legalAcceptanceListeners) {
-    listener();
-  }
-}
-
-export function subscribeToLegalAcceptanceChanges(listener: () => void): () => void {
-  legalAcceptanceListeners.add(listener);
-  return () => {
-    legalAcceptanceListeners.delete(listener);
-  };
-}
-
-export const localLegalAcceptanceAdapter: LegalAcceptanceAdapter = {
-  async loadRequiredLegalAcceptances(requiredDocuments) {
-    const acceptedDocumentKeys = readAcceptedKeys();
-    const missingDocuments = requiredDocuments.filter(
-      (document) => !acceptedDocumentKeys.has(legalDocumentKey(document))
-    );
-
-    return {
-      status: missingDocuments.length > 0 ? 'needs-legal' : 'complete',
-      requiredDocuments: missingDocuments,
-      acceptedDocumentKeys: [...acceptedDocumentKeys],
-    };
-  },
-
-  async acceptLegalDocument(document) {
-    const acceptedDocumentKeys = readAcceptedKeys();
-    acceptedDocumentKeys.add(legalDocumentKey(document));
-    writeAcceptedKeys(acceptedDocumentKeys);
-  },
-};
-
-let legalAcceptanceAdapter: LegalAcceptanceAdapter = localLegalAcceptanceAdapter;
+/** @deprecated Use memoryLegalAcceptanceAdapter. Kept as a compatible alias. */
+export const localLegalAcceptanceAdapter = memoryLegalAcceptanceAdapter;
 
 export function configureLegalAcceptanceAdapter(adapter: LegalAcceptanceAdapter): void {
-  legalAcceptanceAdapter = adapter;
+  configureSharedLegalAcceptanceAdapter(adapter);
 }
 
+export { subscribeToLegalAcceptanceChanges };
+
 export function useLegalUpdateGateSnapshot(
-  adapter: LegalAcceptanceAdapter = legalAcceptanceAdapter
+  adapter: LegalAcceptanceAdapter = getLegalAcceptanceAdapter() as LegalAcceptanceAdapter,
+  userId?: string,
 ) {
   const requiredMaterialDocuments = useMemo(() => getRequiredMaterialLegalDocuments(), []);
   const [snapshot, setSnapshot] = useState<LegalAcceptanceSnapshot>({
@@ -151,7 +82,10 @@ export function useLegalUpdateGateSnapshot(
       error: undefined,
     }));
     try {
-      const nextSnapshot = await adapter.loadRequiredLegalAcceptances(requiredMaterialDocuments);
+      const nextSnapshot = await adapter.loadRequiredLegalAcceptances(
+        requiredMaterialDocuments,
+        userId,
+      );
       setSnapshot(nextSnapshot);
       return nextSnapshot;
     } catch (error) {
@@ -165,19 +99,29 @@ export function useLegalUpdateGateSnapshot(
       setSnapshot(errorSnapshot);
       return errorSnapshot;
     }
-  }, [adapter, requiredMaterialDocuments]);
+  }, [adapter, requiredMaterialDocuments, userId]);
 
   const acceptDocument = useCallback(
-    async (document: RequiredLegalDocument) => {
+    async (
+      document: RequiredLegalDocument,
+      input?: { userId?: string; flowId?: string; flowVersion?: number },
+    ) => {
       setSavingDocumentId(document.documentId);
       try {
-        await adapter.acceptLegalDocument(document);
+        await adapter.acceptLegalDocument(document, {
+          userId: input?.userId ?? userId,
+          flowId: input?.flowId,
+          flowVersion: input?.flowVersion,
+        });
+        if (adapter !== memoryLegalAcceptanceAdapter) {
+          notifyLegalAcceptanceChanged();
+        }
         return await refresh();
       } finally {
         setSavingDocumentId(null);
       }
     },
-    [adapter, refresh]
+    [adapter, refresh, userId],
   );
 
   useEffect(() => {
@@ -192,7 +136,7 @@ export function useLegalUpdateGateSnapshot(
       subscribeToLegalAcceptanceChanges(() => {
         void refresh();
       }),
-    [refresh]
+    [refresh],
   );
 
   return {
@@ -204,7 +148,39 @@ export function useLegalUpdateGateSnapshot(
 }
 
 export function useLegalUpdateGateStatus(
-  adapter: LegalAcceptanceAdapter = legalAcceptanceAdapter
+  adapter: LegalAcceptanceAdapter = getLegalAcceptanceAdapter() as LegalAcceptanceAdapter,
+  userId?: string,
 ): LegalGateStatus {
-  return useLegalUpdateGateSnapshot(adapter).snapshot.status;
+  return useLegalUpdateGateSnapshot(adapter, userId).snapshot.status;
+}
+
+export function useLegalAcceptance(
+  adapter: LegalAcceptanceAdapter = getLegalAcceptanceAdapter() as LegalAcceptanceAdapter,
+  userId?: string,
+) {
+  const requiredDocuments = useMemo(() => getRequiredMaterialLegalDocuments(), []);
+  const { snapshot, acceptDocument, refresh } = useLegalUpdateGateSnapshot(adapter, userId);
+
+  const acceptedDocuments = {
+    terms: !snapshot.requiredDocuments.some((document) => document.documentId === 'terms'),
+    privacy: !snapshot.requiredDocuments.some((document) => document.documentId === 'privacy'),
+  };
+
+  return {
+    acceptedDocuments,
+    hasAcceptedRequiredDocuments: snapshot.status === 'complete',
+    acceptDocument: (documentId: LegalDocumentId) => {
+      const document = requiredDocuments.find((item) => item.documentId === documentId);
+      if (document) {
+        return acceptDocument(document, { userId });
+      }
+      return refresh();
+    },
+    revokeDocument: () => {
+      throw new Error('Legal acceptance records are append-only. Replace the adapter for test resets.');
+    },
+    resetLegalAcceptance: () => {
+      throw new Error('Legal acceptance records are append-only. Replace the adapter for test resets.');
+    },
+  };
 }

@@ -9,12 +9,25 @@ import { runDoctor } from '@mr.dj2u/doctor';
 
 import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
 
+import {
+  classifyExpoSdkUpgrade,
+  detectProjectExpoSdk,
+  fetchOfficialExpoVersions,
+  requiresExpoSdkAttention,
+  type ExpoSdkSnapshot,
+  type ExpoVersionsCatalog,
+} from '../expo-sdk-state.js';
+
 const execFileAsync = promisify(execFile);
 const TODO_MARKER = '# TodoForContext(optional):';
 
 export interface ContinueArgv {
   path?: string;
   json?: boolean;
+}
+
+export interface ContinueBriefOptions {
+  resolveExpoVersions?: () => Promise<ExpoVersionsCatalog | null>;
 }
 
 export interface MarkerHit {
@@ -45,6 +58,7 @@ export interface ContinueRecommendation {
     | 'doctor-errors'
     | 'dirty-git'
     | 'phase-0-user-review'
+    | 'expo-sdk-upgrade'
     | 'todo'
     | 'ci-ready';
   title: string;
@@ -68,6 +82,7 @@ export interface ContinueSessionBrief {
     warnings: Array<Pick<DoctorCheckResult, 'name' | 'message'>>;
   } | null;
   nextTodo: TodoItem | null;
+  expoSdk: ExpoSdkSnapshot | null;
   recommendation: ContinueRecommendation;
   handoff: string;
 }
@@ -105,6 +120,8 @@ const MOTION_INTENT_KEYWORDS = [
 interface PackageJsonSubset {
   packageManager?: string;
   scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 }
 
 interface CommandOutput {
@@ -126,7 +143,10 @@ export async function runContinueCommand(argv: ContinueArgv): Promise<void> {
   }
 }
 
-export async function buildContinueSessionBrief(projectPathInput = '.'): Promise<ContinueSessionBrief> {
+export async function buildContinueSessionBrief(
+  projectPathInput = '.',
+  options: ContinueBriefOptions = {}
+): Promise<ContinueSessionBrief> {
   const projectPath = path.resolve(projectPathInput);
   const isOnboardedApp = await isOnboardedProject(projectPath);
   const packageJson = await readPackageJson(projectPath);
@@ -142,12 +162,14 @@ export async function buildContinueSessionBrief(projectPathInput = '.'): Promise
     ? await runDoctor(projectPath, { mode: 'fast', runScripts: false })
     : null;
   const nextTodo = isOnboardedApp ? await findFirstUncheckedTodo(projectPath) : null;
+  const expoSdk = isOnboardedApp ? await resolveExpoSdkSnapshot(packageJson, options) : null;
   const recommendation = chooseRecommendation({
     isOnboardedApp,
     markerCount: todoForContext.hits.length,
     doctorReport,
     git,
     nextTodo,
+    expoSdk,
   });
 
   return {
@@ -172,6 +194,7 @@ export async function buildContinueSessionBrief(projectPathInput = '.'): Promise
         }
       : null,
     nextTodo,
+    expoSdk,
     recommendation,
     handoff:
       'For lower token usage and lower cost, open this app folder directly in a new agent session and run `mds continue` before implementation work.',
@@ -184,6 +207,7 @@ export function chooseRecommendation(input: {
   doctorReport: DoctorReport | null;
   git: GitSnapshot;
   nextTodo: TodoItem | null;
+  expoSdk?: ExpoSdkSnapshot | null;
 }): ContinueRecommendation {
   if (!input.isOnboardedApp) {
     return {
@@ -236,6 +260,11 @@ export function chooseRecommendation(input: {
         'Inspect the existing working tree before starting new work.',
         'Separate user changes from generated or agent-made changes.',
         'Only begin the next task once the user confirms how to handle the dirty state.',
+        ...(requiresExpoSdkAttention(input.expoSdk)
+          ? [
+              'If this working tree needs Expo SDK attention, load the official Expo upgrade skill (`upgrading-expo`) after the user confirms how to handle the dirty state. Do not call MDS `get_skill` for an upgrade skill.',
+            ]
+          : []),
       ],
     };
   }
@@ -251,6 +280,10 @@ export function chooseRecommendation(input: {
         'Run `mds continue` again once Phase 0 items are complete to move into implementation phases.',
       ],
     };
+  }
+
+  if (requiresExpoSdkAttention(input.expoSdk) && input.expoSdk) {
+    return buildExpoSdkUpgradeRecommendation(input.expoSdk, input.nextTodo);
   }
 
   if (input.nextTodo) {
@@ -309,6 +342,9 @@ export function renderContinueSessionBrief(brief: ContinueSessionBrief): string 
   lines.push(
     `Next todo: ${brief.nextTodo ? `${brief.nextTodo.section} - ${brief.nextTodo.text}` : 'none found'}`
   );
+  if (brief.expoSdk) {
+    lines.push(`Expo SDK: ${formatExpoSdkSnapshot(brief.expoSdk)}`);
+  }
   lines.push('');
 
   if (brief.todoForContext.hits.length > 0) {
@@ -347,6 +383,72 @@ function renderPlan(recommendation: ContinueRecommendation): string[] {
     '',
     'Plan approval required. Autopilot is intentionally reserved for a future command or flag.',
   ];
+}
+
+function buildExpoSdkUpgradeRecommendation(
+  expoSdk: ExpoSdkSnapshot,
+  nextTodo: TodoItem | null
+): ContinueRecommendation {
+  const from = expoSdk.detectedMajor;
+  const to = expoSdk.latestStableMajor;
+  const title =
+    expoSdk.status === 'unavailable'
+      ? 'Verify Expo SDK state using the official Expo upgrade skill'
+      : expoSdk.status === 'in-progress'
+      ? `Finish the in-progress Expo SDK upgrade${to != null ? ` to ${to}` : ''} using the official Expo upgrade skill`
+      : `Upgrade Expo SDK${from != null && to != null ? ` ${from} → ${to}` : ''} using the official Expo upgrade skill`;
+  const deferredTodo = nextTodo
+    ? `Do not start the next todo (${nextTodo.section} - ${nextTodo.text}) until the upgrade is complete or the user explicitly declines.`
+    : 'Do not start a new product todo until the upgrade is complete or the user explicitly declines.';
+
+  return {
+    priority: 'expo-sdk-upgrade',
+    title,
+    requiresApproval: true,
+    plan: [
+      PLAN_MODE_KICKOFF_STEP,
+      expoSdk.status === 'unavailable'
+        ? "The project's Expo SDK could not be compared with the official catalog, so do not assume the next unchecked todo is safe to start."
+        : "This recommendation comes from the project's declared Expo SDK and official latest stable SDK, not from the next unchecked todo.",
+      'Load the official Expo skill `upgrading-expo`. Do not call MDS `get_skill` for an upgrade skill. MDS does not own upgrade steps.',
+      'Confirm the target SDK with the user, then follow that official skill for dependency updates, diagnostics, breaking changes, and any skip-a-release rules.',
+      'After the official skill finishes, run `mds continue` again to return to phase work.',
+      deferredTodo,
+    ],
+  };
+}
+
+function formatExpoSdkSnapshot(expoSdk: ExpoSdkSnapshot): string {
+  const detected = expoSdk.detectedMajor ?? 'not detected';
+  const latest = expoSdk.latestStableMajor ?? 'unknown';
+  return `${detected} (latest stable ${latest}; ${expoSdk.status})`;
+}
+
+async function resolveExpoSdkSnapshot(
+  packageJson: PackageJsonSubset | null,
+  options: ContinueBriefOptions
+): Promise<ExpoSdkSnapshot | null> {
+  const project = detectProjectExpoSdk(packageJson);
+  if (!project.hasExpo) {
+    return null;
+  }
+
+  const catalog = await resolveExpoVersionsCatalog(options);
+  return classifyExpoSdkUpgrade(project, catalog);
+}
+
+async function resolveExpoVersionsCatalog(
+  options: ContinueBriefOptions
+): Promise<ExpoVersionsCatalog | null> {
+  if (options.resolveExpoVersions) {
+    return options.resolveExpoVersions();
+  }
+
+  if (process.env.VITEST) {
+    return null;
+  }
+
+  return fetchOfficialExpoVersions();
 }
 
 function buildGenericTodoPlan(): string[] {

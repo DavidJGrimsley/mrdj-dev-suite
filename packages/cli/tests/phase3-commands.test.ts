@@ -4,6 +4,7 @@ import { explainTopic } from '../src/commands/explain.js';
 import { renderMarkdownReport } from '../src/commands/report.js';
 import { listSkillSummaries } from '../src/commands/skills.js';
 
+import { createModeSelection } from '@mr.dj2u/doctor';
 import type { DoctorReport } from '@mr.dj2u/doctor';
 
 describe('Phase 3 command helpers', () => {
@@ -48,6 +49,7 @@ describe('Phase 3 command helpers', () => {
       projectPath: 'F:/ReactNativeApps/Demo',
       timestamp: '2026-05-12T00:00:00.000Z',
       mode: 'fast',
+      selection: createModeSelection('fast', true),
       summary: {
         score: 95,
         errors: 0,
@@ -73,6 +75,7 @@ describe('Phase 3 command helpers', () => {
     const markdown = renderMarkdownReport(report);
 
     expect(markdown).toContain('# MDS Doctor Report');
+    expect(markdown).toContain('- Default mode: fast');
     expect(markdown).toContain('0 errors, 1 warnings, 1 passed, 0 skipped');
     expect(markdown).toContain('### WARN env hygiene');
     expect(markdown).toContain('"files"');

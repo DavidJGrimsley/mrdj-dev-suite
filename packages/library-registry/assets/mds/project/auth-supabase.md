@@ -17,6 +17,10 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 
 Apply `supabase/migrations/0001_mds_auth_onboarding.sql` to the Supabase project before relying on onboarding or legal acceptance persistence.
 
+Onboarding completion and legal acceptance are written through MDS adapters, not by the auth screens. When Zustand is also selected, Zustand is only a local cache and pending queue. Supabase `user_onboarding_state` and `user_legal_acceptances` remain the source of truth. Legal rows are insert-only and scoped to `auth.uid()`.
+
+Do not treat pre-auth local legal acceptance as a hosted audit record. Hosted apps should write legal acceptance after sign-in, typically through `/legal/updates`.
+
 The Expo client env values are not enough to run migrations. To apply SQL, use one of these:
 
 ```bash
