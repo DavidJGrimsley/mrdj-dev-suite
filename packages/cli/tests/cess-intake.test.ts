@@ -782,4 +782,40 @@ describe('CESS intake contract', () => {
 
     expect(flags).not.toContain('--eas');
   });
+
+  it('emits no styling-library flags or default tokens for stylesheet', () => {
+    const plan = resolveCessPlan({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'stylesheet-app',
+      answers: {
+        scriptLanguage: 'typescript',
+        packageManager: 'npm',
+        navigationLibrary: 'expo-router',
+        stylingSystem: 'stylesheet',
+        stateManagement: 'none',
+        authBackend: 'none',
+        audience: 'People',
+        coreFlows: 'Open the app',
+        targetPlatforms: ['web'],
+        dataStart: 'local',
+      },
+    });
+
+    expect(plan.onboardAnswers.generatorStylingSystem).toBe('stylesheet');
+    expect(plan.onboardAnswers.defaults).not.toContain('uniwind');
+    expect(plan.onboardAnswers.defaults).not.toContain('nativewind');
+    expect(plan.onboardAnswers.defaults).not.toContain('nativewindui');
+    expect(plan.onboardAnswers.defaults).not.toContain('tamagui');
+    expect(plan.onboardAnswers.defaults).not.toContain('restyle');
+    expect(buildCreateExpoStackFlags(plan.answers)).toEqual([
+      '--typescript',
+      '--npm',
+      '--expo-router',
+    ]);
+    expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--uniwind');
+    expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--nativewind');
+    expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--nativewindui');
+    expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--tamagui');
+    expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--restyle');
+  });
 });

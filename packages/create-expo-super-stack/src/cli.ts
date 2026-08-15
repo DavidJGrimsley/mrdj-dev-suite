@@ -21,7 +21,10 @@ import {
   defaultOnboardPlan,
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
-import { scaffoldProjectMemory } from "@mr.dj2u/cli/project-memory";
+import {
+  resolveGeneratorStylingSystem,
+  scaffoldProjectMemory,
+} from "@mr.dj2u/cli/project-memory";
 import {
   generateProjectRoadmap,
 } from "@mr.dj2u/cli/roadmap";
@@ -191,7 +194,7 @@ export async function main(): Promise<void> {
   const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const typeSupportRepairs = await repairGeneratedTypeSupport(projectPath, {
     needsNodeTypes: hasStylistSyncRoute,
-    needsUniwindTypes: plan.answers.defaults.includes("uniwind"),
+    needsUniwindTypes: resolveGeneratorStylingSystem(plan.answers) === "uniwind",
   });
   const nativeWindUiPickerRepairs =
     await repairGeneratedNativeWindUiPicker(projectPath);
@@ -2500,7 +2503,7 @@ function buildOnboardArgv(
   };
 }
 
-function inferGeneratorChoices(
+export function inferGeneratorChoices(
   args: string[],
   easSelected?: boolean,
 ): {
