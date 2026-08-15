@@ -1328,6 +1328,7 @@ describe('runOnboardCommand', () => {
       yes: true,
       appName: 'Persist Local App',
       legalDocumentMode: 'onboarding-agreement',
+      noInstall: true,
     });
 
     await expect(
@@ -1384,6 +1385,7 @@ describe('runOnboardCommand', () => {
       yes: true,
       appName: 'Persist Zustand App',
       generatorStateManagement: 'zustand',
+      noInstall: true,
     });
 
     const adapter = await readFile(
