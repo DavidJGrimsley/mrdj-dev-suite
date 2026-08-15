@@ -288,27 +288,51 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
   }
 }
 
-function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
-  const completion = onboardingCompletionConfig(answers);
-  const replacement = [
-    '  completion: {',
-    `    mode: '${completion.mode}',`,
-    `    route: '${completion.route}' as Href,`,
-    `    label: ${JSON.stringify(completion.label)},`,
-    `    helperText: ${JSON.stringify(completion.helperText)},`,
-    '  },',
-  ].join('\n');
+function detectLineEnding(source: string): '\r\n' | '\n' {
+ return source.match(/\r?\n/u)?.[0] === '\r\n' ? '\r\n' : '\n';
+}
 
-  const completionPattern =
-    /[ ]{2}completion: \{\r?\n[ ]{4}mode: '[^']+',\r?\n[ ]{4}route: '[^']+' as Href,\r?\n[ ]{4}label: [^\n\r]+,\r?\n[ ]{4}helperText: [^\n\r]+,\r?\n[ ]{2}\},/u;
+export function renderGeneratedOnboardingConfig(source: string, answers: OnboardAnswers): string {
+ const completion = onboardingCompletionConfig(answers);
+ const lineEnding = detectLineEnding(source);
+ const replacement = [
+   '  completion: {',
+   `    mode: '${completion.mode}',`,
+   `    route: '${completion.route}' as Href,`,
+   `    label: ${JSON.stringify(completion.label)},`,
+   `    helperText: ${JSON.stringify(completion.helperText)},`,
+   '  },',
+ ].join(lineEnding);
 
-  if (!completionPattern.test(source)) {
-    throw new Error(
-      'Unable to update onboarding completion config; template did not match the expected completion block.'
-    );
-  }
+ const lines = source.split(/\r?\n/u);
+ const startIndex = lines.findIndex((line) => line.includes('completion: {'));
 
-  return source.replace(completionPattern, replacement);
+ if (startIndex === -1) {
+   throw new Error(
+     'Unable to update onboarding completion config; template did not match the expected completion block.'
+   );
+ }
+
+ let endIndex = startIndex + 1;
+ while (endIndex < lines.length) {
+   const line = lines[endIndex];
+   if (line === undefined || line.trim() === '},') {
+     break;
+   }
+   endIndex += 1;
+ }
+
+ if (endIndex >= lines.length || lines[endIndex] === undefined) {
+   throw new Error(
+     'Unable to update onboarding completion config; template did not match the expected completion block.'
+   );
+ }
+
+ return [
+   ...lines.slice(0, startIndex),
+   ...replacement.split(lineEnding),
+   ...lines.slice(endIndex + 1),
+ ].join(lineEnding);
 }
 
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {

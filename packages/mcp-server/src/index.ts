@@ -154,7 +154,8 @@ export function listTools(): MCPTool[] {
   return [
     {
       name: 'continue_project',
-      description: 'Build an MDS Continue session brief for an onboarded app folder.',
+      description:
+        'Build an MDS Continue session brief for an onboarded app folder, including Expo SDK upgrade routing when project state is behind the official latest stable SDK.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1157,7 +1158,11 @@ export function buildContinueProjectPromptText(projectPath?: string): string {
     '   - After the user answers, write the answer into the file under the marker and delete the marker line. Then move to the next question.',
     '   - Do not offer "skip markers and implement anyway."',
     '4. After all markers are resolved, call continue_project again to confirm blockers are cleared.',
-    '5. Before implementation planning, call `generate_project_roadmap`.',
+    '5. If recommendation.priority is expo-sdk-upgrade:',
+    '   - Load the official Expo skill `upgrading-expo`.',
+    '   - Do not call MDS `get_skill` for an upgrade skill. MDS does not own upgrade steps.',
+    '   - Do not implement the next todo or call `generate_project_roadmap` for feature work until the user declines or the upgrade is done.',
+    '6. Before implementation planning, call `generate_project_roadmap`.',
     '   - If it returns `needsClarification: true`, ask the listed clarification questions EXACTLY ONE AT A TIME, update `project/info.md`, and rerun `generate_project_roadmap` until it no longer needs clarification.',
     '   - Only move into implementation planning after roadmap is not blocked and does not need clarification.',
   ].join('\n');
