@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { DarkTheme, DefaultTheme, Link, Stack, ThemeProvider } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { Platform, Pressable, StatusBar, Text } from 'react-native';
-import { NavigationBar } from 'expo-navigation-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import * as SystemUI from 'expo-system-ui';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -43,6 +43,13 @@ function RouterThemeBridge({ children }: { children: ReactNode }) {
 function LayoutInner() {
   const theme = useAppTheme();
   const shellColor = theme.activeColors.background;
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setStyle(theme.activeScheme === 'dark' ? 'light' : 'dark');
+    }
+  }, [theme.activeScheme]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: shellColor }}>
       <KeyboardProvider>
@@ -53,9 +60,6 @@ function LayoutInner() {
               barStyle={theme.activeScheme === 'dark' ? 'light-content' : 'dark-content'}
               translucent={false}
             />
-            {Platform.OS === 'android' ? (
-              <NavigationBar style={theme.activeScheme === 'dark' ? 'dark' : 'light'} />
-            ) : null}
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: shellColor },
