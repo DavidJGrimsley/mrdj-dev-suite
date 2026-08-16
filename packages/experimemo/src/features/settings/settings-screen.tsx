@@ -22,8 +22,7 @@ export default function SettingsScreen() {
                   ? '800'
                   : 'normal',
             },
-          ]}
-        >
+          ]}>
           Settings
         </Text>
         <Text style={[styles.body, { color: colors.text }]}>
@@ -41,8 +40,7 @@ export default function SettingsScreen() {
           style={[
             styles.webModal,
             { backgroundColor: colors.background, borderColor: colors.primary },
-          ]}
-        >
+          ]}>
           {content}
         </View>
       </View>

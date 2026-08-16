@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "experimemo",
+    "slug": "experimemo",
+    "version": "1.0.0",
+    "scheme": "experimemo",
+    "platforms": ["web", "ios", "android"],
+    "web": {
+      "bundler": "metro",
+      "output": "server",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash.png",
+          "dark": {
+            "image": "./assets/images/splash-icon-dark.png",
+            "backgroundColor": "#000000"
+          },
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "style": "dark",
+          "enforceContrast": false
+        }
+      ],
+      "expo-system-ui"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true,
+      "tsconfigPaths": true
+    },
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "backgroundColor": "#f1f0f8"
+    },
+    "backgroundColor": "#f1f0f8",
+    "androidStatusBar": {
+      "backgroundColor": "#f1f0f8",
+      "barStyle": "dark-content",
+      "translucent": false
+    }
+  }
+}

@@ -425,7 +425,7 @@ export function renderGeneratedOnboardingConfig(source: string, answers: Onboard
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
   'react-native-gesture-handler': '~2.31.1',
   'react-native-reanimated': '4.3.1',
-  'react-native-screens': '~4.25.2',
+  'react-native-screens': '4.26.2',
   'react-native-svg': '15.15.4',
   'react-native-keyboard-controller': '1.21.6',
   'react-native-worklets': '0.8.3',
@@ -1999,7 +1999,9 @@ async function ensurePackageJson(
     'post-create-check':
       packageJson.scripts?.['post-create-check'] ?? 'npx expo install --fix && npx expo-doctor',
     'ci:verify': packageJson.scripts?.['ci:verify'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
-    test: packageJson.scripts?.test ?? 'npm run lint && npm run typecheck',
+    test:
+      packageJson.scripts?.test ??
+      renderPackageManagerScript(answers, '{pm} lint && {pm} typecheck'),
   };
 
   const stylingSystem = resolveGeneratorStylingSystem(answers, { manageUniwind });
@@ -2248,10 +2250,17 @@ function deriveServeProdScript(answers: OnboardAnswers): string {
 }
 
 function deriveServeProdFreshScript(answers: OnboardAnswers): string {
+  const buildWebCommand = renderPackageManagerScript(answers, '{pm} build:web');
   if (answers.expoServerAdapter === 'express' || answers.expoServerAdapter === 'bun') {
-    return `${MDS_NPX_COMMAND} free-port 3000 && npm run build:web && node server.js`;
+    return `${MDS_NPX_COMMAND} free-port 3000 && ${buildWebCommand} && node server.js`;
   }
-  return `${MDS_NPX_COMMAND} free-port 8081 && npm run build:web && npx expo serve`;
+  return `${MDS_NPX_COMMAND} free-port 8081 && ${buildWebCommand} && npx expo serve`;
+}
+
+function renderPackageManagerScript(answers: OnboardAnswers, template: string): string {
+  const packageManager = answers.generatorPackageManager ?? 'npm';
+  const command = packageManager === 'npm' ? 'npm run' : packageManager;
+  return template.split('{pm}').join(command);
 }
 
 function extractFirstNonEmptyLine(value: string): string {
@@ -5057,8 +5066,8 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
       ];
 
   return [
-    "import { useState } from 'react';",
-    "import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';",
+    ...(answers.usesExpoUiUniversalComponents ? ["import { useState } from 'react';"] : []),
+    "import { Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';",
     ...(answers.usesExpoUiUniversalComponents
       ? [
           "import { Host, Column, Button as ExpoUIButton, Switch as ExpoUISwitch, Text as ExpoUIText } from '@expo/ui';",
@@ -5181,7 +5190,7 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     '      ))}',
     '      <View style={[styles.linksCard, { backgroundColor: colors.surface, borderColor: colors.primary }]}>',
     '        <Text style={[styles.linksTitle, { color: colors.text }]}>Video sources</Text>',
-    '        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=MKqGbv-Tssg&t")} style={[styles.link, { color: colors.secondary }]}>What\'s New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo</Text>',
+    `        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=MKqGbv-Tssg&t")} style={[styles.link, { color: colors.secondary }]}>{"What's New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo"}</Text>`,
     '        <Text accessibilityRole="link" onPress={() => Linking.openURL("https://www.youtube.com/watch?v=ywvywq0AGPM")} style={[styles.link, { color: colors.secondary }]}>Everything new in Expo SDK 56 by Code with Beto</Text>',
     '      </View>',
     '    </ScrollView>',
@@ -5211,11 +5220,6 @@ function renderExpoSdk56Screen(answers: OnboardAnswers): string {
     '  },',
     '  linksWrap: {',
     '    gap: 8,',
-    '  },',
-    '  link: {',
-    '    fontSize: 14,',
-    "    fontWeight: '800',",
-    '    lineHeight: 20,',
     '  },',
     '  body: {',
     "    color: '#4b5563',",
