@@ -102,7 +102,7 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
     if (LEGACY_KEEP_KEYS.includes(item)) {
       return item !== 'stylist' || stylistPresent;
     }
-    return presentIds.has(item) || item !== 'stylist';
+    return presentIds.has(item);
   });
   const autoSkipped = keepRequested.filter((item) => !keep.includes(item));
 
@@ -171,7 +171,7 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
     return;
   }
 
-  console.log(chalk.bold('mds eject exposition'));
+  console.log(chalk.bold('mds eject'));
   console.log(chalk.dim(projectPath));
   console.log(`Phase 0 ejection status: ${result.ejectionStatus.decision}`);
   console.log(
@@ -237,7 +237,7 @@ async function resolveKeepSelection(
 
   if (!interactive) {
     throw new Error(
-      'Non-interactive mode requires --keep, --from-memory, or --all. Example: mds eject exposition . --keep onboarding,settings'
+      'Non-interactive mode requires --keep, --from-memory, or --all. Example: mds eject . --keep onboarding,settings'
     );
   }
 
