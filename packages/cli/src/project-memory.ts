@@ -6,6 +6,8 @@ import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock } from './stylist-them
 import { loadLibraryTextAssets, requireLibraryTextAsset } from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
 
+import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
+
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
 
 export type DataStart = 'local' | 'supabase';
@@ -422,6 +424,23 @@ const ANDROID_NAVIGATION_BAR_DEPENDENCIES = {
   'expo-navigation-bar': '~56.0.3',
 } as const;
 
+const SPLASH_SCREEN_DEPENDENCIES = {
+  'expo-splash-screen': '~56.0.14',
+} as const;
+
+export const SDK_56_SPLASH_ITEM_ID = 'expo/splash-screen';
+export const SDK_56_SPLASH_LIGHT_IMAGE = './assets/images/splash-icon.png';
+export const SDK_56_SPLASH_DARK_IMAGE = './assets/images/splash-icon-dark.png';
+export const SDK_56_SPLASH_PLUGIN_CONFIG = {
+  backgroundColor: '#ffffff',
+  image: SDK_56_SPLASH_LIGHT_IMAGE,
+  dark: {
+    image: SDK_56_SPLASH_DARK_IMAGE,
+    backgroundColor: '#000000',
+  },
+  imageWidth: 200,
+} as const;
+
 const UNIWIND_DEV_DEPENDENCIES = {
   tailwindcss: '^4.2.4',
 } as const;
@@ -540,7 +559,160 @@ export async function scaffoldProjectMemory(
     );
   }
 
+  results.push(...(await ensureGeneratedSystemAppearance(projectPath, force)));
+
   return results;
+}
+
+export function applySdk56SplashConfig(expo: Record<string, unknown>): boolean {
+  let changed = false;
+
+  if (expo.userInterfaceStyle !== 'automatic') {
+    expo.userInterfaceStyle = 'automatic';
+    changed = true;
+  }
+
+  const desiredConfig = {
+    backgroundColor: SDK_56_SPLASH_PLUGIN_CONFIG.backgroundColor,
+    image: SDK_56_SPLASH_PLUGIN_CONFIG.image,
+    dark: {
+      image: SDK_56_SPLASH_PLUGIN_CONFIG.dark.image,
+      backgroundColor: SDK_56_SPLASH_PLUGIN_CONFIG.dark.backgroundColor,
+    },
+    imageWidth: SDK_56_SPLASH_PLUGIN_CONFIG.imageWidth,
+  };
+
+  const plugins = Array.isArray(expo.plugins) ? [...expo.plugins] : [];
+  const existingIndex = plugins.findIndex((plugin) => {
+    if (plugin === 'expo-splash-screen') {
+      return true;
+    }
+    return Array.isArray(plugin) && plugin[0] === 'expo-splash-screen';
+  });
+
+  if (existingIndex === -1) {
+    plugins.push(['expo-splash-screen', desiredConfig]);
+    changed = true;
+  } else {
+    const existing = plugins[existingIndex];
+    const existingConfig =
+      Array.isArray(existing) && isPlainObject(existing[1]) ? { ...existing[1] } : {};
+    const existingDark = isPlainObject(existingConfig.dark) ? existingConfig.dark : {};
+    const mergedConfig = {
+      ...desiredConfig,
+      ...existingConfig,
+      dark: {
+        ...desiredConfig.dark,
+        ...existingDark,
+      },
+    };
+    if (typeof mergedConfig.image !== 'string' || mergedConfig.image.length === 0) {
+      mergedConfig.image = desiredConfig.image;
+    }
+    if (typeof mergedConfig.backgroundColor !== 'string' || mergedConfig.backgroundColor.length === 0) {
+      mergedConfig.backgroundColor = desiredConfig.backgroundColor;
+    }
+    if (typeof mergedConfig.dark.image !== 'string' || mergedConfig.dark.image.length === 0) {
+      mergedConfig.dark.image = desiredConfig.dark.image;
+    }
+    if (
+      typeof mergedConfig.dark.backgroundColor !== 'string' ||
+      mergedConfig.dark.backgroundColor.length === 0
+    ) {
+      mergedConfig.dark.backgroundColor = desiredConfig.dark.backgroundColor;
+    }
+    if (typeof mergedConfig.imageWidth !== 'number') {
+      mergedConfig.imageWidth = desiredConfig.imageWidth;
+    }
+
+    const nextPlugin = ['expo-splash-screen', mergedConfig];
+    if (JSON.stringify(plugins[existingIndex]) !== JSON.stringify(nextPlugin)) {
+      plugins[existingIndex] = nextPlugin;
+      changed = true;
+    }
+  }
+
+  if (JSON.stringify(expo.plugins) !== JSON.stringify(plugins)) {
+    expo.plugins = plugins;
+    changed = true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(expo, 'splash')) {
+    delete expo.splash;
+    changed = true;
+  }
+
+  return changed;
+}
+
+export async function ensureGeneratedSplashAssets(
+  projectPath: string,
+  force = false
+): Promise<WriteResult[]> {
+  const item = getLibraryItem(SDK_56_SPLASH_ITEM_ID);
+  if (!item) {
+    throw new Error(`MDS Library is missing ${SDK_56_SPLASH_ITEM_ID}.`);
+  }
+
+  const results: WriteResult[] = [];
+  for (const asset of item.assets) {
+    const destination = path.join(projectPath, ...asset.destination.split('/'));
+    if (!force && (await fileExists(destination))) {
+      results.push({ filePath: destination, wrote: false });
+      continue;
+    }
+
+    const contents = await readLibraryAsset(asset);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, contents);
+    results.push({ filePath: destination, wrote: true });
+  }
+  return results;
+}
+
+export async function ensureSdk56SplashAppConfig(projectPath: string): Promise<WriteResult | null> {
+  const appJsonPath = path.join(projectPath, 'app.json');
+  const raw = await readOptionalText(appJsonPath);
+  if (!raw) {
+    return null;
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    const value = JSON.parse(raw) as unknown;
+    parsed = isPlainObject(value) ? value : {};
+  } catch {
+    return null;
+  }
+
+  const expo = isPlainObject(parsed.expo) ? parsed.expo : undefined;
+  if (!expo) {
+    return null;
+  }
+
+  if (!applySdk56SplashConfig(expo)) {
+    return { filePath: appJsonPath, wrote: false };
+  }
+
+  parsed.expo = expo;
+  await writeFile(appJsonPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+  return { filePath: appJsonPath, wrote: true };
+}
+
+export async function ensureGeneratedSystemAppearance(
+  projectPath: string,
+  force = false
+): Promise<WriteResult[]> {
+  const results = await ensureGeneratedSplashAssets(projectPath, force);
+  const appJsonResult = await ensureSdk56SplashAppConfig(projectPath);
+  if (appJsonResult) {
+    results.push(appJsonResult);
+  }
+  return results;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 export async function scaffoldRichBoilerplate(
@@ -1791,6 +1963,7 @@ async function ensurePackageJson(
 
   packageJson.dependencies = {
     ...ANDROID_NAVIGATION_BAR_DEPENDENCIES,
+    ...SPLASH_SCREEN_DEPENDENCIES,
     ...packageJson.dependencies,
   };
 

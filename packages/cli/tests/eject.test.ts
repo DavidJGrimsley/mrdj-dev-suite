@@ -5,6 +5,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { runEjectExpositionCommand } from '../src/commands/eject.js';
+import { runStylistEjectCommand } from '../src/commands/stylist.js';
+import {
+  SDK_56_SPLASH_DARK_IMAGE,
+  SDK_56_SPLASH_LIGHT_IMAGE,
+} from '../src/project-memory.js';
 
 const tempDirs: string[] = [];
 
@@ -247,5 +252,239 @@ describe('runEjectExpositionCommand', () => {
     await expect(access(path.join(projectPath, 'src', 'app', 'exposition', 'nativewindui.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'))).resolves.toBeUndefined();
+  });
+
+  it('preserves system appearance splash config and theme provider through exposition ejection', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-appearance-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'theme'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
+    await mkdir(path.join(projectPath, 'assets', 'images'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+
+    const splashPlugin = [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#ffffff',
+        image: SDK_56_SPLASH_LIGHT_IMAGE,
+        dark: {
+          image: SDK_56_SPLASH_DARK_IMAGE,
+          backgroundColor: '#000000',
+        },
+        imageWidth: 200,
+      },
+    ];
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          userInterfaceStyle: 'automatic',
+          web: { output: 'server' },
+          plugins: ['expo-router', splashPlugin],
+        },
+      }),
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, 'assets', 'images', 'splash-icon.png'), 'light-splash', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'),
+      'dark-splash',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'theme', 'provider.tsx'),
+      [
+        "import { Appearance, useColorScheme } from 'react-native';",
+        "export function readSystemScheme() { return Appearance.getColorScheme(); }",
+        'export function AppThemeProvider({ children }: { children: unknown }) { return children; }',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      [
+        "import { AppThemeProvider, useAppTheme } from '../theme/provider';",
+        'export default function Layout() {',
+        '  return (',
+        '    <AppThemeProvider>',
+        '      <LayoutInner />',
+        '    </AppThemeProvider>',
+        '  );',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+      "const links = [{ href: '/exposition/stylist' as const, title: 'Stylist' }];\n",
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Info\n\n## Platforms\n\n- Target platforms: web, ios, android\n- Web output: static\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'theme.json'),
+      '{"version":1,"colorSystem":{"mode":"automatic","previewScheme":"light","familyMode":"one"},"families":{"light":{"primary":"blue","secondary":"violet","success":"emerald","warning":"amber"},"dark":{"primary":"blue","secondary":"violet","success":"emerald","warning":"amber"}},"palettes":{"bg":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}},"automatic":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}}},"colors":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}},"typography":{"fontFamily":"System","displaySize":34,"headingSize":22,"bodySize":16,"captionSize":12},"layout":{"radius":12,"spacing":{"xs":4,"sm":8,"md":16,"lg":24,"xl":32}}}\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        dependencies: { 'reanimated-color-picker': '^4.2.0', 'expo-splash-screen': '~56.0.14' },
+        scripts: { 'mds:stylist:sync': 'mds stylist sync .' },
+      }),
+      'utf8'
+    );
+
+    await runEjectExpositionCommand({ path: projectPath, all: true });
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: { userInterfaceStyle?: string; plugins?: unknown[] };
+    };
+    expect(appJson.expo.userInterfaceStyle).toBe('automatic');
+    expect(appJson.expo.plugins).toContainEqual(splashPlugin);
+    await expect(readFile(path.join(projectPath, 'assets', 'images', 'splash-icon.png'), 'utf8')).resolves.toBe(
+      'light-splash'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'), 'utf8')
+    ).resolves.toBe('dark-splash');
+    const layout = await readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8');
+    expect(layout).toContain('AppThemeProvider');
+    expect(layout).toContain('../theme/provider');
+    const provider = await readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8');
+    expect(provider).toContain('Appearance.getColorScheme()');
+    expect(provider).toContain('AppThemeProvider');
+  });
+
+  it('preserves system appearance splash config and theme provider through stylist ejection', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-stylist-appearance-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'app', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'theme'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
+    await mkdir(path.join(projectPath, 'assets', 'images'), { recursive: true });
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+
+    const splashPlugin = [
+      'expo-splash-screen',
+      {
+        backgroundColor: '#ffffff',
+        image: SDK_56_SPLASH_LIGHT_IMAGE,
+        dark: {
+          image: SDK_56_SPLASH_DARK_IMAGE,
+          backgroundColor: '#000000',
+        },
+        imageWidth: 200,
+      },
+    ];
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          userInterfaceStyle: 'automatic',
+          web: { output: 'server' },
+          plugins: ['expo-router', splashPlugin],
+        },
+      }),
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, 'assets', 'images', 'splash-icon.png'), 'light-splash', 'utf8');
+    await writeFile(
+      path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'),
+      'dark-splash',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'theme', 'provider.tsx'),
+      [
+        "import { Appearance } from 'react-native';",
+        "export function readSystemScheme() { return Appearance.getColorScheme(); }",
+        'export function AppThemeProvider({ children }: { children: unknown }) { return children; }',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      [
+        "import { AppThemeProvider } from '../theme/provider';",
+        '<Stack.Screen name="exposition/stylist" />',
+        'export default function Layout() {',
+        '  return <AppThemeProvider><LayoutInner /></AppThemeProvider>;',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+      "{ href: '/exposition/stylist' as const, title: 'Stylist' },\n",
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'exposition', 'stylist-sync+api.ts'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      '# Info\n\n## Platforms\n\n- Target platforms: web, ios, android\n- Web output: static\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'theme.json'),
+      '{"version":1,"colorSystem":{"mode":"automatic","previewScheme":"light","familyMode":"one"},"families":{"light":{"primary":"blue","secondary":"violet","success":"emerald","warning":"amber"},"dark":{"primary":"blue","secondary":"violet","success":"emerald","warning":"amber"}},"palettes":{"bg":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}},"automatic":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}}},"colors":{"light":{"background":"#ffffff","surface":"#f3f4f6","text":"#111827","primary":"#2563eb","secondary":"#7c3aed","success":"#16a34a","warning":"#f59e0b"},"dark":{"background":"#0f172a","surface":"#1f2937","text":"#f8fafc","primary":"#60a5fa","secondary":"#a78bfa","success":"#4ade80","warning":"#fbbf24"}},"typography":{"fontFamily":"System","displaySize":34,"headingSize":22,"bodySize":16,"captionSize":12},"layout":{"radius":12,"spacing":{"xs":4,"sm":8,"md":16,"lg":24,"xl":32}}}\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        dependencies: { 'reanimated-color-picker': '^4.2.0', 'expo-splash-screen': '~56.0.14' },
+        scripts: { 'mds:stylist:sync': 'mds stylist sync .' },
+      }),
+      'utf8'
+    );
+
+    await runStylistEjectCommand({ path: projectPath });
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: { userInterfaceStyle?: string; plugins?: unknown[] };
+    };
+    expect(appJson.expo.userInterfaceStyle).toBe('automatic');
+    expect(appJson.expo.plugins).toContainEqual(splashPlugin);
+    await expect(readFile(path.join(projectPath, 'assets', 'images', 'splash-icon.png'), 'utf8')).resolves.toBe(
+      'light-splash'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'), 'utf8')
+    ).resolves.toBe('dark-splash');
+    const layout = await readFile(path.join(projectPath, 'src', 'app', '_layout.tsx'), 'utf8');
+    expect(layout).toContain('AppThemeProvider');
+    const provider = await readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8');
+    expect(provider).toContain('Appearance.getColorScheme()');
   });
 });

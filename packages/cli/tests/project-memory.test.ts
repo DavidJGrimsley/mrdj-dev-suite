@@ -1,10 +1,16 @@
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  applySdk56SplashConfig,
+  ensureGeneratedSystemAppearance,
   renderGeneratedOnboardingConfig,
   resolveGeneratorStylingSystem,
+  SDK_56_SPLASH_DARK_IMAGE,
+  SDK_56_SPLASH_LIGHT_IMAGE,
 } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
@@ -18,6 +24,13 @@ const answers: OnboardAnswers = {
   appName: 'Sample App',
   onboardingCompletionMode: 'auth',
 } as OnboardAnswers;
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
+  tempDirs.length = 0;
+});
 
 function normalizeLineEndings(source: string, lineEnding: '\n' | '\r\n'): string {
   return source.replace(/\r?\n/gu, lineEnding);
@@ -91,5 +104,97 @@ describe('resolveGeneratorStylingSystem', () => {
         defaults: ['project-docs', 'guidelines', 'doctor'],
       })
     ).toBe('stylesheet');
+  });
+});
+
+describe('ensureGeneratedSystemAppearance', () => {
+  it('adds create-expo-app SDK 56 light and dark splash config and assets', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-splash-config-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'app.json'),
+      JSON.stringify({
+        expo: {
+          name: 'Appearance App',
+          slug: 'appearance-app',
+          userInterfaceStyle: 'light',
+          splash: {
+            image: './assets/splash.png',
+            resizeMode: 'contain',
+            backgroundColor: '#ffffff',
+          },
+          plugins: ['expo-router'],
+        },
+      }),
+      'utf8'
+    );
+
+    const results = await ensureGeneratedSystemAppearance(projectPath);
+    expect(results.some((result) => result.wrote)).toBe(true);
+
+    const appJson = JSON.parse(await readFile(path.join(projectPath, 'app.json'), 'utf8')) as {
+      expo: {
+        userInterfaceStyle: string;
+        splash?: unknown;
+        plugins: unknown[];
+      };
+    };
+    expect(appJson.expo.userInterfaceStyle).toBe('automatic');
+    expect(appJson.expo.splash).toBeUndefined();
+    expect(appJson.expo.plugins).toContainEqual([
+      'expo-splash-screen',
+      {
+        backgroundColor: '#ffffff',
+        image: SDK_56_SPLASH_LIGHT_IMAGE,
+        dark: {
+          image: SDK_56_SPLASH_DARK_IMAGE,
+          backgroundColor: '#000000',
+        },
+        imageWidth: 200,
+      },
+    ]);
+
+    const lightSplash = await readFile(path.join(projectPath, 'assets', 'images', 'splash-icon.png'));
+    const darkSplash = await readFile(
+      path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png')
+    );
+    expect(lightSplash.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+    expect(darkSplash.subarray(0, 8)).toEqual(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+  });
+
+  it('fills missing dark splash fields without replacing an existing light image', () => {
+    const expo: Record<string, unknown> = {
+      userInterfaceStyle: 'automatic',
+      plugins: [
+        [
+          'expo-splash-screen',
+          {
+            backgroundColor: '#208AEF',
+            image: './assets/images/custom-splash.png',
+            imageWidth: 76,
+          },
+        ],
+      ],
+    };
+
+    expect(applySdk56SplashConfig(expo)).toBe(true);
+    expect(expo.plugins).toEqual([
+      [
+        'expo-splash-screen',
+        {
+          backgroundColor: '#208AEF',
+          image: './assets/images/custom-splash.png',
+          imageWidth: 76,
+          dark: {
+            image: SDK_56_SPLASH_DARK_IMAGE,
+            backgroundColor: '#000000',
+          },
+        },
+      ],
+    ]);
   });
 });

@@ -58,6 +58,7 @@ describe("MDS Library catalog", () => {
       "nativewindui/components",
       "nativewindui/exposition",
       "expo/themed-text",
+      "expo/splash-screen",
       "expo/default-starter",
       "ces/button",
     ]) {
@@ -65,6 +66,31 @@ describe("MDS Library catalog", () => {
     }
     expect(ids.has("mds/data-supabase")).toBe(false);
     expect(ids.has("mds/exposition-notice")).toBe(false);
+  });
+
+  it("ships create-expo-app SDK 56 light and dark splash icons", async () => {
+    const item = getLibraryItem("expo/splash-screen");
+    expect(item?.tags).not.toContain("eject:stylist");
+    expect(item?.tags).not.toContain("eject:exposition");
+    expect(item?.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          destination: "assets/images/splash-icon.png",
+          encoding: "binary",
+        }),
+        expect.objectContaining({
+          destination: "assets/images/splash-icon-dark.png",
+          encoding: "binary",
+        }),
+      ]),
+    );
+
+    for (const asset of item?.assets ?? []) {
+      const contents = await readLibraryAsset(asset);
+      expect(contents.subarray(0, 8)).toEqual(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      );
+    }
   });
 
   it("returns summaries from list and full metadata from get", () => {

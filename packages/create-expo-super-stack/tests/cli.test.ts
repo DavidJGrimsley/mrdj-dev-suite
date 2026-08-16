@@ -508,6 +508,8 @@ describe("create-expo-super-stack CLI helpers", () => {
           slug: string;
           scheme: string;
           platforms: string[];
+          userInterfaceStyle?: string;
+          splash?: unknown;
           backgroundColor?: string;
           androidStatusBar?: {
             backgroundColor?: string;
@@ -520,6 +522,8 @@ describe("create-expo-super-stack CLI helpers", () => {
       expect(repaired.expo.slug).toBe("bandana-designer");
       expect(repaired.expo.scheme).toBe("bandana-designer");
       expect(repaired.expo.platforms).toContain("web");
+      expect(repaired.expo.userInterfaceStyle).toBe("automatic");
+      expect(repaired.expo.splash).toBeUndefined();
       expect(repaired.expo.backgroundColor).toBe("#f1f0f8");
       expect(repaired.expo).not.toHaveProperty("androidNavigationBar");
       expect(repaired.expo.androidStatusBar).toEqual({
@@ -535,6 +539,18 @@ describe("create-expo-super-stack CLI helpers", () => {
         },
       ]);
       expect(repaired.expo.plugins ?? []).toContain("expo-system-ui");
+      expect(repaired.expo.plugins ?? []).toContainEqual([
+        "expo-splash-screen",
+        {
+          backgroundColor: "#ffffff",
+          image: "./assets/images/splash-icon.png",
+          dark: {
+            image: "./assets/images/splash-icon-dark.png",
+            backgroundColor: "#000000",
+          },
+          imageWidth: 200,
+        },
+      ]);
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }
@@ -573,9 +589,58 @@ describe("create-expo-super-stack CLI helpers", () => {
       ) as {
         expo: {
           platforms: string[];
+          userInterfaceStyle?: string;
+          plugins?: unknown[];
         };
       };
       expect(repaired.expo.platforms).toEqual(["web", "ios", "android"]);
+      expect(repaired.expo.userInterfaceStyle).toBe("automatic");
+      expect(repaired.expo.plugins ?? []).toContainEqual([
+        "expo-splash-screen",
+        {
+          backgroundColor: "#ffffff",
+          image: "./assets/images/splash-icon.png",
+          dark: {
+            image: "./assets/images/splash-icon-dark.png",
+            backgroundColor: "#000000",
+          },
+          imageWidth: 200,
+        },
+      ]);
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
+  it("is idempotent after SDK 56 splash config has been applied", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-splash-idempotent-"),
+    );
+    try {
+      await mkdir(projectPath, { recursive: true });
+      await writeFile(
+        path.join(projectPath, "app.json"),
+        JSON.stringify({
+          expo: {
+            name: "Appearance App",
+            slug: "appearance-app",
+            scheme: "appearance-app",
+            userInterfaceStyle: "light",
+            splash: {
+              image: "./assets/splash.png",
+              backgroundColor: "#ffffff",
+            },
+          },
+        }),
+        "utf8",
+      );
+
+      await expect(
+        repairExpoProjectIdentifiers(projectPath, "appearance-app"),
+      ).resolves.toEqual([path.join(projectPath, "app.json")]);
+      await expect(
+        repairExpoProjectIdentifiers(projectPath, "appearance-app"),
+      ).resolves.toEqual([]);
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

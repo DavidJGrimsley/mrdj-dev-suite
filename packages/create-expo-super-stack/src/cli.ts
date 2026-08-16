@@ -22,6 +22,8 @@ import {
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
 import {
+  applySdk56SplashConfig,
+  ensureGeneratedSplashAssets,
   resolveGeneratorStylingSystem,
   scaffoldProjectMemory,
 } from "@mr.dj2u/cli/project-memory";
@@ -187,6 +189,7 @@ export async function main(): Promise<void> {
     projectName,
     plan.answers.targetPlatforms,
   );
+  const splashAssetRepairs = await ensureGeneratedSplashAssets(projectPath);
   const stylistWebOutputRepairs = await repairExpoWebOutputForStylistLifecycle(
     projectPath,
     plan.answers.webOutput,
@@ -223,6 +226,11 @@ export async function main(): Promise<void> {
   }
   for (const result of identifierRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
+  }
+  for (const result of splashAssetRepairs) {
+    console.log(
+      `${result.wrote ? "CREATED" : "KEPT"} ${path.relative(process.cwd(), result.filePath)}`,
+    );
   }
   for (const result of stylistWebOutputRepairs) {
     console.log(`UPDATED ${path.relative(process.cwd(), result)}`);
@@ -1661,6 +1669,9 @@ export async function repairExpoProjectIdentifiers(
     JSON.stringify(currentPlatforms) !== JSON.stringify(desiredPlatforms)
   ) {
     expo.platforms = desiredPlatforms;
+    changed = true;
+  }
+  if (applySdk56SplashConfig(expo)) {
     changed = true;
   }
   const shouldIncludeAndroid = targetPlatforms.includes("android");
