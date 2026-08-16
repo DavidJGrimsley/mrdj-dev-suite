@@ -626,7 +626,10 @@ export async function finalizeOnboardPlanWithDetectedEnvironment(
 
   printDetectedEnvironmentSummary(report);
 
-  let applyRecommendation = report.recommendedPlatforms.join(',') === plan.answers.targetPlatforms.join(',');
+  let applyRecommendation = haveSamePlatformSelection(
+    report.recommendedPlatforms,
+    plan.answers.targetPlatforms
+  );
   if (!applyRecommendation) {
     if (argv.yes) {
       applyRecommendation = true;
@@ -879,6 +882,16 @@ function applyDetectedPlatformRecommendation(
       answers.deployedServer
     ),
   };
+}
+
+function haveSamePlatformSelection(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  return leftSorted.every((platform, index) => platform === rightSorted[index]);
 }
 
 function printDetectedEnvironmentSummary(

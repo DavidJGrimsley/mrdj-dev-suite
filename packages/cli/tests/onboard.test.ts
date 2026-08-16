@@ -1957,6 +1957,71 @@ describe('runOnboardCommand', () => {
     expect(todo).toContain('Confirm the Phase 0 component strategy in `project/info.md`');
   });
 
+  it('treats reordered platform recommendations as the same selection', async () => {
+    const report = {
+      mode: 'enabled' as const,
+      trigger: 'flag' as const,
+      expoSdkVersion: '56.0.19',
+      nodeVersion: '22.3.0',
+      packageManagers: [
+        { name: 'npm' as const, available: true, version: '10.8.2' },
+        { name: 'pnpm' as const, available: false },
+        { name: 'yarn' as const, available: false },
+        { name: 'bun' as const, available: false },
+      ],
+      expoMcp: {
+        packageInstalled: true,
+        localCapabilitiesConfigured: true,
+      },
+      ios: {
+        toolchainAvailable: true,
+        simulatorAvailable: false,
+      },
+      android: {
+        toolchainAvailable: true,
+        simulatorAvailable: false,
+      },
+      envFiles: ['.env.local'],
+      recommendedPlatforms: ['ios', 'web', 'android'],
+      skippedPlatforms: [],
+      summaryLines: ['Recommended platform scope for local onboarding: ios, web, android.'],
+      warningLines: [],
+      appliedPlatformRecommendation: false,
+    };
+    const spy = vi.spyOn(detectEnvironmentModule, 'detectEnvironment').mockResolvedValue(report);
+
+    try {
+      const plan = await finalizeOnboardPlanWithDetectedEnvironment(
+        { project: '.', yes: true, withExpoMcp: true },
+        path.join(os.tmpdir(), 'expo-mcp-plan-reordered'),
+        defaultOnboardPlan({
+          project: path.join(os.tmpdir(), 'expo-mcp-plan-reordered'),
+          platforms: ['web', 'ios', 'android'],
+        })
+      );
+
+      expect(plan.answers.targetPlatforms).toEqual(['ios', 'web', 'android']);
+      expect(plan.answers.environmentDetection?.recommendedPlatforms).toEqual(['ios', 'web', 'android']);
+      expect(plan.answers.environmentDetection?.appliedPlatformRecommendation).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('renders Environment Detection canonically even when Expo MCP onboarding is not enabled', () => {
+    const plan = defaultOnboardPlan({
+      project: path.join(os.tmpdir(), 'env-default-app'),
+    });
+
+    const firstPass = renderInfo(plan.answers.appName, plan.answers);
+    const secondPass = renderInfo(plan.answers.appName, plan.answers, firstPass);
+
+    expect(firstPass).toContain('## Environment Detection');
+    expect(firstPass).toContain('- Mode: disabled');
+    expect(firstPass).toContain('Expo MCP-aware environment detection was not enabled for this onboarding run.');
+    expect(secondPass).not.toContain('## Imported Notes');
+  });
+
   it('persists a pending Phase 0 component strategy by default', () => {
     const plan = defaultOnboardPlan({
       project: path.join(os.tmpdir(), 'strategy-app'),

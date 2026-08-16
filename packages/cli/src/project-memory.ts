@@ -1568,7 +1568,12 @@ function renderEnvironmentDetectionSection(
   report: DetectedEnvironmentReport | undefined
 ): string[] {
   if (!report) {
-    return [];
+    return [
+      '## Environment Detection',
+      '',
+      '- Mode: disabled',
+      '- Expo MCP-aware environment detection was not enabled for this onboarding run.',
+    ];
   }
 
   return [
@@ -3449,7 +3454,13 @@ function hasNonCanonicalContent(
     return false;
   }
 
-  return !headings.every((heading) => trimmed.includes(`## ${heading}`));
+  return !headings.every((heading) => hasMarkdownHeading(trimmed, heading));
+}
+
+function hasMarkdownHeading(content: string, heading: string): boolean {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const pattern = new RegExp(`^#{1,2}\\s+${escapedHeading}\\s*$`, 'mu');
+  return pattern.test(content);
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
