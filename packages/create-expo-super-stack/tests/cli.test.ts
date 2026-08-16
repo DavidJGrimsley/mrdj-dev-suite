@@ -16,6 +16,7 @@ import {
   buildInstallCommand,
   buildPrettierWriteCommand,
   detectEasSetup,
+  inferGeneratorChoices,
   isCliEntryPoint,
   parseArgs,
   prepareCommandForSpawn,
@@ -41,6 +42,17 @@ import {
 } from "../src/cli.js";
 
 describe("create-expo-super-stack CLI helpers", () => {
+  it("infers stylesheet when no create-expo-stack styling flag is present", () => {
+    expect(inferGeneratorChoices([]).stylingSystem).toBe("stylesheet");
+    expect(inferGeneratorChoices(["--uniwind"]).stylingSystem).toBe("uniwind");
+    expect(inferGeneratorChoices(["--nativewind"]).stylingSystem).toBe("nativewind");
+    expect(inferGeneratorChoices(["--nativewindui"]).stylingSystem).toBe(
+      "nativewindui",
+    );
+    expect(inferGeneratorChoices(["--tamagui"]).stylingSystem).toBe("tamagui");
+    expect(inferGeneratorChoices(["--restyle"]).stylingSystem).toBe("restyle");
+  });
+
   it("parses help flags without forcing interactive prompts", () => {
     const longHelp = parseArgs(["--help"]);
     expect(longHelp.helpRequested).toBe(true);

@@ -23,19 +23,21 @@ export type OnboardingPersistenceMode =
   | 'supabase'
   | 'zustand-supabase';
 
+export type GeneratorStylingSystem =
+  | 'uniwind'
+  | 'nativewind'
+  | 'nativewindui'
+  | 'tamagui'
+  | 'restyle'
+  | 'stylesheet';
+
 export interface OnboardAnswers {
   appName: string;
   generatorScriptLanguage?: 'typescript' | 'javascript';
   generatorPackageManager?: 'npm' | 'pnpm' | 'yarn' | 'bun';
   generatorNavigationLibrary?: 'expo-router' | 'react-navigation';
   generatorReactNavigationLayout?: 'stack' | 'tabs' | 'drawer';
-  generatorStylingSystem?:
-    | 'uniwind'
-    | 'nativewind'
-    | 'nativewindui'
-    | 'tamagui'
-    | 'restyle'
-    | 'stylesheet';
+  generatorStylingSystem?: GeneratorStylingSystem;
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
   authProvider?: AuthProviderChoice;
@@ -124,6 +126,45 @@ interface GeneratedLibraryRouteAssets {
   expoSdk56?: ReadonlyMap<string, string>;
 }
 
+export function resolveGeneratorStylingSystem(
+  answers: Pick<OnboardAnswers, 'generatorStylingSystem' | 'defaults'>,
+  options: { manageUniwind?: boolean } = {}
+): GeneratorStylingSystem {
+  if (answers.generatorStylingSystem) {
+    return answers.generatorStylingSystem;
+  }
+
+  const defaults = answers.defaults ?? [];
+  if (defaults.includes('nativewindui')) {
+    return 'nativewindui';
+  }
+  if (defaults.includes('nativewind')) {
+    return 'nativewind';
+  }
+  if (defaults.includes('tamagui')) {
+    return 'tamagui';
+  }
+  if (defaults.includes('restyle')) {
+    return 'restyle';
+  }
+  if (defaults.includes('uniwind') || options.manageUniwind) {
+    return 'uniwind';
+  }
+  return 'stylesheet';
+}
+
+function usesCssUtilityStyling(stylingSystem: GeneratorStylingSystem): boolean {
+  return (
+    stylingSystem === 'uniwind' ||
+    stylingSystem === 'nativewind' ||
+    stylingSystem === 'nativewindui'
+  );
+}
+
+function usesNativeWindFamily(stylingSystem: GeneratorStylingSystem): boolean {
+  return stylingSystem === 'nativewind' || stylingSystem === 'nativewindui';
+}
+
 function buildGeneratedLibraryContext(
   answers: OnboardAnswers,
   navigationShell: NavigationShell,
@@ -140,16 +181,7 @@ function buildGeneratedLibraryContext(
     }
   }
 
-  const generatedStyling = answers.generatorStylingSystem;
-  const styling: LibraryStyling = generatedStyling
-    ? generatedStyling === 'stylesheet'
-      ? 'stylesheet'
-      : generatedStyling
-    : answers.defaults.includes('nativewindui')
-      ? 'nativewindui'
-      : manageUniwind
-        ? 'uniwind'
-        : 'stylesheet';
+  const styling: LibraryStyling = resolveGeneratorStylingSystem(answers, { manageUniwind });
 
   return {
     projectName: answers.appName,
@@ -380,7 +412,6 @@ const ZUSTAND_DEPENDENCIES = {
 
 const STYLIST_DEV_DEPENDENCIES = {
   '@types/node': '^25.9.1',
-  tailwindcss: '^4.2.4',
 } as const;
 
 const EXPO_UI_DEPENDENCIES = {
@@ -519,9 +550,11 @@ export async function scaffoldRichBoilerplate(
   options: RichBoilerplateOptions = { manageUniwind: true }
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
-  const needsNativeWindMetroPatch = !options.manageUniwind;
+  const stylingSystem = resolveGeneratorStylingSystem(answers, options);
+  const includeNativeWindUiExposition = stylingSystem === 'nativewindui';
+  const needsNativeWindMetroPatch =
+    !options.manageUniwind && usesNativeWindFamily(stylingSystem);
   const navigationShell = await detectNavigationShell(projectPath);
-  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
   const libraryContext = buildGeneratedLibraryContext(
     answers,
     navigationShell,
@@ -1106,14 +1139,15 @@ export async function scaffoldRichBoilerplate(
     );
   }
 
-  if (options.manageUniwind) {
+  const shouldManageUniwind = options.manageUniwind && stylingSystem === 'uniwind';
+  if (shouldManageUniwind) {
     results.push(
       await writeIfAllowed(path.join(projectPath, 'global.css'), renderGlobalCss(), force)
     );
   }
 
   await ensurePackageJson(projectPath, answers, options.manageUniwind);
-  if (options.manageUniwind) {
+  if (shouldManageUniwind) {
     await ensureUniwindGlobalCss(projectPath);
     await ensureUniwindMetroConfig(projectPath);
     await removeNativeWindArtifacts(projectPath);
@@ -1667,7 +1701,8 @@ async function ensurePackageJson(
     test: packageJson.scripts?.test ?? 'npm run lint && npm run typecheck',
   };
 
-  if (!manageUniwind) {
+  const stylingSystem = resolveGeneratorStylingSystem(answers, { manageUniwind });
+  if (!manageUniwind && usesNativeWindFamily(stylingSystem)) {
     packageJson.scripts['patch:nativewind-metro'] =
       packageJson.scripts['patch:nativewind-metro'] ?? 'node ./scripts/patch-nativewind-metro.cjs';
     packageJson.scripts.prestart =
@@ -1759,7 +1794,7 @@ async function ensurePackageJson(
     ...packageJson.dependencies,
   };
 
-  if (manageUniwind) {
+  if (manageUniwind && stylingSystem === 'uniwind') {
     packageJson.dependencies = {
       ...UNIWIND_DEPENDENCIES,
       ...packageJson.dependencies,
@@ -1780,6 +1815,13 @@ async function ensurePackageJson(
     ...packageJson.devDependencies,
     '@mr.dj2u/cli': packageJson.devDependencies?.['@mr.dj2u/cli'] ?? `^${MDS_CLI_VERSION}`,
   };
+
+  if (usesCssUtilityStyling(stylingSystem)) {
+    packageJson.devDependencies = {
+      ...packageJson.devDependencies,
+      tailwindcss: packageJson.devDependencies.tailwindcss ?? UNIWIND_DEV_DEPENDENCIES.tailwindcss,
+    };
+  }
 
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 }
@@ -1948,25 +1990,20 @@ function formatGeneratorNavigationType(
 }
 
 function formatCessStyleLibrary(answers: OnboardAnswers): string {
-  if (
-    answers.generatorStylingSystem === 'nativewindui' ||
-    answers.defaults.includes('nativewindui')
-  ) {
-    return 'NativeWindUI';
+  switch (resolveGeneratorStylingSystem(answers)) {
+    case 'nativewindui':
+      return 'NativeWindUI';
+    case 'nativewind':
+      return 'NativeWind';
+    case 'tamagui':
+      return 'Tamagui';
+    case 'restyle':
+      return 'Restyle';
+    case 'stylesheet':
+      return 'StyleSheet';
+    case 'uniwind':
+      return 'Uniwind';
   }
-  if (answers.generatorStylingSystem === 'nativewind' || answers.defaults.includes('nativewind')) {
-    return 'NativeWind';
-  }
-  if (answers.generatorStylingSystem === 'tamagui' || answers.defaults.includes('tamagui')) {
-    return 'Tamagui';
-  }
-  if (answers.generatorStylingSystem === 'restyle' || answers.defaults.includes('restyle')) {
-    return 'Restyle';
-  }
-  if (answers.generatorStylingSystem === 'stylesheet') {
-    return 'StyleSheet';
-  }
-  return 'Uniwind';
 }
 
 function formatGeneratorAuth(value: OnboardAnswers['generatorAuthBackend']): string {
@@ -2241,7 +2278,8 @@ async function scaffoldNavigationRoutes(
     'exposition',
     'nativewindui-screen'
   );
-  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
+  const includeNativeWindUiExposition =
+    resolveGeneratorStylingSystem(answers) === 'nativewindui';
   const shouldWriteExpositionRouteWrappers =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const appDirectory = path.relative(projectPath, appDir).split(path.sep).join('/');
@@ -3329,7 +3367,8 @@ function renderRichRootLayout(
   const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
-  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
+  const includeNativeWindUiExposition =
+    resolveGeneratorStylingSystem(answers) === 'nativewindui';
   const expositionScreens = shouldRegisterExpositionRoutes
     ? [
         '        <Stack.Screen name="exposition/index" options={{ title: \'Package Exposition\' }} />',
@@ -4083,7 +4122,8 @@ function renderNativeWindUiScreen(): string {
 }
 
 function renderHomeScreen(answers: OnboardAnswers, navigationShell: NavigationShell): string {
-  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
+  const includeNativeWindUiExposition =
+    resolveGeneratorStylingSystem(answers) === 'nativewindui';
   const onboardingLinks = shouldGenerateOnboarding(answers)
     ? [
         '        <Link href="/onboarding" asChild>',
@@ -4281,7 +4321,8 @@ async function ensureExpoRouterGroupLayouts(
     return [];
   }
   const results: WriteResult[] = [];
-  const includeNativeWindUiExposition = answers.defaults.includes('nativewindui');
+  const includeNativeWindUiExposition =
+    resolveGeneratorStylingSystem(answers) === 'nativewindui';
   if (navigationShell.layout === 'tabs') {
     const tabsDir = path.join(appDir, '(tabs)');
     await mkdir(tabsDir, { recursive: true });

@@ -675,6 +675,7 @@ describe('runOnboardCommand', () => {
     await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
     const answers = sampleAnswers('Nativewind Patch App');
     answers.appDirectory = 'src';
+    answers.generatorStylingSystem = 'nativewind';
     answers.defaults = ['project-docs', 'guidelines', 'doctor'];
     await scaffoldProjectMemory(projectPath, answers, {
       richBoilerplate: true,
@@ -1570,6 +1571,125 @@ describe('runOnboardCommand', () => {
     await expect(
       access(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'))
     ).rejects.toThrow();
+  });
+
+  it.each([
+    { manageUniwind: true, label: 'mds-managed' },
+    { manageUniwind: false, label: 'cess-owned' },
+  ])(
+    'generates no Uniwind/Tailwind/NativeWind artifacts when stylesheet is selected ($label)',
+    async ({ manageUniwind }) => {
+      const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-stylesheet-'));
+      tempDirs.push(projectPath);
+      await mkdir(path.join(projectPath, 'app'), { recursive: true });
+      await writeFile(
+        path.join(projectPath, 'package.json'),
+        JSON.stringify({
+          name: 'stylesheet-app',
+          scripts: {},
+          dependencies: {},
+          devDependencies: {},
+        }),
+        'utf8'
+      );
+
+      const answers = sampleAnswers('Stylesheet App');
+      answers.generatorStylingSystem = 'stylesheet';
+      answers.defaults = ['project-docs', 'guidelines', 'uniwind', 'nativewindui', 'doctor'];
+      await scaffoldProjectMemory(projectPath, answers, {
+        richBoilerplate: true,
+        manageUniwind,
+      });
+
+      const packageJson = JSON.parse(
+        await readFile(path.join(projectPath, 'package.json'), 'utf8')
+      ) as {
+        scripts: Record<string, string>;
+        dependencies: Record<string, string>;
+        devDependencies: Record<string, string>;
+      };
+      expect(packageJson.dependencies.uniwind).toBeUndefined();
+      expect(packageJson.dependencies.nativewind).toBeUndefined();
+      expect(packageJson.dependencies['@roninoss/nativewindui']).toBeUndefined();
+      expect(packageJson.devDependencies.tailwindcss).toBeUndefined();
+      expect(packageJson.devDependencies['prettier-plugin-tailwindcss']).toBeUndefined();
+      expect(packageJson.scripts['patch:nativewind-metro']).toBeUndefined();
+      expect(packageJson.scripts.prestart).toBeUndefined();
+      expect(packageJson.scripts.preandroid).toBeUndefined();
+      expect(packageJson.scripts.preweb).toBeUndefined();
+      expect(packageJson.scripts.postinstall).toBeUndefined();
+
+      await expect(access(path.join(projectPath, 'global.css'))).rejects.toThrow();
+      await expect(access(path.join(projectPath, 'nativewind-env.d.ts'))).rejects.toThrow();
+      await expect(access(path.join(projectPath, 'tailwind.config.js'))).rejects.toThrow();
+      await expect(access(path.join(projectPath, 'uniwind-types.d.ts'))).rejects.toThrow();
+      await expect(
+        access(path.join(projectPath, 'scripts', 'patch-nativewind-metro.cjs'))
+      ).rejects.toThrow();
+      await expect(
+        access(path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'))
+      ).rejects.toThrow();
+      await expect(
+        access(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'))
+      ).rejects.toThrow();
+      await expect(
+        access(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'))
+      ).rejects.toThrow();
+
+      const homeScreen = await readFile(
+        path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+        'utf8'
+      );
+      const expositionScreen = await readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      );
+      const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
+      expect(homeScreen).not.toContain('/exposition/nativewindui');
+      expect(homeScreen).not.toContain('className=');
+      expect(expositionScreen).not.toContain('/exposition/nativewindui');
+      expect(expositionScreen).not.toContain('className=');
+      expect(rootLayout).not.toContain('exposition/nativewindui');
+      expect(rootLayout).not.toContain('className=');
+      expect(rootLayout).not.toContain('global.css');
+    }
+  );
+
+  it('generates NativeWindUI artifacts from generatorStylingSystem even without a nativewindui default', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-nativewindui-flag-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'nativewindui-flag-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    const answers = sampleAnswers('NativeWindUI Flag App');
+    answers.generatorStylingSystem = 'nativewindui';
+    answers.defaults = ['project-docs', 'guidelines', 'doctor'];
+    await scaffoldProjectMemory(projectPath, answers, {
+      richBoilerplate: true,
+      manageUniwind: false,
+    });
+
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'nativewindui-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('NativeWindUI Exposition');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'components', 'nativewindui', 'Button.tsx'), 'utf8')
+    ).resolves.toContain('buttonVariants');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'exposition', 'nativewindui.tsx'), 'utf8')
+    ).resolves.toContain('nativewindui-screen');
   });
 
   it('installs newly declared packages by default and validates their presence', async () => {

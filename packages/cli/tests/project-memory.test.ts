@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
-import { renderGeneratedOnboardingConfig } from '../src/project-memory.js';
+import {
+  renderGeneratedOnboardingConfig,
+  resolveGeneratorStylingSystem,
+} from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
 
@@ -52,5 +55,41 @@ describe('renderGeneratedOnboardingConfig', () => {
     expect(rendered).toContain("mode: 'auth'");
     expect(rendered).not.toContain("mode: 'enter-app'");
     expect(rendered.includes('\r\n')).toBe(lineEnding === '\r\n');
+  });
+});
+
+describe('resolveGeneratorStylingSystem', () => {
+  it('prefers this run\'s generatorStylingSystem over stale defaults', () => {
+    expect(
+      resolveGeneratorStylingSystem({
+        generatorStylingSystem: 'stylesheet',
+        defaults: ['project-docs', 'uniwind', 'nativewindui'],
+      })
+    ).toBe('stylesheet');
+  });
+
+  it('falls back to a nativewindui default when the current run did not set a system', () => {
+    expect(
+      resolveGeneratorStylingSystem({
+        defaults: ['project-docs', 'guidelines', 'nativewindui'],
+      })
+    ).toBe('nativewindui');
+  });
+
+  it('falls back to Uniwind when MDS is managing Uniwind and no system is selected', () => {
+    expect(
+      resolveGeneratorStylingSystem(
+        { defaults: ['project-docs', 'guidelines', 'doctor'] },
+        { manageUniwind: true }
+      )
+    ).toBe('uniwind');
+  });
+
+  it('returns stylesheet when nothing selected the current run as a styling library', () => {
+    expect(
+      resolveGeneratorStylingSystem({
+        defaults: ['project-docs', 'guidelines', 'doctor'],
+      })
+    ).toBe('stylesheet');
   });
 });
