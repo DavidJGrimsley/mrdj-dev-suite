@@ -5,17 +5,33 @@ import { cancel, isCancel, multiselect } from '@clack/prompts';
 import chalk from 'chalk';
 
 import {
+  applyInventoryDecisions,
+  buildEjectionInventory,
+  defaultKeepIds,
+  expandLibraryDestinations,
+  generateEjectionCleanupTasks,
+  knownEjectionItemIds,
+  persistEjectionCleanup,
+  persistEjectionInventory,
+  type EjectionCleanupTask,
+  type EjectionInventory,
+  type EjectionInventoryStatus,
+  type ExpositionKeepKey,
+  inventoryStatusFrom,
+} from '../ejection-inventory.js';
+import {
   listLibraryDestinationsByTag,
   listLibraryDestinationsForItems,
 } from '../library-generation.js';
 import { runStylistEjectCommand, type StylistEjectArgv } from './stylist.js';
 
-export type ExpositionKeepKey = 'onboarding' | 'settings' | 'data' | 'stylist';
+export type { ExpositionKeepKey };
 
 export interface EjectExpositionArgv {
   path?: string;
   keep?: string;
   all?: boolean;
+  fromMemory?: boolean;
   json?: boolean;
   styleLibrary?: StylistEjectArgv['styleLibrary'];
   writePolicy?: StylistEjectArgv['writePolicy'];
@@ -30,16 +46,28 @@ interface EjectExpositionResult {
   autoSkipped: ExpositionKeepKey[];
   removedFiles: string[];
   stylistEjected: boolean;
+  inventory: EjectionInventory;
+  ejectionStatus: EjectionInventoryStatus;
+  cleanupTasks: EjectionCleanupTask[];
+  cleanupPath: string | null;
 }
 
-const KEEP_KEY_LABEL: Record<ExpositionKeepKey, string> = {
+const KEEP_KEY_LABEL: Record<string, string> = {
   onboarding: 'Onboarding Setup',
   settings: 'Settings Page',
   data: 'Data Adapter',
   stylist: 'Stylist',
+  auth: 'Auth Flow',
+  legal: 'Legal Documents',
+  exposition: 'Exposition Pages',
+  'expo-sdk-56': 'Expo SDK 56 Exposition',
+  nativewindui: 'NativeWindUI Exposition',
+  swmansion: 'Software Mansion Demos',
+  'create-expo-app': 'create-expo-app Components',
+  'create-expo-stack': 'create-expo-stack Starter Components',
 };
 
-const ALL_KEEP_KEYS: ExpositionKeepKey[] = ['onboarding', 'settings', 'data', 'stylist'];
+const LEGACY_KEEP_KEYS: ExpositionKeepKey[] = ['onboarding', 'settings', 'data', 'stylist'];
 const LEGACY_ONBOARDING_PREVIEW_DESTINATIONS = [
   '{{featuresDir}}/onboarding/onboarding-screen.tsx',
   '{{featuresDir}}/onboarding/agreement-screen.tsx',
@@ -58,12 +86,27 @@ const LEGACY_ONBOARDING_PREVIEW_DESTINATIONS = [
 export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const stylistPresent = await hasStylistArtifacts(projectPath);
+  const inventory = await buildEjectionInventory(projectPath);
+  const stylistPresent =
+    inventory.items.find((item) => item.id === 'stylist')?.present ??
+    (await hasStylistArtifacts(projectPath));
 
-  const keepRequested = await resolveKeepSelection(argv, interactive, stylistPresent);
-  const keep = keepRequested.filter((item) => item !== 'stylist' || stylistPresent);
-  const autoSkipped = keepRequested.filter((item) => item === 'stylist' && !stylistPresent);
+  const keepRequested = await resolveKeepSelection(argv, interactive, inventory);
+  const presentIds = new Set(
+    inventory.items.filter((item) => item.present || (item.id === 'stylist' && stylistPresent)).map((item) => item.id)
+  );
+  if (stylistPresent) {
+    presentIds.add('stylist');
+  }
+  const keep = keepRequested.filter((item) => item !== 'stylist' || stylistPresent).filter((item) => {
+    if (LEGACY_KEEP_KEYS.includes(item)) {
+      return item !== 'stylist' || stylistPresent;
+    }
+    return presentIds.has(item) || item !== 'stylist';
+  });
+  const autoSkipped = keepRequested.filter((item) => !keep.includes(item));
 
+  const decided = applyInventoryDecisions(inventory, keep, { confirm: true });
   const removedFiles: string[] = [];
 
   if (!keep.includes('stylist') && stylistPresent) {
@@ -87,11 +130,26 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
     removedFiles.push(...(await removeDataAdapterSetup(projectPath)));
   }
 
+  for (const extraId of ['auth', 'legal', 'create-expo-app', 'create-expo-stack'] as const) {
+    if (!keep.includes(extraId)) {
+      const extraItem = decided.items.find((item) => item.id === extraId);
+      if (extraItem && (extraItem.present || extraItem.destinations.length > 0)) {
+        removedFiles.push(
+          ...(await removeExistingFiles(expandLibraryDestinations(projectPath, extraItem.destinations)))
+        );
+      }
+    }
+  }
+
   removedFiles.push(...(await removeSharedExpositionArtifacts(projectPath, keep)));
 
   await removeReferencesForRemovedGroups(projectPath, keep);
 
   const dedupedRemoved = Array.from(new Set(removedFiles));
+  const ejectedItems = decided.items.filter((item) => item.decision === 'eject');
+  const cleanupTasks = await generateEjectionCleanupTasks(projectPath, ejectedItems, dedupedRemoved);
+  await persistEjectionInventory(projectPath, decided);
+  const persistedCleanup = await persistEjectionCleanup(projectPath, decided, cleanupTasks);
 
   const result: EjectExpositionResult = {
     projectPath,
@@ -102,6 +160,10 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
     autoSkipped,
     removedFiles: dedupedRemoved,
     stylistEjected: !keep.includes('stylist') && stylistPresent,
+    inventory: decided,
+    ejectionStatus: inventoryStatusFrom(decided),
+    cleanupTasks,
+    cleanupPath: persistedCleanup.cleanupPath,
   };
 
   if (argv.json) {
@@ -111,11 +173,16 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
 
   console.log(chalk.bold('mds eject exposition'));
   console.log(chalk.dim(projectPath));
-  console.log(`Keeping: ${keep.map((item) => KEEP_KEY_LABEL[item]).join(', ') || 'nothing'}`);
+  console.log(`Phase 0 ejection status: ${result.ejectionStatus.decision}`);
+  console.log(
+    `Keeping: ${keep.map((item) => KEEP_KEY_LABEL[item] ?? item).join(', ') || 'nothing'}`
+  );
   if (autoSkipped.length > 0) {
     console.log(
       chalk.yellow(
-        `Auto-skipped unavailable keep options: ${autoSkipped.map((item) => KEEP_KEY_LABEL[item]).join(', ')}`
+        `Auto-skipped unavailable keep options: ${autoSkipped
+          .map((item) => KEEP_KEY_LABEL[item] ?? item)
+          .join(', ')}`
       )
     );
   }
@@ -126,71 +193,72 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
   for (const filePath of dedupedRemoved) {
     console.log(`- removed ${path.relative(process.cwd(), filePath)}`);
   }
+  if (cleanupTasks.length > 0) {
+    console.log(chalk.yellow(`Generated ${cleanupTasks.length} cleanup follow-up(s).`));
+    if (persistedCleanup.cleanupPath) {
+      console.log(`- wrote ${path.relative(process.cwd(), persistedCleanup.cleanupPath)}`);
+    }
+  }
 }
 
-function parseKeepCsv(input: string): ExpositionKeepKey[] {
+function parseKeepCsv(input: string, inventory: EjectionInventory): ExpositionKeepKey[] {
   const tokens = input
     .split(',')
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 
-  const invalid = tokens.filter((item) => !ALL_KEEP_KEYS.includes(item as ExpositionKeepKey));
+  const valid = new Set(knownEjectionItemIds(inventory));
+  const invalid = tokens.filter((item) => !valid.has(item));
   if (invalid.length > 0) {
     throw new Error(
-      `Invalid --keep value(s): ${invalid.join(', ')}. Valid values: ${ALL_KEEP_KEYS.join(', ')}.`
+      `Invalid --keep value(s): ${invalid.join(', ')}. Valid values: ${[...valid].sort().join(', ')}.`
     );
   }
 
-  return Array.from(new Set(tokens as ExpositionKeepKey[]));
+  return Array.from(new Set(tokens));
 }
 
 async function resolveKeepSelection(
   argv: EjectExpositionArgv,
   interactive: boolean,
-  stylistPresent: boolean
+  inventory: EjectionInventory
 ): Promise<ExpositionKeepKey[]> {
   if (argv.all) {
     return [];
   }
 
+  if (argv.fromMemory) {
+    return defaultKeepIds(inventory);
+  }
+
   if (argv.keep?.trim()) {
-    return parseKeepCsv(argv.keep);
+    return parseKeepCsv(argv.keep, inventory);
   }
 
   if (!interactive) {
-    throw new Error('Non-interactive mode requires --keep or --all. Example: mds eject exposition . --keep onboarding,settings');
+    throw new Error(
+      'Non-interactive mode requires --keep, --from-memory, or --all. Example: mds eject exposition . --keep onboarding,settings'
+    );
   }
 
-  const options = [
-    {
-      value: 'onboarding' as const,
-      label: KEEP_KEY_LABEL.onboarding,
-      hint: 'Keep generated onboarding route/screens.',
-    },
-    {
-      value: 'settings' as const,
-      label: KEEP_KEY_LABEL.settings,
-      hint: 'Keep modal settings route/screen.',
-    },
-    {
-      value: 'data' as const,
-      label: KEEP_KEY_LABEL.data,
-      hint: 'Keep data adapter exposition page.',
-    },
-    ...(stylistPresent
-      ? [
-          {
-            value: 'stylist' as const,
-            label: KEEP_KEY_LABEL.stylist,
-            hint: 'Keep stylist page and sync API route.',
-          },
-        ]
-      : []),
-  ];
+  const presentItems = inventory.items.filter((item) => item.present || item.id === 'stylist');
+  const options = (presentItems.length > 0 ? presentItems : inventory.items).map((item) => ({
+    value: item.id,
+    label: item.label,
+    hint: item.selectedInMemory
+      ? `Selected in project memory; default ${item.defaultDecision}.`
+      : item.description,
+  }));
+
+  const initialValues = defaultKeepIds(
+    presentItems.length > 0 ? { ...inventory, items: presentItems } : inventory
+  );
 
   const answer = await multiselect<ExpositionKeepKey>({
-    message: 'Choose which generated sections to keep before ejecting exposition artifacts.',
-    options,
+    message:
+      'Choose which generated components to retain. Items selected in project memory are checked by default.',
+    options: options.length > 0 ? options : [{ value: 'settings', label: 'Settings Page', hint: 'No generated inventory was found.' }],
+    initialValues,
     required: false,
   });
 
@@ -234,7 +302,7 @@ async function removeDataAdapterSetup(projectPath: string): Promise<string[]> {
 
 async function removeSharedExpositionArtifacts(
   projectPath: string,
-  keep: ExpositionKeepKey[]
+  keep: readonly string[]
 ): Promise<string[]> {
   const removeData = !keep.includes('data');
   const removeStylist = !keep.includes('stylist');
@@ -273,44 +341,12 @@ function libraryFilesForDestinations(
   projectPath: string,
   destinations: readonly string[]
 ): string[] {
-  const files = new Set<string>();
-  for (const destination of destinations) {
-    const appDirectories = destination.includes('{{appDir}}') ? ['app', 'src/app'] : [null];
-    const componentDirectories = destination.includes('{{componentsDir}}')
-      ? ['components', 'src/components']
-      : [null];
-    const featureDirectories = destination.includes('{{featuresDir}}')
-      ? ['features', 'src/features']
-      : [null];
-    for (const appDirectory of appDirectories) {
-      for (const componentsDirectory of componentDirectories) {
-        for (const featuresDirectory of featureDirectories) {
-          const relativePath = destination
-            .split('{{appDir}}')
-            .join(appDirectory ?? '')
-            .split('{{componentsDir}}')
-            .join(componentsDirectory ?? '')
-            .split('{{featuresDir}}')
-            .join(featuresDirectory ?? '');
-          if (relativePath.includes('{{') || path.isAbsolute(relativePath)) {
-            throw new Error(`Unsafe MDS Library ejection destination: ${destination}`);
-          }
-          const resolved = path.resolve(projectPath, relativePath);
-          const relative = path.relative(projectPath, resolved);
-          if (relative.startsWith('..') || path.isAbsolute(relative)) {
-            throw new Error(`Unsafe MDS Library ejection destination: ${destination}`);
-          }
-          files.add(resolved);
-        }
-      }
-    }
-  }
-  return [...files];
+  return expandLibraryDestinations(projectPath, destinations);
 }
 
 async function removeReferencesForRemovedGroups(
   projectPath: string,
-  keep: ExpositionKeepKey[]
+  keep: readonly string[]
 ): Promise<void> {
   const layoutFiles = [
     path.join(projectPath, 'src', 'app', '_layout.tsx'),

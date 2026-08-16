@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { explainTopic } from '../src/commands/explain.js';
 import { renderMarkdownReport } from '../src/commands/report.js';
+import { renderDeveloperCopyMarkdown } from '../src/developer-copy.js';
 import { listSkillSummaries } from '../src/commands/skills.js';
 
 import { createModeSelection } from '@mr.dj2u/doctor';
@@ -79,5 +80,29 @@ describe('Phase 3 command helpers', () => {
     expect(markdown).toContain('0 errors, 1 warnings, 1 passed, 0 skipped');
     expect(markdown).toContain('### WARN env hygiene');
     expect(markdown).toContain('"files"');
+  });
+
+  it('renders a Markdown developer-copy report', () => {
+    const markdown = renderDeveloperCopyMarkdown({
+      kind: 'developer-copy',
+      projectPath: 'F:/ReactNativeApps/Demo',
+      timestamp: '2026-08-16T00:00:00.000Z',
+      summary: { findings: 1, errors: 1, warnings: 0 },
+      findings: [
+        {
+          severity: 'error',
+          code: 'placeholder-legal',
+          file: 'src/features/legal/legal-documents.ts',
+          line: 22,
+          excerpt: 'This placeholder legal text is not legal advice.',
+          message: 'Placeholder legal copy is still in a user-facing file and must be replaced before release.',
+        },
+      ],
+    });
+
+    expect(markdown).toContain('# MDS Developer Copy Report');
+    expect(markdown).toContain('1 errors, 0 warnings, 1 findings');
+    expect(markdown).toContain('### ERROR placeholder-legal');
+    expect(markdown).toContain('src/features/legal/legal-documents.ts:22');
   });
 });

@@ -10,6 +10,15 @@ import {
   renderComponentStrategySection,
   resolveComponentStrategyForRender,
 } from './component-strategy.js';
+import {
+  PHASE0_EJECTION_INVENTORY_TODO,
+  PHASE4_DEVELOPER_COPY_TODO,
+  parseEjectionInventory,
+  renderEjectionInventorySection,
+  resolveEjectionInventoryForRender,
+  shouldSkipGeneratedSubstitute,
+  type EjectionInventory,
+} from './ejection-inventory.js';
 
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
@@ -30,6 +39,17 @@ export {
   renderComponentStrategySection,
   resolveComponentStrategyForRender,
 } from './component-strategy.js';
+
+export {
+  EJECTION_INVENTORY_HEADING,
+  PHASE0_EJECTION_INVENTORY_TODO,
+  PHASE3_EJECTION_CLEANUP_TODO,
+  PHASE4_DEVELOPER_COPY_TODO,
+  isEjectionInventoryResolved,
+  parseEjectionInventory,
+  renderEjectionInventorySection,
+  resolveEjectionInventoryForRender,
+} from './ejection-inventory.js';
 
 export type {
   ComponentStrategy,
@@ -142,6 +162,8 @@ interface PackageJson {
 interface RichBoilerplateOptions {
   manageUniwind: boolean;
 }
+
+let activeScaffoldGuard: { projectPath: string; inventory: EjectionInventory | null } | null = null;
 type NavigationLibrary = 'expo-router' | 'react-navigation';
 type NavigationLayout = 'stack' | 'tabs' | 'drawer + tabs';
 
@@ -516,6 +538,7 @@ const INFO_HEADINGS = [
   'Research, Notes, and References',
   'Tech Stack & CESS Onboarding',
   'Component Strategy',
+  'Ejection Inventory',
 ] as const;
 
 const STYLE_HEADINGS = [
@@ -754,6 +777,26 @@ export async function scaffoldRichBoilerplate(
   options: RichBoilerplateOptions = { manageUniwind: true }
 ): Promise<WriteResult[]> {
   const results: WriteResult[] = [];
+  const existingInfo = await readOptionalText(path.join(projectPath, 'project', 'info.md'));
+  const previousGuard = activeScaffoldGuard;
+  activeScaffoldGuard = {
+    projectPath,
+    inventory: existingInfo ? parseEjectionInventory(existingInfo) : null,
+  };
+  try {
+    return await scaffoldRichBoilerplateInner(projectPath, answers, force, options, results);
+  } finally {
+    activeScaffoldGuard = previousGuard;
+  }
+}
+
+async function scaffoldRichBoilerplateInner(
+  projectPath: string,
+  answers: OnboardAnswers,
+  force: boolean,
+  options: RichBoilerplateOptions,
+  results: WriteResult[]
+): Promise<WriteResult[]> {
   const stylingSystem = resolveGeneratorStylingSystem(answers, options);
   const includeNativeWindUiExposition = stylingSystem === 'nativewindui';
   const needsNativeWindMetroPatch =
@@ -1290,7 +1333,12 @@ export async function scaffoldRichBoilerplate(
       );
     }
 
-    if (!answers.includeCreateExpoComponents) {
+    const retainCreateExpoComponents =
+      answers.includeCreateExpoComponents ||
+      activeScaffoldGuard?.inventory?.items.some(
+        (item) => item.id === 'create-expo-app' && item.decision === 'retain'
+      );
+    if (!retainCreateExpoComponents) {
       await removeOptionalFile(path.join(appDir, 'details.tsx'));
     }
   }
@@ -1486,6 +1534,22 @@ export function renderInfo(
     `- Use test-to-main safeguards: ${formatYesNo(answers.testToMainSafeguards)}`,
     '',
     renderComponentStrategySection(componentStrategyFromAnswers(answers, existingInfo)),
+    renderEjectionInventorySection(
+      resolveEjectionInventoryForRender(
+        {
+          includeCreateExpoComponents: answers.includeCreateExpoComponents,
+          onboardingFlow: answers.onboardingFlow,
+          legalDocumentMode: answers.legalDocumentMode,
+          authProvider: answers.authProvider,
+          dataStart: answers.dataStart,
+          usesExpoUi: answers.usesExpoUi,
+          usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
+          usesExpoNativeTabs: answers.usesExpoNativeTabs,
+          stylingSystem: resolveGeneratorStylingSystem(answers),
+        },
+        existingInfo
+      )
+    ),
   ].join('\n');
 }
 
@@ -1521,11 +1585,12 @@ export function renderTodo(answers: OnboardAnswers): string {
     '## Phase 0: Orientation And Planning',
     '',
     `- [ ] ${PHASE0_COMPONENT_STRATEGY_TODO}`,
+    `- [ ] ${PHASE0_EJECTION_INVENTORY_TODO}`,
     '- [ ] Browse exposition pages to understand included base packages.',
     "- [ ] Review styling in the 'Stylist' page.",
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
     '- [ ] Run or defer `eject-stylist`; mark this todo done after ejection or deciding to defer (if you want to keep the stylist around for tinkering).',
-    '- [ ] Run `mds eject exposition` and keep only the generated sections you want to retain.',
+    '- [ ] Run `mds eject` and keep only the generated sections you want to retain.',
     ...((answers.generatorEasSetup ?? answers.easUses.length > 0)
       ? ['- [ ] Sign in and set up EAS in the terminal.']
       : []),
@@ -1592,6 +1657,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     '## Phase 4: Polish, Safeguards, And Release',
     '',
+    `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',
     ...(answers.testToMainSafeguards
       ? [
@@ -3228,6 +3294,13 @@ async function writeIfAllowed(
   contents: string,
   force: boolean
 ): Promise<WriteResult> {
+  if (
+    activeScaffoldGuard &&
+    shouldSkipGeneratedSubstitute(activeScaffoldGuard.inventory, activeScaffoldGuard.projectPath, filePath)
+  ) {
+    return { filePath, wrote: false };
+  }
+
   if (!force && (await fileExists(filePath))) {
     return { filePath, wrote: false };
   }

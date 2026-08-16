@@ -452,7 +452,7 @@ async function main(): Promise<void> {
     )
     .command(
       'eject [path]',
-      'Interactively eject generated exposition artifacts while keeping selected sections',
+      'Review the generated-component inventory and eject artifacts that should not ship',
       (builder) =>
         builder
           .positional('path', {
@@ -461,8 +461,14 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('keep', {
-            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            describe:
+              'Comma-separated inventory items to retain (for example onboarding,settings,create-expo-app)',
             type: 'string',
+          })
+          .option('from-memory', {
+            describe: 'Retain items selected in project memory and eject the rest',
+            type: 'boolean',
+            default: false,
           })
           .option('all', {
             describe: 'Remove all generated sections and keep nothing',
@@ -480,7 +486,7 @@ async function main(): Promise<void> {
     )
     .command(
       'eject exposition [path]',
-      'Eject generated exposition artifacts and keep only selected sections',
+      'Eject generated exposition artifacts using the project-memory-aware inventory',
       (builder) =>
         builder
           .positional('path', {
@@ -489,8 +495,14 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('keep', {
-            describe: 'Comma-separated sections to keep: onboarding,settings,data,stylist',
+            describe:
+              'Comma-separated inventory items to retain (for example onboarding,settings,create-expo-app)',
             type: 'string',
+          })
+          .option('from-memory', {
+            describe: 'Retain items selected in project memory and eject the rest',
+            type: 'boolean',
+            default: false,
           })
           .option('all', {
             describe: 'Remove all generated sections and keep nothing',
@@ -772,7 +784,7 @@ async function main(): Promise<void> {
     )
     .command(
       'report [path]',
-      'Generate a local Doctor-backed project report',
+      'Generate a local Doctor-backed project report or pre-release developer-copy report',
       (builder) =>
         builder
           .positional('path', {
@@ -784,6 +796,11 @@ async function main(): Promise<void> {
             describe: 'Doctor mode',
             choices: ['fast', 'ci', 'full'] as const,
             default: 'fast' as const,
+          })
+          .option('kind', {
+            describe: 'doctor for health checks, content for leftover placeholder copy, or all',
+            choices: ['doctor', 'content', 'all'] as const,
+            default: 'doctor' as const,
           })
           .option('scripts', {
             describe: 'Run package scripts in addition to static checks',

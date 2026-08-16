@@ -17,6 +17,11 @@ export type {
 } from './commands/continue.js';
 
 export type {
+  EjectionInventory,
+  EjectionInventoryStatus,
+} from './ejection-inventory.js';
+
+export type {
   ExpoSdkSnapshot,
   ExpoSdkStatus,
   ExpoVersionsCatalog,
