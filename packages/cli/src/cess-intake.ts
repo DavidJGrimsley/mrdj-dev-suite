@@ -18,7 +18,13 @@ import {
 
 import type { OnboardArgv } from './commands/onboard.js';
 import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from './project-memory.js';
-import { deriveOnboardingPersistence } from './project-memory.js';
+import { componentStrategyFromAnswers, deriveOnboardingPersistence } from './project-memory.js';
+import {
+  formatComponentStrategySummary,
+  parseComponentStrategy,
+  parseComponentStrategyDecision,
+  type ComponentStrategyDecision,
+} from './component-strategy.js';
 
 export type CessScriptLanguage = 'typescript' | 'javascript';
 export type CessPackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
@@ -81,6 +87,7 @@ export interface CessIntakeAnswers {
   usesExpoUi?: boolean;
   usesExpoUiUniversalComponents?: boolean;
   usesExpoNativeTabs?: boolean;
+  componentStrategyDecision?: ComponentStrategyDecision;
   easUses?: string[];
   guidelinesTemplate?: boolean;
   dataStart?: OnboardAnswers['dataStart'];
@@ -846,6 +853,19 @@ export function extractCessInfoFromMarkdown(input: {
     extractTechStackDecisions(techStackSection, assignValue, TECH_STACK_PRIORITY);
   }
 
+  const componentStrategySection = getMarkdownSection(sections, 'Component Strategy');
+  if (componentStrategySection) {
+    usedSections.add('Component Strategy');
+    extractComponentStrategyDecisions(componentStrategySection, assignValue, VISIBLE_SECTION_PRIORITY);
+  } else {
+    assignValue(
+      'componentStrategyDecision',
+      'pending',
+      'Default Phase 0 pending component-strategy decision',
+      SNAPSHOT_PRIORITY
+    );
+  }
+
   const onboardingDecisionsSection = sections.get('Onboarding Decisions');
   if (onboardingDecisionsSection) {
     usedSections.add('Onboarding Decisions');
@@ -1514,6 +1534,45 @@ function extractTechStackDecisions(
   extractOnboardingDecisionLines(value, assignValue, priority);
 }
 
+function extractComponentStrategyDecisions(
+  value: string,
+  assignValue: (
+    id: keyof CessIntakeAnswers,
+    nextValue: CessIntakeAnswers[keyof CessIntakeAnswers] | undefined,
+    note: string,
+    priority?: number
+  ) => void,
+  priority = VISIBLE_SECTION_PRIORITY
+): void {
+  const parsed = parseComponentStrategy(`## Component Strategy\n\n${value}`);
+  if (parsed) {
+    assignValue('stylingSystem', parsed.stylingSystem, 'Component Strategy section', priority);
+    assignValue('usesExpoUi', parsed.usesExpoUi, 'Component Strategy section', priority);
+    assignValue(
+      'usesExpoUiUniversalComponents',
+      parsed.usesExpoUiUniversalComponents,
+      'Component Strategy section',
+      priority
+    );
+    assignValue('usesExpoNativeTabs', parsed.usesExpoNativeTabs, 'Component Strategy section', priority);
+    assignValue(
+      'componentStrategyDecision',
+      parsed.decision,
+      'Component Strategy section',
+      priority
+    );
+    return;
+  }
+
+  const decision = parseComponentStrategyDecision(extractKeyValue(value, 'Decision'));
+  assignValue(
+    'componentStrategyDecision',
+    decision ?? 'pending',
+    'Component Strategy section',
+    priority
+  );
+}
+
 function extractOnboardingDecisionLines(
   value: string,
   assignValue: (
@@ -1552,6 +1611,13 @@ function extractOnboardingDecisionLines(
       assignValue('usesExpoUiUniversalComponents', parseBooleanValue(rawValue), 'Onboarding decisions', priority);
     } else if (loweredKey === 'expo native tabs') {
       assignValue('usesExpoNativeTabs', parseBooleanValue(rawValue), 'Onboarding decisions', priority);
+    } else if (loweredKey === 'component strategy decision' || loweredKey === 'decision') {
+      assignValue(
+        'componentStrategyDecision',
+        parseComponentStrategyDecision(rawValue),
+        'Onboarding decisions',
+        priority
+      );
     } else if (loweredKey === 'target platforms') {
       const targetPlatforms = parsePlatformList(rawValue);
       if (targetPlatforms.length > 0) {
@@ -1715,6 +1781,8 @@ function normalizeExtractedAnswerValue(
       return normalizeEnum(value, ['stack', 'tabs', 'drawer']);
     case 'stylingSystem':
       return normalizeEnum(value, ['uniwind', 'nativewind', 'nativewindui', 'tamagui', 'restyle', 'stylesheet']);
+    case 'componentStrategyDecision':
+      return parseComponentStrategyDecision(typeof value === 'string' ? value : undefined);
     case 'stateManagement':
       return normalizeEnum(value, ['zustand', 'none']);
     case 'authBackend':
@@ -2093,6 +2161,9 @@ export function normalizeCessIntakeAnswers(
     answers.usesExpoUiUniversalComponents
   );
   normalized.usesExpoNativeTabs = normalizeBoolean(answers.usesExpoNativeTabs);
+  normalized.componentStrategyDecision = parseComponentStrategyDecision(
+    answers.componentStrategyDecision
+  );
   normalized.easUses = normalizeStringArray(answers.easUses);
   normalized.guidelinesTemplate = normalizeBoolean(answers.guidelinesTemplate);
   normalized.dataStart = normalizeEnum(answers.dataStart, ['local', 'supabase']);
@@ -2219,6 +2290,9 @@ export function buildMdsFlags(
   } else {
     flags.push('--mds-no-expo-native-tabs');
   }
+  flags.push(
+    `--mds-component-strategy-decision=${onboardAnswers.componentStrategyDecision ?? 'pending'}`
+  );
   if (onboardAnswers.easUses.length > 0) {
     flags.push(`--mds-eas-uses=${quoteFlagValue(onboardAnswers.easUses.join(','))}`);
   }
@@ -2303,6 +2377,9 @@ export function buildCessSummaryLines(
     serverLine,
     onboardingLine,
     `data start: ${onboardAnswers.dataStart}, test-to-main: ${onboardAnswers.testToMainSafeguards ? 'on' : 'off'}, guidelines template: ${answers.guidelinesTemplate === false ? 'off' : 'on'}, save defaults: ${answers.saveDefaults ? 'on' : 'off'}`,
+    `component strategy: ${formatComponentStrategySummary(
+      componentStrategyFromAnswers(onboardAnswers)
+    )}`,
   ];
 }
 
@@ -2382,6 +2459,10 @@ function buildResolvedCessAnswers(
       currentAnswers.usesExpoUiUniversalComponents ??
       (usesExpoUi ? onboardAnswers.usesExpoUiUniversalComponents : false),
     usesExpoNativeTabs: currentAnswers.usesExpoNativeTabs ?? onboardAnswers.usesExpoNativeTabs,
+    componentStrategyDecision:
+      currentAnswers.componentStrategyDecision ??
+      onboardAnswers.componentStrategyDecision ??
+      'pending',
     easUses: currentAnswers.easUses ?? onboardAnswers.easUses,
     guidelinesTemplate: currentAnswers.guidelinesTemplate ?? true,
     dataStart: currentAnswers.dataStart ?? onboardAnswers.dataStart,
@@ -2455,6 +2536,7 @@ function buildOnboardArgvFromCess(
     expoUi: answers.usesExpoUi,
     expoUiUniversal: answers.usesExpoUiUniversalComponents,
     expoNativeTabs: answers.usesExpoNativeTabs,
+    componentStrategyDecision: answers.componentStrategyDecision,
     easSelected: answers.easSetup,
     easUses: answers.easUses,
     guidelinesTemplate: answers.guidelinesTemplate,

@@ -27,7 +27,12 @@ import {
   savePersonalOnboardDefaults,
   validateRequiredInput,
 } from '../src/commands/onboard.js';
-import { deriveOnboardingPersistence, renderTodo, scaffoldProjectMemory } from '../src/project-memory.js';
+import {
+  deriveOnboardingPersistence,
+  renderInfo,
+  renderTodo,
+  scaffoldProjectMemory,
+} from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
 
@@ -76,6 +81,15 @@ describe('runOnboardCommand', () => {
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '# Tech Stack & CESS Onboarding'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '## Component Strategy'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '- Decision: pending'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
+      'Confirm the Phase 0 component strategy in `project/info.md`'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
@@ -1838,6 +1852,24 @@ describe('runOnboardCommand', () => {
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
     expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
+  });
+
+  it('persists a pending Phase 0 component strategy by default', () => {
+    const plan = defaultOnboardPlan({
+      project: path.join(os.tmpdir(), 'strategy-app'),
+      generatorStylingSystem: 'uniwind',
+      expoUi: true,
+      expoUiUniversal: true,
+      expoNativeTabs: true,
+    });
+    const info = renderInfo(plan.answers.appName, plan.answers);
+    const todo = renderTodo(plan.answers);
+
+    expect(plan.answers.componentStrategyDecision).toBe('pending');
+    expect(info).toContain('## Component Strategy');
+    expect(info).toContain('- Style Library: Uniwind');
+    expect(info).toContain('- Decision: pending');
+    expect(todo).toContain('Confirm the Phase 0 component strategy in `project/info.md`');
   });
 
   it('adds a Phase 0 manual EAS setup step when EAS is planned', () => {

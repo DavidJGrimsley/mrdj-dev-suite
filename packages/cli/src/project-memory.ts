@@ -5,10 +5,40 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock } from './stylist-theme.js';
 import { loadLibraryTextAssets, requireLibraryTextAsset } from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
+import {
+  PHASE0_COMPONENT_STRATEGY_TODO,
+  renderComponentStrategySection,
+  resolveComponentStrategyForRender,
+} from './component-strategy.js';
 
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
+import type { ComponentStrategy, ComponentStrategyDecision } from './component-strategy.js';
+
+export {
+  COMPONENT_STRATEGY_HEADING,
+  PHASE0_COMPONENT_STRATEGY_TODO,
+  buildComponentStrategy,
+  detectComponentStrategyConflicts,
+  formatComponentStrategySummary,
+  formatStylingSystemLabel,
+  isComponentStrategyResolved,
+  parseComponentStrategy,
+  parseComponentStrategyDecision,
+  parseStylingSystemLabel,
+  renderComponentStrategySection,
+  resolveComponentStrategyForRender,
+} from './component-strategy.js';
+
+export type {
+  ComponentStrategy,
+  ComponentStrategyConflict,
+  ComponentStrategyConflictCode,
+  ComponentStrategyDecision,
+  ComponentStrategyInput,
+  ComponentStrategyStylingSystem,
+} from './component-strategy.js';
 
 export type DataStart = 'local' | 'supabase';
 export type AppDirectory = 'src' | 'root';
@@ -70,6 +100,7 @@ export interface OnboardAnswers {
   usesExpoUi: boolean;
   usesExpoUiUniversalComponents: boolean;
   usesExpoNativeTabs: boolean;
+  componentStrategyDecision?: ComponentStrategyDecision;
   easUses: string[];
   projectInfoReady: boolean;
   projectStyleReady: boolean;
@@ -484,6 +515,7 @@ const INFO_HEADINGS = [
   'Later Scope & Possibilities',
   'Research, Notes, and References',
   'Tech Stack & CESS Onboarding',
+  'Component Strategy',
 ] as const;
 
 const STYLE_HEADINGS = [
@@ -1453,7 +1485,33 @@ export function renderInfo(
     `- Start with MDS project guidelines template: ${formatYesNo(true)}`,
     `- Use test-to-main safeguards: ${formatYesNo(answers.testToMainSafeguards)}`,
     '',
+    renderComponentStrategySection(componentStrategyFromAnswers(answers, existingInfo)),
   ].join('\n');
+}
+
+export function componentStrategyFromAnswers(
+  answers: Pick<
+    OnboardAnswers,
+    | 'generatorStylingSystem'
+    | 'defaults'
+    | 'usesExpoUi'
+    | 'usesExpoUiUniversalComponents'
+    | 'usesExpoNativeTabs'
+    | 'componentStrategyDecision'
+  >,
+  existingInfo?: string | null,
+  options: { manageUniwind?: boolean } = {}
+): ComponentStrategy {
+  return resolveComponentStrategyForRender(
+    {
+      stylingSystem: resolveGeneratorStylingSystem(answers, options),
+      usesExpoUi: answers.usesExpoUi,
+      usesExpoUiUniversalComponents: answers.usesExpoUiUniversalComponents,
+      usesExpoNativeTabs: answers.usesExpoNativeTabs,
+      decision: answers.componentStrategyDecision,
+    },
+    existingInfo
+  );
 }
 
 export function renderTodo(answers: OnboardAnswers): string {
@@ -1462,6 +1520,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     '## Phase 0: Orientation And Planning',
     '',
+    `- [ ] ${PHASE0_COMPONENT_STRATEGY_TODO}`,
     '- [ ] Browse exposition pages to understand included base packages.',
     "- [ ] Review styling in the 'Stylist' page.",
     '- [ ] Review `project/` files for accuracy and planning adjustments.',
@@ -1617,6 +1676,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- The `project/` folder is the golden source of truth for product intent, roadmap, visual style, and technical rules.',
     '- Agents and contributors must read `project/info.md`, `project/todo.md`, `project/style.md`, and this file before making product or architecture changes.',
     '- Never make a change that conflicts with the project memory files unless the user explicitly updates them first.',
+    '- Honor the `Component Strategy` section in `project/info.md`. Do not start Phase 1 until Decision is confirmed.',
     '',
     '## TodoForContext Markers Block Onboarding',
     '',
@@ -1683,6 +1743,7 @@ export function renderGuidelines(answers: OnboardAnswers): string {
         ]
       : []),
     `- Expo UI Universal components preference captured during onboarding: ${formatBoolean(answers.usesExpoUiUniversalComponents)}.`,
+    '- Honor the Component Strategy section in project/info.md and do not start Phase 1 until Decision is confirmed.',
     '- Treat monorepo scaffolding as future work until the single-app MVP is stable.',
     '',
   ].join('\n');
@@ -1714,6 +1775,8 @@ export function renderAgentInstructions(answers: OnboardAnswers): string {
     'Before any intake, planning, scaffolding, or phase work, scan `project/info.md` for the marker `# TodoForContext(optional):`. If any remain, stop and tell the user to fill the section underneath OR delete the marker line to acknowledge they do not want to add that context. Only proceed when zero `project/info.md` markers remain.',
     '',
     'Then build from `project/todo.md` in phase order. Do not make changes that conflict with project memory. If the files are unclear or generic, update the project memory first or ask the user.',
+    '',
+    'Phase 0 includes an explicit component-strategy gate. Read `## Component Strategy` in `project/info.md` and do not start implementation until Decision is confirmed.',
     '',
   ].join('\n');
 }

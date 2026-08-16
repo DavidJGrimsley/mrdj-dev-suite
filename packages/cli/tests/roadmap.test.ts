@@ -170,6 +170,7 @@ describe('project roadmap generation', () => {
 
     const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
     expect(result.needsClarification).toBe(false);
+    expect(todo).toContain('Confirm the Phase 0 component strategy in `project/info.md`');
     expect(todo).toContain('Browse exposition pages to understand the included starter flows');
     expect(todo).toContain("Review styling in the 'Stylist' page");
     expect(todo).toContain('Run or defer `eject-stylist`');

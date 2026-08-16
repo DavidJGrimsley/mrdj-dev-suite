@@ -196,6 +196,11 @@ async function main(): Promise<void> {
             describe: 'Track Expo Native Tabs usage for mobile targets',
             type: 'boolean',
           })
+          .option('component-strategy-decision', {
+            describe:
+              'Phase 0 component-strategy decision: leave pending for first-run review or confirm now',
+            choices: ['pending', 'confirmed'] as const,
+          })
           .option('eas-selected', {
             describe: 'Ask/store EAS usage choices',
             type: 'boolean',

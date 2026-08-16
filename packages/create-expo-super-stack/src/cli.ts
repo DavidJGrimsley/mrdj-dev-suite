@@ -84,6 +84,7 @@ export interface ParsedArgs {
     expoUi?: boolean;
     expoUiUniversal?: boolean;
     expoNativeTabs?: boolean;
+    componentStrategyDecision?: "pending" | "confirmed";
     easUses?: string[];
     saveDefaults?: boolean;
   };
@@ -668,6 +669,14 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === "--mds-no-expo-native-tabs") {
       mds.expoNativeTabs = false;
+      continue;
+    }
+
+    if (arg.startsWith("--mds-component-strategy-decision=")) {
+      const value = arg.slice("--mds-component-strategy-decision=".length);
+      if (value === "pending" || value === "confirmed") {
+        mds.componentStrategyDecision = value;
+      }
       continue;
     }
 
@@ -2503,6 +2512,7 @@ function buildOnboardArgv(
     expoUi: parsed.mds.expoUi,
     expoUiUniversal: parsed.mds.expoUiUniversal,
     expoNativeTabs: parsed.mds.expoNativeTabs,
+    componentStrategyDecision: parsed.mds.componentStrategyDecision,
     easUses: parsed.mds.easUses,
   };
 }

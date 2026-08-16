@@ -6,6 +6,7 @@ export {
 } from './commands/continue.js';
 
 export type {
+  ComponentStrategy,
   ContinueArgv,
   ContinueBriefOptions,
   ContinueRecommendation,

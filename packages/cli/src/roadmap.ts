@@ -1,6 +1,8 @@
 import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { PHASE0_COMPONENT_STRATEGY_TODO } from './component-strategy.js';
+
 export type DerivedRoadmapPhaseId = 'phase-0' | 'phase-1' | 'phase-2' | 'phase-3' | 'phase-4';
 
 export interface InfoSectionMapEntry {
@@ -100,7 +102,8 @@ type InfoSectionKey =
   | 'releaseStrategy'
   | 'questionsToRevisit'
   | 'resources'
-  | 'techStack';
+  | 'techStack'
+  | 'componentStrategy';
 
 interface PhaseSpec {
   id: DerivedRoadmapPhaseId;
@@ -134,6 +137,7 @@ const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
 const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
 const ROADMAP_STATE_FILE = 'roadmap-state.json';
 const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
+  'confirm the phase 0 component strategy in project info md style library expo ui universal components nativetabs and any listed conflicts set decision to confirmed after you review the generated app',
   'browse exposition pages to understand included base packages',
   'review styling in the stylist page',
   'review project files for accuracy and planning adjustments',
@@ -164,6 +168,7 @@ const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
   'prepare store distribution packaging review notes and release validation for the chosen delivery path',
 ]);
 const GENERATED_SCAFFOLD_TASK_PATTERNS = [
+  /^confirm the phase 0 component strategy/,
   /^browse exposition pages to understand included base packages$/,
   /^review styling in the stylist page$/,
   /^run or defer eject stylist mark this todo done after ejection or deciding to defer/,
@@ -254,6 +259,7 @@ const SECTION_ALIASES: Record<InfoSectionKey, string[]> = {
   questionsToRevisit: ['questions to revisit', 'open questions', 'unknowns', 'risks', 'later scope & possibilities'],
   resources: ['resources', 'references', 'links', 'research, notes, and references'],
   techStack: ['tech stack & cess onboarding', 'tech stack & mds onboarding', 'tech stack', 'mds onboarding'],
+  componentStrategy: ['component strategy', 'style strategy', 'ui strategy'],
 };
 
 const KEYWORD_TASKS: Array<{
@@ -602,6 +608,7 @@ export function deriveRoadmapPhases(
     ? []
     : monetizationItems;
 
+  addTask('phase-0', PHASE0_COMPONENT_STRATEGY_TODO, 'setup');
   addTask('phase-0', 'Review `project/` files for accuracy and planning adjustments.', 'setup');
   if (context.hasExposition) {
     addTask(
