@@ -14,6 +14,8 @@ it for the app before treating it as final.
   changes.
 - Never make a change that conflicts with the project memory files unless the
   user explicitly updates them first.
+- Honor the `Component Strategy` section in `project/info.md`. Do not start
+  Phase 1 until Decision is confirmed.
 
 ## TodoForContext Markers Block Onboarding
 

@@ -182,6 +182,7 @@ describe('CESS intake contract', () => {
     expect(extracted.prefilledAnswers.targetPlatforms).toEqual(['ios']);
     expect(extracted.prefilledAnswers.dataStart).toBe('local');
     expect(extracted.prefilledAnswers.stylingSystem).toBe('uniwind');
+    expect(extracted.prefilledAnswers.componentStrategyDecision).toBe('pending');
     expect(extracted.prefilledAnswers.usesExpoUi).toBe(true);
     expect(extracted.prefilledAnswers.includeCreateExpoComponents).toBe(false);
     expect(extracted.prefilledAnswers.onboardingFlow).toBe('multi-screen');
@@ -628,6 +629,10 @@ describe('CESS intake contract', () => {
     expect(confirmStep.summaryLines).toContain(
       'onboarding: multi-screen, legal documents: onboarding-agreement, completion: auth, legal update gate: material-required, persistence: zustand-supabase'
     );
+    expect(confirmStep.summaryLines?.some((line) => line.startsWith('component strategy:'))).toBe(
+      true
+    );
+    expect(confirmStep.summaryLines?.join('\n')).toContain('decision pending');
 
     const readyStep = buildCessIntakeStep({
       parentDir: 'F:/ReactNativeApps',
@@ -733,6 +738,7 @@ describe('CESS intake contract', () => {
     expect(argv).toContain('--mds-legal-documents=public-routes');
     expect(argv).toContain('--mds-onboarding-completion=account-setup');
     expect(argv).toContain('--mds-legal-update-gate=material-required');
+    expect(argv).toContain('--mds-component-strategy-decision=pending');
     expect(argv).not.toContain('--firebase');
     expect(argv.every((arg) => !arg.includes('\n') && !arg.includes('\r'))).toBe(true);
   });
@@ -817,5 +823,49 @@ describe('CESS intake contract', () => {
     expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--nativewindui');
     expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--tamagui');
     expect(buildCreateExpoStackFlags(plan.answers)).not.toContain('--restyle');
+  });
+
+  it('extracts a confirmed component strategy and forwards the decision flag', () => {
+    const extracted = extractCessInfoFromMarkdown({
+      infoMarkdown: [
+        '# Strategy App Project Info',
+        '',
+        '## Component Strategy',
+        '',
+        '- Style Library: StyleSheet',
+        '- Expo UI: No',
+        '- Expo UI Universal components: No',
+        '- Expo Native Tabs: No',
+        '- Conflicts: none',
+        '- Decision: confirmed',
+        '',
+      ].join('\n'),
+      parentDir: 'F:/ReactNativeApps',
+    });
+
+    expect(extracted.prefilledAnswers.stylingSystem).toBe('stylesheet');
+    expect(extracted.prefilledAnswers.usesExpoUi).toBe(false);
+    expect(extracted.prefilledAnswers.usesExpoUiUniversalComponents).toBe(false);
+    expect(extracted.prefilledAnswers.usesExpoNativeTabs).toBe(false);
+    expect(extracted.prefilledAnswers.componentStrategyDecision).toBe('confirmed');
+
+    const plan = resolveCessPlan({
+      parentDir: 'F:/ReactNativeApps',
+      appName: 'strategy-app',
+      answers: {
+        stylingSystem: 'stylesheet',
+        usesExpoUi: false,
+        usesExpoUiUniversalComponents: false,
+        usesExpoNativeTabs: false,
+        componentStrategyDecision: 'confirmed',
+        audience: 'People',
+        coreFlows: 'Open the app',
+        targetPlatforms: ['web'],
+      },
+    });
+
+    expect(plan.onboardAnswers.componentStrategyDecision).toBe('confirmed');
+    expect(plan.mdsFlags).toContain('--mds-component-strategy-decision=confirmed');
+    expect(plan.summaryLines.join('\n')).toContain('decision confirmed');
   });
 });

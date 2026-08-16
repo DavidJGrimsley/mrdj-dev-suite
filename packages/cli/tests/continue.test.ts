@@ -93,6 +93,74 @@ describe('MDS Continue', () => {
     expect(brief.recommendation.priority).toBe('todo');
   });
 
+  it('hard-stops when a persisted component strategy is still pending', async () => {
+    const projectPath = await createOnboardedProject({
+      info: [
+        '# Info',
+        '',
+        '## Component Strategy',
+        '',
+        '- Style Library: Uniwind',
+        '- Expo UI: Yes',
+        '- Expo UI Universal components: Yes',
+        '- Expo Native Tabs: Yes',
+        '- Conflicts:',
+        '  - styling-system-and-expo-ui-universal (warning): Uniwind does not style Expo UI Universal components.',
+        '  - styling-system-and-native-tabs (info): Expo Native Tabs ignore Uniwind tab-bar styles.',
+        '- Decision: pending',
+        '',
+      ].join('\n'),
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+
+    expect(brief.componentStrategy?.decision).toBe('pending');
+    expect(brief.componentStrategy?.stylingSystem).toBe('uniwind');
+    expect(brief.recommendation.priority).toBe('phase-0-user-review');
+    expect(brief.recommendation.title).toContain('component strategy');
+    expect(brief.recommendation.plan.join('\n')).toContain('Set `Decision: confirmed`');
+  });
+
+  it('does not treat a confirmed component strategy as a Phase 0 hard-stop', async () => {
+    const projectPath = await createOnboardedProject({
+      info: [
+        '# Info',
+        '',
+        '## Component Strategy',
+        '',
+        '- Style Library: StyleSheet',
+        '- Expo UI: No',
+        '- Expo UI Universal components: No',
+        '- Expo Native Tabs: No',
+        '- Conflicts: none',
+        '- Decision: confirmed',
+        '',
+      ].join('\n'),
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+
+    expect(brief.componentStrategy?.decision).toBe('confirmed');
+    expect(brief.recommendation.priority).toBe('todo');
+    expect(brief.nextTodo?.text).toBe('Build the app shell.');
+  });
+
   it('hard-stops with user guidance when the next unchecked item is in Phase 0', async () => {
     const projectPath = await createOnboardedProject({
       todo: [

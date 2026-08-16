@@ -17,6 +17,13 @@ import {
   type ExpoSdkSnapshot,
   type ExpoVersionsCatalog,
 } from '../expo-sdk-state.js';
+import {
+  isComponentStrategyResolved,
+  parseComponentStrategy,
+  type ComponentStrategy,
+} from '../component-strategy.js';
+
+export type { ComponentStrategy };
 
 const execFileAsync = promisify(execFile);
 const TODO_MARKER = '# TodoForContext(optional):';
@@ -83,6 +90,7 @@ export interface ContinueSessionBrief {
   } | null;
   nextTodo: TodoItem | null;
   expoSdk: ExpoSdkSnapshot | null;
+  componentStrategy: ComponentStrategy | null;
   recommendation: ContinueRecommendation;
   handoff: string;
 }
@@ -163,6 +171,7 @@ export async function buildContinueSessionBrief(
     : null;
   const nextTodo = isOnboardedApp ? await findFirstUncheckedTodo(projectPath) : null;
   const expoSdk = isOnboardedApp ? await resolveExpoSdkSnapshot(packageJson, options) : null;
+  const componentStrategy = isOnboardedApp ? await readComponentStrategy(projectPath) : null;
   const recommendation = chooseRecommendation({
     isOnboardedApp,
     markerCount: todoForContext.hits.length,
@@ -170,6 +179,7 @@ export async function buildContinueSessionBrief(
     git,
     nextTodo,
     expoSdk,
+    componentStrategy,
   });
 
   return {
@@ -195,6 +205,7 @@ export async function buildContinueSessionBrief(
       : null,
     nextTodo,
     expoSdk,
+    componentStrategy,
     recommendation,
     handoff:
       'For lower token usage and lower cost, open this app folder directly in a new agent session and run `mds continue` before implementation work.',
@@ -208,6 +219,7 @@ export function chooseRecommendation(input: {
   git: GitSnapshot;
   nextTodo: TodoItem | null;
   expoSdk?: ExpoSdkSnapshot | null;
+  componentStrategy?: ComponentStrategy | null;
 }): ContinueRecommendation {
   if (!input.isOnboardedApp) {
     return {
@@ -265,6 +277,20 @@ export function chooseRecommendation(input: {
               'If this working tree needs Expo SDK attention, load the official Expo upgrade skill (`upgrading-expo`) after the user confirms how to handle the dirty state. Do not call MDS `get_skill` for an upgrade skill.',
             ]
           : []),
+      ],
+    };
+  }
+
+  if (input.componentStrategy && !isComponentStrategyResolved(input.componentStrategy)) {
+    return {
+      priority: 'phase-0-user-review',
+      title: 'Confirm the Phase 0 component strategy before implementation work',
+      requiresApproval: true,
+      plan: [
+        'Phase 0 cannot continue until the owner confirms the component strategy in `project/info.md`.',
+        'Review the Style Library, Expo UI / Universal Components / NativeTabs flags, and any listed conflicts.',
+        'Set `Decision: confirmed` in the Component Strategy section after that review, then mark the matching Phase 0 todo complete.',
+        'Run `mds continue` again once the strategy decision is confirmed.',
       ],
     };
   }
@@ -481,6 +507,19 @@ function matchesMotionIntent(text: string): boolean {
 
 function isPhase0Section(section: string): boolean {
   return /^phase\s*0\b/i.test(section.trim());
+}
+
+async function readComponentStrategy(projectPath: string): Promise<ComponentStrategy | null> {
+  const infoPath = path.join(projectPath, 'project', 'info.md');
+  if (!(await pathExists(infoPath))) {
+    return null;
+  }
+
+  try {
+    return parseComponentStrategy(await readFile(infoPath, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 async function isOnboardedProject(projectPath: string): Promise<boolean> {

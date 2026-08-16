@@ -375,6 +375,7 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-no-expo-ui",
       "--mds-expo-ui-universal",
       "--mds-expo-native-tabs",
+      "--mds-component-strategy-decision=confirmed",
       "--mds-eas-uses=building mobile applications,publishing mobile applications",
       "--mds-save-defaults",
     ]);
@@ -396,6 +397,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.expoUi).toBe(false);
     expect(parsed.mds.expoUiUniversal).toBe(true);
     expect(parsed.mds.expoNativeTabs).toBe(true);
+    expect(parsed.mds.componentStrategyDecision).toBe("confirmed");
     expect(parsed.mds.easUses).toEqual([
       "building mobile applications",
       "publishing mobile applications",

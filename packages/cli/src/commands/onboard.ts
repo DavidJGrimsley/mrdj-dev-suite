@@ -14,13 +14,22 @@ import {
   shouldInstallProjectDependencies,
   validateInstalledPackages,
 } from '../package-install.js';
-import { scaffoldProjectMemory } from '../project-memory.js';
+import {
+  componentStrategyFromAnswers,
+  formatComponentStrategySummary,
+  scaffoldProjectMemory,
+} from '../project-memory.js';
 import { generateProjectRoadmap } from '../roadmap.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { PackageCommandRunner, PackageJsonSubset } from '../package-install.js';
 
-import type { AuthProviderChoice, ExpoServerAdapter, OnboardAnswers } from '../project-memory.js';
+import type {
+  AuthProviderChoice,
+  ComponentStrategyDecision,
+  ExpoServerAdapter,
+  OnboardAnswers,
+} from '../project-memory.js';
 import type { Option } from '@clack/prompts';
 
 export interface OnboardArgv {
@@ -69,6 +78,7 @@ export interface OnboardArgv {
   expoUi?: boolean;
   expoUiUniversal?: boolean;
   expoNativeTabs?: boolean;
+  componentStrategyDecision?: ComponentStrategyDecision;
   easSelected?: boolean;
   easUses?: string | string[];
   dataStart?: 'local' | 'supabase';
@@ -395,6 +405,14 @@ export async function collectOnboardPlan(
     hasMobileTarget &&
     (argv.expoNativeTabs ??
       (await askYesNo('Will you use Expo Native Tabs?', seed.usesExpoNativeTabs)));
+  const componentStrategyDecision =
+    argv.componentStrategyDecision ??
+    (await askComponentStrategyDecision({
+      ...seed,
+      usesExpoUi,
+      usesExpoUiUniversalComponents,
+      usesExpoNativeTabs,
+    }));
 
   const easSelected = await askEasIntent(argv, seed.easUses.length > 0);
   const easUses = easSelected
@@ -548,6 +566,7 @@ export async function collectOnboardPlan(
       usesExpoUi,
       usesExpoUiUniversalComponents,
       usesExpoNativeTabs,
+      componentStrategyDecision,
       easUses,
       projectInfoReady,
       projectStyleReady,
@@ -744,6 +763,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     usesExpoUiUniversalComponents:
       argv.expoUiUniversal ?? savedDefaults.usesExpoUiUniversalComponents ?? (argv.expoUi ?? savedDefaults.usesExpoUi ?? true),
     usesExpoNativeTabs: argv.expoNativeTabs ?? savedDefaults.usesExpoNativeTabs ?? true,
+    componentStrategyDecision: argv.componentStrategyDecision ?? 'pending',
     easUses,
     projectInfoReady: false,
     projectStyleReady: false,
@@ -1218,16 +1238,49 @@ function printOnboardingNextSteps(installOutcome?: OnboardInstallOutcome): void 
 
   console.log();
   console.log('Onboarding Phase 0 checklist:');
-  console.log('1. Browse exposition pages to understand included base packages.');
-  console.log("2. Review styling in the 'Stylist' page and save theme tokens.");
-  console.log('3. Review project/ files for accuracy and planning adjustments.');
   console.log(
-    '4. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
+    '1. Confirm the component strategy in project/info.md (style library, Expo UI / Universal Components / NativeTabs, and any listed conflicts). Set Decision to confirmed after you review the generated app.'
+  );
+  console.log('2. Browse exposition pages to understand included base packages.');
+  console.log("3. Review styling in the 'Stylist' page and save theme tokens.");
+  console.log('4. Review project/ files for accuracy and planning adjustments.');
+  console.log(
+    '5. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
   );
   console.log(
-    '5. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
+    '6. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
+}
+
+async function askComponentStrategyDecision(
+  answers: Pick<
+    OnboardAnswers,
+    | 'generatorStylingSystem'
+    | 'defaults'
+    | 'usesExpoUi'
+    | 'usesExpoUiUniversalComponents'
+    | 'usesExpoNativeTabs'
+  >
+): Promise<ComponentStrategyDecision> {
+  const strategy = componentStrategyFromAnswers(answers);
+  return askExplainedChoice(
+    'Confirm this component strategy now, or leave it pending for Phase 0 first-run review?',
+    [
+      {
+        value: 'pending',
+        label: 'Leave pending for Phase 0',
+        hint: 'Default — review the generated app first',
+      },
+      {
+        value: 'confirmed',
+        label: 'Confirm now',
+        hint: 'Accept this style library and Expo UI / NativeTabs combination',
+      },
+    ],
+    'pending',
+    `Current strategy: ${formatComponentStrategySummary(strategy)}. Phase 0 cannot start implementation until Decision is confirmed in project/info.md.`
+  );
 }
 
 interface OnboardInstallOutcome {
