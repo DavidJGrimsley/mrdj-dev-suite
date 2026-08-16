@@ -784,6 +784,64 @@ describe("library resolution", () => {
     );
   });
 
+  it("hydrates theme from system appearance and uses semantic colors in exposition pages", async () => {
+    const themeSupport = resolveLibraryItem("mds/theme-support", routerContext);
+    const stylist = resolveLibraryItem("mds/stylist", routerContext);
+    const exposition = resolveLibraryItem("mds/exposition", routerContext);
+    const expoSdk56 = resolveLibraryItem("mds/expo-sdk-56", routerContext);
+    const dataLocal = resolveLibraryItem("mds/data-local", routerContext);
+
+    const providerAsset = themeSupport.assets.find(
+      (asset) => asset.destination === "src/theme/provider.tsx",
+    );
+    const stylistAsset = stylist.assets.find(
+      (asset) => asset.destination === "src/features/exposition/stylist-screen.tsx",
+    );
+    const expositionAsset = exposition.assets.find(
+      (asset) => asset.destination === "src/features/exposition/exposition-screen.tsx",
+    );
+    const sdk56Asset = expoSdk56.assets.find(
+      (asset) => asset.destination === "src/features/exposition/expo-sdk-56-screen.tsx",
+    );
+    const dataAsset = dataLocal.assets.find(
+      (asset) => asset.destination === "src/features/exposition/data-screen.tsx",
+    );
+
+    expect(providerAsset).toBeDefined();
+    expect(stylistAsset).toBeDefined();
+    expect(expositionAsset).toBeDefined();
+    expect(sdk56Asset).toBeDefined();
+    expect(dataAsset).toBeDefined();
+
+    const providerSource = (await readLibraryAsset(providerAsset!)).toString("utf8");
+    const stylistSource = (await readLibraryAsset(stylistAsset!)).toString("utf8");
+    const expositionSource = (await readLibraryAsset(expositionAsset!)).toString("utf8");
+    const sdk56Source = (await readLibraryAsset(sdk56Asset!)).toString("utf8");
+    const dataSource = (await readLibraryAsset(dataAsset!)).toString("utf8");
+
+    expect(providerSource).toContain("scheme = 'system'");
+    expect(providerSource).toContain("Appearance.getColorScheme");
+    expect(providerSource).toContain("export function readSystemScheme");
+    expect(providerSource).toContain("if (preference === 'preview')");
+    expect(providerSource).not.toContain(
+      "activeScheme: defaultThemeTokens.colorSystem.previewScheme",
+    );
+    expect(providerSource).toContain("return readSystemScheme() ?? 'light'");
+
+    expect(stylistSource).toContain("function updatePreviewScheme");
+    expect(stylistSource).toContain("userOverrodePreview");
+    expect(stylistSource).toContain("readSystemScheme");
+    expect(stylistSource).toContain("payload.theme");
+
+    expect(expositionSource).toContain("{ color: colors.secondary }");
+    expect(expositionSource).not.toContain("#1d4ed8");
+    expect(sdk56Source).toContain("{ color: colors.secondary }");
+    expect(sdk56Source).not.toContain("#1d4ed8");
+    expect(sdk56Source).not.toContain("#eff6ff");
+    expect(sdk56Source).not.toContain("#bfdbfe");
+    expect(dataSource).toContain("backgroundColor: colors.secondary");
+  });
+
   it("includes stylist sync support and expo-router on routed variants", () => {
     const stylist = getLibraryItem("mds/stylist");
     const syncSupport = getLibraryItem("mds/stylist-sync-support");

@@ -202,6 +202,9 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8')
     ).resolves.toContain('AppThemeProvider');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'theme', 'color-utils.ts'), 'utf8')
+    ).resolves.toContain('getReadableTextColor');
     await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
       'AppThemeProvider'
     );
@@ -214,6 +217,45 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
       'KeyboardProvider'
     );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.toContain(
+      'theme.activeScheme'
+    );
+    await expect(readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8')).resolves.not.toContain(
+      'theme.colorSystem.previewScheme'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8')
+    ).resolves.toContain('Appearance.getColorScheme');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('{ color: colors.secondary }');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('#1d4ed8');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('backgroundColor: colors.secondary');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain("from '../../theme/color-utils'");
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('#1d4ed8');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.not.toContain('#eff6ff');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
     ).resolves.toContain('useAppTheme');
@@ -347,7 +389,7 @@ describe('runOnboardCommand', () => {
         path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
         'utf8'
       )
-    ).resolves.toContain('textStyle={styles.textInputText}');
+    ).resolves.toContain('styles.textInputText');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'exposition', 'expo-sdk-56-screen.tsx'),
@@ -1152,6 +1194,12 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Sign the guestbook');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('backgroundColor: colors.secondary');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain("from '../../theme/color-utils'");
     await expect(
       readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
     ).resolves.toContain('mds_guestbook_sign');

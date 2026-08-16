@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ExpositionNotice } from '../../components/exposition';
 import { addLocalTask, getLocalAppSnapshot } from '../../services/local-data';
+import { getReadableTextColor } from '../../theme/color-utils';
 import { useAppTheme } from '../../theme/provider';
 
 import type { appSnapshot } from '../../data/mock-app';
@@ -12,6 +13,7 @@ type Snapshot = typeof appSnapshot;
 export default function DataScreen() {
   const theme = useAppTheme();
   const colors = theme.activeColors;
+  const secondaryForeground = getReadableTextColor(colors.secondary, theme.colors.light.text);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
 
   useEffect(() => {
@@ -51,9 +53,9 @@ export default function DataScreen() {
         onPress={addTask}
         style={[
           styles.button,
-          { backgroundColor: colors.primary, borderRadius: theme.layout.radius },
+          { backgroundColor: colors.secondary, borderRadius: theme.layout.radius },
         ]}>
-        <Text style={styles.buttonText}>Insert a local task</Text>
+        <Text style={[styles.buttonText, { color: secondaryForeground }]}>Insert a local task</Text>
       </Pressable>
       {snapshot?.tasks.map((task) => (
         <View

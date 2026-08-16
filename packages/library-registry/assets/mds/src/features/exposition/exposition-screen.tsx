@@ -44,7 +44,7 @@ export default function ExpositionScreen() {
         title="Stylist color editing"
         body="Stylist uses this package for the hue slider, color preview, and manual palette picker that writes theme tokens.">
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://github.com/alabsi91/reanimated-color-picker')}>
           Reanimated Color Picker
         </Text>
@@ -54,7 +54,7 @@ export default function ExpositionScreen() {
         title="Stylist local preferences"
         body="Stylist stores local-only preferences such as the Google Fonts API key, dismissed banners, and editor settings with Async Storage.">
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() =>
             Linking.openURL('https://react-native-async-storage.github.io/async-storage/')
           }>
@@ -66,7 +66,7 @@ export default function ExpositionScreen() {
         title="Stylist safe spacing"
         body="Stylist reads safe-area insets so editor controls stay clear of cutouts, native tabs, and device navigation areas.">
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() =>
             Linking.openURL('https://docs.expo.dev/versions/latest/sdk/safe-area-context/')
           }>
@@ -78,7 +78,7 @@ export default function ExpositionScreen() {
         title="Stylist palette families"
         body="Stylist uses Tailwind color families and shade scales to drive the palette-family mode and accessible token previews.">
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://tailwindcss.com/docs/customizing-colors')}>
           Tailwind CSS - Colors
         </Text>
@@ -88,7 +88,7 @@ export default function ExpositionScreen() {
         title="Stylist sync endpoint"
         body="Stylist uses an Expo Router +api route so both native and web can sync theme output files by calling /exposition/stylist-sync.">
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://docs.expo.dev/router/web/api-routes/')}>
           Expo Router - API Routes
         </Text>
@@ -99,7 +99,7 @@ export default function ExpositionScreen() {
         body="Press the button to see the Reanimated timing demo. Worklets make this kind of UI-thread animation possible.">
         <AnimatedPressable label="Press and hold" />
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://docs.swmansion.com/react-native-reanimated')}>
           Software Mansion - Reanimated
         </Text>
@@ -110,7 +110,7 @@ export default function ExpositionScreen() {
         body="Drag the card below. If your product does not need touch-heavy interactions, this demo helps you decide what to remove.">
         <GestureCard title="Drag me" body="This card springs back when the gesture ends." />
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() =>
             Linking.openURL('https://docs.swmansion.com/react-native-gesture-handler')
           }>
@@ -123,7 +123,7 @@ export default function ExpositionScreen() {
         body="Screens support the navigation layer with native lifecycle and memory behavior.">
         <ScreensCard />
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://docs.swmansion.com/react-native-screens')}>
           Software Mansion - Screens
         </Text>
@@ -136,7 +136,7 @@ export default function ExpositionScreen() {
           <SoftwareMansionLogo width={150} height={80} />
         </View>
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() => Linking.openURL('https://docs.expo.dev/versions/latest/sdk/svg')}>
           Expo SDK - SVG
         </Text>
@@ -147,7 +147,7 @@ export default function ExpositionScreen() {
         body="Use this when forms, chat, notes, or auth flows need better keyboard control than manual offsets.">
         <KeyboardForm />
         <Text
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
           onPress={() =>
             Linking.openURL('https://kirillzyusko.github.io/react-native-keyboard-controller/')
           }>
@@ -179,7 +179,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   link: {
-    color: '#1d4ed8',
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 20,

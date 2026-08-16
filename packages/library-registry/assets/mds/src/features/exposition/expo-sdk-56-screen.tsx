@@ -152,7 +152,7 @@ const highlights: {
   },
 ];
 
-function ExpoLogoSvg({ size }: { size: number }) {
+function ExpoLogoSvg({ size, fill }: { size: number; fill: string }) {
   return (
     <Svg
       width={size}
@@ -163,18 +163,24 @@ function ExpoLogoSvg({ size }: { size: number }) {
     >
       <Path
         d="M9.477 7.638c.164-.24.343-.27.488-.27.145 0 .387.03.551.27 2.13 2.901 6.55 10.56 6.959 10.976.605.618 1.436.233 1.918-.468.475-.69.607-1.174.607-1.69 0-.352-6.883-13.05-7.576-14.106-.667-1.017-.884-1.274-2.025-1.274h-.854c-1.138 0-1.302.257-1.969 1.274C6.883 3.406 0 16.104 0 16.456c0 .517.132 1 .607 1.69.482.7 1.313 1.086 1.918.468.41-.417 4.822-8.075 6.952-10.977z"
-        fill="#111827"
+        fill={fill}
       />
     </Svg>
   );
 }
 
 function ExpoIconMark({ visible, size }: { visible: boolean; size: number }) {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   if (!visible) return null;
   if (Platform.OS === 'web') {
     return (
-      <View style={styles.logoFrame}>
-        <ExpoLogoSvg size={size} />
+      <View
+        style={[
+          styles.logoFrame,
+          { backgroundColor: colors.background, borderColor: colors.primary },
+        ]}>
+        <ExpoLogoSvg size={size} fill={colors.text} />
       </View>
     );
   }
@@ -183,13 +189,15 @@ function ExpoIconMark({ visible, size }: { visible: boolean; size: number }) {
     <ExpoUIIcon
       name={'app.fill' as any}
       size={size}
-      color="#111827"
+      color={colors.text}
       accessibilityLabel="Expo app icon"
     />
   );
 }
 
 function UniversalComponentLab() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   const [count, setCount] = useState(0);
   const [showIcon, setShowIcon] = useState(true);
   const [likesSuperStack, setLikesSuperStack] = useState(true);
@@ -198,21 +206,38 @@ function UniversalComponentLab() {
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [isOpen, setOpen] = useState(true);
   const name = useNativeState('Ada Lovelace');
+  const headingStyle = { ...styles.universalHeading, color: colors.text };
+  const bodyStyle = { ...styles.universalBody, color: colors.text };
+  const statusStyle = {
+    ...styles.statusPill,
+    backgroundColor: colors.success,
+    color: colors.background,
+  };
+  const inputStyle = {
+    ...styles.textInput,
+    backgroundColor: colors.background,
+    borderColor: colors.primary,
+  };
+  const inputTextStyle = { ...styles.textInputText, color: colors.text };
 
   return (
-    <View style={styles.universalExampleBox}>
+    <View
+      style={[
+        styles.universalExampleBox,
+        { backgroundColor: colors.surface, borderColor: colors.primary },
+      ]}>
       <Host matchContents={{ vertical: true }} style={styles.universalHost}>
         <Column spacing={14}>
           <Row spacing={10} alignment="center">
             <ExpoIconMark visible={showIcon} size={logoSize} />
             <Column spacing={3}>
-              <ExpoUIText textStyle={styles.universalHeading}>Universal component lab</ExpoUIText>
+              <ExpoUIText textStyle={headingStyle}>Universal component lab</ExpoUIText>
               <ExpoUIText
-                textStyle={styles.universalBody}
+                textStyle={bodyStyle}
               >{`Count: ${count} | Density: ${density}`}</ExpoUIText>
             </Column>
             <Spacer flexible />
-            <ExpoUIText textStyle={styles.statusPill}>
+            <ExpoUIText textStyle={statusStyle}>
               {likesSuperStack ? 'Approved' : 'Reviewing'}
             </ExpoUIText>
           </Row>
@@ -222,7 +247,7 @@ function UniversalComponentLab() {
             isOpen={isOpen}
             onOpenChange={setOpen}
           >
-            <ExpoUIText textStyle={styles.universalBody}>
+            <ExpoUIText textStyle={bodyStyle}>
               Host, Column, Row, Collapsible, Button, Switch, Checkbox, Slider, Picker, TextInput,
               and BottomSheet are all live here in one universal tree.
             </ExpoUIText>
@@ -247,7 +272,7 @@ function UniversalComponentLab() {
           />
 
           <Column spacing={6}>
-            <ExpoUIText textStyle={styles.universalBody}>{`Logo size: ${logoSize}`}</ExpoUIText>
+            <ExpoUIText textStyle={bodyStyle}>{`Logo size: ${logoSize}`}</ExpoUIText>
             <ExpoUISlider min={28} max={72} step={4} value={logoSize} onValueChange={setLogoSize} />
           </Column>
           <ExpoUIPicker selectedValue={density} onValueChange={setDensity}>
@@ -258,11 +283,11 @@ function UniversalComponentLab() {
           <ExpoUITextInput
             value={name}
             placeholder="Display name"
-            placeholderTextColor="#64748b"
-            style={styles.textInput}
-            textStyle={styles.textInputText}
+            placeholderTextColor={colors.text}
+            style={inputStyle}
+            textStyle={inputTextStyle}
           />
-          <ExpoUIText textStyle={styles.universalBody}>{`Input value: ${name.value}`}</ExpoUIText>
+          <ExpoUIText textStyle={bodyStyle}>{`Input value: ${name.value}`}</ExpoUIText>
 
           <BottomSheet
             isPresented={isSheetOpen}
@@ -270,8 +295,8 @@ function UniversalComponentLab() {
             snapPoints={[{ height: 320 }, 'half']}
           >
             <Column spacing={10}>
-              <ExpoUIText textStyle={styles.universalHeading}>BottomSheet example</ExpoUIText>
-              <ExpoUIText textStyle={styles.universalBody}>
+              <ExpoUIText textStyle={headingStyle}>BottomSheet example</ExpoUIText>
+              <ExpoUIText textStyle={bodyStyle}>
                 This sheet is rendered by Expo UI BottomSheet and opened by the universal Button.
               </ExpoUIText>
               <ExpoUIButton label="Close sheet" onPress={() => setSheetOpen(false)} />
@@ -284,21 +309,30 @@ function UniversalComponentLab() {
 }
 
 function NativeStateExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   const text = useNativeState('Ada Lovelace');
   return (
-    <View style={styles.exampleBox}>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
       <Host matchContents={{ vertical: true }} style={styles.universalHost}>
         <Column spacing={8}>
-          <ExpoUIText textStyle={styles.universalHeading}>Native-owned text field</ExpoUIText>
+          <ExpoUIText textStyle={{ ...styles.universalHeading, color: colors.text }}>
+            Native-owned text field
+          </ExpoUIText>
           <ExpoUITextInput
             value={text}
             placeholder="Display name"
-            placeholderTextColor="#64748b"
-            style={styles.textInput}
-            textStyle={styles.textInputText}
+            placeholderTextColor={colors.text}
+            style={{
+              ...styles.textInput,
+              backgroundColor: colors.background,
+              borderColor: colors.primary,
+            }}
+            textStyle={{ ...styles.textInputText, color: colors.text }}
           />
           <ExpoUIText
-            textStyle={styles.universalBody}
+            textStyle={{ ...styles.universalBody, color: colors.text }}
           >{`Current native state: ${text.value}`}</ExpoUIText>
         </Column>
       </Host>
@@ -307,16 +341,21 @@ function NativeStateExample() {
 }
 
 function DropInExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   const [enabled, setEnabled] = useState(true);
   const [level, setLevel] = useState(3);
   return (
-    <View style={styles.exampleBox}>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
       <Host matchContents={{ vertical: true }} style={styles.universalHost}>
         <Column spacing={12}>
-          <ExpoUIText textStyle={styles.exampleTitle}>Drop-in controls wired together</ExpoUIText>
+          <ExpoUIText textStyle={{ ...styles.exampleTitle, color: colors.text }}>
+            Drop-in controls wired together
+          </ExpoUIText>
           <ExpoUISwitch label="Enabled" value={enabled} onValueChange={setEnabled} />
           <Column spacing={6}>
-            <ExpoUIText textStyle={styles.exampleBody}>{`Selected intensity: ${level}`}</ExpoUIText>
+            <ExpoUIText textStyle={{ ...styles.exampleBody, color: colors.text }}>{`Selected intensity: ${level}`}</ExpoUIText>
             <ExpoUISlider
               min={1}
               max={5}
@@ -333,9 +372,12 @@ function DropInExample() {
 }
 
 function InlineModuleExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   return (
-    <View style={styles.exampleBox}>
-      <Text style={styles.exampleTitle}>Inline module shape</Text>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+      <Text style={[styles.exampleTitle, { color: colors.text }]}>Inline module shape</Text>
       <Text style={styles.codeLine}>modules/LocalGreeting/index.ts</Text>
       <Text style={styles.codeLine}>modules/LocalGreeting/ios/LocalGreeting.swift</Text>
       <Text style={styles.codeLine}>modules/LocalGreeting/android/LocalGreeting.kt</Text>
@@ -344,10 +386,13 @@ function InlineModuleExample() {
 }
 
 function NativeTabsExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   return (
-    <View style={styles.exampleBox}>
-      <Text style={styles.exampleTitle}>No fake tab preview here</Text>
-      <Text style={styles.exampleBody}>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+      <Text style={[styles.exampleTitle, { color: colors.text }]}>No fake tab preview here</Text>
+      <Text style={[styles.exampleBody, { color: colors.text }]}>
         In generated tabs apps, the actual tab bar uses expo-router NativeTabs when Expo Native Tabs
         are enabled. Keep mobile tab counts tight because Android native tabs are best with five or
         fewer destinations.
@@ -357,37 +402,58 @@ function NativeTabsExample() {
 }
 
 function RuntimeExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
+  const labelStyle = [
+    styles.componentLabel,
+    { backgroundColor: colors.primary, color: colors.background },
+  ];
   return (
-    <View style={styles.exampleBox}>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
       <View style={styles.componentLabelGrid}>
-        <Text style={styles.componentLabel}>React Native 0.85</Text>
-        <Text style={styles.componentLabel}>React 19.2</Text>
-        <Text style={styles.componentLabel}>Hermes V1</Text>
-        <Text style={styles.componentLabel}>Precompiled modules</Text>
+        <Text style={labelStyle}>React Native 0.85</Text>
+        <Text style={labelStyle}>React 19.2</Text>
+        <Text style={labelStyle}>Hermes V1</Text>
+        <Text style={labelStyle}>Precompiled modules</Text>
       </View>
     </View>
   );
 }
 
 function WidgetsExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
   return (
-    <View style={styles.exampleBox}>
-      <View style={styles.widgetTile}>
-        <Text style={styles.widgetTitle}>Today</Text>
-        <Text style={styles.widgetBody}>3 generated-app checks ready</Text>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+      <View
+        style={[
+          styles.widgetTile,
+          { backgroundColor: colors.background, borderColor: colors.primary },
+        ]}>
+        <Text style={[styles.widgetTitle, { color: colors.text }]}>Today</Text>
+        <Text style={[styles.widgetBody, { color: colors.text }]}>3 generated-app checks ready</Text>
       </View>
     </View>
   );
 }
 
 function AudioExample() {
+  const theme = useAppTheme();
+  const colors = theme.activeColors;
+  const transportStyle = [
+    styles.transportButton,
+    { backgroundColor: colors.background, borderColor: colors.primary, color: colors.text },
+  ];
   return (
-    <View style={styles.exampleBox}>
+    <View
+      style={[styles.exampleBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
       <View style={styles.transportRow}>
-        <Text style={styles.transportButton}>expo-audio player</Text>
-        <Text style={styles.transportButton}>haptic confirmation</Text>
+        <Text style={transportStyle}>expo-audio player</Text>
+        <Text style={transportStyle}>haptic confirmation</Text>
       </View>
-      <Text style={styles.exampleBody}>
+      <Text style={[styles.exampleBody, { color: colors.text }]}>
         Add expo-audio when the product needs real playback; keep haptics for important control
         transitions.
       </Text>
@@ -438,7 +504,7 @@ export default function ExpoSdk56Screen() {
                   <Text
                     key={link.href}
                     onPress={() => Linking.openURL(link.href)}
-                    style={styles.link}
+                    style={[styles.link, { color: colors.secondary }]}
                   >
                     {link.label}
                   </Text>
@@ -448,11 +514,15 @@ export default function ExpoSdk56Screen() {
           </View>
         </PackageCard>
       ))}
-      <View style={styles.linksCard}>
-        <Text style={styles.linksTitle}>Video sources</Text>
+      <View
+        style={[
+          styles.linksCard,
+          { backgroundColor: colors.surface, borderColor: colors.primary },
+        ]}>
+        <Text style={[styles.linksTitle, { color: colors.text }]}>Video sources</Text>
         <Text
           onPress={() => Linking.openURL('https://www.youtube.com/watch?v=MKqGbv-Tssg&t')}
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
         >
           {
             "What's New in Expo SDK 56: Expo UI, Inline Swift/Kotlin Modules, and Faster Builds by Expo"
@@ -460,7 +530,7 @@ export default function ExpoSdk56Screen() {
         </Text>
         <Text
           onPress={() => Linking.openURL('https://www.youtube.com/watch?v=ywvywq0AGPM')}
-          style={styles.link}
+          style={[styles.link, { color: colors.secondary }]}
         >
           Everything new in Expo SDK 56 by Code with Beto
         </Text>
@@ -495,8 +565,6 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   exampleBox: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
     borderRadius: 12,
     borderWidth: 1,
     gap: 12,
@@ -504,8 +572,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   universalExampleBox: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#bfdbfe',
     borderRadius: 12,
     borderWidth: 1,
     gap: 12,
@@ -531,7 +597,6 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   collapsibleTitle: {
-    color: '#0f2a5f',
     fontSize: 14,
     fontWeight: '900',
     marginBottom: 2,
@@ -543,20 +608,16 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   exampleTitle: {
-    color: '#1e3a8a',
     fontSize: 13,
     fontWeight: '900',
   },
   exampleBody: {
-    color: '#1e3a8a',
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 19,
   },
   logoFrame: {
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderColor: '#dbeafe',
     borderRadius: 14,
     borderWidth: 1,
     height: 76,
@@ -564,9 +625,7 @@ const styles = StyleSheet.create({
     width: 76,
   },
   statusPill: {
-    backgroundColor: '#dcfce7',
     borderRadius: 999,
-    color: '#166534',
     fontSize: 12,
     fontWeight: '900',
     includeFontPadding: false,
@@ -577,8 +636,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   textInput: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bfdbfe',
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -590,7 +647,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   listItemTitle: {
-    color: '#0f2a5f',
     fontSize: 15,
     fontWeight: '900',
   },
@@ -601,9 +657,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   listBadge: {
-    backgroundColor: '#e0f2fe',
     borderRadius: 999,
-    color: '#075985',
     fontSize: 11,
     fontWeight: '900',
     overflow: 'hidden',
@@ -636,9 +690,7 @@ const styles = StyleSheet.create({
   },
   componentLabel: {
     alignSelf: 'flex-start',
-    backgroundColor: '#dbeafe',
     borderRadius: 999,
-    color: '#1e3a8a',
     fontSize: 12,
     fontWeight: '800',
     includeFontPadding: false,
@@ -649,8 +701,6 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
   widgetTile: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bfdbfe',
     borderRadius: 14,
     borderWidth: 1,
     padding: 16,
@@ -672,11 +722,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   transportButton: {
-    backgroundColor: '#ffffff',
-    borderColor: '#bfdbfe',
     borderRadius: 8,
     borderWidth: 1,
-    color: '#1e3a8a',
     fontSize: 13,
     fontWeight: '800',
     overflow: 'hidden',
@@ -688,20 +735,16 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   linksCard: {
-    backgroundColor: '#eef2ff',
-    borderColor: '#c7d2fe',
     borderRadius: 12,
     borderWidth: 1,
     gap: 8,
     padding: 14,
   },
   linksTitle: {
-    color: '#312e81',
     fontSize: 16,
     fontWeight: '900',
   },
   link: {
-    color: '#1d4ed8',
     fontSize: 14,
     fontWeight: '800',
     lineHeight: 20,
