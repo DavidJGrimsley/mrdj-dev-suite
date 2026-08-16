@@ -3259,7 +3259,7 @@ function hasNonCanonicalContent(
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
-    await readFile(filePath, 'utf8');
+    await access(filePath);
     return true;
   } catch {
     return false;
