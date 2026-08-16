@@ -262,6 +262,19 @@ describe('ejection inventory', () => {
           libraryItemIds: ['expo/themed-text'],
           destinations: ['{{componentsDir}}/themed-text.tsx'],
         },
+        {
+          id: 'expo-sdk-56',
+          label: 'Expo SDK 56 Exposition',
+          description: 'Expo starter screens',
+          source: 'mds' as const,
+          kind: 'exposition' as const,
+          present: false,
+          selectedInMemory: false,
+          defaultDecision: 'eject' as const,
+          decision: 'eject' as const,
+          libraryItemIds: [],
+          destinations: ['{{componentsDir}}/legacy-ejected.tsx'],
+        },
       ],
     };
 
@@ -274,6 +287,13 @@ describe('ejection inventory', () => {
     ).toBe(true);
     expect(
       shouldSkipGeneratedSubstitute(inventory, '/tmp/app', path.join('/tmp/app', 'src', 'theme', 'provider.tsx'))
+    ).toBe(false);
+    expect(
+      shouldSkipGeneratedSubstitute(
+        inventory,
+        '/tmp/app',
+        path.join('/tmp/app', 'src', 'components', 'legacy-ejected.tsx')
+      )
     ).toBe(false);
   });
 });

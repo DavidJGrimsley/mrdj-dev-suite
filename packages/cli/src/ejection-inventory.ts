@@ -563,7 +563,7 @@ export function shouldSkipGeneratedSubstitute(
     if (!matches) {
       continue;
     }
-    return true;
+    return item.decision === 'retain';
   }
 
   return false;

@@ -100,7 +100,7 @@ export async function runEjectExpositionCommand(argv: EjectExpositionArgv): Prom
   }
   const keep = keepRequested.filter((item) => item !== 'stylist' || stylistPresent).filter((item) => {
     if (LEGACY_KEEP_KEYS.includes(item)) {
-      return item !== 'stylist' || stylistPresent;
+      return true;
     }
     return presentIds.has(item);
   });
