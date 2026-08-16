@@ -2,6 +2,12 @@ import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { PHASE0_COMPONENT_STRATEGY_TODO } from './component-strategy.js';
+import {
+  PHASE0_EJECTION_INVENTORY_TODO,
+  PHASE3_EJECTION_CLEANUP_TODO,
+  PHASE4_DEVELOPER_COPY_TODO,
+  EJECTION_CLEANUP_FILE,
+} from './ejection-inventory.js';
 
 export type DerivedRoadmapPhaseId = 'phase-0' | 'phase-1' | 'phase-2' | 'phase-3' | 'phase-4';
 
@@ -131,6 +137,7 @@ interface RoadmapProjectContext {
   appDirectory: 'src/app' | 'app' | null;
   hasExposition: boolean;
   hasStylist: boolean;
+  hasEjectionCleanup: boolean;
 }
 
 const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
@@ -138,11 +145,15 @@ const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
 const ROADMAP_STATE_FILE = 'roadmap-state.json';
 const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
   'confirm the phase 0 component strategy in project info md style library expo ui universal components nativetabs and any listed conflicts set decision to confirmed after you review the generated app',
+  'review the ejection inventory with mds eject and confirm retain eject decisions for generated starter and template components set decision to confirmed after you finish',
   'browse exposition pages to understand included base packages',
   'review styling in the stylist page',
   'review project files for accuracy and planning adjustments',
   'run or defer eject stylist mark this todo done after ejection or deciding to defer if you want to keep the stylist around for tinkering',
   'run mds eject exposition and keep only the generated sections you want to retain',
+  'run mds eject and keep only the generated sections you want to retain',
+  'complete the ejection cleanup checklist in project ejection cleanup md after the app shell and core flows are stable',
+  'run mds report kind content and replace remaining placeholder or example copy before release',
   'sign in and set up eas in the terminal',
   'resolve every todoforcontext optional marker in project info md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed',
   'confirm visual direction in project style md after using the stylist page',
@@ -169,10 +180,14 @@ const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
 ]);
 const GENERATED_SCAFFOLD_TASK_PATTERNS = [
   /^confirm the phase 0 component strategy/,
+  /^review the ejection inventory with mds eject/,
   /^browse exposition pages to understand included base packages$/,
   /^review styling in the stylist page$/,
   /^run or defer eject stylist mark this todo done after ejection or deciding to defer/,
   /^run mds eject exposition and keep only the generated sections/,
+  /^run mds eject and keep only the generated sections/,
+  /^complete the ejection cleanup checklist/,
+  /^run mds report --kind content and replace remaining placeholder/,
   /^sign in and set up eas in the terminal$/,
   /^resolve every todoforcontext optional marker/,
   /^confirm visual direction in project style md after using the stylist page$/,
@@ -526,6 +541,7 @@ export function deriveRoadmapPhases(
     appDirectory: null,
     hasExposition: false,
     hasStylist: false,
+    hasEjectionCleanup: false,
   }
 ): DerivedRoadmapPhase[] {
   const phaseTasks = new Map<DerivedRoadmapPhaseId, DerivedRoadmapTask[]>(
@@ -609,6 +625,7 @@ export function deriveRoadmapPhases(
     : monetizationItems;
 
   addTask('phase-0', PHASE0_COMPONENT_STRATEGY_TODO, 'setup');
+  addTask('phase-0', PHASE0_EJECTION_INVENTORY_TODO, 'setup');
   addTask('phase-0', 'Review `project/` files for accuracy and planning adjustments.', 'setup');
   if (context.hasExposition) {
     addTask(
@@ -618,7 +635,7 @@ export function deriveRoadmapPhases(
     );
     addTask(
       'phase-0',
-      'Run `mds eject exposition` and keep only the generated sections you want to retain.',
+      'Run `mds eject` and keep only the generated sections you want to retain.',
       'setup'
     );
     addTask(
@@ -795,6 +812,10 @@ export function deriveRoadmapPhases(
     addTask('phase-3', `Configure EAS for ${easUse}.`, 'integration');
   }
 
+  if (context.hasEjectionCleanup) {
+    addTask('phase-3', PHASE3_EJECTION_CLEANUP_TODO, 'feature');
+  }
+  addTask('phase-4', PHASE4_DEVELOPER_COPY_TODO, 'release');
   addTask('phase-4', 'Run `mds doctor --ci` and address errors.', 'release');
   if (testToMainSafeguards === true) {
     addTask('phase-4', 'Follow `project/release-flow.md` for test-to-main development.', 'release');
@@ -1509,11 +1530,13 @@ async function inspectRoadmapProjectContext(projectPath: string): Promise<Roadma
   const hasRootApp = await pathExists(rootAppDir);
   const hasExposition = (await pathExists(srcExpositionDir)) || (await pathExists(rootExpositionDir));
   const hasStylist = (await pathExists(srcStylistPath)) || (await pathExists(rootStylistPath));
+  const hasEjectionCleanup = await pathExists(path.join(projectPath, 'project', EJECTION_CLEANUP_FILE));
 
   return {
     appDirectory: hasSrcApp ? 'src/app' : hasRootApp ? 'app' : null,
     hasExposition,
     hasStylist,
+    hasEjectionCleanup,
   };
 }
 

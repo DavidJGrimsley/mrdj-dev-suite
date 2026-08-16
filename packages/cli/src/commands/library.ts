@@ -15,6 +15,7 @@ import type {
   LibraryItemSummary,
   LibraryResolution,
   LibrarySourceName,
+  LibraryVariant,
 } from '@mr.dj2u/library-registry';
 import type { LibraryAddPlan, LibraryAddResult } from '../library.js';
 
@@ -311,7 +312,7 @@ async function promptLibraryAddVariant(argv: LibraryAddArgv): Promise<string | u
 
   const answer = await select<string>({
     message: `Which ${argv.id} variant should be added?`,
-    options: item.variants.map((variant) => ({
+    options: item.variants.map((variant: LibraryVariant) => ({
       value: variant.id,
       label: variant.name,
       hint: variant.description,

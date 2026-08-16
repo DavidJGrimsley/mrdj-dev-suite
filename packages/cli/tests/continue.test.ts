@@ -129,6 +129,47 @@ describe('MDS Continue', () => {
     expect(brief.recommendation.plan.join('\n')).toContain('Set `Decision: confirmed`');
   });
 
+  it('hard-stops when a persisted ejection inventory is still pending', async () => {
+    const projectPath = await createOnboardedProject({
+      info: [
+        '# Info',
+        '',
+        '## Component Strategy',
+        '',
+        '- Style Library: StyleSheet',
+        '- Expo UI: No',
+        '- Expo UI Universal components: No',
+        '- Expo Native Tabs: No',
+        '- Conflicts: none',
+        '- Decision: confirmed',
+        '',
+        '## Ejection Inventory',
+        '',
+        '- Decision: pending',
+        '- Items:',
+        '  - onboarding: retain (present)',
+        '  - stylist: eject (present)',
+        '',
+      ].join('\n'),
+      todo: [
+        '# Todo',
+        '',
+        '## Phase 1: App Shell',
+        '',
+        '- [ ] Build the app shell.',
+        '',
+      ].join('\n'),
+    });
+
+    const brief = await buildContinueSessionBrief(projectPath);
+
+    expect(brief.ejectionInventory?.decision).toBe('pending');
+    expect(brief.ejectionStatus.decision).toBe('pending');
+    expect(brief.recommendation.priority).toBe('phase-0-user-review');
+    expect(brief.recommendation.title).toContain('ejection inventory');
+    expect(brief.recommendation.plan.join('\n')).toContain('mds eject');
+  });
+
   it('does not treat a confirmed component strategy as a Phase 0 hard-stop', async () => {
     const projectPath = await createOnboardedProject({
       info: [

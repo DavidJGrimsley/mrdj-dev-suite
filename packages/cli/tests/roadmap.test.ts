@@ -174,7 +174,9 @@ describe('project roadmap generation', () => {
     expect(todo).toContain('Browse exposition pages to understand the included starter flows');
     expect(todo).toContain("Review styling in the 'Stylist' page");
     expect(todo).toContain('Run or defer `eject-stylist`');
-    expect(todo).toContain('Run `mds eject exposition`');
+    expect(todo).toContain('Review the ejection inventory with `mds eject`');
+    expect(todo).toContain('Run `mds eject` and keep only the generated sections you want to retain');
+    expect(todo).toContain('Run `mds report --kind content`');
     expect(todo).toContain('Sign in and set up EAS in the terminal');
     expect(todo).toContain('Establish the app shell and first implementation-ready route in src/app');
     expect(todo).toContain('Implement the initial data layer using local dummy data with Expo SQLite');

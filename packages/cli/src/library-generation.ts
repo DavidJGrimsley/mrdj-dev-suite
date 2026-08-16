@@ -10,6 +10,7 @@ import {
 import type {
   LibraryProjectContext,
   LibraryResolvedAsset,
+  LibraryResolutionIssue,
 } from '@mr.dj2u/library-registry';
 
 function normalizeProjectPath(filePath: string): string {
@@ -24,8 +25,8 @@ export async function loadLibraryTextAssets(
   const resolution = resolveLibraryItem(itemId, context, { variant });
   if (!resolution.compatible) {
     const details = resolution.issues
-      .filter((issue) => issue.severity === 'error')
-      .map((issue) => issue.message)
+      .filter((issue: LibraryResolutionIssue) => issue.severity === 'error')
+      .map((issue: LibraryResolutionIssue) => issue.message)
       .join('; ');
     throw new Error(`MDS Library item ${itemId} is not compatible with generated project: ${details}`);
   }

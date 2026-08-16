@@ -24,7 +24,7 @@ describe('runEjectExpositionCommand', () => {
     tempDirs.push(projectPath);
 
     await expect(runEjectExpositionCommand({ path: projectPath })).rejects.toThrow(
-      'Non-interactive mode requires --keep or --all'
+      'Non-interactive mode requires --keep, --from-memory, or --all'
     );
   });
 
@@ -486,5 +486,83 @@ describe('runEjectExpositionCommand', () => {
     expect(layout).toContain('AppThemeProvider');
     const provider = await readFile(path.join(projectPath, 'src', 'theme', 'provider.tsx'), 'utf8');
     expect(provider).toContain('Appearance.getColorScheme()');
+  });
+
+  it('defaults retain from project memory and records Phase 0 ejection status plus cleanup tasks', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-memory-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'onboarding'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'settings'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'home'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'features', 'exposition'), { recursive: true });
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'),
+      'export {};\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', '_layout.tsx'),
+      '<Stack.Screen name="onboarding" />\n<Stack.Screen name="settings" />\n<Stack.Screen name="exposition/stylist" />\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'),
+      "import { WelcomeScreen } from '../onboarding/welcome-screen';\nexport const leftover = WelcomeScreen;\n",
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'info.md'),
+      [
+        '# Info',
+        '',
+        '- Components from create-expo-app: No',
+        '- Onboarding Flow: Multi-screen',
+        '- Starting Data mode: local dummy data with Expo SQLite.',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'project', 'todo.md'),
+      '# Todo\n\n## Phase 3: Complete Product Flows\n\n- [ ] Build remaining flows.\n',
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, 'project', 'guidelines.md'), '- Onboarding Setup is generated.\n', 'utf8');
+
+    await runEjectExpositionCommand({ path: projectPath, fromMemory: true });
+
+    await expect(
+      access(path.join(projectPath, 'src', 'features', 'onboarding', 'welcome-screen.tsx'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(projectPath, 'src', 'features', 'exposition', 'stylist-screen.tsx'))
+    ).rejects.toThrow();
+
+    const info = await readFile(path.join(projectPath, 'project', 'info.md'), 'utf8');
+    expect(info).toContain('## Ejection Inventory');
+    expect(info).toContain('- Decision: confirmed');
+    expect(info).toMatch(/onboarding:\s+retain/);
+    expect(info).toMatch(/stylist:\s+eject/);
+
+    const cleanup = await readFile(path.join(projectPath, 'project', 'ejection-cleanup.md'), 'utf8');
+    expect(cleanup).toContain('# Ejection Cleanup');
+    expect(cleanup).toContain('Onboarding Setup');
+    const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
+    expect(todo).toContain('ejection-cleanup.md');
   });
 });

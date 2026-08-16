@@ -22,6 +22,13 @@ import {
   parseComponentStrategy,
   type ComponentStrategy,
 } from '../component-strategy.js';
+import {
+  isEjectionInventoryResolved,
+  parseEjectionInventory,
+  type EjectionInventory,
+  type EjectionInventoryStatus,
+  inventoryStatusFrom,
+} from '../ejection-inventory.js';
 
 export type { ComponentStrategy };
 
@@ -91,6 +98,8 @@ export interface ContinueSessionBrief {
   nextTodo: TodoItem | null;
   expoSdk: ExpoSdkSnapshot | null;
   componentStrategy: ComponentStrategy | null;
+  ejectionInventory: EjectionInventory | null;
+  ejectionStatus: EjectionInventoryStatus;
   recommendation: ContinueRecommendation;
   handoff: string;
 }
@@ -172,6 +181,7 @@ export async function buildContinueSessionBrief(
   const nextTodo = isOnboardedApp ? await findFirstUncheckedTodo(projectPath) : null;
   const expoSdk = isOnboardedApp ? await resolveExpoSdkSnapshot(packageJson, options) : null;
   const componentStrategy = isOnboardedApp ? await readComponentStrategy(projectPath) : null;
+  const ejectionInventory = isOnboardedApp ? await readEjectionInventory(projectPath) : null;
   const recommendation = chooseRecommendation({
     isOnboardedApp,
     markerCount: todoForContext.hits.length,
@@ -180,6 +190,7 @@ export async function buildContinueSessionBrief(
     nextTodo,
     expoSdk,
     componentStrategy,
+    ejectionInventory,
   });
 
   return {
@@ -206,6 +217,8 @@ export async function buildContinueSessionBrief(
     nextTodo,
     expoSdk,
     componentStrategy,
+    ejectionInventory,
+    ejectionStatus: inventoryStatusFrom(ejectionInventory),
     recommendation,
     handoff:
       'For lower token usage and lower cost, open this app folder directly in a new agent session and run `mds continue` before implementation work.',
@@ -220,6 +233,7 @@ export function chooseRecommendation(input: {
   nextTodo: TodoItem | null;
   expoSdk?: ExpoSdkSnapshot | null;
   componentStrategy?: ComponentStrategy | null;
+  ejectionInventory?: EjectionInventory | null;
 }): ContinueRecommendation {
   if (!input.isOnboardedApp) {
     return {
@@ -291,6 +305,20 @@ export function chooseRecommendation(input: {
         'Review the Style Library, Expo UI / Universal Components / NativeTabs flags, and any listed conflicts.',
         'Set `Decision: confirmed` in the Component Strategy section after that review, then mark the matching Phase 0 todo complete.',
         'Run `mds continue` again once the strategy decision is confirmed.',
+      ],
+    };
+  }
+
+  if (input.ejectionInventory && !isEjectionInventoryResolved(input.ejectionInventory)) {
+    return {
+      priority: 'phase-0-user-review',
+      title: 'Confirm the Phase 0 ejection inventory before implementation work',
+      requiresApproval: true,
+      plan: [
+        'Phase 0 cannot continue until retain/eject decisions are recorded for generated starter and template components.',
+        'Run `mds eject` and keep the components selected in project memory, or set `Decision: confirmed` in the Ejection Inventory section after reviewing the list.',
+        'Ejected items get a cleanup checklist in `project/ejection-cleanup.md` instead of leaving stale imports undocumented.',
+        'Run `mds continue` again once the ejection inventory decision is confirmed.',
       ],
     };
   }
@@ -371,6 +399,7 @@ export function renderContinueSessionBrief(brief: ContinueSessionBrief): string 
   if (brief.expoSdk) {
     lines.push(`Expo SDK: ${formatExpoSdkSnapshot(brief.expoSdk)}`);
   }
+  lines.push(`Ejection inventory: ${formatEjectionStatus(brief.ejectionStatus)}`);
   lines.push('');
 
   if (brief.todoForContext.hits.length > 0) {
@@ -520,6 +549,27 @@ async function readComponentStrategy(projectPath: string): Promise<ComponentStra
   } catch {
     return null;
   }
+}
+
+async function readEjectionInventory(projectPath: string): Promise<EjectionInventory | null> {
+  const infoPath = path.join(projectPath, 'project', 'info.md');
+  if (!(await pathExists(infoPath))) {
+    return null;
+  }
+
+  try {
+    return parseEjectionInventory(await readFile(infoPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function formatEjectionStatus(status: EjectionInventoryStatus): string {
+  if (status.decision === 'not-applicable') {
+    return 'not applicable';
+  }
+  const retained = status.retained.length > 0 ? status.retained.join(', ') : 'none';
+  return `${status.decision} (${status.presentCount} present; retain ${retained})`;
 }
 
 async function isOnboardedProject(projectPath: string): Promise<boolean> {

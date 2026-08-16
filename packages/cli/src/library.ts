@@ -17,6 +17,10 @@ import {
   resolveLibraryItem,
 } from '@mr.dj2u/library-registry';
 import {
+  buildEjectionInventory,
+  expandLibraryDestinations,
+} from './ejection-inventory.js';
+import {
   buildAddCommand,
   buildExpoInstallCommand,
   detectPackageManager,
@@ -90,7 +94,8 @@ export type LibraryAddConflictCode =
   | 'integration-conflict'
   | 'dependency-version-conflict'
   | 'missing-content-token'
-  | 'unsupported-content-token';
+  | 'unsupported-content-token'
+  | 'retained-substitute';
 
 export interface LibraryAddConflict {
   code: LibraryAddConflictCode;
@@ -321,6 +326,7 @@ export async function planLibraryAdd(
   }
 
   const files = await planFiles(context, resolution.assets, conflicts);
+  await pushRetainedSubstituteConflicts(context.projectPath, id, resolution.items, files, conflicts);
   const dependencies = planDependencies(context, resolution.dependencies, conflicts);
   const commands = buildDependencyCommands(
     context.packageManager,
@@ -1075,6 +1081,42 @@ function deduplicateConflicts(conflicts: readonly LibraryAddConflict[]): Library
     seen.add(key);
     return true;
   });
+}
+
+async function pushRetainedSubstituteConflicts(
+  projectPath: string,
+  requestedId: string,
+  resolvedItems: readonly LibraryResolvedItem[],
+  files: readonly LibraryPlannedFile[],
+  conflicts: LibraryAddConflict[]
+): Promise<void> {
+  const inventory = await buildEjectionInventory(projectPath);
+  if (inventory.decision !== 'confirmed') {
+    return;
+  }
+
+  const requestedIds = new Set([requestedId, ...resolvedItems.map((item) => item.id)]);
+  for (const retained of inventory.items.filter((item) => item.decision === 'retain')) {
+    if (retained.libraryItemIds.some((itemId) => requestedIds.has(itemId))) {
+      continue;
+    }
+    const retainedFiles = new Set(
+      expandLibraryDestinations(projectPath, retained.destinations).map((filePath) =>
+        path.resolve(filePath)
+      )
+    );
+    for (const file of files) {
+      if (!retainedFiles.has(path.resolve(file.absolutePath))) {
+        continue;
+      }
+      conflicts.push({
+        code: 'retained-substitute',
+        message: `Refusing to recreate a substitute for retained ${retained.label} at ${file.destination}.`,
+        itemId: requestedId,
+        path: file.destination,
+      });
+    }
+  }
 }
 
 function isCompatibilityConflict(conflict: LibraryAddConflict): boolean {
