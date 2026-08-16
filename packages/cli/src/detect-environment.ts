@@ -5,6 +5,9 @@ import path from 'node:path';
 
 const execFileAsync = promisify(execFile);
 
+type ProcessPlatform = typeof process.platform;
+type ProcessEnv = Record<string, string | undefined>;
+
 export interface DetectedPackageManager {
   name: 'npm' | 'pnpm' | 'yarn' | 'bun';
   available: boolean;
@@ -40,8 +43,8 @@ export interface DetectEnvironmentOptions {
   desiredPlatforms?: string[];
   trigger?: 'flag' | 'env';
   appliedPlatformRecommendation?: boolean;
-  platform?: NodeJS.Platform;
-  env?: NodeJS.ProcessEnv;
+  platform?: ProcessPlatform;
+  env?: ProcessEnv;
   fileExists?: (filePath: string) => Promise<boolean>;
   readTextFile?: (filePath: string) => Promise<string | null>;
   runCommand?: (command: string, args: string[]) => Promise<string | null>;
@@ -145,7 +148,7 @@ export async function detectEnvironment(
 
 export function isExpoMcpOnboardingEnabled(
   value: boolean | undefined,
-  env: NodeJS.ProcessEnv = process.env
+  env: ProcessEnv = process.env
 ): { enabled: boolean; trigger?: 'flag' | 'env' } {
   if (value === true) {
     return { enabled: true, trigger: 'flag' };
@@ -271,7 +274,7 @@ async function readPackageJson(
   }
 }
 
-function hasTruthyEnv(env: NodeJS.ProcessEnv, keys: string[]): boolean {
+function hasTruthyEnv(env: ProcessEnv, keys: string[]): boolean {
   return keys.some((key) => typeof env[key] === 'string' && env[key]?.trim().length);
 }
 
