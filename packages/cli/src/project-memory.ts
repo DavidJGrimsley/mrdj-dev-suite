@@ -675,6 +675,11 @@ export async function scaffoldRichBoilerplate(
       force
     ),
     await writeIfAllowed(
+      path.join(projectPath, 'src', 'theme', 'color-utils.ts'),
+      requireLibraryTextAsset('mds/theme-support', themeAssets, 'src/theme/color-utils.ts'),
+      force
+    ),
+    await writeIfAllowed(
       path.join(projectPath, 'src', 'data', 'mock-app.ts'),
       renderMockData(answers),
       force
