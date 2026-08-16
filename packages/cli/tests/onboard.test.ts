@@ -646,6 +646,7 @@ describe('runOnboardCommand', () => {
     expect(packageJson.dependencies['expo-sqlite']).toBe('~56.0.4');
     expect(packageJson.dependencies['@expo/ui']).toBe('~56.0.14');
     expect(packageJson.dependencies['expo-navigation-bar']).toBe('~56.0.3');
+    expect(packageJson.dependencies['expo-splash-screen']).toBe('~56.0.14');
     expect(packageJson.dependencies['reanimated-color-picker']).toBe('^4.2.0');
     expect(packageJson.dependencies.uniwind).toBe('^1.6.4');
     const cliPackageJsonPath =
@@ -657,6 +658,10 @@ describe('runOnboardCommand', () => {
     };
     expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe(`^${cliPackageJson.version}`);
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
+    await expect(access(path.join(projectPath, 'assets', 'images', 'splash-icon.png'))).resolves.toBeUndefined();
+    await expect(
+      access(path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'))
+    ).resolves.toBeUndefined();
   });
 
   it('adds react-native-css-interop Metro patch wiring for nativewind projects', async () => {

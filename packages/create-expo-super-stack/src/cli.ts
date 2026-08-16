@@ -22,6 +22,7 @@ import {
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
 import {
+  applySdk56SplashConfig,
   resolveGeneratorStylingSystem,
   scaffoldProjectMemory,
 } from "@mr.dj2u/cli/project-memory";
@@ -1661,6 +1662,9 @@ export async function repairExpoProjectIdentifiers(
     JSON.stringify(currentPlatforms) !== JSON.stringify(desiredPlatforms)
   ) {
     expo.platforms = desiredPlatforms;
+    changed = true;
+  }
+  if (applySdk56SplashConfig(expo)) {
     changed = true;
   }
   const shouldIncludeAndroid = targetPlatforms.includes("android");

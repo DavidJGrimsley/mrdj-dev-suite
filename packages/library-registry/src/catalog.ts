@@ -1642,6 +1642,41 @@ const nativeWindUiItems: LibraryItem[] = [
 
 const ceaItems: LibraryItem[] = [
   defineItem({
+    id: "expo/splash-screen",
+    name: "Expo SDK 56 splash screen",
+    description:
+      "Light and dark splash icons and expo-splash-screen plugin config matching create-expo-app on SDK 56.",
+    kind: "integration",
+    source: CEA_SOURCE,
+    tags: ["expo", "splash", "appearance"],
+    categories: ["theming", "support"],
+    compatibility: SDK_56_CEA_ASSETS,
+    dependencies: [runtime("expo-splash-screen", "~56.0.14", "expo")],
+    assets: [
+      ceaAsset(
+        "assets/images/expo-logo.png",
+        "assets/images/splash-icon.png",
+        "static",
+        "binary",
+      ),
+      ceaAsset(
+        "assets/images/expo-badge-white.png",
+        "assets/images/splash-icon-dark.png",
+        "static",
+        "binary",
+      ),
+    ],
+    integration: {
+      summary:
+        "Install the SDK 56 splash icons and configure expo-splash-screen for system light and dark appearance.",
+      instructions: [
+        "Set expo.userInterfaceStyle to automatic.",
+        "Add the expo-splash-screen config plugin with light and dark image and backgroundColor values.",
+        "Keep the splash assets under assets/images, matching create-expo-app.",
+      ],
+    },
+  }),
+  defineItem({
     id: "expo/theme-support",
     name: "Expo starter theme support",
     description:
