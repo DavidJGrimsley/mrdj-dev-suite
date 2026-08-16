@@ -71,6 +71,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(help).toContain("create-expo-super-stack [project-name]");
     expect(help).toContain("--mds-yes");
     expect(help).toContain("--mds-auth-provider=");
+    expect(help).toContain("--mds-with-expo-mcp");
     expect(help).toContain("--mds-save-defaults");
     expect(help).toContain("--mds-no-guidelines-template");
     expect(help).toContain("-h, --help");
@@ -410,6 +411,13 @@ describe("create-expo-super-stack CLI helpers", () => {
   it("supports explicit opt-out for saving onboarding defaults", () => {
     const parsed = parseArgs(["demo-app", "--mds-no-save-defaults"]);
     expect(parsed.mds.saveDefaults).toBe(false);
+  });
+
+  it("parses the optional Expo MCP onboarding flag without forwarding it to create-expo-stack", () => {
+    const parsed = parseArgs(["demo-app", "--mds-with-expo-mcp"]);
+
+    expect(parsed.mds.withExpoMcp).toBe(true);
+    expect(parsed.createExpoStackArgs).toEqual(["demo-app"]);
   });
 
   it("supports explicit opt-out for the bundled guidelines template", () => {

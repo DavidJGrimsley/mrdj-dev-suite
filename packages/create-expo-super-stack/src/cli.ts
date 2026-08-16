@@ -19,6 +19,7 @@ import {
   SUPER_STACK_SUCCESS_MESSAGE,
   collectOnboardPlan,
   defaultOnboardPlan,
+  finalizeOnboardPlanWithDetectedEnvironment,
   savePersonalOnboardDefaults,
 } from "@mr.dj2u/cli/onboarding";
 import {
@@ -87,6 +88,7 @@ export interface ParsedArgs {
     componentStrategyDecision?: "pending" | "confirmed";
     easUses?: string[];
     saveDefaults?: boolean;
+    withExpoMcp?: boolean;
   };
 }
 
@@ -160,9 +162,14 @@ export async function main(): Promise<void> {
     parsed.createExpoStackArgs,
   );
   const onboardArgv = buildOnboardArgv(projectPath, parsed, easSelected);
-  const plan = parsed.mds.yes
+  const draftPlan = parsed.mds.yes
     ? defaultOnboardPlan(onboardArgv, projectPath)
     : await collectOnboardPlan(onboardArgv, projectPath);
+  const plan = await finalizeOnboardPlanWithDetectedEnvironment(
+    onboardArgv,
+    projectPath,
+    draftPlan,
+  );
   const movedAppDir =
     plan.answers.appDirectory === "src"
       ? await moveRootAppIntoSrc(projectPath)
@@ -363,6 +370,11 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === "--mds-save-defaults") {
       mds.saveDefaults = true;
+      continue;
+    }
+
+    if (arg === "--mds-with-expo-mcp") {
+      mds.withExpoMcp = true;
       continue;
     }
 
@@ -710,6 +722,7 @@ export function renderHelpText(): string {
     "Common mds options:",
     "  --mds-yes                     Run non-interactive onboarding defaults",
     "  --mds-save-defaults           Save onboarding answers as personal defaults",
+    "  --mds-with-expo-mcp          Enable Expo MCP-aware environment detection during onboarding",
     "  --mds-no-save-defaults        Do not save onboarding answers as personal defaults",
     "  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app",
     "  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass",
@@ -2500,6 +2513,7 @@ function buildOnboardArgv(
     deploymentTarget: parsed.mds.deploymentTarget,
     defaults: parsed.mds.defaults,
     saveDefaults: parsed.mds.saveDefaults,
+    withExpoMcp: parsed.mds.withExpoMcp,
     testToMain: parsed.mds.testToMain,
     platforms: parsed.mds.platforms,
     firstPlatform: parsed.mds.firstPlatform,

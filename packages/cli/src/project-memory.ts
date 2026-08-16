@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock } from './stylist-theme.js';
 import { loadLibraryTextAssets, requireLibraryTextAsset } from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
+import type { DetectedEnvironmentReport } from './detect-environment.js';
 import {
   PHASE0_COMPONENT_STRATEGY_TODO,
   renderComponentStrategySection,
@@ -83,6 +84,8 @@ export type GeneratorStylingSystem =
   | 'restyle'
   | 'stylesheet';
 
+export type EnvironmentDetectionMode = 'disabled' | 'enabled';
+
 export interface OnboardAnswers {
   appName: string;
   generatorScriptLanguage?: 'typescript' | 'javascript';
@@ -133,6 +136,8 @@ export interface OnboardAnswers {
   legalUpdateGate: LegalUpdateGate;
   testToMainSafeguards: boolean;
   defaults: string[];
+  environmentDetectionMode?: EnvironmentDetectionMode;
+  environmentDetection?: DetectedEnvironmentReport;
 }
 
 export interface ProjectScaffoldOptions {
@@ -537,6 +542,7 @@ const INFO_HEADINGS = [
   'Later Scope & Possibilities',
   'Research, Notes, and References',
   'Tech Stack & CESS Onboarding',
+  'Environment Detection',
   'Component Strategy',
   'Ejection Inventory',
 ] as const;
@@ -1533,6 +1539,11 @@ export function renderInfo(
     `- Start with MDS project guidelines template: ${formatYesNo(true)}`,
     `- Use test-to-main safeguards: ${formatYesNo(answers.testToMainSafeguards)}`,
     '',
+    ...renderEnvironmentDetectionSection(answers.environmentDetection),
+    ...((answers.environmentDetection && answers.environmentDetection.summaryLines.length > 0) ||
+    (answers.environmentDetection && answers.environmentDetection.warningLines.length > 0)
+      ? ['']
+      : []),
     renderComponentStrategySection(componentStrategyFromAnswers(answers, existingInfo)),
     renderEjectionInventorySection(
       resolveEjectionInventoryForRender(
@@ -1551,6 +1562,54 @@ export function renderInfo(
       )
     ),
   ].join('\n');
+}
+
+function renderEnvironmentDetectionSection(
+  report: DetectedEnvironmentReport | undefined
+): string[] {
+  if (!report) {
+    return [];
+  }
+
+  return [
+    '## Environment Detection',
+    '',
+    `- Mode: ${report.mode}`,
+    `- Trigger: ${report.trigger}`,
+    `- Expo MCP package detected: ${formatYesNo(report.expoMcp.packageInstalled)}`,
+    `- Expo MCP local capabilities configured in this shell: ${formatYesNo(report.expoMcp.localCapabilitiesConfigured)}`,
+    `- Expo SDK detected: ${report.expoSdkVersion ?? 'not detected'}`,
+    `- Node.js: ${report.nodeVersion ?? 'not detected'}`,
+    `- Package managers detected: ${formatDetectedPackageManagers(report.packageManagers)}`,
+    `- iOS local support: ${formatPlatformSupportSummary(report.ios.toolchainAvailable, report.ios.simulatorAvailable)}`,
+    `- Android local support: ${formatPlatformSupportSummary(report.android.toolchainAvailable, report.android.simulatorAvailable)}`,
+    `- Env files present: ${report.envFiles.length > 0 ? report.envFiles.join(', ') : 'none detected'}`,
+    `- Recommended platforms: ${report.recommendedPlatforms.join(', ')}`,
+    `- Platform recommendation applied: ${formatYesNo(report.appliedPlatformRecommendation)}`,
+    ...report.summaryLines.map((line) => `- ${line}`),
+    ...(report.warningLines.length > 0
+      ? ['', '### Environment Warnings', '', ...report.warningLines.map((line) => `- ${line}`)]
+      : []),
+  ];
+}
+
+function formatDetectedPackageManagers(
+  packageManagers: DetectedEnvironmentReport['packageManagers']
+): string {
+  const detected = packageManagers
+    .filter((manager) => manager.available)
+    .map((manager) => `${manager.name}${manager.version ? ` ${manager.version}` : ''}`);
+  return detected.length > 0 ? detected.join(', ') : 'none detected';
+}
+
+function formatPlatformSupportSummary(
+  toolchainAvailable: boolean,
+  simulatorAvailable: boolean
+): string {
+  if (!toolchainAvailable) {
+    return 'toolchain not detected';
+  }
+  return simulatorAvailable ? 'toolchain and simulator detected' : 'toolchain detected, simulator not detected';
 }
 
 export function componentStrategyFromAnswers(

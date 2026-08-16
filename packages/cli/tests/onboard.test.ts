@@ -19,6 +19,7 @@ import {
   defaultOnboardPlan,
   deriveDefaults,
   formatDataNeedsSelection,
+  finalizeOnboardPlanWithDetectedEnvironment,
   loadPersonalOnboardDefaults,
   getServerPrompt,
   normalizePromptText,
@@ -27,6 +28,7 @@ import {
   savePersonalOnboardDefaults,
   validateRequiredInput,
 } from '../src/commands/onboard.js';
+import * as detectEnvironmentModule from '../src/detect-environment.js';
 import {
   deriveOnboardingPersistence,
   renderInfo,
@@ -1852,6 +1854,107 @@ describe('runOnboardCommand', () => {
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
     expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
+  });
+
+  it('records detected environment details when Expo MCP onboarding is applied', async () => {
+    const report: detectEnvironmentModule.DetectedEnvironmentReport = {
+      mode: 'enabled',
+      trigger: 'flag',
+      expoSdkVersion: '56.0.19',
+      nodeVersion: '22.3.0',
+      packageManagers: [
+        { name: 'npm', available: true, version: '10.8.2' },
+        { name: 'pnpm', available: true, version: '9.15.0' },
+        { name: 'yarn', available: false },
+        { name: 'bun', available: false },
+      ],
+      expoMcp: {
+        packageInstalled: true,
+        localCapabilitiesConfigured: false,
+      },
+      ios: {
+        toolchainAvailable: false,
+        simulatorAvailable: false,
+      },
+      android: {
+        toolchainAvailable: true,
+        simulatorAvailable: false,
+      },
+      envFiles: ['.env.local'],
+      recommendedPlatforms: ['web', 'android'],
+      skippedPlatforms: ['ios'],
+      summaryLines: ['Recommended platform scope for local onboarding: web, android.'],
+      warningLines: ['Xcode was not detected, so local iOS builds are not currently available.'],
+      appliedPlatformRecommendation: false,
+    };
+    const spy = vi.spyOn(detectEnvironmentModule, 'detectEnvironment').mockResolvedValue(report);
+
+    try {
+      const plan = await finalizeOnboardPlanWithDetectedEnvironment(
+        { project: '.', yes: true, withExpoMcp: true },
+        path.join(os.tmpdir(), 'expo-mcp-plan'),
+        defaultOnboardPlan({
+          project: path.join(os.tmpdir(), 'expo-mcp-plan'),
+          platforms: ['web', 'ios', 'android'],
+        })
+      );
+
+      expect(plan.answers.environmentDetectionMode).toBe('enabled');
+      expect(plan.answers.environmentDetection?.recommendedPlatforms).toEqual(['web', 'android']);
+      expect(plan.answers.environmentDetection?.appliedPlatformRecommendation).toBe(true);
+      expect(plan.answers.targetPlatforms).toEqual(['web', 'android']);
+      expect(plan.answers.firstTargetPlatform).toBe('web');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('renders the Environment Detection section without changing Phase 0 component strategy output', () => {
+    const plan = defaultOnboardPlan({
+      project: path.join(os.tmpdir(), 'env-render-app'),
+      platforms: ['web', 'ios', 'android'],
+    });
+    plan.answers.environmentDetectionMode = 'enabled';
+    plan.answers.environmentDetection = {
+      mode: 'enabled',
+      trigger: 'env',
+      expoSdkVersion: '56.0.19',
+      nodeVersion: '22.3.0',
+      packageManagers: [
+        { name: 'npm', available: true, version: '10.8.2' },
+        { name: 'pnpm', available: false },
+        { name: 'yarn', available: false },
+        { name: 'bun', available: false },
+      ],
+      expoMcp: {
+        packageInstalled: false,
+        localCapabilitiesConfigured: false,
+      },
+      ios: {
+        toolchainAvailable: false,
+        simulatorAvailable: false,
+      },
+      android: {
+        toolchainAvailable: true,
+        simulatorAvailable: true,
+      },
+      envFiles: [],
+      recommendedPlatforms: ['web', 'android'],
+      skippedPlatforms: ['ios'],
+      summaryLines: ['Recommended platform scope for local onboarding: web, android.'],
+      warningLines: ['No .env files were detected in the project root.'],
+      appliedPlatformRecommendation: true,
+    };
+
+    const info = renderInfo(plan.answers.appName, plan.answers);
+    const todo = renderTodo(plan.answers);
+
+    expect(info).toContain('## Environment Detection');
+    expect(info).toContain('- Recommended platforms: web, android');
+    expect(info).toContain('- Platform recommendation applied: Yes');
+    expect(info).toContain('## Component Strategy');
+    expect(info).toContain('- Decision: pending');
+    expect(todo).toContain('Confirm the Phase 0 component strategy in `project/info.md`');
   });
 
   it('persists a pending Phase 0 component strategy by default', () => {

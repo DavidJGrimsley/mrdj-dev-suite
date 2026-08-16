@@ -314,6 +314,12 @@ async function main(): Promise<void> {
               'Persist selected onboarding defaults globally for future app generation (interactive runs ask unless this is set)',
             type: 'boolean',
           })
+          .option('with-expo-mcp', {
+            describe:
+              'Enable Expo MCP-aware environment detection during onboarding (or set EXPO_MCP_ONBOARDING=true)',
+            type: 'boolean',
+            default: false,
+          })
           .option('install', {
             describe:
               'Install newly declared dependencies immediately (disable with --no-install)',

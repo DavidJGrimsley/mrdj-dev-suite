@@ -15,6 +15,10 @@ import {
   validateInstalledPackages,
 } from '../package-install.js';
 import {
+  detectEnvironment,
+  isExpoMcpOnboardingEnabled,
+} from '../detect-environment.js';
+import {
   componentStrategyFromAnswers,
   formatComponentStrategySummary,
   scaffoldProjectMemory,
@@ -88,6 +92,8 @@ export interface OnboardArgv {
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMain?: boolean;
   saveDefaults?: boolean;
+  withExpoMcp?: boolean;
+  environmentDetectionMode?: OnboardAnswers['environmentDetectionMode'];
   noInstall?: boolean;
   install?: boolean;
   installRunner?: PackageCommandRunner;
@@ -201,9 +207,10 @@ interface PersonalOnboardDefaults {
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   const projectPath = path.resolve(argv.project ?? '.');
-  const plan = argv.yes
+  const draftPlan = argv.yes
     ? defaultOnboardPlan(argv, projectPath)
     : await collectOnboardPlan(argv, projectPath);
+  const plan = await finalizeOnboardPlanWithDetectedEnvironment(argv, projectPath, draftPlan);
   const packageJsonPath = path.join(projectPath, 'package.json');
   const beforePackageJson = await readOptionalPackageJson(packageJsonPath);
   const written = await scaffoldProjectMemory(projectPath, plan.answers, {
@@ -602,6 +609,68 @@ export function defaultOnboardPlan(argv: OnboardArgv, projectPath = path.resolve
   };
 }
 
+export async function finalizeOnboardPlanWithDetectedEnvironment(
+  argv: OnboardArgv,
+  projectPath: string,
+  plan: OnboardPlan
+): Promise<OnboardPlan> {
+  const mcpMode = isExpoMcpOnboardingEnabled(argv.withExpoMcp, process.env);
+  if (!mcpMode.enabled) {
+    return plan;
+  }
+
+  const report = await detectEnvironment(projectPath, {
+    desiredPlatforms: plan.answers.targetPlatforms,
+    trigger: mcpMode.trigger,
+  });
+
+  printDetectedEnvironmentSummary(report);
+
+  let applyRecommendation = report.recommendedPlatforms.join(',') === plan.answers.targetPlatforms.join(',');
+  if (!applyRecommendation) {
+    if (argv.yes) {
+      applyRecommendation = true;
+      console.log(
+        chalk.dim(
+          'Auto-applied the detected platform recommendation because onboarding is running non-interactively.'
+        )
+      );
+    } else {
+      const choice = await askChoice(
+        'Proceed with full onboarding, or apply the detected platform recommendation?',
+        [
+          {
+            value: 'recommended' as const,
+            label: 'Apply recommendation',
+            hint: `Use ${report.recommendedPlatforms.join(', ')} for local-first onboarding`,
+          },
+          {
+            value: 'full' as const,
+            label: 'Keep full plan',
+            hint: `Keep ${plan.answers.targetPlatforms.join(', ')} even if local toolchains are missing`,
+          },
+        ],
+        'recommended'
+      );
+      applyRecommendation = choice === 'recommended';
+    }
+  }
+
+  const nextAnswers = applyRecommendation
+    ? applyDetectedPlatformRecommendation(plan.answers, report.recommendedPlatforms)
+    : { ...plan.answers };
+  nextAnswers.environmentDetectionMode = 'enabled';
+  nextAnswers.environmentDetection = {
+    ...report,
+    appliedPlatformRecommendation: applyRecommendation,
+  };
+
+  return {
+    ...plan,
+    answers: nextAnswers,
+  };
+}
+
 export function validateRequiredInput(value: string, visibleDefault?: string): string | undefined {
   if (value.trim() || visibleDefault) {
     return undefined;
@@ -778,6 +847,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     onboardingCompletionMode,
     legalUpdateGate,
     testToMainSafeguards,
+    environmentDetectionMode: argv.environmentDetectionMode,
     defaults: deriveDefaults(
       argv.defaults ?? savedDefaults.defaults,
       ['project-docs', 'guidelines', 'uniwind', 'doctor'],
@@ -786,6 +856,46 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
       authProvider
     ),
   };
+}
+
+function applyDetectedPlatformRecommendation(
+  answers: OnboardAnswers,
+  recommendedPlatforms: string[]
+): OnboardAnswers {
+  const nextPlatforms = recommendedPlatforms.length > 0 ? recommendedPlatforms : answers.targetPlatforms;
+  const nextFirstPlatform = nextPlatforms.includes(answers.firstTargetPlatform)
+    ? answers.firstTargetPlatform
+    : nextPlatforms[0] ?? answers.firstTargetPlatform;
+  const nextWebOutput = nextPlatforms.includes('web') ? answers.webOutput : 'none';
+  return {
+    ...answers,
+    targetPlatforms: nextPlatforms,
+    firstTargetPlatform: nextFirstPlatform,
+    webOutput: nextWebOutput,
+    deployedServer: deriveDeployedServer(
+      nextWebOutput,
+      answers.expoServerAdapter,
+      answers.customBackend,
+      answers.deployedServer
+    ),
+  };
+}
+
+function printDetectedEnvironmentSummary(
+  report: Awaited<ReturnType<typeof detectEnvironment>>
+): void {
+  console.log();
+  console.log(chalk.bold('Detected environment'));
+  for (const line of report.summaryLines) {
+    console.log(`- ${line}`);
+  }
+  if (report.warningLines.length > 0) {
+    console.log(chalk.yellow('Warnings:'));
+    for (const line of report.warningLines) {
+      console.log(`- ${line}`);
+    }
+  }
+  console.log();
 }
 
 export function resolvePersonalOnboardDefaultsPath(): string {
