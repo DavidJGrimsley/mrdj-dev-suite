@@ -40,3 +40,6 @@ explicitly declared in an asset's `contentTokens` metadata. V1 declares only
 
 The registry does not track installation history and does not implement
 authentication. See `THIRD_PARTY_NOTICES.md` for snapshot provenance.
+
+See `docs/database-adapter.md` for the generated app database adapter contract
+and provider variant expectations.

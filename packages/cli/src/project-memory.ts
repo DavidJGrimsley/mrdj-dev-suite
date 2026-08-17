@@ -857,6 +857,10 @@ async function scaffoldRichBoilerplateInner(
     navigationShell.library === 'expo-router' && answers.usesExpoUiUniversalComponents
       ? await loadLibraryTextAssets('mds/expo-sdk-56', libraryContext)
       : undefined;
+  const dbAssets =
+    answers.dataStart === 'supabase'
+      ? await loadLibraryTextAssets('mds/db', libraryContext, 'supabase')
+      : undefined;
   const nativeWindUiAssets = includeNativeWindUiExposition
     ? await loadLibraryTextAssets(
         'nativewindui/exposition',
@@ -911,8 +915,10 @@ async function scaffoldRichBoilerplateInner(
     });
   }
   await mkdir(path.join(projectPath, 'src', 'data'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'db'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'services'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'theme'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'types'), { recursive: true });
   await mkdir(path.join(projectPath, 'scripts'), { recursive: true });
 
   results.push(
@@ -1350,8 +1356,11 @@ async function scaffoldRichBoilerplateInner(
     const authAlreadyWroteSupabaseClient = Boolean(
       authAssets?.has('src/services/supabase.ts')
     );
+    const dbAssetsIncludeSupabaseClient = Boolean(dbAssets?.has('src/services/supabase.ts'));
     results.push(
+      ...(dbAssets ? await writeLibraryAssetMap(projectPath, dbAssets, force) : []),
       ...(authAlreadyWroteSupabaseClient
+        || dbAssetsIncludeSupabaseClient
         ? []
         : [
             await writeIfAllowed(

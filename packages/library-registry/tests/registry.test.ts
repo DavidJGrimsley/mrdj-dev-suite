@@ -50,6 +50,7 @@ describe("MDS Library catalog", () => {
       "mds/onboarding",
       "mds/onboarding-state",
       "mds/onboarding-auth-supabase",
+      "mds/db",
       "mds/settings",
       "mds/stylist",
       "mds/data-local",
@@ -572,6 +573,72 @@ describe("library resolution", () => {
     expect(authScreenSource).toContain("color: colors.text");
     expect(authScreenSource).not.toContain("color: '#111827'");
     expect(authScreenSource).not.toContain("backgroundColor: '#ffffff'");
+  });
+
+  it("resolves the database adapter contract with provider variants", async () => {
+    const supabase = resolveLibraryItem("mds/db", routerContext, {
+      variant: "supabase",
+    });
+    const firebase = resolveLibraryItem("mds/db", routerContext, {
+      variant: "firebase",
+    });
+
+    expect(supabase.compatible).toBe(true);
+    expect(supabase.variant?.id).toBe("supabase");
+    expect(getLibraryItem("mds/db")?.variants.map((variant) => variant.id)).toEqual([
+      "supabase",
+      "firebase",
+    ]);
+    expect(supabase.dependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "@supabase/supabase-js" }),
+        expect.objectContaining({
+          name: "@react-native-async-storage/async-storage",
+        }),
+      ]),
+    );
+    expect(supabase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/db/adapter.ts" }),
+        expect.objectContaining({ destination: "src/db/supabase.ts" }),
+        expect.objectContaining({ destination: "src/db/index.ts" }),
+        expect.objectContaining({ destination: "src/types/database.ts" }),
+        expect.objectContaining({ destination: "src/services/supabase.ts" }),
+        expect.objectContaining({ destination: ".env.example" }),
+      ]),
+    );
+    const supabaseIndex = supabase.assets.find(
+      (asset) => asset.destination === "src/db/index.ts",
+    );
+    expect(supabaseIndex).toBeDefined();
+    const supabaseIndexSource = (await readLibraryAsset(supabaseIndex!)).toString("utf8");
+    expect(supabaseIndexSource).toContain("createSupabaseDatabaseAdapter");
+    expect(supabaseIndexSource).not.toContain("firebase");
+
+    expect(firebase.dependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "firebase" }),
+        expect.objectContaining({
+          name: "@react-native-async-storage/async-storage",
+        }),
+      ]),
+    );
+    expect(firebase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: "src/db/adapter.ts" }),
+        expect.objectContaining({ destination: "src/db/firebase.ts" }),
+        expect.objectContaining({ destination: "src/db/index.ts" }),
+        expect.objectContaining({ destination: "src/types/database.ts" }),
+        expect.objectContaining({ destination: "src/services/firebase.ts" }),
+      ]),
+    );
+    const firebaseAdapter = firebase.assets.find(
+      (asset) => asset.destination === "src/db/firebase.ts",
+    );
+    expect(firebaseAdapter).toBeDefined();
+    expect((await readLibraryAsset(firebaseAdapter!)).toString("utf8")).toContain(
+      "generated skeleton",
+    );
   });
 
   it("resolves production onboarding variants", async () => {

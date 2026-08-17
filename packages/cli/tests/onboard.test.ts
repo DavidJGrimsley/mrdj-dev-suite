@@ -1206,6 +1206,18 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')
     ).resolves.toContain('@react-native-async-storage/async-storage');
     await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'adapter.ts'), 'utf8')
+    ).resolves.toContain('DatabaseAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'index.ts'), 'utf8')
+    ).resolves.toContain("getAdapter(type: 'supabase' = 'supabase')");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'supabase.ts'), 'utf8')
+    ).resolves.toContain('createSupabaseDatabaseAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'types', 'database.ts'), 'utf8')
+    ).resolves.toContain('AppDatabase');
+    await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Supabase environments and branches');
     await expect(
