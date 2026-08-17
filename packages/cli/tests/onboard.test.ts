@@ -1475,6 +1475,93 @@ describe('runOnboardCommand', () => {
         'utf8'
       )
     ).resolves.toContain("route: '/' as Href");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain("import { createURL } from 'expo-linking';");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain('const auth = useAuthAdapter();');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain("legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-types.ts'), 'utf8')
+    ).resolves.toContain('refreshSession(): Promise<void>;');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-guard.tsx'), 'utf8')
+    ).resolves.toContain('Checking session...');
+  });
+
+  it('personalizes public legal documents and settings links for base auth account setup', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-settings-legal-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'settings-legal-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      noInstall: true,
+      appName: 'Settings Legal App',
+      authProvider: 'base',
+      legalDocumentMode: 'public-routes',
+      onboardingCompletionMode: 'account-setup',
+      legalBusinessName: 'Settings Legal LLC',
+      legalContactEmail: 'privacy@settings-legal.test',
+      legalAddressOrRegionNote: 'Brooklyn, NY, USA',
+    });
+
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain("import { createURL } from 'expo-linking';");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain('const auth = useAuthAdapter();');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain("legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
+    ).resolves.toContain("profileHref={createURL('/account-setup')}");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'terms.tsx'), 'utf8')
+    ).resolves.toContain('legal-page-route');
+    await expect(
+      readFile(path.join(projectPath, 'app', 'privacy.tsx'), 'utf8')
+    ).resolves.toContain('legal-page-route');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('Settings Legal LLC');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('privacy@settings-legal.test');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('Brooklyn, NY, USA');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'legal', 'legal-documents.ts'),
+        'utf8'
+      )
+    ).resolves.toContain('GDPR');
   });
 
   it('does not generate legal-gated routes when Supabase auth is selected without legal options', async () => {
@@ -2315,9 +2402,19 @@ describe('runOnboardCommand', () => {
       delete process.env.VITEST;
       delete process.env.VITEST_WORKER_ID;
 
-      const savedPath = savePersonalOnboardDefaults(sampleAnswers('Defaults App'));
+      const savedPath = savePersonalOnboardDefaults({
+        ...sampleAnswers('Defaults App'),
+        legalBusinessName: 'Defaults Legal LLC',
+        legalContactEmail: 'privacy@defaults.test',
+        legalAddressOrRegionNote: 'Queens, NY, USA',
+      });
       expect(savedPath).toBe(defaultsPath);
       await expect(readFile(defaultsPath, 'utf8')).resolves.toContain('"defaults"');
+      await expect(readFile(defaultsPath, 'utf8')).resolves.toContain('"legalBusinessName"');
+      await expect(readFile(defaultsPath, 'utf8')).resolves.toContain('"legalContactEmail"');
+      await expect(readFile(defaultsPath, 'utf8')).resolves.toContain(
+        '"legalAddressOrRegionNote"'
+      );
       if (process.platform !== 'win32') {
         const fileStats = await stat(defaultsPath);
         expect(fileStats.mode & 0o777).toBe(0o600);
@@ -2342,6 +2439,9 @@ describe('runOnboardCommand', () => {
           includeCreateExpoComponents: true,
           dataStart: 'supabase',
           authProvider: 'convex',
+          legalBusinessName: 'Saved Defaults LLC',
+          legalContactEmail: 'legal@saved-defaults.test',
+          legalAddressOrRegionNote: 'Remote-friendly; US East',
           onboardingFlow: 'multi-screen',
           legalDocumentMode: 'public-routes',
           onboardingCompletionMode: 'auth',
@@ -2364,6 +2464,9 @@ describe('runOnboardCommand', () => {
         includeCreateExpoComponents: true,
         dataStart: 'supabase',
         authProvider: 'convex',
+        legalBusinessName: 'Saved Defaults LLC',
+        legalContactEmail: 'legal@saved-defaults.test',
+        legalAddressOrRegionNote: 'Remote-friendly; US East',
         onboardingFlow: 'multi-screen',
         legalDocumentMode: 'public-routes',
         onboardingCompletionMode: 'auth',

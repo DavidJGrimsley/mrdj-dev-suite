@@ -71,6 +71,9 @@ export interface OnboardArgv {
   screens?: string;
   monetizationStrategy?: string;
   teamContext?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   laterScope?: string;
   researchNotes?: string;
   dataNeeds?: string;
@@ -210,6 +213,9 @@ interface PersonalOnboardDefaults {
   onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   authProvider?: AuthProviderChoice;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   testToMainSafeguards?: boolean;
   easUses?: string[];
 }
@@ -890,6 +896,10 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     screens: argv.screens?.trim() || undefined,
     monetizationStrategy: argv.monetizationStrategy,
     teamContext: argv.teamContext,
+    legalBusinessName: argv.legalBusinessName ?? savedDefaults.legalBusinessName,
+    legalContactEmail: argv.legalContactEmail ?? savedDefaults.legalContactEmail,
+    legalAddressOrRegionNote:
+      argv.legalAddressOrRegionNote ?? savedDefaults.legalAddressOrRegionNote,
     laterScope: argv.laterScope,
     researchNotes: argv.researchNotes,
     dataNeeds: argv.dataNeeds ?? 'Local state first; add backend only when needed',
@@ -993,6 +1003,9 @@ export function savePersonalOnboardDefaults(answers: OnboardAnswers): string | n
     usesExpoNativeTabs: answers.usesExpoNativeTabs,
     includeCreateExpoComponents: answers.includeCreateExpoComponents,
     authProvider: answers.authProvider,
+    legalBusinessName: answers.legalBusinessName,
+    legalContactEmail: answers.legalContactEmail,
+    legalAddressOrRegionNote: answers.legalAddressOrRegionNote,
     dataStart: answers.dataStart,
     onboardingFlow: answers.onboardingFlow,
     legalDocumentMode: answers.legalDocumentMode,
@@ -1048,6 +1061,9 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   const legalDocumentMode = normalizeChoice(raw.legalDocumentMode, ['none', 'public-routes', 'onboarding-agreement'] as const);
   const onboardingCompletionMode = normalizeChoice(raw.onboardingCompletionMode, ['enter-app', 'auth', 'account-setup', 'custom'] as const);
   const legalUpdateGate = normalizeChoice(raw.legalUpdateGate, ['none', 'material-required'] as const);
+  const legalBusinessName = normalizeString(raw.legalBusinessName);
+  const legalContactEmail = normalizeString(raw.legalContactEmail);
+  const legalAddressOrRegionNote = normalizeString(raw.legalAddressOrRegionNote);
   const customBackendEntry = normalizeString(raw.customBackendEntry);
   const easUses = normalizeStringArray(raw.easUses);
 
@@ -1073,6 +1089,11 @@ function normalizePersonalOnboardDefaults(value: unknown): PersonalOnboardDefaul
   if (typeof raw.testToMainSafeguards === 'boolean') normalized.testToMainSafeguards = raw.testToMainSafeguards;
   if (dataStart) normalized.dataStart = dataStart;
   if (authProvider) normalized.authProvider = authProvider;
+  if (legalBusinessName) normalized.legalBusinessName = legalBusinessName;
+  if (legalContactEmail) normalized.legalContactEmail = legalContactEmail;
+  if (legalAddressOrRegionNote) {
+    normalized.legalAddressOrRegionNote = legalAddressOrRegionNote;
+  }
   if (onboardingFlow) normalized.onboardingFlow = onboardingFlow;
   if (legalDocumentMode) normalized.legalDocumentMode = legalDocumentMode;
   if (onboardingCompletionMode) normalized.onboardingCompletionMode = onboardingCompletionMode;

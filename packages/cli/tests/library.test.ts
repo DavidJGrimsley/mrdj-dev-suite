@@ -122,6 +122,9 @@ describe('MDS Library CLI services', () => {
     const renderedLegalSource = await readFile(legalSourcePath, 'utf8');
     expect(renderedLegalSource).toContain('Library Test App');
     expect(renderedLegalSource).toContain('not legal advice');
+    expect(renderedLegalSource).toContain('GDPR');
+    expect(renderedLegalSource).toContain('TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME');
+    expect(renderedLegalSource).toContain('TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL');
     expect(renderedLegalSource).not.toContain('__MDS_APP_NAME__');
 
     const secondPlan = await planLibraryAdd(projectPath, 'mds/legal-documents');
@@ -174,6 +177,7 @@ describe('MDS Library CLI services', () => {
         expect.objectContaining({ destination: 'src/app/(auth)/sign-in.tsx', role: 'route' }),
         expect.objectContaining({ destination: 'src/app/(auth)/sign-up.tsx', role: 'route' }),
         expect.objectContaining({ destination: 'src/features/auth/auth-adapter.tsx' }),
+        expect.objectContaining({ destination: 'src/features/auth/auth-guard.tsx' }),
         expect.objectContaining({ destination: 'src/features/auth/auth-provider.tsx' }),
         expect.objectContaining({ destination: 'src/services/supabase.ts' }),
         expect.objectContaining({ destination: '.env.example' }),

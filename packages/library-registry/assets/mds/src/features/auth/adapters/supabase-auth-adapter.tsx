@@ -128,10 +128,25 @@ export function useAuthAdapter(): AuthAdapter {
     }
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    if (!supabase) {
+      setError(configurationError);
+      setSession(null);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    const { data, error: sessionError } = await supabase.auth.getSession();
+    setError(sessionError?.message ?? null);
+    setSession(mapSupabaseSession(data.session));
+    setIsLoading(false);
+  }, [configurationError]);
+
   return useMemo<AuthAdapter>(
     () => ({
       provider: 'supabase',
       state: { isLoading, session, error },
+      refreshSession,
       signInWithEmailPassword,
       signUpWithEmailPassword,
       requestPasswordReset,
@@ -140,6 +155,7 @@ export function useAuthAdapter(): AuthAdapter {
     [
       error,
       isLoading,
+      refreshSession,
       requestPasswordReset,
       session,
       signInWithEmailPassword,

@@ -8,6 +8,10 @@ import {
   applySdk56SplashConfig,
   ensureGeneratedSystemAppearance,
   renderGeneratedOnboardingConfig,
+  renderInfo,
+  resolveLegalAddressOrRegionNote,
+  resolveLegalBusinessName,
+  resolveLegalContactEmail,
   resolveGeneratorStylingSystem,
   SDK_56_SPLASH_DARK_IMAGE,
   SDK_56_SPLASH_LIGHT_IMAGE,
@@ -104,6 +108,52 @@ describe('resolveGeneratorStylingSystem', () => {
         defaults: ['project-docs', 'guidelines', 'doctor'],
       })
     ).toBe('stylesheet');
+  });
+});
+
+describe('legal project-memory values', () => {
+  it('renders legal contact details when present and falls back to explicit placeholders when absent', () => {
+    const info = renderInfo('Sample App', {
+      ...answers,
+      audience: 'Compliance teams',
+      coreFlows: 'Settings, legal review',
+      dataNeeds: 'Local state first',
+      deploymentTarget: 'Internal testing',
+      advancedPackageSetup: true,
+      includeCreateExpoComponents: false,
+      targetPlatforms: ['web'],
+      firstTargetPlatform: 'web',
+      platformFileStrategy: 'files-only',
+      webOutput: 'static',
+      deployedServer: 'none',
+      usesExpoUi: false,
+      usesExpoUiUniversalComponents: false,
+      usesExpoNativeTabs: false,
+      projectInfoReady: false,
+      projectStyleReady: false,
+      appDirectory: 'src',
+      platformLayoutMode: 'shared',
+      dataStart: 'local',
+      onboardingFlow: 'multi-screen',
+      legalDocumentMode: 'public-routes',
+      legalUpdateGate: 'none',
+      testToMainSafeguards: true,
+      defaults: ['project-docs'],
+      easUses: [],
+      legalBusinessName: 'Sample Holdings LLC',
+      legalContactEmail: 'privacy@example.com',
+      legalAddressOrRegionNote: 'New York, NY, USA',
+    } as OnboardAnswers);
+
+    expect(info).toContain('## Legal & Compliance Contact');
+    expect(info).toContain('- Business Name: Sample Holdings LLC');
+    expect(info).toContain('- Contact Email: privacy@example.com');
+    expect(info).toContain('- Address Or Region Note: New York, NY, USA');
+    expect(resolveLegalBusinessName({})).toBe('TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME');
+    expect(resolveLegalContactEmail({})).toBe('TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL');
+    expect(resolveLegalAddressOrRegionNote({})).toBe(
+      'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE'
+    );
   });
 });
 

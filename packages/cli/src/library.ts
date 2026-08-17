@@ -53,6 +53,9 @@ export interface LibraryProjectInspection extends LibraryProjectContext {
   packageManager: LibraryPackageManager;
   projectName?: string;
   projectAudience?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   navigationLayout: LibraryNavigationLayout;
   dependencies: Record<string, string>;
   runtimeDependencies: Record<string, string>;
@@ -216,6 +219,12 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
 const CONTENT_TOKEN_VALUES = {
   __MDS_APP_NAME__: (context: LibraryProjectInspection) => context.projectName,
   __MDS_APP_AUDIENCE__: (context: LibraryProjectInspection) => context.projectAudience,
+  __MDS_LEGAL_BUSINESS_NAME__: (context: LibraryProjectInspection) =>
+    context.legalBusinessName ?? 'TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME',
+  __MDS_LEGAL_CONTACT_EMAIL__: (context: LibraryProjectInspection) =>
+    context.legalContactEmail ?? 'TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL',
+  __MDS_LEGAL_ADDRESS_OR_REGION_NOTE__: (context: LibraryProjectInspection) =>
+    context.legalAddressOrRegionNote ?? 'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE',
 } satisfies Record<string, (context: LibraryProjectInspection) => string | undefined>;
 
 export async function inspectLibraryProject(projectPath = '.'): Promise<LibraryProjectInspection> {
@@ -258,6 +267,9 @@ export async function inspectLibraryProject(projectPath = '.'): Promise<LibraryP
       readString(appConfig?.expo?.name) ??
       normalizePackageName(readString(packageJson.name)),
     projectAudience: projectInfo.audience,
+    legalBusinessName: projectInfo.legalBusinessName,
+    legalContactEmail: projectInfo.legalContactEmail,
+    legalAddressOrRegionNote: projectInfo.legalAddressOrRegionNote,
     expoSdk: dependencies.expo,
     appDirectory,
     componentsDirectory,
@@ -1188,6 +1200,9 @@ function hashableProjectContext(context: LibraryProjectInspection): Record<strin
     featuresDirectory: context.featuresDirectory,
     projectName: context.projectName ?? null,
     projectAudience: context.projectAudience ?? null,
+    legalBusinessName: context.legalBusinessName ?? null,
+    legalContactEmail: context.legalContactEmail ?? null,
+    legalAddressOrRegionNote: context.legalAddressOrRegionNote ?? null,
     packageManager: context.packageManager,
   };
 }
@@ -1275,9 +1290,13 @@ async function readStaticAppConfigSource(configPath: string): Promise<AppConfigS
   };
 }
 
-async function readProjectInfo(
-  projectPath: string
-): Promise<{ name?: string; audience?: string }> {
+async function readProjectInfo(projectPath: string): Promise<{
+  name?: string;
+  audience?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
+}> {
   let raw: string;
   try {
     raw = await readFile(path.join(projectPath, 'project', 'info.md'), 'utf8');
@@ -1287,6 +1306,15 @@ async function readProjectInfo(
   return {
     name: readMarkdownSectionValue(raw, ['App Name']),
     audience: readMarkdownSectionValue(raw, ['Target Users', 'Audience']),
+    legalBusinessName: readMarkdownLabeledValue(raw, 'Legal & Compliance Contact', [
+      'Business Name',
+    ]),
+    legalContactEmail: readMarkdownLabeledValue(raw, 'Legal & Compliance Contact', [
+      'Contact Email',
+    ]),
+    legalAddressOrRegionNote: readMarkdownLabeledValue(raw, 'Legal & Compliance Contact', [
+      'Address Or Region Note',
+    ]),
   };
 }
 
@@ -1302,10 +1330,48 @@ function readMarkdownSectionValue(markdown: string, headings: readonly string[])
       if (!value) {
         continue;
       }
+      if (value.startsWith('# TodoForContext(optional):')) {
+        continue;
+      }
       if (value.startsWith('#')) {
         break;
       }
       return value.replace(/^[-*]\s+/, '').trim() || undefined;
+    }
+  }
+  return undefined;
+}
+
+function readMarkdownLabeledValue(
+  markdown: string,
+  heading: string,
+  labels: readonly string[]
+): string | undefined {
+  const lines = markdown.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const currentHeading = lines[index]?.match(/^##\s+(.+?)\s*$/)?.[1]?.trim().toLowerCase();
+    if (currentHeading !== heading.toLowerCase()) {
+      continue;
+    }
+
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor]?.trim();
+      if (!line) {
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        break;
+      }
+      const bullet = line.match(/^[-*]\s+([^:]+):\s*(.+)$/);
+      if (!bullet?.[1] || !bullet[2]) {
+        continue;
+      }
+      const bulletLabel = bullet[1].trim().toLowerCase();
+      const bulletValue = bullet[2].trim();
+      if (!labels.some((label) => label.toLowerCase() === bulletLabel)) {
+        continue;
+      }
+      return bulletValue;
     }
   }
   return undefined;

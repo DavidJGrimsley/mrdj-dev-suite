@@ -83,6 +83,11 @@ export type GeneratorStylingSystem =
   | 'restyle'
   | 'stylesheet';
 
+export const LEGAL_BUSINESS_NAME_PLACEHOLDER = 'TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME';
+export const LEGAL_CONTACT_EMAIL_PLACEHOLDER = 'TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL';
+export const LEGAL_ADDRESS_OR_REGION_PLACEHOLDER =
+  'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE';
+
 export interface OnboardAnswers {
   appName: string;
   generatorScriptLanguage?: 'typescript' | 'javascript';
@@ -103,6 +108,9 @@ export interface OnboardAnswers {
   screens?: string;
   monetizationStrategy?: string;
   teamContext?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   laterScope?: string;
   researchNotes?: string;
   dataNeeds: string;
@@ -252,6 +260,9 @@ function buildGeneratedLibraryContext(
 
   return {
     projectName: answers.appName,
+    legalBusinessName: resolveLegalBusinessName(answers),
+    legalContactEmail: resolveLegalContactEmail(answers),
+    legalAddressOrRegionNote: resolveLegalAddressOrRegionNote(answers),
     expoSdk: 56,
     styling,
     appDirectory: answers.appDirectory === 'src' ? 'src/app' : 'app',
@@ -263,6 +274,30 @@ function buildGeneratedLibraryContext(
     componentsDirectory: 'src/components',
     featuresDirectory: 'src/features',
   };
+}
+
+function normalizeOptionalLegalValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export function resolveLegalBusinessName(answers: Pick<OnboardAnswers, 'legalBusinessName'>): string {
+  return normalizeOptionalLegalValue(answers.legalBusinessName) ?? LEGAL_BUSINESS_NAME_PLACEHOLDER;
+}
+
+export function resolveLegalContactEmail(
+  answers: Pick<OnboardAnswers, 'legalContactEmail'>
+): string {
+  return normalizeOptionalLegalValue(answers.legalContactEmail) ?? LEGAL_CONTACT_EMAIL_PLACEHOLDER;
+}
+
+export function resolveLegalAddressOrRegionNote(
+  answers: Pick<OnboardAnswers, 'legalAddressOrRegionNote'>
+): string {
+  return (
+    normalizeOptionalLegalValue(answers.legalAddressOrRegionNote) ??
+    LEGAL_ADDRESS_OR_REGION_PLACEHOLDER
+  );
 }
 
 function shouldGenerateOnboarding(answers: OnboardAnswers): boolean {
@@ -557,6 +592,7 @@ const INFO_HEADINGS = [
   'Platforms',
   'Monetization Strategy',
   'Team Context',
+  'Legal & Compliance Contact',
   'Later Scope & Possibilities',
   'Research, Notes, and References',
   'Tech Stack & CESS Onboarding',
@@ -869,10 +905,11 @@ async function scaffoldRichBoilerplateInner(
     navigationShell.library === 'expo-router' && shouldGenerateOnboardingAuthSupabase(answers)
       ? await loadLibraryTextAssets('mds/onboarding-auth-supabase', libraryContext)
       : undefined;
-  const settingsAssets =
-    navigationShell.library === 'expo-router'
-      ? await loadLibraryTextAssets('mds/settings', libraryContext)
-      : undefined;
+  const settingsAssets = await loadLibraryTextAssets(
+    'mds/settings',
+    libraryContext,
+    navigationShell.library === 'react-navigation' ? 'react-navigation' : undefined
+  );
   const stylistAssets =
     navigationShell.library === 'expo-router'
       ? await loadLibraryTextAssets('mds/stylist', libraryContext)
@@ -1219,6 +1256,19 @@ async function scaffoldRichBoilerplateInner(
             : []),
         ]
       : []),
+    ...(settingsAssets?.has('src/features/auth/auth-types.ts')
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'auth', 'auth-types.ts'),
+            requireLibraryTextAsset(
+              'mds/settings',
+              settingsAssets,
+              'src/features/auth/auth-types.ts'
+            ),
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
       libraryAssetOrFallback(
@@ -1229,6 +1279,19 @@ async function scaffoldRichBoilerplateInner(
       ),
       force
     ),
+    ...(settingsAssets?.has('src/features/settings/settings-screen-logic.ts')
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'settings', 'settings-screen-logic.ts'),
+            requireLibraryTextAsset(
+              'mds/settings',
+              settingsAssets,
+              'src/features/settings/settings-screen-logic.ts'
+            ),
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
       renderExpositionScreen(includeNativeWindUiExposition),
@@ -1588,6 +1651,13 @@ export function renderInfo(
     '',
     answers.teamContext?.trim() ||
       '# TodoForContext(optional): Add team size, roles, delegated responsibilities, stakeholders, and client contacts if useful.',
+    '',
+    '## Legal & Compliance Contact',
+    '',
+    `- Business Name: ${resolveLegalBusinessName(answers)}`,
+    `- Contact Email: ${resolveLegalContactEmail(answers)}`,
+    `- Address Or Region Note: ${resolveLegalAddressOrRegionNote(answers)}`,
+    '# TodoForContext(optional): Replace placeholder legal contact details before shipping generated terms, privacy, or GDPR-facing copy.',
     '',
     '## Later Scope & Possibilities',
     '',
@@ -2646,6 +2716,52 @@ function renderRouteExport(routeDir: string, targetModulePath: string): string {
   return `export { default } from '${toRelativeImportPath(routeDir, targetModulePath)}';\n`;
 }
 
+function renderGeneratedSettingsRoute(
+  routeDir: string,
+  settingsScreenPath: string,
+  options: {
+    authEnabled: boolean;
+    legalLinksEnabled: boolean;
+    profileHref?: string;
+  }
+): string {
+  const settingsImport = toRelativeImportPath(routeDir, settingsScreenPath);
+  const lines = [
+    `import SettingsScreen, { createPlaceholderAuthAdapter } from '${settingsImport}';`,
+  ];
+  if (options.legalLinksEnabled || !options.authEnabled) {
+    lines.unshift("import { createURL } from 'expo-linking';");
+  }
+
+  if (options.authEnabled) {
+    const authAdapterPath = toRelativeImportPath(
+      routeDir,
+      path.join(path.dirname(settingsScreenPath), '..', 'auth', 'auth-adapter')
+    );
+    lines.push(`import { useAuthAdapter } from '${authAdapterPath}';`);
+  }
+
+  lines.push('', 'export default function SettingsRoute() {');
+  if (options.authEnabled) {
+    lines.push('  const auth = useAuthAdapter();');
+  }
+  lines.push('  return (', '    <SettingsScreen');
+  lines.push(
+    `      auth=${options.authEnabled ? '{auth}' : '{createPlaceholderAuthAdapter()}'}`
+  );
+  if (options.legalLinksEnabled) {
+    lines.push(
+      "      legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}"
+    );
+  }
+  if (options.profileHref) {
+    lines.push(`      profileHref={createURL('${options.profileHref}')}`);
+  }
+  lines.push('    />', '  );', '}', '');
+
+  return lines.join('\n');
+}
+
 async function scaffoldNavigationRoutes(
   projectPath: string,
   appDir: string,
@@ -2700,6 +2816,9 @@ async function scaffoldNavigationRoutes(
   );
   const includeNativeWindUiExposition =
     resolveGeneratorStylingSystem(answers) === 'nativewindui';
+  const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
+  const legalLinksEnabled =
+    answers.legalDocumentMode !== 'none' || shouldGenerateLegalUpdateGate(answers);
   const shouldWriteExpositionRouteWrappers =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const appDirectory = path.relative(projectPath, appDir).split(path.sep).join('/');
@@ -2820,12 +2939,12 @@ async function scaffoldNavigationRoutes(
       : []),
     await writeIfAllowed(
       path.join(appDir, 'settings.tsx'),
-      routeAssetOrFallback(
-        'mds/settings',
-        libraryAssets.settings,
-        `${appDirectory}/settings.tsx`,
-        () => renderRouteExport(appDir, settingsScreen)
-      ),
+      renderGeneratedSettingsRoute(appDir, settingsScreen, {
+        authEnabled,
+        legalLinksEnabled,
+        profileHref:
+          answers.onboardingCompletionMode === 'account-setup' ? '/account-setup' : undefined,
+      }),
       routeForce
     ),
     await writeIfAllowed(

@@ -36,6 +36,12 @@ export type LibraryAssetEncoding = "utf8" | "binary";
 
 export type LibraryAssetRole = "source" | "route" | "support" | "static";
 
+export type LibraryContentToken =
+  | "__MDS_APP_NAME__"
+  | "__MDS_LEGAL_BUSINESS_NAME__"
+  | "__MDS_LEGAL_CONTACT_EMAIL__"
+  | "__MDS_LEGAL_ADDRESS_OR_REGION_NOTE__";
+
 export interface LibrarySource {
   name: LibrarySourceName;
   displayName: string;
@@ -76,7 +82,7 @@ export interface LibraryAsset {
   encoding: LibraryAssetEncoding;
   role?: LibraryAssetRole;
   /** Explicit content placeholders; callers replace these only when project context supplies a value. */
-  contentTokens?: readonly "__MDS_APP_NAME__"[];
+  contentTokens?: readonly LibraryContentToken[];
 }
 
 export interface LibraryVariant {
@@ -135,6 +141,9 @@ export interface LibraryItemSummary {
 
 export interface LibraryProjectContext {
   projectName?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   /** Expo SDK version such as `56`, `56.0.11`, `~56.0.11`, or `^56.0.11`. */
   expoSdk?: string | number;
   styling?: LibraryStyling;

@@ -20,16 +20,19 @@ function useMissingConvexAuthAdapter(): AuthAdapter {
     return { ok: false, error: configurationError } satisfies AuthActionResult;
   }, []);
 
+  const refreshSession = useCallback(async () => {}, []);
+
   return useMemo<AuthAdapter>(
     () => ({
       provider: 'convex',
       state: { isLoading: false, session: null, error: configurationError },
+      refreshSession,
       signInWithEmailPassword: unavailable,
       signUpWithEmailPassword: unavailable,
       requestPasswordReset: unavailable,
       signOut: unavailable,
     }),
-    [unavailable],
+    [refreshSession, unavailable],
   );
 }
 
@@ -120,10 +123,13 @@ function useConfiguredConvexAuthAdapter(): AuthAdapter {
     }
   }, [convexSignOut]);
 
+  const refreshSession = useCallback(async () => {}, []);
+
   return useMemo<AuthAdapter>(
     () => ({
       provider: 'convex',
       state: { isLoading, session },
+      refreshSession,
       signInWithEmailPassword,
       signUpWithEmailPassword,
       requestPasswordReset,
@@ -131,6 +137,7 @@ function useConfiguredConvexAuthAdapter(): AuthAdapter {
     }),
     [
       isLoading,
+      refreshSession,
       requestPasswordReset,
       session,
       signInWithEmailPassword,
