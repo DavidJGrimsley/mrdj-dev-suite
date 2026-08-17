@@ -451,14 +451,17 @@ async function main(): Promise<void> {
       }
     )
     .command(
-      'eject [path]',
-      'Review the generated-component inventory and eject artifacts that should not ship',
+      'eject [targetOrPath] [path]',
+      'Review and eject generated artifacts that should not ship',
       (builder) =>
         builder
-          .positional('path', {
-            describe: 'Project path',
+          .positional('targetOrPath', {
+            describe: 'Ejection target (exposition or stylist) or project path',
             type: 'string',
-            default: '.',
+          })
+          .positional('path', {
+            describe: 'Project path when target is exposition or stylist',
+            type: 'string',
           })
           .option('keep', {
             describe:
@@ -479,57 +482,9 @@ async function main(): Promise<void> {
             describe: 'Print eject result as JSON',
             type: 'boolean',
             default: false,
-          }),
-      async (argv) => {
-        await runEjectExpositionCommand(argv as EjectExpositionArgv);
-      }
-    )
-    .command(
-      'eject exposition [path]',
-      'Eject generated exposition artifacts using the project-memory-aware inventory',
-      (builder) =>
-        builder
-          .positional('path', {
-            describe: 'Project path',
-            type: 'string',
-            default: '.',
-          })
-          .option('keep', {
-            describe:
-              'Comma-separated inventory items to retain (for example onboarding,settings,create-expo-app)',
-            type: 'string',
-          })
-          .option('from-memory', {
-            describe: 'Retain items selected in project memory and eject the rest',
-            type: 'boolean',
-            default: false,
-          })
-          .option('all', {
-            describe: 'Remove all generated sections and keep nothing',
-            type: 'boolean',
-            default: false,
-          })
-          .option('json', {
-            describe: 'Print eject result as JSON',
-            type: 'boolean',
-            default: false,
-          }),
-      async (argv) => {
-        await runEjectExpositionCommand(argv as EjectExpositionArgv);
-      }
-    )
-    .command(
-      'eject stylist [path]',
-      'Sync theme tokens, remove Stylist UI/API artifacts, and restore project output/platform settings',
-      (builder) =>
-        builder
-          .positional('path', {
-            describe: 'Project path',
-            type: 'string',
-            default: '.',
           })
           .option('style-library', {
-            describe: 'Style library adapter (auto-detected by default)',
+            describe: 'Style library adapter for stylist ejection',
             choices: [
               'auto',
               'uniwind',
@@ -545,14 +500,25 @@ async function main(): Promise<void> {
           .option('write-policy', {
             describe: 'How stylist manages style-library files',
             choices: ['managed', 'overwrite'] as const,
-          })
-          .option('json', {
-            describe: 'Print eject result as JSON',
-            type: 'boolean',
-            default: false,
           }),
       async (argv) => {
-        await runStylistEjectCommand(argv as StylistEjectArgv);
+        const targetOrPath = typeof argv.targetOrPath === 'string' ? argv.targetOrPath : undefined;
+        const target =
+          targetOrPath === 'stylist' || targetOrPath === 'exposition' ? targetOrPath : 'exposition';
+        const projectPath = targetOrPath === target ? argv.path : (targetOrPath ?? argv.path);
+
+        if (target === 'stylist') {
+          await runStylistEjectCommand({
+            ...(argv as StylistEjectArgv),
+            path: projectPath,
+          });
+          return;
+        }
+
+        await runEjectExpositionCommand({
+          ...(argv as EjectExpositionArgv),
+          path: projectPath,
+        });
       }
     )
     .command(

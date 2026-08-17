@@ -29,3 +29,6 @@ plugins/mr-djs-dev-suite/
 **/.git.backup-*/
 
 test-apps/
+
+# Local generator matrix report written by pnpm test:matrix
+generator-matrix-report.json
