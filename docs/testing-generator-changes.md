@@ -8,13 +8,19 @@ Run:
 pnpm test:matrix
 ```
 
-The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`, looks for app source repositories under `F:\SoftwareDev\MDS\test-apps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
+The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`, looks for real app source repositories under `F:\ReactNativeApps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
 
 - `mds doctor --ci`
 - `mds eject exposition`
 - `mds eject stylist`
 
-The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\SoftwareDev\MDS\test-apps`, the matrix clones its GitHub URL into the disposable run folder instead. The report is written to `generator-matrix-report.json` at the repo root.
+The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\ReactNativeApps`, the matrix clones its GitHub URL into the disposable run folder instead. The report is written to `generator-matrix-report.json` at the repo root.
+
+Folder roles:
+
+- `F:\ReactNativeApps` is for real apps you actively work on.
+- `F:\SoftwareDev\MDS\test-apps` is for scratch/generated test apps, including Create Expo Super Stack experiments.
+- `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees` is for throwaway matrix copies that can be safely modified and deleted.
 
 After dependencies are installed, the matrix continues through ejection and Link/Slot style-array scanning even if `mds doctor --ci` reports app-health failures. That keeps generator regressions visible separately from app cleanup work.
 
@@ -22,7 +28,7 @@ Useful environment variables:
 
 - `MDS_MATRIX_KEEP_TEMP=1` keeps temporary app workspaces for debugging.
 - `MDS_MATRIX_SKIP_INSTALL=1` skips dependency installation when a prepared temp workspace already has dependencies.
-- `MDS_TEST_APPS_ROOT=<path>` overrides the source app root, which defaults to `F:\SoftwareDev\MDS\test-apps`.
+- `MDS_TEST_APPS_ROOT=<path>` overrides the real app source root, which defaults to `F:\ReactNativeApps`.
 - `MDS_MATRIX_WORKTREES_ROOT=<path>` overrides the disposable validation workspace root, which defaults to `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`.
 - `MDS_MATRIX_COMMAND_TIMEOUT_MS=<ms>` changes the per-command timeout.
 - `MDS_MATRIX_TEST_TIMEOUT_MS=<ms>` changes the full matrix test timeout.
