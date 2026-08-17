@@ -1,10 +1,16 @@
 {
-  "apps_root": "F:\\ReactNativeApps",
-  "worktrees_root": "F:\\SoftwareDev\\MDS\\test-apps\\.generator-matrix-worktrees",
+  "apps_root": null,
+  "worktrees_root": null,
+  "platform_defaults": {
+    "win32": {
+      "apps_root": "F:\\ReactNativeApps",
+      "worktrees_root": "F:\\SoftwareDev\\MDS\\test-apps\\.generator-matrix-worktrees"
+    }
+  },
   "apps": [
     {
       "name": "time2pay",
-      "github_url": "git@github.com:DavidJGrimsley/time2pay.git",
+      "github_url": "https://github.com/DavidJGrimsley/time2pay.git",
       "local_path": "T2P\\time2pay",
       "branches_to_test": ["main"]
     },

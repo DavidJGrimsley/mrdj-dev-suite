@@ -14,4 +14,8 @@ const result = spawnSync('vitest', ['run', '--passWithNoTests', ...args], {
   stdio: 'inherit',
 });
 
+if (result.error) {
+  console.error(`Failed to start Vitest: ${result.error.message}`);
+}
+
 process.exit(result.status ?? 1);

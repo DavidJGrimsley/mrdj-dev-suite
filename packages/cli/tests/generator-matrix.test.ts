@@ -9,7 +9,13 @@ import { describe, expect, it } from 'vitest';
 interface MatrixConfig {
   apps_root?: string | null;
   worktrees_root?: string | null;
+  platform_defaults?: Partial<Record<NodeJS.Platform, MatrixPlatformDefaults>>;
   apps: MatrixApp[];
+}
+
+interface MatrixPlatformDefaults {
+  apps_root?: string | null;
+  worktrees_root?: string | null;
 }
 
 interface MatrixApp {
@@ -71,9 +77,7 @@ const cliPath = path.join(packageRoot, 'dist', 'cli.js');
 const reportPath = path.join(repoRoot, 'generator-matrix-report.json');
 const keepTemp = process.env.MDS_MATRIX_KEEP_TEMP === '1';
 const skipInstall = process.env.MDS_MATRIX_SKIP_INSTALL === '1';
-const matrixRequested =
-  process.env.MDS_RUN_GENERATOR_MATRIX === '1' ||
-  process.argv.some((argument) => /generator-matrix/u.test(argument));
+const matrixRequested = process.env.MDS_RUN_GENERATOR_MATRIX === '1';
 const describeMatrix = matrixRequested ? describe : describe.skip;
 const commandTimeoutMs = Number(process.env.MDS_MATRIX_COMMAND_TIMEOUT_MS ?? 10 * 60_000);
 const testTimeoutMs = Number(process.env.MDS_MATRIX_TEST_TIMEOUT_MS ?? 90 * 60_000);
@@ -83,14 +87,18 @@ describeMatrix('generator validation matrix', () => {
     'validates external apps without modifying their source repositories',
     async () => {
       const matrix = await readMatrixConfig();
+      const platformDefaults = matrix.platform_defaults?.[process.platform];
       expect(matrix.apps.length).toBeGreaterThanOrEqual(3);
       await assertFileExists(cliPath, 'Run `pnpm --filter @mr.dj2u/cli build` before the matrix.');
 
       const appsRoot = resolveOptionalConfigPath(
-        process.env.MDS_TEST_APPS_ROOT ?? matrix.apps_root ?? null
+        process.env.MDS_TEST_APPS_ROOT ?? matrix.apps_root ?? platformDefaults?.apps_root ?? null
       );
       const worktreesRoot = resolveConfigPath(
-        process.env.MDS_MATRIX_WORKTREES_ROOT ?? matrix.worktrees_root ?? null,
+        process.env.MDS_MATRIX_WORKTREES_ROOT ??
+          matrix.worktrees_root ??
+          platformDefaults?.worktrees_root ??
+          null,
         path.join(os.tmpdir(), 'mds-generator-matrix')
       );
       await mkdir(worktreesRoot, { recursive: true });

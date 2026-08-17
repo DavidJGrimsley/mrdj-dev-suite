@@ -8,13 +8,13 @@ Run:
 pnpm test:matrix
 ```
 
-The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`, looks for real app source repositories under `F:\ReactNativeApps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
+The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`. On Windows, it looks for real app source repositories under `F:\ReactNativeApps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
 
 - `mds doctor --ci`
 - `mds eject exposition`
 - `mds eject stylist`
 
-The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\ReactNativeApps`, the matrix clones its GitHub URL into the disposable run folder instead. The report is written to `generator-matrix-report.json` at the repo root.
+The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\ReactNativeApps`, the matrix clones its GitHub URL into the disposable run folder instead. On non-Windows machines, configure `MDS_TEST_APPS_ROOT` and `MDS_MATRIX_WORKTREES_ROOT`, or let the matrix fall back to GitHub clones and the OS temp directory. The report is written to `generator-matrix-report.json` at the repo root.
 
 Folder roles:
 
