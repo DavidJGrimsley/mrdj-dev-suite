@@ -56,7 +56,7 @@
     "type-check": "pnpm --filter @mr.dj2u/library-registry build && tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "pnpm --filter @mr.dj2u/library-registry build && vitest run --passWithNoTests",
+    "test": "pnpm --filter @mr.dj2u/library-registry build && node ./scripts/run-vitest.mjs",
     "sync:bundles": "node ./scripts/copy-agent-bundles.mjs",
     "check:bundles": "node ./scripts/copy-agent-bundles.mjs --check",
     "prepack": "node ./scripts/copy-agent-bundles.mjs --check && node ../../scripts/verify-publish-manifest.mjs .",

@@ -1,0 +1,30 @@
+{
+  "apps_root": "F:\\SoftwareDev\\MDS\\test-apps",
+  "worktrees_root": "F:\\SoftwareDev\\MDS\\test-apps\\.generator-matrix-worktrees",
+  "apps": [
+    {
+      "name": "time2pay",
+      "github_url": "git@github.com:DavidJGrimsley/time2pay.git",
+      "local_path": "time2pay",
+      "branches_to_test": ["main"]
+    },
+    {
+      "name": "experimemo",
+      "github_url": "https://github.com/DavidJGrimsley/Experimemo",
+      "local_path": "experimemo",
+      "branches_to_test": ["main"]
+    },
+    {
+      "name": "PokePages",
+      "github_url": "https://github.com/DavidJGrimsley/PokePages.git",
+      "local_path": "PokePages",
+      "branches_to_test": ["main"]
+    },
+    {
+      "name": "DJsPortfolio",
+      "github_url": "https://github.com/DavidJGrimsley/DavidsPortfolio.git",
+      "local_path": "DJsPortfolio",
+      "branches_to_test": ["main"]
+    }
+  ]
+}
