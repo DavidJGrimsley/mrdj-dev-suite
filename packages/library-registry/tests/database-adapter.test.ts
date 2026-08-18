@@ -10,8 +10,9 @@ import {
 } from "../assets/mds/src/db/supabase.ts";
 
 type TestSchema = {
-  mds_guestbook: {
-    id: string;
+  mds_demo_guestbook_comments: {
+    id: number;
+    user_id: string;
     display_name: string;
     message: string;
     created_at: string;
@@ -62,9 +63,10 @@ function createBuilder<T>(resolveResult: (state: BuilderState) => { data: T; err
 }
 
 function createMockClient() {
-  const rows: TestSchema["mds_guestbook"][] = [
+  const rows: TestSchema["mds_demo_guestbook_comments"][] = [
     {
-      id: "comment-1",
+      id: 1,
+      user_id: "user-1",
       display_name: "DJ",
       message: "Hello",
       created_at: "2026-08-17T00:00:00.000Z",
@@ -79,9 +81,9 @@ function createMockClient() {
         select() {
           return createBuilder(() => ({ data: rows, error: null }));
         },
-        insert(values: TestSchema["mds_guestbook"]) {
+        insert(values: TestSchema["mds_demo_guestbook_comments"]) {
           return createBuilder(() => {
-            if (values.id === "duplicate") {
+            if (values.id === -1) {
               return {
                 data: null,
                 error: { code: "23505", message: "duplicate key value violates unique constraint" },
@@ -114,15 +116,16 @@ describe("database adapter contract assets", () => {
     const { client } = createMockClient();
     const adapter = createSupabaseDatabaseAdapter<TestSchema>(() => client);
 
-    const rows = await adapter.query({ table: "mds_guestbook", filters: [{ column: "id", value: "comment-1" }] });
+    const rows = await adapter.query({ table: "mds_demo_guestbook_comments", filters: [{ column: "id", value: 1 }] });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.message).toBe("Hello");
 
     const result = await adapter.mutate({
-      table: "mds_guestbook",
+      table: "mds_demo_guestbook_comments",
       type: "insert",
       values: {
-        id: "comment-2",
+        id: 2,
+        user_id: "user-2",
         display_name: "Reader",
         message: "Hi",
         created_at: "2026-08-17T00:00:01.000Z",
@@ -130,7 +133,7 @@ describe("database adapter contract assets", () => {
     });
 
     expect(result.count).toBe(1);
-    expect(result.rows[0]?.id).toBe("comment-2");
+    expect(result.rows[0]?.id).toBe(2);
   });
 
   it("maps provider errors and supports the transaction callback fallback", async () => {
@@ -139,10 +142,11 @@ describe("database adapter contract assets", () => {
 
     await expect(
       adapter.mutate({
-        table: "mds_guestbook",
+        table: "mds_demo_guestbook_comments",
         type: "insert",
         values: {
-          id: "duplicate",
+          id: -1,
+          user_id: "user-1",
           display_name: "DJ",
           message: "Again",
           created_at: "2026-08-17T00:00:00.000Z",
@@ -156,7 +160,7 @@ describe("database adapter contract assets", () => {
       }).transaction(async () => "nope"),
     ).rejects.toBeInstanceOf(DatabaseUnsupportedError);
 
-    await expect(adapter.transaction(async (db) => (await db.query({ table: "mds_guestbook" })).length)).resolves.toBe(1);
+    await expect(adapter.transaction(async (db) => (await db.query({ table: "mds_demo_guestbook_comments" })).length)).resolves.toBe(1);
   });
 
   it("subscribes to realtime changes and returns a cleanup callback", () => {
@@ -164,14 +168,15 @@ describe("database adapter contract assets", () => {
     const adapter = createSupabaseDatabaseAdapter<TestSchema>(() => client);
     const events: unknown[] = [];
 
-    const cleanup = adapter.subscribe({ table: "mds_guestbook" }, (event) => {
+    const cleanup = adapter.subscribe({ table: "mds_demo_guestbook_comments" }, (event) => {
       events.push(event);
     });
 
     emit({
       eventType: "INSERT",
       new: {
-        id: "comment-3",
+        id: 3,
+        user_id: "user-3",
         display_name: "Sub",
         message: "scribed",
         created_at: "2026-08-17T00:00:02.000Z",
@@ -182,8 +187,8 @@ describe("database adapter contract assets", () => {
     expect(events).toEqual([
       expect.objectContaining({
         type: "insert",
-        table: "mds_guestbook",
-        row: expect.objectContaining({ id: "comment-3" }),
+        table: "mds_demo_guestbook_comments",
+        row: expect.objectContaining({ id: 3 }),
       }),
     ]);
     expect(unsubscribe).toHaveBeenCalledTimes(1);

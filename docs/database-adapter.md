@@ -21,7 +21,8 @@ const comments = await db.query({
 });
 ```
 
+The generated Supabase data exposition uses the adapter for direct guestbook table reads. Guestbook writes still call the generated `mds_guestbook_sign` RPC because that server-side function trims input, checks auth, writes the signed-in user id, and returns the saved row.
+
 The Supabase adapter supports reads, writes, realtime subscriptions, and contract-level error mapping. Its `transaction` method is a callback boundary for code organization, not an atomic Postgres transaction. Use a Postgres function or server route when a flow needs atomic multi-step writes.
 
 The Firebase variant is a skeleton. It copies the same contract and a Firestore-oriented adapter shell, but apps must define collection paths, auth rules, query mapping, and `onSnapshot` behavior before using it for product data.
-

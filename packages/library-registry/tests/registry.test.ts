@@ -614,6 +614,13 @@ describe("library resolution", () => {
     const supabaseIndexSource = (await readLibraryAsset(supabaseIndex!)).toString("utf8");
     expect(supabaseIndexSource).toContain("createSupabaseDatabaseAdapter");
     expect(supabaseIndexSource).not.toContain("firebase");
+    const databaseTypes = supabase.assets.find(
+      (asset) => asset.destination === "src/types/database.ts",
+    );
+    expect(databaseTypes).toBeDefined();
+    expect((await readLibraryAsset(databaseTypes!)).toString("utf8")).toContain(
+      "mds_demo_guestbook_comments",
+    );
 
     expect(firebase.dependencies).toEqual(
       expect.arrayContaining([

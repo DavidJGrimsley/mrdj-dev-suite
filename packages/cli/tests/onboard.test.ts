@@ -1216,10 +1216,22 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('createSupabaseDatabaseAdapter');
     await expect(
       readFile(path.join(projectPath, 'src', 'types', 'database.ts'), 'utf8')
-    ).resolves.toContain('AppDatabase');
+    ).resolves.toContain('mds_demo_guestbook_comments');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("import { getAdapter } from '../db';");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("table: 'mds_demo_guestbook_comments'");
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Supabase environments and branches');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Database adapter active');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('server/RPC for multi-step writes');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Users signed up');
@@ -1241,6 +1253,12 @@ describe('runOnboardCommand', () => {
         'utf8'
       )
     ).resolves.toContain('mds_demo_signup_count');
+    await expect(
+      readFile(
+        path.join(projectPath, 'supabase', 'migrations', '0002_mds_data_exposition.sql'),
+        'utf8'
+      )
+    ).resolves.toContain('grant select on public.mds_demo_guestbook_comments to anon, authenticated;');
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).rejects.toThrow();
