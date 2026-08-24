@@ -675,7 +675,7 @@ const mdsItems: LibraryItem[] = [
           mdsAsset("project/auth-supabase.md", "project/auth.md", "support"),
         ],
         integration: [
-          "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local.",
+          "Generated apps ship .env.example; copy it to .env.local before setting EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
           "Apply the generated Supabase migration before relying on onboarding or legal acceptance persistence.",
           "Keep Supabase service-role and secret keys out of Expo client code; use RLS policies for client-visible data.",
         ],
@@ -1085,7 +1085,7 @@ const mdsItems: LibraryItem[] = [
         "Install mds/onboarding-state --variant supabase or zustand-supabase so hosted legal acceptance is user-scoped.",
         "Keep /sign-in, /sign-up, /terms, /privacy, and /legal/updates public.",
         "Prefer intro, features, auth, then legal so legal rows are written with a known user id.",
-        "Apply supabase/migrations/0001_mds_auth_onboarding.sql and set EXPO_PUBLIC_SUPABASE_* values in .env.local.",
+        "Apply supabase/migrations/0001_mds_auth_onboarding.sql and use the generated .env.example as the starting point for .env.local values.",
       ],
       notes: [
         "This composition does not add mds/db and does not install Firebase or Convex persistence.",

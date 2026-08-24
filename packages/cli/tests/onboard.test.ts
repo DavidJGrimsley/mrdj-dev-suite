@@ -1287,6 +1287,9 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
       'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
     );
+    await expect(readFile(path.join(projectPath, 'project', 'auth.md'), 'utf8')).resolves.toContain(
+      '.env.example'
+    );
     const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
     expect(rootLayout).toContain(
       "import { AuthProvider, useAuth } from '../src/features/auth/auth-provider';"
