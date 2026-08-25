@@ -25,6 +25,10 @@
       "import": "./dist/project-memory.js",
       "types": "./dist/project-memory.d.ts"
     },
+    "./workspace": {
+      "import": "./dist/workspace/index.js",
+      "types": "./dist/workspace/index.d.ts"
+    },
     "./onboarding": {
       "import": "./dist/commands/onboard.js",
       "types": "./dist/commands/onboard.d.ts"
