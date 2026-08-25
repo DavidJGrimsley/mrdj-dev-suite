@@ -724,6 +724,11 @@ describe("library resolution", () => {
     const authSupabase = resolveLibraryItem("mds/auth", routerContext, {
       variant: "with-supabase",
     });
+    expect(authSupabase.assets).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: ".env.example" }),
+      ]),
+    );
     const sqlAsset = authSupabase.assets.find(
       (asset) => asset.destination === "supabase/migrations/0001_mds_auth_onboarding.sql",
     );

@@ -4,7 +4,7 @@ This app includes the MDS auth shell wired to Supabase Auth.
 
 ## Environment
 
-Set these values in `.env.local`:
+The scaffold includes `.env.example` with the required client-safe Supabase variables. Copy it to `.env.local` and fill in your values before running the app:
 
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=
@@ -36,7 +36,7 @@ npx supabase migration up --db-url "<postgres-connection-string>"
 
 Use separate Supabase projects for test/staging and production. Never put service-role keys, database passwords, or other Supabase secrets in Expo client code.
 
-`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are client-visible configuration values, not database admin credentials. They are okay in local `.env.local` files and deployment env settings, but generated templates should leave them blank so new apps do not all point at one shared development backend.
+`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are client-visible configuration values, not database admin credentials. They are okay in local `.env.local` files and deployment env settings, and the generated `.env.example` template leaves them blank so new apps do not all point at one shared development backend.
 
 ## Notes
 
