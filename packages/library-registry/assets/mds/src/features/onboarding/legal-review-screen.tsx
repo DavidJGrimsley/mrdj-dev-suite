@@ -60,11 +60,14 @@ export default function OnboardingLegalReviewScreen() {
   const colors = theme.activeColors;
   const primaryForeground = getReadableTextColor(colors.primary, theme.colors.light.text);
   const [activeDocument, setActiveDocument] = useState<LegalDocumentId | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false);
   const { snapshot, acceptDocument, savingDocumentId } = useLegalUpdateGateSnapshot();
   const missingDocumentIds = new Set(
     snapshot.requiredDocuments.map((document) => document.documentId)
   );
   const hasAcceptedRequiredDocuments = snapshot.status === 'complete';
+  const canContinue = hasAcceptedRequiredDocuments && !savingDocumentId && !isCompleting;
 
   const closeModal = () => setActiveDocument(null);
   const acceptActiveDocument = async () => {
@@ -75,6 +78,23 @@ export default function OnboardingLegalReviewScreen() {
       }
     }
     closeModal();
+  };
+  const finishOnboarding = async () => {
+    if (!canContinue) {
+      return;
+    }
+    setIsCompleting(true);
+    setCompletionError(null);
+    try {
+      await markOnboardingComplete();
+      setTimeout(() => router.replace(onboardingConfig.completion.route), 0);
+    } catch (error) {
+      setCompletionError(
+        error instanceof Error ? error.message : 'Unable to finish onboarding. Please try again.'
+      );
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -112,17 +132,12 @@ export default function OnboardingLegalReviewScreen() {
 
       <Pressable
         accessibilityRole="button"
-        disabled={!hasAcceptedRequiredDocuments || Boolean(savingDocumentId)}
-        onPress={() => {
-          void markOnboardingComplete().then(() => {
-            router.replace(onboardingConfig.completion.route);
-          });
-        }}
+        disabled={!canContinue}
+        onPress={() => void finishOnboarding()}
         style={[
           styles.primaryButton,
           {
-            backgroundColor:
-              hasAcceptedRequiredDocuments && !savingDocumentId ? colors.primary : colors.surface,
+            backgroundColor: canContinue ? colors.primary : colors.surface,
             borderRadius: theme.layout.radius,
           },
         ]}
@@ -131,14 +146,16 @@ export default function OnboardingLegalReviewScreen() {
           style={[
             styles.primaryButtonText,
             {
-              color:
-                hasAcceptedRequiredDocuments && !savingDocumentId ? primaryForeground : colors.text,
+              color: canContinue ? primaryForeground : colors.text,
             },
           ]}
         >
-          {onboardingConfig.completion.label}
+          {isCompleting ? 'Completing...' : onboardingConfig.completion.label}
         </Text>
       </Pressable>
+      {completionError ? (
+        <Text style={[styles.errorText, { color: colors.warning }]}>{completionError}</Text>
+      ) : null}
 
       {activeDocument ? (
         <LegalDocumentModal
@@ -216,5 +233,10 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '900',
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 19,
   },
 });

@@ -57,6 +57,8 @@ export interface ParsedArgs {
     dataNeeds?: string;
     dataStart?: "local" | "supabase";
     authProvider?: OnboardArgv["authProvider"];
+    supabaseUrl?: string;
+    supabasePublishableKey?: string;
     onboardingFlow?: OnboardArgv["onboardingFlow"];
     legalDocumentMode?: OnboardArgv["legalDocumentMode"];
     onboardingCompletionMode?: OnboardArgv["onboardingCompletionMode"];
@@ -517,6 +519,18 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg.startsWith("--mds-supabase-url=")) {
+      mds.supabaseUrl = arg.slice("--mds-supabase-url=".length);
+      continue;
+    }
+
+    if (arg.startsWith("--mds-supabase-publishable-key=")) {
+      mds.supabasePublishableKey = arg.slice(
+        "--mds-supabase-publishable-key=".length,
+      );
+      continue;
+    }
+
     if (arg.startsWith("--mds-onboarding-flow=")) {
       const value = arg.slice("--mds-onboarding-flow=".length);
       if (value === "none" || value === "multi-screen") {
@@ -718,6 +732,9 @@ export function renderHelpText(): string {
     "  --mds-app-name=<name>         Set display app name for project memory",
     "  --mds-screens=                List must-include screens for project memory",
     "  --mds-auth-provider=          none | base | supabase | firebase | convex",
+    "  --mds-supabase-url=<url>      Override generated Supabase .env.local URL",
+    "  --mds-supabase-publishable-key=<key>",
+    "                                Override generated Supabase .env.local publishable key",
     "  --mds-onboarding-flow=        none | multi-screen",
     "  --mds-legal-documents=        none | public-routes | onboarding-agreement",
     "  --mds-onboarding-completion=  enter-app | auth | account-setup | custom",
@@ -2493,6 +2510,8 @@ function buildOnboardArgv(
     dataNeeds: parsed.mds.dataNeeds,
     dataStart: parsed.mds.dataStart,
     authProvider: parsed.mds.authProvider,
+    supabaseUrl: parsed.mds.supabaseUrl,
+    supabasePublishableKey: parsed.mds.supabasePublishableKey,
     onboardingFlow: parsed.mds.onboardingFlow,
     legalDocumentMode: parsed.mds.legalDocumentMode,
     onboardingCompletionMode: parsed.mds.onboardingCompletionMode,

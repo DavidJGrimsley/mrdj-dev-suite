@@ -125,6 +125,29 @@ describe("onboarding persistence adapters", () => {
     expect(snapshot.status).toBe("needs-legal");
     expect(legal).toHaveLength(1);
     expect(legal[0]).not.toHaveProperty("updated_at");
+    expect(legal[0]).toMatchObject({
+      document_version: "2026-08-10",
+      acceptance_version: "2026-08-10",
+    });
+  });
+
+  it("treats legacy Supabase complete rows without completed_at as complete", async () => {
+    const { client, onboarding: rows } = createMockSupabase();
+    const onboarding = createSupabaseOnboardingStateAdapter(() => client);
+
+    rows.set("user-1", {
+      user_id: "user-1",
+      flow_id: "mds/onboarding",
+      flow_version: 1,
+      status: "complete",
+      current_step: "complete",
+      completed_at: null,
+    });
+
+    const state = await onboarding.loadState("user-1");
+
+    expect(state?.completedAt).toBe("1970-01-01T00:00:00.000Z");
+    expect(state?.currentStep).toBe("complete");
   });
 
   it("uses zustand as a cache while supabase remains canonical after sync", async () => {

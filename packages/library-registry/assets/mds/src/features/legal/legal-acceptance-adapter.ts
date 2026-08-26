@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   configureLegalAcceptanceAdapter as configureSharedLegalAcceptanceAdapter,
+  getLegalAcceptanceUserId,
   getLegalAcceptanceAdapter,
   memoryLegalAcceptanceAdapter as sharedMemoryLegalAcceptanceAdapter,
   notifyLegalAcceptanceChanged,
+  setLegalAcceptanceUserId,
   subscribeToLegalAcceptanceChanges,
 } from './legal-acceptance-config';
 import { legalDocuments, type LegalDocument, type LegalDocumentId } from './legal-documents';
@@ -61,7 +63,7 @@ export function configureLegalAcceptanceAdapter(adapter: LegalAcceptanceAdapter)
   configureSharedLegalAcceptanceAdapter(adapter);
 }
 
-export { subscribeToLegalAcceptanceChanges };
+export { setLegalAcceptanceUserId, subscribeToLegalAcceptanceChanges };
 
 export function useLegalUpdateGateSnapshot(
   adapter: LegalAcceptanceAdapter = getLegalAcceptanceAdapter() as LegalAcceptanceAdapter,
@@ -82,9 +84,10 @@ export function useLegalUpdateGateSnapshot(
       error: undefined,
     }));
     try {
+      const effectiveUserId = userId ?? getLegalAcceptanceUserId();
       const nextSnapshot = await adapter.loadRequiredLegalAcceptances(
         requiredMaterialDocuments,
-        userId,
+        effectiveUserId,
       );
       setSnapshot(nextSnapshot);
       return nextSnapshot;
@@ -99,7 +102,7 @@ export function useLegalUpdateGateSnapshot(
       setSnapshot(errorSnapshot);
       return errorSnapshot;
     }
-  }, [adapter, requiredMaterialDocuments, userId]);
+  }, [adapter, userId, requiredMaterialDocuments]);
 
   const acceptDocument = useCallback(
     async (
@@ -108,8 +111,9 @@ export function useLegalUpdateGateSnapshot(
     ) => {
       setSavingDocumentId(document.documentId);
       try {
+        const effectiveUserId = userId ?? getLegalAcceptanceUserId();
         await adapter.acceptLegalDocument(document, {
-          userId: input?.userId ?? userId,
+          userId: input?.userId ?? effectiveUserId,
           flowId: input?.flowId,
           flowVersion: input?.flowVersion,
         });
@@ -121,7 +125,7 @@ export function useLegalUpdateGateSnapshot(
         setSavingDocumentId(null);
       }
     },
-    [adapter, refresh, userId],
+    [adapter, userId, refresh],
   );
 
   useEffect(() => {

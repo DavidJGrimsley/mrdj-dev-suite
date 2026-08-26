@@ -1,9 +1,16 @@
 import { useEffect } from 'react';
 
 import { useAuth } from '../auth/auth-provider';
-import { configureLegalAcceptanceAdapter } from '../legal/legal-acceptance-config';
+import {
+  configureLegalAcceptanceAdapter,
+  setLegalAcceptanceUserId,
+} from '../legal/legal-acceptance-config';
 import { getSupabaseClient } from '../../services/supabase';
-import { configureOnboardingStateAdapter, getOnboardingStateAdapter } from './onboarding-state-core';
+import {
+  configureOnboardingStateAdapter,
+  getOnboardingStateAdapter,
+  setOnboardingStateUserId,
+} from './onboarding-state-core';
 import type { SupabaseClientFactory } from './onboarding-state-supabase';
 import {
   getPersistedOnboardingState,
@@ -32,10 +39,14 @@ export function OnboardingPersistenceSync() {
   const auth = useAuth();
 
   useEffect(() => {
-    if (!auth.user?.id) {
+    const userId = auth.user?.id;
+    setOnboardingStateUserId(userId);
+    setLegalAcceptanceUserId(userId);
+
+    if (!userId) {
       return;
     }
-    void getOnboardingStateAdapter().syncPending?.(auth.user.id);
+    void getOnboardingStateAdapter().syncPending?.(userId);
   }, [auth.user?.id]);
 
   return null;

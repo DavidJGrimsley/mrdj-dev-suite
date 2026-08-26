@@ -54,6 +54,16 @@ function requireUserId(userId?: string): string {
   return userId;
 }
 
+function isIgnorableInsertError(message: string): boolean {
+  return /duplicate|unique/i.test(message);
+}
+
+function isMissingColumnError(message: string, columnName: string): boolean {
+  return message.includes(columnName) && /column|schema cache|not find/i.test(message);
+}
+
+const LEGACY_COMPLETED_AT_FALLBACK = '1970-01-01T00:00:00.000Z';
+
 function toOnboardingState(
   row: SupabaseOnboardingRow | null,
   legalRows: SupabaseLegalRow[],
@@ -66,7 +76,9 @@ function toOnboardingState(
     flowId: row?.flow_id ?? DEFAULT_ONBOARDING_FLOW_ID,
     flowVersion: row?.flow_version ?? DEFAULT_ONBOARDING_FLOW_VERSION,
     currentStep: row?.current_step ?? undefined,
-    completedAt: row?.completed_at ?? undefined,
+    completedAt:
+      row?.completed_at ??
+      (row?.status === 'complete' ? LEGACY_COMPLETED_AT_FALLBACK : undefined),
     legalAcceptances: legalRows.map((item) => ({
       documentId: item.document_id as OnboardingDocumentAcceptance['documentId'],
       documentVersion: item.document_version,
@@ -139,7 +151,7 @@ export function createSupabaseOnboardingStateAdapter(
     },
     async markComplete(input) {
       const id = requireUserId(input?.userId);
-      const current = (await loadRemote(getClient, id)) ?? createEmptyOnboardingState();
+      const current = createEmptyOnboardingState();
       const next = {
         ...current,
         completedAt: input?.completedAt ?? new Date().toISOString(),
@@ -206,17 +218,27 @@ export function createSupabaseLegalAcceptanceAdapter(
 
     async acceptLegalDocument(document, input) {
       const userId = requireUserId(input?.userId);
-      const result = await getClient().from('user_legal_acceptances').insert({
+      const payload = {
         user_id: userId,
         document_id: document.documentId,
         document_version: document.acceptanceVersion,
+        acceptance_version: document.acceptanceVersion,
         flow_id: input?.flowId ?? DEFAULT_ONBOARDING_FLOW_ID,
         accepted_at: new Date().toISOString(),
         metadata: {
           flowVersion: input?.flowVersion ?? DEFAULT_ONBOARDING_FLOW_VERSION,
         },
-      });
-      if (result.error && !/duplicate|unique/i.test(result.error.message)) {
+      };
+      let result = await getClient().from('user_legal_acceptances').insert(payload);
+      if (
+        result.error &&
+        isMissingColumnError(result.error.message, 'acceptance_version')
+      ) {
+        const modernPayload: Record<string, unknown> = { ...payload };
+        delete modernPayload.acceptance_version;
+        result = await getClient().from('user_legal_acceptances').insert(modernPayload);
+      }
+      if (result.error && !isIgnorableInsertError(result.error.message)) {
         throw new Error(result.error.message);
       }
     },

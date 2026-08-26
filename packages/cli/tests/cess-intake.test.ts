@@ -713,7 +713,7 @@ describe('CESS intake contract', () => {
     expect(plan.onboardAnswers.defaults).toContain('nativewindui');
     expect(plan.onboardAnswers.defaults).not.toContain('uniwind');
     expect(plan.onboardAnswers.onboardingFlow).toBe('multi-screen');
-    expect(plan.onboardAnswers.legalDocumentMode).toBe('public-routes');
+    expect(plan.onboardAnswers.legalDocumentMode).toBe('onboarding-agreement');
     expect(plan.onboardAnswers.onboardingCompletionMode).toBe('account-setup');
     expect(plan.onboardAnswers.legalUpdateGate).toBe('material-required');
     expect(plan.onboardAnswers.authProvider).toBe('firebase');
@@ -735,7 +735,7 @@ describe('CESS intake contract', () => {
     expect(argv).toContain('--mds-deployment-target=Internal preview');
     expect(argv).toContain('--mds-onboarding-flow=multi-screen');
     expect(argv).toContain('--mds-auth-provider=firebase');
-    expect(argv).toContain('--mds-legal-documents=public-routes');
+    expect(argv).toContain('--mds-legal-documents=onboarding-agreement');
     expect(argv).toContain('--mds-onboarding-completion=account-setup');
     expect(argv).toContain('--mds-legal-update-gate=material-required');
     expect(argv).toContain('--mds-component-strategy-decision=pending');

@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, wri
 import { access } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { URL } from 'node:url';
 
 import { cancel, intro, isCancel, log, multiselect, note, outro, select, text } from '@clack/prompts';
 import chalk from 'chalk';
@@ -15,6 +16,7 @@ import {
   validateInstalledPackages,
 } from '../package-install.js';
 import {
+  DEFAULT_SUPABASE_LOCAL_ENVIRONMENT,
   componentStrategyFromAnswers,
   formatComponentStrategySummary,
   scaffoldProjectMemory,
@@ -29,6 +31,7 @@ import type {
   ComponentStrategyDecision,
   ExpoServerAdapter,
   OnboardAnswers,
+  SupabaseLocalEnvironment,
 } from '../project-memory.js';
 import type { Option } from '@clack/prompts';
 
@@ -48,6 +51,8 @@ export interface OnboardArgv {
   generatorStateManagement?: 'zustand' | 'none';
   generatorAuthBackend?: 'none' | 'supabase' | 'firebase';
   authProvider?: AuthProviderChoice;
+  supabaseUrl?: string;
+  supabasePublishableKey?: string;
   generatorEasSetup?: boolean;
   overview?: string;
   audience?: string;
@@ -99,6 +104,7 @@ export interface OnboardPlan {
   guidelinesTemplatePath?: string;
   richBoilerplate: boolean;
   saveDefaults: boolean;
+  supabaseLocalEnvironment?: SupabaseLocalEnvironment;
 }
 
 type ExplainChoice = typeof EXPLAIN_CHOICE;
@@ -211,6 +217,7 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     guidelinesTemplate: plan.guidelinesTemplate,
     guidelinesTemplatePath: plan.guidelinesTemplatePath,
     richBoilerplate: plan.richBoilerplate,
+    supabaseLocalEnvironment: plan.supabaseLocalEnvironment,
   });
   const afterPackageJson = await readOptionalPackageJson(packageJsonPath);
   const addedPackages = diffDeclaredPackageNames(beforePackageJson, afterPackageJson);
@@ -450,7 +457,11 @@ export async function collectOnboardPlan(
       ],
       seed.authProvider ?? 'none'
     ));
-  const onboardingFlow =
+  const supabaseLocalEnvironment = resolveSupabaseLocalEnvironment(
+    supabaseEnvironmentInput(argv),
+    dataStart === 'supabase' || authProvider === 'supabase'
+  );
+  let onboardingFlow =
     argv.onboardingFlow ??
     (await askChoice(
       'Add a reusable onboarding flow to the generated app?',
@@ -460,52 +471,33 @@ export async function collectOnboardPlan(
       ],
       seed.onboardingFlow
     ));
-  const legalDocumentOptions =
-    onboardingFlow === 'none'
-      ? [
-          { value: 'none' as const, label: 'None', hint: 'Default' },
-          { value: 'public-routes' as const, label: 'Public routes', hint: 'Adds /terms and /privacy' },
-        ]
-      : [
-          { value: 'none' as const, label: 'None', hint: 'Default' },
-          { value: 'public-routes' as const, label: 'Public routes', hint: 'Adds /terms and /privacy' },
-          {
-            value: 'onboarding-agreement' as const,
-            label: 'Onboarding agreement',
-            hint: 'Adds legal review inside onboarding',
-          },
-        ];
+  const legalDocumentOptions = [
+    { value: 'none' as const, label: 'None', hint: 'Default' },
+    {
+      value: 'onboarding-agreement' as const,
+      label: 'Legal onboarding',
+      hint: 'Adds legal review inside onboarding plus /terms and /privacy',
+    },
+  ];
   const seededLegalDocumentMode =
-    legalDocumentOptions.some((option) => option.value === seed.legalDocumentMode)
-      ? seed.legalDocumentMode
-      : 'none';
+    seed.legalDocumentMode === 'none' && seed.legalUpdateGate !== 'material-required'
+      ? 'none'
+      : 'onboarding-agreement';
   const selectedLegalDocumentMode =
     argv.legalDocumentMode ??
     (await askChoice(
-      'How should generated legal documents be included?',
+      'Add legal document review to onboarding?',
       legalDocumentOptions,
       seededLegalDocumentMode
     ));
-  const legalDocumentMode =
-    onboardingFlow === 'none' && selectedLegalDocumentMode === 'onboarding-agreement'
-      ? 'none'
-      : selectedLegalDocumentMode;
-  const legalUpdateGate =
-    argv.legalUpdateGate ??
-    (legalDocumentMode === 'none'
-      ? 'none'
-      : await askChoice(
-          'Gate protected app routes when material legal documents need re-acceptance?',
-          [
-            { value: 'none' as const, label: 'None', hint: 'Default' },
-            {
-              value: 'material-required' as const,
-              label: 'Material updates only',
-              hint: 'Adds /legal/updates and protected-route guard scaffolding',
-            },
-          ],
-          seed.legalUpdateGate
-        ));
+  const legalUpdateGate = argv.legalUpdateGate ?? 'none';
+  let legalDocumentMode = selectedLegalDocumentMode;
+  if (legalUpdateGate === 'material-required' && legalDocumentMode !== 'onboarding-agreement') {
+    legalDocumentMode = 'onboarding-agreement';
+  }
+  if (legalDocumentMode === 'onboarding-agreement' && onboardingFlow === 'none') {
+    onboardingFlow = 'multi-screen';
+  }
   const onboardingCompletionMode =
     onboardingFlow === 'none'
       ? seed.onboardingCompletionMode
@@ -575,10 +567,7 @@ export async function collectOnboardPlan(
       dataStart,
       authProvider,
       onboardingFlow,
-      legalDocumentMode:
-        legalUpdateGate === 'material-required' && legalDocumentMode === 'none'
-          ? 'public-routes'
-          : legalDocumentMode,
+      legalDocumentMode,
       onboardingCompletionMode,
       legalUpdateGate,
       testToMainSafeguards,
@@ -588,18 +577,86 @@ export async function collectOnboardPlan(
     guidelinesTemplatePath: argv.guidelinesTemplatePath,
     richBoilerplate: argv.rich ?? advancedPackageSetup,
     saveDefaults,
+    supabaseLocalEnvironment,
   };
 }
 
 export function defaultOnboardPlan(argv: OnboardArgv, projectPath = path.resolve(argv.project ?? '.')): OnboardPlan {
   const answers = defaultAnswers(argv, projectPath);
+  const supabaseLocalEnvironment = resolveSupabaseLocalEnvironment(
+    supabaseEnvironmentInput(argv),
+    answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
+  );
   return {
     answers,
     guidelinesTemplate: argv.guidelinesTemplate ?? true,
     guidelinesTemplatePath: argv.guidelinesTemplatePath,
     richBoilerplate: argv.rich ?? answers.advancedPackageSetup,
     saveDefaults: argv.saveDefaults === true,
+    supabaseLocalEnvironment,
   };
+}
+
+export function resolveSupabaseLocalEnvironment(
+  argv: Pick<OnboardArgv, 'supabaseUrl' | 'supabasePublishableKey'>,
+  usesSupabase = true
+): SupabaseLocalEnvironment | undefined {
+  if (!usesSupabase) {
+    return undefined;
+  }
+
+  const hasUrl = Boolean(argv.supabaseUrl?.trim());
+  const hasPublishableKey = Boolean(argv.supabasePublishableKey?.trim());
+  if (!hasUrl && !hasPublishableKey) {
+    return DEFAULT_SUPABASE_LOCAL_ENVIRONMENT;
+  }
+  if (hasUrl !== hasPublishableKey) {
+    throw new Error(
+      'Supabase local environment generation requires both --mds-supabase-url and --mds-supabase-publishable-key.'
+    );
+  }
+
+  const url = argv.supabaseUrl!.trim();
+  const publishableKey = argv.supabasePublishableKey!.trim();
+  validateSupabaseUrl(url);
+  validateSupabasePublishableKey(publishableKey);
+  return { url, publishableKey };
+}
+
+function supabaseEnvironmentInput(
+  argv: Pick<OnboardArgv, 'supabaseUrl' | 'supabasePublishableKey'>
+): Pick<OnboardArgv, 'supabaseUrl' | 'supabasePublishableKey'> {
+  return {
+    supabaseUrl: firstNonEmpty(argv.supabaseUrl, process.env.EXPO_PUBLIC_SUPABASE_URL),
+    supabasePublishableKey: firstNonEmpty(
+      argv.supabasePublishableKey,
+      process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+      process.env.EXPO_PUBLIC_SUPABASE_KEY,
+      process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    ),
+  };
+}
+
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  return values.find((value) => value?.trim());
+}
+
+function validateSupabaseUrl(value: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('Supabase URL must be a valid http or https URL.');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Supabase URL must be a valid http or https URL.');
+  }
+}
+
+function validateSupabasePublishableKey(value: string): void {
+  if (/\s/.test(value)) {
+    throw new Error('Supabase publishable key must be provided without whitespace.');
+  }
 }
 
 export function validateRequiredInput(value: string, visibleDefault?: string): string | undefined {
@@ -714,12 +771,19 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     argv.expoServerAdapter ?? savedDefaults.expoServerAdapter ?? 'none';
   const customBackend = argv.customBackend ?? savedDefaults.customBackend ?? false;
   const customBackendEntry = argv.customBackendEntry ?? savedDefaults.customBackendEntry ?? 'server.js';
-  const onboardingFlow = argv.onboardingFlow ?? savedDefaults.onboardingFlow ?? 'multi-screen';
-  const legalDocumentMode =
-    onboardingFlow === 'none' && (argv.legalDocumentMode ?? savedDefaults.legalDocumentMode) === 'onboarding-agreement'
-      ? 'none'
-      : argv.legalDocumentMode ?? savedDefaults.legalDocumentMode ?? 'none';
+  let onboardingFlow = argv.onboardingFlow ?? savedDefaults.onboardingFlow ?? 'multi-screen';
+  const selectedLegalDocumentMode = argv.legalDocumentMode ?? savedDefaults.legalDocumentMode ?? 'none';
   const legalUpdateGate = argv.legalUpdateGate ?? savedDefaults.legalUpdateGate ?? 'none';
+  let legalDocumentMode =
+    !argv.legalDocumentMode && selectedLegalDocumentMode === 'public-routes'
+      ? 'onboarding-agreement'
+      : selectedLegalDocumentMode;
+  if (legalUpdateGate === 'material-required' && legalDocumentMode !== 'onboarding-agreement') {
+    legalDocumentMode = 'onboarding-agreement';
+  }
+  if (legalDocumentMode === 'onboarding-agreement' && onboardingFlow === 'none') {
+    onboardingFlow = 'multi-screen';
+  }
   const onboardingCompletionMode =
     argv.onboardingCompletionMode ?? savedDefaults.onboardingCompletionMode ?? 'enter-app';
   const authProvider = argv.authProvider ?? savedDefaults.authProvider ?? 'none';
@@ -771,10 +835,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     platformLayoutMode: argv.platformLayouts ?? savedDefaults.platformLayoutMode ?? 'shared',
     dataStart,
     onboardingFlow,
-    legalDocumentMode:
-      legalUpdateGate === 'material-required' && legalDocumentMode === 'none'
-        ? 'public-routes'
-        : legalDocumentMode,
+    legalDocumentMode,
     onboardingCompletionMode,
     legalUpdateGate,
     testToMainSafeguards,

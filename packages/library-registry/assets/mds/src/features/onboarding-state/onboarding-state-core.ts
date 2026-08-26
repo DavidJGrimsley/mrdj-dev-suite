@@ -4,20 +4,31 @@ import { createMemoryOnboardingStateAdapter } from './onboarding-state-memory';
 import type { OnboardingState, OnboardingStateAdapter } from './onboarding-state-types';
 
 let onboardingStateAdapter: OnboardingStateAdapter = createMemoryOnboardingStateAdapter();
-const onboardingStateListeners = new Set<() => void>();
+type OnboardingStateListener = (state?: OnboardingState) => void;
+
+const onboardingStateListeners = new Set<OnboardingStateListener>();
+let currentOnboardingUserId: string | undefined;
+
+function notifyOnboardingStateChanged(state?: OnboardingState): void {
+  for (const listener of onboardingStateListeners) {
+    listener(state);
+  }
+}
 
 export function configureOnboardingStateAdapter(adapter: OnboardingStateAdapter): void {
   onboardingStateAdapter = adapter;
-  for (const listener of onboardingStateListeners) {
-    listener();
-  }
+  notifyOnboardingStateChanged();
 }
 
 export function getOnboardingStateAdapter(): OnboardingStateAdapter {
   return onboardingStateAdapter;
 }
 
-export function subscribeToOnboardingStateChanges(listener: () => void): () => void {
+export function setOnboardingStateUserId(userId?: string | null): void {
+  currentOnboardingUserId = userId ?? undefined;
+}
+
+export function subscribeToOnboardingStateChanges(listener: OnboardingStateListener): () => void {
   onboardingStateListeners.add(listener);
   return () => {
     onboardingStateListeners.delete(listener);
@@ -28,7 +39,12 @@ export async function markOnboardingComplete(input?: {
   userId?: string;
   completedAt?: string;
 }): Promise<OnboardingState> {
-  return onboardingStateAdapter.markComplete(input);
+  const next = await onboardingStateAdapter.markComplete({
+    ...input,
+    userId: input?.userId ?? currentOnboardingUserId,
+  });
+  notifyOnboardingStateChanged(next);
+  return next;
 }
 
 export function useOnboardingState(userId?: string) {
@@ -62,7 +78,13 @@ export function useOnboardingState(userId?: string) {
 
   useEffect(
     () =>
-      subscribeToOnboardingStateChanges(() => {
+      subscribeToOnboardingStateChanges((nextState) => {
+        if (nextState) {
+          setState(nextState);
+          setError(undefined);
+          setIsLoading(false);
+          return;
+        }
         void refresh();
       }),
     [refresh],
@@ -74,7 +96,13 @@ export function useOnboardingState(userId?: string) {
     isLoading,
     error,
     refresh,
-    markComplete: (input?: { completedAt?: string }) =>
-      adapter.markComplete({ userId, completedAt: input?.completedAt }),
+    markComplete: async (input?: { completedAt?: string }) => {
+      const next = await adapter.markComplete({ userId, completedAt: input?.completedAt });
+      setState(next);
+      setError(undefined);
+      setIsLoading(false);
+      notifyOnboardingStateChanged(next);
+      return next;
+    },
   };
 }

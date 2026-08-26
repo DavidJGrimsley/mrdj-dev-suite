@@ -23,6 +23,7 @@ import {
   getServerPrompt,
   normalizePromptText,
   resolvePersonalOnboardDefaultsPath,
+  resolveSupabaseLocalEnvironment,
   runOnboardCommand,
   savePersonalOnboardDefaults,
   validateRequiredInput,
@@ -37,6 +38,12 @@ import {
 import type { OnboardAnswers } from '../src/project-memory.js';
 
 const tempDirs: string[] = [];
+const DEFAULT_SUPABASE_ENV_LOCAL = [
+  'EXPO_PUBLIC_SUPABASE_URL=https://bvzekjnvpkbcdobccffn.supabase.co',
+  'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
+  'EXPO_PUBLIC_SUPABASE_KEY=sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
+  '',
+].join('\n');
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
@@ -1198,10 +1205,31 @@ describe('runOnboardCommand', () => {
     const packageJson = JSON.parse(
       await readFile(path.join(projectPath, 'package.json'), 'utf8')
     ) as {
+      main?: string;
       dependencies: Record<string, string>;
     };
+    expect(packageJson.main).toBe('expo-router/entry');
+    expect(packageJson.dependencies['expo-router']).toBe('~56.2.19');
     expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.112.3');
     expect(packageJson.dependencies['@react-native-async-storage/async-storage']).toBe('2.2.0');
+    await expect(readFile(path.join(projectPath, '.env.local'), 'utf8')).resolves.toBe(
+      DEFAULT_SUPABASE_ENV_LOCAL
+    );
+    await expect(readFile(path.join(projectPath, '.gitignore'), 'utf8')).resolves.toContain(
+      '.env.local'
+    );
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
+      'EXPO_PUBLIC_SUPABASE_URL='
+    );
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY='
+    );
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
+      'EXPO_PUBLIC_SUPABASE_KEY='
+    );
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.not.toContain(
+      'bvzekjnvpkbcdobccffn'
+    );
     await expect(
       readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')
     ).resolves.toContain('@react-native-async-storage/async-storage');
@@ -1255,6 +1283,8 @@ describe('runOnboardCommand', () => {
       noInstall: true,
       appName: 'Auth App',
       authProvider: 'supabase',
+      supabaseUrl: 'https://custom-project.supabase.co',
+      supabasePublishableKey: 'sb_publishable_custom',
       onboardingCompletionMode: 'auth',
       legalUpdateGate: 'material-required',
     });
@@ -1266,6 +1296,8 @@ describe('runOnboardCommand', () => {
     };
     expect(packageJson.dependencies['@supabase/supabase-js']).toBe('^2.112.3');
     expect(packageJson.dependencies['@react-native-async-storage/async-storage']).toBe('2.2.0');
+    expect(packageJson.dependencies['expo-router']).toBe('~56.2.19');
+    expect(packageJson.dependencies['react-native-screens']).toBe('4.27.0');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-provider.tsx'), 'utf8')
     ).resolves.toContain('useAuth');
@@ -1287,6 +1319,20 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.toContain(
       'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
     );
+    await expect(readFile(path.join(projectPath, '.env.local'), 'utf8')).resolves.toBe(
+      [
+        'EXPO_PUBLIC_SUPABASE_URL=https://custom-project.supabase.co',
+        'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_custom',
+        'EXPO_PUBLIC_SUPABASE_KEY=sb_publishable_custom',
+        '',
+      ].join('\n')
+    );
+    await expect(readFile(path.join(projectPath, '.gitignore'), 'utf8')).resolves.toContain(
+      '.env.local'
+    );
+    await expect(readFile(path.join(projectPath, '.env.example'), 'utf8')).resolves.not.toContain(
+      'custom-project'
+    );
     await expect(readFile(path.join(projectPath, 'project', 'auth.md'), 'utf8')).resolves.toContain(
       '.env.example'
     );
@@ -1297,17 +1343,82 @@ describe('runOnboardCommand', () => {
     expect(rootLayout).toContain('<AuthProvider>');
     expect(rootLayout).toContain('<Stack.Protected guard={!auth.isAuthenticated}>');
     expect(rootLayout).toContain('<Stack.Screen name="(auth)/sign-in"');
+    expect(rootLayout).toContain('useOnboardingState(auth.user?.id)');
+    expect(rootLayout).toContain('const onboardingIsReady = !onboarding.isLoading;');
     expect(rootLayout).toContain(
-      '<Stack.Protected guard={auth.isAuthenticated && legalGateStatus === "complete"}>'
+      'const onboardingComplete = onboardingIsReady && Boolean(onboarding.state?.completedAt);'
     );
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && !onboardingComplete}>'
+    );
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete && legalGateStatus === "complete"}>'
+    );
+    const protectedAppRouteIndex = rootLayout.indexOf(
+      '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete && legalGateStatus === "complete"}>'
+    );
+    const publicLegalRouteIndex = rootLayout.indexOf('<Stack.Screen name="terms"');
+    expect(protectedAppRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(publicLegalRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(protectedAppRouteIndex).toBeLessThan(publicLegalRouteIndex);
+    expect(rootLayout).toContain('<Stack.Screen name="onboarding/legal"');
+    expect(rootLayout).not.toContain('<Stack.Screen name="onboarding/complete"');
     expect(rootLayout).toContain('OnboardingPersistenceSync');
     expect(rootLayout).toContain('useLegalUpdateGateStatus(undefined, auth.user?.id)');
-    await expect(
-      readFile(
-        path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
-        'utf8'
-      )
-    ).resolves.toContain('createSupabaseOnboardingStateAdapter');
+    const onboardingStateAdapter = await readFile(
+      path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter.ts'),
+      'utf8'
+    );
+    expect(onboardingStateAdapter).toContain('createSupabaseOnboardingStateAdapter');
+    expect(onboardingStateAdapter).toContain('setOnboardingStateUserId(userId)');
+    expect(onboardingStateAdapter).toContain('setLegalAcceptanceUserId(userId)');
+    const onboardingStateCore = await readFile(
+      path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-core.ts'),
+      'utf8'
+    );
+    expect(onboardingStateCore).toContain('currentOnboardingUserId');
+    expect(onboardingStateCore).toContain('userId: input?.userId ?? currentOnboardingUserId');
+    expect(onboardingStateCore).toContain('notifyOnboardingStateChanged(next)');
+    const legalAcceptanceAdapter = await readFile(
+      path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
+      'utf8'
+    );
+    expect(legalAcceptanceAdapter).toContain('getLegalAcceptanceUserId');
+    expect(legalAcceptanceAdapter).toContain('const effectiveUserId = userId ?? getLegalAcceptanceUserId();');
+    expect(legalAcceptanceAdapter).toContain('input?.userId ?? effectiveUserId');
+    const supabaseOnboardingState = await readFile(
+      path.join(
+        projectPath,
+        'src',
+        'features',
+        'onboarding-state',
+        'onboarding-state-supabase.ts'
+      ),
+      'utf8'
+    );
+    expect(supabaseOnboardingState).toContain('const current = createEmptyOnboardingState();');
+    expect(supabaseOnboardingState).toContain("current_step: next.currentStep ?? null");
+    expect(supabaseOnboardingState).toContain("row?.status === 'complete'");
+    expect(supabaseOnboardingState).toContain(
+      'acceptance_version: document.acceptanceVersion'
+    );
+    expect(supabaseOnboardingState).toContain(
+      "isMissingColumnError(result.error.message, 'acceptance_version')"
+    );
+    const onboardingMigration = await readFile(
+      path.join(projectPath, 'supabase', 'migrations', '0001_mds_auth_onboarding.sql'),
+      'utf8'
+    );
+    expect(onboardingMigration).toContain('add column if not exists flow_version');
+    expect(onboardingMigration).toContain('add column if not exists document_id');
+    expect(onboardingMigration).toContain('add column if not exists document_version');
+    expect(onboardingMigration).toContain('add column if not exists acceptance_version');
+    expect(onboardingMigration).toContain('add column if not exists metadata');
+    expect(onboardingMigration).toContain('column_name = \'acceptance_version\'');
+    expect(onboardingMigration).toContain('alter column acceptance_version drop not null');
+    expect(onboardingMigration).toContain(
+      'create unique index if not exists user_legal_acceptances_user_document_version_idx'
+    );
     await expect(
       readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')
     ).resolves.toContain('- Onboarding Persistence: supabase');
@@ -1316,13 +1427,121 @@ describe('runOnboardCommand', () => {
         path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
         'utf8'
       )
-    ).resolves.toContain('Signed-out users are routed to sign in by the protected app layout.');
+    ).resolves.toContain(
+      'Auth handoff selected. Signed-out users are routed to sign in by the protected app layout.'
+    );
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
         'utf8'
       )
     ).resolves.toContain("route: '/' as Href");
+  });
+
+  it('does not generate legal-gated routes when Supabase auth is selected without legal options', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-auth-no-legal-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'auth-no-legal-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      noInstall: true,
+      appName: 'Auth No Legal App',
+      authProvider: 'supabase',
+      onboardingCompletionMode: 'auth',
+      legalDocumentMode: 'none',
+      legalUpdateGate: 'none',
+    });
+
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '- Legal Documents: none'
+    );
+    await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
+      '- Legal Update Gate: none'
+    );
+    const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain('const onboardingIsReady = !onboarding.isLoading;');
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && !onboardingComplete}>'
+    );
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete}>'
+    );
+    expect(rootLayout).toContain('useOnboardingState(auth.user?.id)');
+    expect(rootLayout).not.toContain('legalGateStatus');
+    expect(rootLayout).not.toContain('useLegalUpdateGateStatus');
+    expect(rootLayout).not.toContain('<Stack.Screen name="legal/updates"');
+    expect(rootLayout).not.toContain('<Stack.Screen name="terms"');
+    expect(rootLayout).not.toContain('<Stack.Screen name="privacy"');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'onboarding-config.ts'),
+        'utf8'
+      )
+    ).resolves.toContain("route: '/' as Href");
+    await expect(
+      readFile(path.join(projectPath, 'app', 'legal', 'updates.tsx'), 'utf8')
+    ).rejects.toThrow();
+  });
+
+  it('preserves an existing Supabase .env.local during forced regeneration', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-auth-env-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'auth-env-app',
+        scripts: {},
+        dependencies: {},
+        devDependencies: {},
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, '.env.local'),
+      [
+        'EXPO_PUBLIC_SUPABASE_URL=https://existing.supabase.co',
+        'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=existing',
+        'EXPO_PUBLIC_SUPABASE_KEY=existing',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      force: true,
+      noInstall: true,
+      appName: 'Auth Env App',
+      authProvider: 'supabase',
+      supabaseUrl: 'https://replacement.supabase.co',
+      supabasePublishableKey: 'sb_publishable_replacement',
+    });
+
+    await expect(readFile(path.join(projectPath, '.env.local'), 'utf8')).resolves.toBe(
+      [
+        'EXPO_PUBLIC_SUPABASE_URL=https://existing.supabase.co',
+        'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=existing',
+        'EXPO_PUBLIC_SUPABASE_KEY=existing',
+        '',
+      ].join('\n')
+    );
+    await expect(readFile(path.join(projectPath, '.gitignore'), 'utf8')).resolves.toContain(
+      '.env.local'
+    );
   });
 
   it('generates a legal update gate route and protected app layout when selected', async () => {
@@ -1350,14 +1569,14 @@ describe('runOnboardCommand', () => {
     });
 
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
-      '- Legal Documents: public-routes'
+      '- Legal Documents: onboarding-agreement'
     );
     await expect(readFile(path.join(projectPath, 'project', 'info.md'), 'utf8')).resolves.toContain(
       '- Legal Update Gate: material-required'
     );
     await expect(
-      readFile(path.join(projectPath, 'app', 'legal', 'updates.tsx'), 'utf8')
-    ).resolves.toContain('legal-update-screen');
+      readFile(path.join(projectPath, 'app', 'onboarding', 'legal.tsx'), 'utf8')
+    ).resolves.toContain('legal-review-screen');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
@@ -1375,7 +1594,12 @@ describe('runOnboardCommand', () => {
       "import { useLegalUpdateGateStatus } from '../src/features/legal/legal-acceptance-adapter';"
     );
     expect(rootLayout).toContain('<Stack.Screen name="legal/updates"');
-    expect(rootLayout).toContain('<Stack.Protected guard={legalGateStatus === "complete"}>');
+    expect(rootLayout).toContain('<Stack.Screen name="onboarding/legal"');
+    expect(rootLayout).not.toContain('<Stack.Screen name="onboarding/complete"');
+    expect(rootLayout).toContain('<Stack.Protected guard={!onboardingComplete}>');
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={onboardingComplete && legalGateStatus === "complete"}>'
+    );
     expect(rootLayout).toContain('<Stack.Screen name="settings"');
   });
 
@@ -1417,6 +1641,12 @@ describe('runOnboardCommand', () => {
         'utf8'
       )
     ).resolves.toContain('legal-acceptance-adapter');
+    await expect(
+      readFile(
+        path.join(projectPath, 'src', 'features', 'onboarding', 'legal-review-screen.tsx'),
+        'utf8'
+      )
+    ).resolves.toContain('Completing...');
     await expect(
       readFile(
         path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
@@ -1470,6 +1700,7 @@ describe('runOnboardCommand', () => {
     expect(adapter).toContain('createZustandOnboardingStateAdapter');
     expect(adapter).not.toContain('@supabase/supabase-js');
     expect(completeScreen).toContain('markOnboardingComplete');
+    expect(completeScreen).toContain('completionError');
     expect(completeScreen).not.toContain('@supabase/supabase-js');
     const packageJson = JSON.parse(
       await readFile(path.join(projectPath, 'package.json'), 'utf8')
@@ -1857,6 +2088,40 @@ describe('runOnboardCommand', () => {
     expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
   });
 
+  it('resolves Supabase local environment defaults, overrides, and validation', () => {
+    expect(resolveSupabaseLocalEnvironment({}, false)).toBeUndefined();
+    expect(resolveSupabaseLocalEnvironment({})).toEqual({
+      url: 'https://bvzekjnvpkbcdobccffn.supabase.co',
+      publishableKey: 'sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
+    });
+    expect(
+      resolveSupabaseLocalEnvironment({
+        supabaseUrl: 'https://project.supabase.co',
+        supabasePublishableKey: 'sb_publishable_project',
+      })
+    ).toEqual({
+      url: 'https://project.supabase.co',
+      publishableKey: 'sb_publishable_project',
+    });
+    expect(() =>
+      resolveSupabaseLocalEnvironment({
+        supabaseUrl: 'https://project.supabase.co',
+      })
+    ).toThrow('requires both');
+    expect(() =>
+      resolveSupabaseLocalEnvironment({
+        supabaseUrl: 'not-a-url',
+        supabasePublishableKey: 'sb_publishable_project',
+      })
+    ).toThrow('valid http or https URL');
+    expect(() =>
+      resolveSupabaseLocalEnvironment({
+        supabaseUrl: 'https://project.supabase.co',
+        supabasePublishableKey: 'bad key',
+      })
+    ).toThrow('without whitespace');
+  });
+
   it('persists a pending Phase 0 component strategy by default', () => {
     const plan = defaultOnboardPlan({
       project: path.join(os.tmpdir(), 'strategy-app'),
@@ -1939,6 +2204,59 @@ describe('runOnboardCommand', () => {
         delete process.env.MDS_ONBOARD_DEFAULTS_PATH;
       } else {
         process.env.MDS_ONBOARD_DEFAULTS_PATH = previous;
+      }
+    }
+  });
+
+  it('normalizes saved legal gate defaults to legal review inside onboarding', async () => {
+    const defaultsPath = path.join(os.tmpdir(), 'mds-onboard-legacy-legal-defaults.json');
+    const previousPath = process.env.MDS_ONBOARD_DEFAULTS_PATH;
+    const previousDisable = process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+    const previousVitest = process.env.VITEST;
+    const previousVitestWorker = process.env.VITEST_WORKER_ID;
+
+    try {
+      process.env.MDS_ONBOARD_DEFAULTS_PATH = defaultsPath;
+      delete process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+      delete process.env.VITEST;
+      delete process.env.VITEST_WORKER_ID;
+      await writeFile(
+        defaultsPath,
+        JSON.stringify({
+          onboardingFlow: 'multi-screen',
+          legalDocumentMode: 'public-routes',
+          legalUpdateGate: 'material-required',
+        }),
+        'utf8'
+      );
+
+      const plan = defaultOnboardPlan({
+        project: path.join(os.tmpdir(), 'legacy-legal-defaults-app'),
+      });
+      expect(plan.answers.onboardingFlow).toBe('multi-screen');
+      expect(plan.answers.legalDocumentMode).toBe('onboarding-agreement');
+      expect(plan.answers.legalUpdateGate).toBe('material-required');
+    } finally {
+      await rm(defaultsPath, { force: true });
+      if (previousPath === undefined) {
+        delete process.env.MDS_ONBOARD_DEFAULTS_PATH;
+      } else {
+        process.env.MDS_ONBOARD_DEFAULTS_PATH = previousPath;
+      }
+      if (previousDisable === undefined) {
+        delete process.env.MDS_DISABLE_PERSONAL_DEFAULTS;
+      } else {
+        process.env.MDS_DISABLE_PERSONAL_DEFAULTS = previousDisable;
+      }
+      if (previousVitest === undefined) {
+        delete process.env.VITEST;
+      } else {
+        process.env.VITEST = previousVitest;
+      }
+      if (previousVitestWorker === undefined) {
+        delete process.env.VITEST_WORKER_ID;
+      } else {
+        process.env.VITEST_WORKER_ID = previousVitestWorker;
       }
     }
   });
