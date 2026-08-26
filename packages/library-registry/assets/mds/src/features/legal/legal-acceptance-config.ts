@@ -36,7 +36,12 @@ export function subscribeToLegalAcceptanceChanges(listener: () => void): () => v
 }
 
 export function setLegalAcceptanceUserId(userId?: string | null): void {
-  currentLegalAcceptanceUserId = userId ?? undefined;
+  const nextUserId = userId ?? undefined;
+  if (currentLegalAcceptanceUserId === nextUserId) {
+    return;
+  }
+  currentLegalAcceptanceUserId = nextUserId;
+  notifyLegalAcceptanceChanged();
 }
 
 export function getLegalAcceptanceUserId(): string | undefined {

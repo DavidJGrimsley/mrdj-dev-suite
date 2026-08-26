@@ -3859,6 +3859,18 @@ function renderRichRootLayout(
         '        </Stack.Protected>',
       ]
     : [];
+  const onboardingGuardExpression = onboardingGateEnabled
+    ? authEnabled
+      ? 'auth.isAuthenticated && !onboardingComplete'
+      : '!onboardingComplete'
+    : null;
+  const protectedOnboardingScreens = onboardingGuardExpression
+    ? [
+        `        <Stack.Protected guard={${onboardingGuardExpression}}>`,
+        ...onboardingScreens.map((screen) => screen.replace(/^ {8}/u, '          ')),
+        '        </Stack.Protected>',
+      ]
+    : onboardingScreens;
   const protectedAppScreens = appGuardExpression
     ? [
         `        <Stack.Protected guard={${appGuardExpression}}>`,
@@ -3932,7 +3944,8 @@ function renderRichRootLayout(
           authEnabled
             ? '  const onboarding = useOnboardingState(auth.user?.id);'
             : '  const onboarding = useOnboardingState();',
-          '  const onboardingComplete = !onboarding.isLoading && Boolean(onboarding.state?.completedAt);',
+          '  const onboardingIsReady = !onboarding.isLoading;',
+          '  const onboardingComplete = onboardingIsReady && Boolean(onboarding.state?.completedAt);',
         ]
       : []),
     ...(legalGateEnabled
@@ -3943,6 +3956,17 @@ function renderRichRootLayout(
         ]
       : []),
     ...(authEnabled ? ['', '  if (auth.isLoading) {', '    return null;', '  }'] : []),
+    ...(onboardingGateEnabled && authEnabled
+      ? [
+          '',
+          '  if (auth.isAuthenticated && !onboardingIsReady) {',
+          '    return null;',
+          '  }',
+        ]
+      : []),
+    ...(onboardingGateEnabled && !authEnabled
+      ? ['', '  if (!onboardingIsReady) {', '    return null;', '  }']
+      : []),
     '  const shellColor = theme.activeColors.background;',
     '  return (',
     '    <GestureHandlerRootView style={{ flex: 1, backgroundColor: shellColor }}>',
@@ -3972,9 +3996,9 @@ function renderRichRootLayout(
     '                ),',
     '              }}>',
     ...publicAuthScreens,
-    ...onboardingScreens,
-    ...legalScreens,
+    ...protectedOnboardingScreens,
     ...protectedAppScreens,
+    ...legalScreens,
     '            </Stack>',
     '          </RouterThemeBridge>',
     '        </SafeAreaProvider>',

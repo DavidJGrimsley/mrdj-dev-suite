@@ -69,7 +69,6 @@ export function useLegalUpdateGateSnapshot(
   adapter: LegalAcceptanceAdapter = getLegalAcceptanceAdapter() as LegalAcceptanceAdapter,
   userId?: string,
 ) {
-  const effectiveUserId = userId ?? getLegalAcceptanceUserId();
   const requiredMaterialDocuments = useMemo(() => getRequiredMaterialLegalDocuments(), []);
   const [snapshot, setSnapshot] = useState<LegalAcceptanceSnapshot>({
     status: 'checking',
@@ -85,6 +84,7 @@ export function useLegalUpdateGateSnapshot(
       error: undefined,
     }));
     try {
+      const effectiveUserId = userId ?? getLegalAcceptanceUserId();
       const nextSnapshot = await adapter.loadRequiredLegalAcceptances(
         requiredMaterialDocuments,
         effectiveUserId,
@@ -102,7 +102,7 @@ export function useLegalUpdateGateSnapshot(
       setSnapshot(errorSnapshot);
       return errorSnapshot;
     }
-  }, [adapter, effectiveUserId, requiredMaterialDocuments]);
+  }, [adapter, userId, requiredMaterialDocuments]);
 
   const acceptDocument = useCallback(
     async (
@@ -111,6 +111,7 @@ export function useLegalUpdateGateSnapshot(
     ) => {
       setSavingDocumentId(document.documentId);
       try {
+        const effectiveUserId = userId ?? getLegalAcceptanceUserId();
         await adapter.acceptLegalDocument(document, {
           userId: input?.userId ?? effectiveUserId,
           flowId: input?.flowId,
@@ -124,7 +125,7 @@ export function useLegalUpdateGateSnapshot(
         setSavingDocumentId(null);
       }
     },
-    [adapter, effectiveUserId, refresh],
+    [adapter, userId, refresh],
   );
 
   useEffect(() => {

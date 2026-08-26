@@ -62,6 +62,8 @@ function isMissingColumnError(message: string, columnName: string): boolean {
   return message.includes(columnName) && /column|schema cache|not find/i.test(message);
 }
 
+const LEGACY_COMPLETED_AT_FALLBACK = '1970-01-01T00:00:00.000Z';
+
 function toOnboardingState(
   row: SupabaseOnboardingRow | null,
   legalRows: SupabaseLegalRow[],
@@ -74,7 +76,9 @@ function toOnboardingState(
     flowId: row?.flow_id ?? DEFAULT_ONBOARDING_FLOW_ID,
     flowVersion: row?.flow_version ?? DEFAULT_ONBOARDING_FLOW_VERSION,
     currentStep: row?.current_step ?? undefined,
-    completedAt: row?.completed_at ?? undefined,
+    completedAt:
+      row?.completed_at ??
+      (row?.status === 'complete' ? LEGACY_COMPLETED_AT_FALLBACK : undefined),
     legalAcceptances: legalRows.map((item) => ({
       documentId: item.document_id as OnboardingDocumentAcceptance['documentId'],
       documentVersion: item.document_version,

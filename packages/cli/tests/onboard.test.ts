@@ -1344,12 +1344,23 @@ describe('runOnboardCommand', () => {
     expect(rootLayout).toContain('<Stack.Protected guard={!auth.isAuthenticated}>');
     expect(rootLayout).toContain('<Stack.Screen name="(auth)/sign-in"');
     expect(rootLayout).toContain('useOnboardingState(auth.user?.id)');
+    expect(rootLayout).toContain('const onboardingIsReady = !onboarding.isLoading;');
     expect(rootLayout).toContain(
-      'const onboardingComplete = !onboarding.isLoading && Boolean(onboarding.state?.completedAt);'
+      'const onboardingComplete = onboardingIsReady && Boolean(onboarding.state?.completedAt);'
+    );
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && !onboardingComplete}>'
     );
     expect(rootLayout).toContain(
       '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete && legalGateStatus === "complete"}>'
     );
+    const protectedAppRouteIndex = rootLayout.indexOf(
+      '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete && legalGateStatus === "complete"}>'
+    );
+    const publicLegalRouteIndex = rootLayout.indexOf('<Stack.Screen name="terms"');
+    expect(protectedAppRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(publicLegalRouteIndex).toBeGreaterThanOrEqual(0);
+    expect(protectedAppRouteIndex).toBeLessThan(publicLegalRouteIndex);
     expect(rootLayout).toContain('<Stack.Screen name="onboarding/legal"');
     expect(rootLayout).not.toContain('<Stack.Screen name="onboarding/complete"');
     expect(rootLayout).toContain('OnboardingPersistenceSync');
@@ -1367,11 +1378,13 @@ describe('runOnboardCommand', () => {
     );
     expect(onboardingStateCore).toContain('currentOnboardingUserId');
     expect(onboardingStateCore).toContain('userId: input?.userId ?? currentOnboardingUserId');
+    expect(onboardingStateCore).toContain('notifyOnboardingStateChanged(next)');
     const legalAcceptanceAdapter = await readFile(
       path.join(projectPath, 'src', 'features', 'legal', 'legal-acceptance-adapter.ts'),
       'utf8'
     );
     expect(legalAcceptanceAdapter).toContain('getLegalAcceptanceUserId');
+    expect(legalAcceptanceAdapter).toContain('const effectiveUserId = userId ?? getLegalAcceptanceUserId();');
     expect(legalAcceptanceAdapter).toContain('input?.userId ?? effectiveUserId');
     const supabaseOnboardingState = await readFile(
       path.join(
@@ -1385,6 +1398,7 @@ describe('runOnboardCommand', () => {
     );
     expect(supabaseOnboardingState).toContain('const current = createEmptyOnboardingState();');
     expect(supabaseOnboardingState).toContain("current_step: next.currentStep ?? null");
+    expect(supabaseOnboardingState).toContain("row?.status === 'complete'");
     expect(supabaseOnboardingState).toContain(
       'acceptance_version: document.acceptanceVersion'
     );
@@ -1457,6 +1471,10 @@ describe('runOnboardCommand', () => {
       '- Legal Update Gate: none'
     );
     const rootLayout = await readFile(path.join(projectPath, 'app', '_layout.tsx'), 'utf8');
+    expect(rootLayout).toContain('const onboardingIsReady = !onboarding.isLoading;');
+    expect(rootLayout).toContain(
+      '<Stack.Protected guard={auth.isAuthenticated && !onboardingComplete}>'
+    );
     expect(rootLayout).toContain(
       '<Stack.Protected guard={auth.isAuthenticated && onboardingComplete}>'
     );
@@ -1578,6 +1596,7 @@ describe('runOnboardCommand', () => {
     expect(rootLayout).toContain('<Stack.Screen name="legal/updates"');
     expect(rootLayout).toContain('<Stack.Screen name="onboarding/legal"');
     expect(rootLayout).not.toContain('<Stack.Screen name="onboarding/complete"');
+    expect(rootLayout).toContain('<Stack.Protected guard={!onboardingComplete}>');
     expect(rootLayout).toContain(
       '<Stack.Protected guard={onboardingComplete && legalGateStatus === "complete"}>'
     );
