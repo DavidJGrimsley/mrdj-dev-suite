@@ -71,6 +71,8 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(help).toContain("create-expo-super-stack [project-name]");
     expect(help).toContain("--mds-yes");
     expect(help).toContain("--mds-auth-provider=");
+    expect(help).toContain("--mds-supabase-url=<url>");
+    expect(help).toContain("--mds-supabase-publishable-key=<key>");
     expect(help).toContain("--mds-save-defaults");
     expect(help).toContain("--mds-no-guidelines-template");
     expect(help).toContain("-h, --help");
@@ -366,6 +368,8 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-web-output=server",
       "--mds-deployed-server=standard-expo",
       "--mds-auth-provider=convex",
+      "--mds-supabase-url=https://project.supabase.co",
+      "--mds-supabase-publishable-key=sb_publishable_project",
       "--mds-onboarding-flow=multi-screen",
       "--mds-legal-documents=onboarding-agreement",
       "--mds-onboarding-completion=auth",
@@ -388,6 +392,8 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.webOutput).toBe("server");
     expect(parsed.mds.deployedServer).toBe("standard-expo");
     expect(parsed.mds.authProvider).toBe("convex");
+    expect(parsed.mds.supabaseUrl).toBe("https://project.supabase.co");
+    expect(parsed.mds.supabasePublishableKey).toBe("sb_publishable_project");
     expect(parsed.mds.onboardingFlow).toBe("multi-screen");
     expect(parsed.mds.legalDocumentMode).toBe("onboarding-agreement");
     expect(parsed.mds.onboardingCompletionMode).toBe("auth");

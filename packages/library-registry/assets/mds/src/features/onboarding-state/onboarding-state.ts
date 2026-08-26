@@ -4,6 +4,7 @@ export {
   configureOnboardingStateAdapter,
   getOnboardingStateAdapter,
   markOnboardingComplete,
+  setOnboardingStateUserId,
   subscribeToOnboardingStateChanges,
   useOnboardingState,
 } from './onboarding-state-core';

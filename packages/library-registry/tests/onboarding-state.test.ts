@@ -125,6 +125,10 @@ describe("onboarding persistence adapters", () => {
     expect(snapshot.status).toBe("needs-legal");
     expect(legal).toHaveLength(1);
     expect(legal[0]).not.toHaveProperty("updated_at");
+    expect(legal[0]).toMatchObject({
+      document_version: "2026-08-10",
+      acceptance_version: "2026-08-10",
+    });
   });
 
   it("uses zustand as a cache while supabase remains canonical after sync", async () => {

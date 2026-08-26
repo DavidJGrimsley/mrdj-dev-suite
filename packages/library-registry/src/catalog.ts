@@ -675,7 +675,7 @@ const mdsItems: LibraryItem[] = [
           mdsAsset("project/auth-supabase.md", "project/auth.md", "support"),
         ],
         integration: [
-          "Generated apps ship .env.example; copy it to .env.local before setting EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.",
+          "Generated apps ship a blank .env.example template and a local .env.local with Supabase publishable credentials.",
           "Apply the generated Supabase migration before relying on onboarding or legal acceptance persistence.",
           "Keep Supabase service-role and secret keys out of Expo client code; use RLS policies for client-visible data.",
         ],
@@ -1059,14 +1059,13 @@ const mdsItems: LibraryItem[] = [
     id: "mds/onboarding-auth-supabase",
     name: "Onboarding plus Supabase auth composition",
     description:
-      "Wires onboarding, legal documents, Supabase auth, and user-scoped onboarding persistence.",
+      "Wires onboarding, Supabase auth, and user-scoped onboarding persistence.",
     kind: "integration",
     tags: ["onboarding", "auth", "supabase", "persistence", "with-auth"],
     categories: ["onboarding", "auth", "flows"],
     compatibility: SDK_56_ROUTER,
     composedItems: [
       "mds/onboarding",
-      "mds/legal-documents",
       "mds/auth",
       "mds/onboarding-state",
     ],
@@ -1080,12 +1079,12 @@ const mdsItems: LibraryItem[] = [
     ],
     integration: {
       summary:
-        "Compose onboarding, legal documents, and Supabase auth, then replace the default memory persistence adapter with a Supabase-backed adapter.",
+        "Compose onboarding and Supabase auth, then replace the default memory persistence adapter with a Supabase-backed adapter.",
       instructions: [
         "Install mds/onboarding-state --variant supabase or zustand-supabase so hosted legal acceptance is user-scoped.",
-        "Keep /sign-in, /sign-up, /terms, /privacy, and /legal/updates public.",
-        "Prefer intro, features, auth, then legal so legal rows are written with a known user id.",
-        "Apply supabase/migrations/0001_mds_auth_onboarding.sql and use the generated .env.example as the starting point for .env.local values.",
+        "Keep /sign-in and /sign-up public; include legal routes only when mds/legal-documents is selected separately or through legal onboarding.",
+        "If legal onboarding is selected, prefer intro, features, auth, then legal so legal rows are written with a known user id.",
+        "Apply supabase/migrations/0001_mds_auth_onboarding.sql; generated apps include .env.local with Supabase publishable credentials plus a blank tracked .env.example template.",
       ],
       notes: [
         "This composition does not add mds/db and does not install Firebase or Convex persistence.",

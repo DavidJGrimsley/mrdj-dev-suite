@@ -9,6 +9,7 @@ The scaffold includes `.env.example` with the required client-safe Supabase vari
 ```bash
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+EXPO_PUBLIC_SUPABASE_KEY=
 ```
 
 `EXPO_PUBLIC_SUPABASE_KEY` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are still accepted as fallbacks for older projects.
@@ -36,7 +37,7 @@ npx supabase migration up --db-url "<postgres-connection-string>"
 
 Use separate Supabase projects for test/staging and production. Never put service-role keys, database passwords, or other Supabase secrets in Expo client code.
 
-`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are client-visible configuration values, not database admin credentials. They are okay in local `.env.local` files and deployment env settings, and the generated `.env.example` template leaves them blank so new apps do not all point at one shared development backend.
+`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are client-visible configuration values, not database admin credentials. Generated apps include a populated, ignored `.env.local` for the smoke Supabase project plus a blank tracked `.env.example` template for replacing those values when you move to another backend project.
 
 ## Notes
 

@@ -16,6 +16,7 @@ export type LegalAcceptanceConfigAdapter = {
 
 const memoryAcceptedKeys = new Set<string>();
 const legalAcceptanceListeners = new Set<() => void>();
+let currentLegalAcceptanceUserId: string | undefined;
 
 function legalDocumentKey(document: { documentId: string; acceptanceVersion: string }): string {
   return `${document.documentId}@${document.acceptanceVersion}`;
@@ -32,6 +33,14 @@ export function subscribeToLegalAcceptanceChanges(listener: () => void): () => v
   return () => {
     legalAcceptanceListeners.delete(listener);
   };
+}
+
+export function setLegalAcceptanceUserId(userId?: string | null): void {
+  currentLegalAcceptanceUserId = userId ?? undefined;
+}
+
+export function getLegalAcceptanceUserId(): string | undefined {
+  return currentLegalAcceptanceUserId;
 }
 
 export const memoryLegalAcceptanceAdapter: LegalAcceptanceConfigAdapter = {

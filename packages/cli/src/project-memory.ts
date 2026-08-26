@@ -135,12 +135,23 @@ export interface OnboardAnswers {
   defaults: string[];
 }
 
+export interface SupabaseLocalEnvironment {
+  url: string;
+  publishableKey: string;
+}
+
+export const DEFAULT_SUPABASE_LOCAL_ENVIRONMENT: SupabaseLocalEnvironment = {
+  url: 'https://bvzekjnvpkbcdobccffn.supabase.co',
+  publishableKey: 'sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
+};
+
 export interface ProjectScaffoldOptions {
   force?: boolean;
   guidelinesTemplate?: boolean;
   guidelinesTemplatePath?: string;
   manageUniwind?: boolean;
   richBoilerplate?: boolean;
+  supabaseLocalEnvironment?: SupabaseLocalEnvironment;
 }
 
 export interface WriteResult {
@@ -161,6 +172,7 @@ interface PackageJson {
 
 interface RichBoilerplateOptions {
   manageUniwind: boolean;
+  supabaseLocalEnvironment?: SupabaseLocalEnvironment;
 }
 
 let activeScaffoldGuard: { projectPath: string; inventory: EjectionInventory | null } | null = null;
@@ -290,11 +302,7 @@ function shouldGenerateStandaloneLegalDocuments(answers: OnboardAnswers): boolea
 }
 
 function shouldGenerateLegalUpdateGate(answers: OnboardAnswers): boolean {
-  return (
-    answers.legalUpdateGate === 'material-required' ||
-    ((answers.authProvider ?? 'none') === 'supabase' &&
-      answers.legalDocumentMode === 'onboarding-agreement')
-  );
+  return answers.legalUpdateGate === 'material-required';
 }
 
 export function deriveOnboardingPersistence(answers: OnboardAnswers): OnboardingPersistenceMode {
@@ -341,36 +349,47 @@ function onboardingCompletionConfig(answers: OnboardAnswers): {
   label: string;
   helperText: string;
 } {
+  const legalGateRoute =
+    shouldGenerateLegalUpdateGate(answers) && answers.legalDocumentMode !== 'onboarding-agreement'
+      ? '/legal/updates'
+      : null;
+
   switch (answers.onboardingCompletionMode) {
     case 'auth':
       return {
         mode: 'auth',
-        route: '/',
+        route: legalGateRoute ?? '/',
         label: 'Continue to app',
-        helperText:
-          'Auth handoff selected. Signed-out users are routed to sign in by the protected app layout.',
+        helperText: legalGateRoute
+          ? 'Auth handoff selected. Review required legal updates before entering the protected app.'
+          : 'Auth handoff selected. Signed-out users are routed to sign in by the protected app layout.',
       };
     case 'account-setup':
       return {
         mode: 'account-setup',
-        route: '/account-setup',
+        route: legalGateRoute ?? '/account-setup',
         label: 'Continue to account setup',
-        helperText:
-          'Account setup handoff selected. Add that route or edit this route when profile setup exists.',
+        helperText: legalGateRoute
+          ? 'Account setup handoff selected. Review required legal updates before continuing.'
+          : 'Account setup handoff selected. Add that route or edit this route when profile setup exists.',
       };
     case 'custom':
       return {
         mode: 'custom',
-        route: '/',
+        route: legalGateRoute ?? '/',
         label: 'Continue',
-        helperText: 'Custom handoff selected. Edit route and label in this config before release.',
+        helperText: legalGateRoute
+          ? 'Custom handoff selected. Review required legal updates before continuing.'
+          : 'Custom handoff selected. Edit route and label in this config before release.',
       };
     case 'enter-app':
       return {
         mode: 'enter-app',
-        route: '/',
+        route: legalGateRoute ?? '/',
         label: "Let's begin",
-        helperText: 'Default mode: enter the app shell.',
+        helperText: legalGateRoute
+          ? 'Default mode: review required legal updates before entering the app shell.'
+          : 'Default mode: enter the app shell.',
       };
   }
 }
@@ -425,10 +444,14 @@ export function renderGeneratedOnboardingConfig(source: string, answers: Onboard
 const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
   'react-native-gesture-handler': '~2.31.1',
   'react-native-reanimated': '4.3.1',
-  'react-native-screens': '~4.25.2',
+  'react-native-screens': '4.27.0',
   'react-native-svg': '15.15.4',
   'react-native-keyboard-controller': '1.21.6',
   'react-native-worklets': '0.8.3',
+} as const;
+
+const EXPO_ROUTER_DEPENDENCIES = {
+  'expo-router': '~56.2.19',
 } as const;
 
 const LOCAL_DATA_DEPENDENCIES = {
@@ -610,6 +633,7 @@ export async function scaffoldProjectMemory(
     results.push(
       ...(await scaffoldRichBoilerplate(projectPath, answers, force, {
         manageUniwind: options.manageUniwind ?? true,
+        supabaseLocalEnvironment: options.supabaseLocalEnvironment,
       }))
     );
   }
@@ -1373,6 +1397,26 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
+  if (answers.authProvider === 'supabase' || answers.dataStart === 'supabase') {
+    results.push(await ensureSupabaseLocalEnvironmentIgnored(projectPath));
+    if (!authAssets?.has('.env.example')) {
+      results.push(
+        await writeIfAllowed(
+          path.join(projectPath, '.env.example'),
+          renderSupabaseExampleEnvironmentFile(),
+          force
+        )
+      );
+    }
+    results.push(
+      await writeIfAllowed(
+        path.join(projectPath, '.env.local'),
+        renderSupabaseLocalEnvironmentFile(options.supabaseLocalEnvironment),
+        false
+      )
+    );
+  }
+
   if (answers.testToMainSafeguards) {
     await mkdir(path.join(projectPath, '.github', 'workflows'), {
       recursive: true,
@@ -1408,6 +1452,60 @@ async function scaffoldRichBoilerplateInner(
   results.push(...(await ensureExpoRouterGroupLayouts(appDir, navigationShell, answers)));
 
   return results;
+}
+
+export function renderSupabaseLocalEnvironmentFile(
+  environment: SupabaseLocalEnvironment = DEFAULT_SUPABASE_LOCAL_ENVIRONMENT
+): string {
+  const url = renderEnvironmentValue('Supabase URL', environment.url);
+  const publishableKey = renderEnvironmentValue(
+    'Supabase publishable key',
+    environment.publishableKey
+  );
+  return [
+    `EXPO_PUBLIC_SUPABASE_URL=${url}`,
+    `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${publishableKey}`,
+    `EXPO_PUBLIC_SUPABASE_KEY=${publishableKey}`,
+    '',
+  ].join('\n');
+}
+
+function renderSupabaseExampleEnvironmentFile(): string {
+  return [
+    'EXPO_PUBLIC_SUPABASE_URL=',
+    'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=',
+    'EXPO_PUBLIC_SUPABASE_KEY=',
+    '',
+  ].join('\n');
+}
+
+function renderEnvironmentValue(label: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} is required to generate .env.local.`);
+  }
+  return trimmed;
+}
+
+async function ensureSupabaseLocalEnvironmentIgnored(projectPath: string): Promise<WriteResult> {
+  const gitignorePath = path.join(projectPath, '.gitignore');
+  const existing = await readOptionalText(gitignorePath);
+  const localEnvIgnorePatterns = new Set(['.env.local', '.env*.local', '.env.*', '.env*', '*.local']);
+  const hasLocalEnvIgnore = existing
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => localEnvIgnorePatterns.has(line));
+
+  if (hasLocalEnvIgnore) {
+    return { filePath: gitignorePath, wrote: false };
+  }
+
+  const next = existing
+    ? `${existing.replace(/\s*$/, '\n')}.env.local\n`
+    : '.env.local\n';
+  await mkdir(path.dirname(gitignorePath), { recursive: true });
+  await writeFile(gitignorePath, next, 'utf8');
+  return { filePath: gitignorePath, wrote: true };
 }
 
 export function renderInfo(
@@ -2002,6 +2100,10 @@ async function ensurePackageJson(
     test: packageJson.scripts?.test ?? 'npm run lint && npm run typecheck',
   };
 
+  if (answers.generatorNavigationLibrary !== 'react-navigation') {
+    packageJson.main = typeof packageJson.main === 'string' ? packageJson.main : 'expo-router/entry';
+  }
+
   const stylingSystem = resolveGeneratorStylingSystem(answers, { manageUniwind });
   if (!manageUniwind && usesNativeWindFamily(stylingSystem)) {
     packageJson.scripts['patch:nativewind-metro'] =
@@ -2039,10 +2141,17 @@ async function ensurePackageJson(
   }
 
   packageJson.dependencies = {
-    ...SOFTWARE_MANSION_CORE_DEPENDENCIES,
-    ...STYLIST_DEPENDENCIES,
     ...packageJson.dependencies,
+    ...STYLIST_DEPENDENCIES,
+    ...SOFTWARE_MANSION_CORE_DEPENDENCIES,
   };
+
+  if (answers.generatorNavigationLibrary !== 'react-navigation') {
+    packageJson.dependencies = {
+      ...packageJson.dependencies,
+      ...EXPO_ROUTER_DEPENDENCIES,
+    };
+  }
 
   if (answers.dataStart === 'local') {
     packageJson.dependencies = {
@@ -3665,6 +3774,10 @@ function renderRichRootLayout(
     appDir,
     path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state-adapter')
   );
+  const onboardingStateImport = toRelativeImportPath(
+    appDir,
+    path.join(projectPath, 'src', 'features', 'onboarding-state', 'onboarding-state')
+  );
   const authProviderImport = toRelativeImportPath(
     appDir,
     path.join(projectPath, 'src', 'features', 'auth', 'auth-provider')
@@ -3673,6 +3786,8 @@ function renderRichRootLayout(
     navigationShell.library === 'expo-router' && shouldGenerateLegalUpdateGate(answers);
   const persistenceEnabled =
     navigationShell.library === 'expo-router' && shouldGenerateOnboardingState(answers);
+  const onboardingGateEnabled =
+    navigationShell.library === 'expo-router' && shouldGenerateOnboarding(answers);
   const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
   const shouldRegisterExpositionRoutes =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
@@ -3729,13 +3844,12 @@ function renderRichRootLayout(
         ? '        <Stack.Screen name="(drawer)" options={{ headerShown: false }} />'
         : '        <Stack.Screen name="index" options={{ title: \'Home\' }} />';
   const appScreens = [shellScreen, ...expositionScreens, ...nativeWindUiScreen];
-  const appGuardExpression = authEnabled
-    ? legalGateEnabled
-      ? 'auth.isAuthenticated && legalGateStatus === "complete"'
-      : 'auth.isAuthenticated'
-    : legalGateEnabled
-      ? 'legalGateStatus === "complete"'
-      : null;
+  const appGuardClauses = [
+    ...(authEnabled ? ['auth.isAuthenticated'] : []),
+    ...(onboardingGateEnabled ? ['onboardingComplete'] : []),
+    ...(legalGateEnabled ? ['legalGateStatus === "complete"'] : []),
+  ];
+  const appGuardExpression = appGuardClauses.length > 0 ? appGuardClauses.join(' && ') : null;
   const publicAuthScreens = authEnabled
     ? [
         '        <Stack.Protected guard={!auth.isAuthenticated}>',
@@ -3777,6 +3891,9 @@ function renderRichRootLayout(
     ...(persistenceEnabled
       ? [`import { OnboardingPersistenceSync } from '${onboardingPersistenceImport}';`]
       : []),
+    ...(onboardingGateEnabled
+      ? [`import { useOnboardingState } from '${onboardingStateImport}';`]
+      : []),
     ...(authEnabled ? [`import { AuthProvider, useAuth } from '${authProviderImport}';`] : []),
     '',
     'function RouterThemeBridge({ children }: { children: ReactNode }) {',
@@ -3810,6 +3927,14 @@ function renderRichRootLayout(
     'function LayoutInner() {',
     '  const theme = useAppTheme();',
     ...(authEnabled ? ['  const auth = useAuth();'] : []),
+    ...(onboardingGateEnabled
+      ? [
+          authEnabled
+            ? '  const onboarding = useOnboardingState(auth.user?.id);'
+            : '  const onboarding = useOnboardingState();',
+          '  const onboardingComplete = !onboarding.isLoading && Boolean(onboarding.state?.completedAt);',
+        ]
+      : []),
     ...(legalGateEnabled
       ? [
           authEnabled

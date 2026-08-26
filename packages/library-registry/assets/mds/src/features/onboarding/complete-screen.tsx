@@ -13,15 +13,21 @@ export default function OnboardingCompleteScreen() {
   const colors = theme.activeColors;
   const primaryForeground = getReadableTextColor(colors.primary, theme.colors.light.text);
   const [isSaving, setIsSaving] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   const finishOnboarding = async () => {
     if (isSaving) {
       return;
     }
     setIsSaving(true);
+    setCompletionError(null);
     try {
       await markOnboardingComplete();
-      router.replace(onboardingConfig.completion.route);
+      setTimeout(() => router.replace(onboardingConfig.completion.route), 0);
+    } catch (error) {
+      setCompletionError(
+        error instanceof Error ? error.message : 'Unable to finish onboarding. Please try again.'
+      );
     } finally {
       setIsSaving(false);
     }
@@ -58,6 +64,9 @@ export default function OnboardingCompleteScreen() {
         <Text style={[styles.helper, { color: colors.text }]}>
           {onboardingConfig.completion.helperText}
         </Text>
+        {completionError ? (
+          <Text style={[styles.errorText, { color: colors.warning }]}>{completionError}</Text>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           disabled={isSaving}
@@ -67,7 +76,7 @@ export default function OnboardingCompleteScreen() {
             { backgroundColor: colors.primary, borderRadius: theme.layout.radius },
           ]}>
           <Text style={[styles.primaryButtonText, { color: primaryForeground }]}>
-            {onboardingConfig.completion.label}
+            {isSaving ? 'Completing...' : onboardingConfig.completion.label}
           </Text>
         </Pressable>
       </View>
@@ -111,6 +120,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     opacity: 0.86,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 19,
   },
   primaryButton: {
     alignItems: 'center',

@@ -704,11 +704,11 @@ describe("library resolution", () => {
     expect(composition.items.map((item) => item.id)).toEqual(
       expect.arrayContaining([
         "mds/onboarding",
-        "mds/legal-documents",
         "mds/auth",
         "mds/onboarding-state",
       ]),
     );
+    expect(composition.items.map((item) => item.id)).not.toContain("mds/legal-documents");
     expect(composition.assets).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -735,6 +735,7 @@ describe("library resolution", () => {
     expect(sqlAsset).toBeDefined();
     const sqlSource = (await readLibraryAsset(sqlAsset!)).toString("utf8");
     expect(sqlSource).toContain("document_version");
+    expect(sqlSource).toContain("acceptance_version");
     expect(sqlSource).toContain("flow_version");
     expect(sqlSource).toContain("Users can insert their onboarding state");
     expect(sqlSource).not.toContain("for all");
