@@ -15,10 +15,15 @@ import {
   buildExpoLatestSdkCommand,
   buildInstallCommand,
   buildPrettierWriteCommand,
+  buildWorkspaceAppCreateArgs,
+  buildWorkspaceAddDevDependencyCommand,
+  buildWorkspaceExpoDoctorCommand,
   detectEasSetup,
   inferGeneratorChoices,
   isCliEntryPoint,
   parseArgs,
+  loadWorkspacePlanFile,
+  minimalWorkspaceOnboardOverrides,
   prepareCommandForSpawn,
   prepareCreateExpoStackArgsForWrapper,
   repairGeneratedNativeWindUiPicker,
@@ -30,6 +35,7 @@ import {
   renderHelpText,
   resolveMissingWindowsTailwindOxideBinding,
   resolveProjectTarget,
+  resolveProjectShape,
   resolveWindowsTailwindOxidePackage,
   parseExpoSdkMajor,
   shouldInstallExpoFontPeerFromPackageJson,
@@ -45,7 +51,9 @@ describe("create-expo-super-stack CLI helpers", () => {
   it("infers stylesheet when no create-expo-stack styling flag is present", () => {
     expect(inferGeneratorChoices([]).stylingSystem).toBe("stylesheet");
     expect(inferGeneratorChoices(["--uniwind"]).stylingSystem).toBe("uniwind");
-    expect(inferGeneratorChoices(["--nativewind"]).stylingSystem).toBe("nativewind");
+    expect(inferGeneratorChoices(["--nativewind"]).stylingSystem).toBe(
+      "nativewind",
+    );
     expect(inferGeneratorChoices(["--nativewindui"]).stylingSystem).toBe(
       "nativewindui",
     );
@@ -75,7 +83,171 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(help).toContain("--mds-supabase-publishable-key=<key>");
     expect(help).toContain("--mds-save-defaults");
     expect(help).toContain("--mds-no-guidelines-template");
+    expect(help).toContain("--mds-project-shape=");
+    expect(help).toContain("single | workspace");
+    expect(help).toContain("--mds-workspace-plan=<file>");
     expect(help).toContain("-h, --help");
+  });
+
+  it("selects project shape before app intake and keeps --mds-yes backward compatible", async () => {
+    const unattended = parseArgs(["product", "--mds-yes"]);
+    await expect(resolveProjectShape(unattended)).resolves.toBe(
+      "single-expo-app",
+    );
+
+    const workspace = parseArgs(["--mds-project-shape=workspace", "--mds-yes"]);
+    expect(workspace.projectName).toBeUndefined();
+    expect(workspace.mds.projectShape).toBe("multi-app-workspace");
+    await expect(resolveProjectShape(workspace)).resolves.toBe(
+      "multi-app-workspace",
+    );
+  });
+
+  it("loads and validates a complete machine-readable workspace plan", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-workspace-plan-"),
+    );
+    try {
+      const planPath = path.join(directory, "plan.json");
+      await writeFile(
+        planPath,
+        JSON.stringify({
+          manifest: {
+            schemaVersion: 1,
+            name: "creative-suite",
+            displayName: "Creative Suite",
+            packageScope: "@creative",
+            packageManager: "pnpm",
+            expoVersion: "~56.0.19",
+            stylingSystem: "uniwind",
+            sharedDesignDirection: "A clear shared visual system.",
+            taskRunner: "turbo",
+            apps: [
+              {
+                id: "studio",
+                displayName: "Studio",
+                packageName: "@creative/studio",
+                path: "apps/studio",
+                kind: "expo",
+                purpose: "Create content.",
+                platforms: ["web", "ios", "android"],
+                port: 8081,
+              },
+              {
+                id: "site",
+                displayName: "Site",
+                packageName: "@creative/site",
+                path: "apps/site",
+                kind: "non-expo",
+                purpose: "Publish product information.",
+                category: "website",
+              },
+            ],
+            sharedPackages: [
+              {
+                name: "config",
+                packageName: "@creative/config",
+                path: "packages/config",
+                role: "config",
+              },
+              {
+                name: "ui",
+                packageName: "@creative/ui",
+                path: "packages/ui",
+                role: "ui-theme",
+              },
+            ],
+          },
+          expoApps: {
+            studio: {
+              profile: "minimal",
+              createExpoStackArgs: ["--expo-router", "--uniwind"],
+            },
+          },
+        }),
+        "utf8",
+      );
+
+      const parsed = parseArgs(["--mds-workspace-plan", planPath, "--mds-yes"]);
+      expect(parsed.mds.workspacePlanPath).toBe(planPath);
+      await expect(resolveProjectShape(parsed)).resolves.toBe(
+        "multi-app-workspace",
+      );
+      const plan = await loadWorkspacePlanFile(planPath);
+      expect(plan.manifest.apps.map((app) => app.path)).toEqual([
+        "apps/studio",
+        "apps/site",
+      ]);
+      expect(plan.expoApps?.studio?.profile).toBe("minimal");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("defines a minimal app profile without auth, legal, onboarding, or rich boilerplate", () => {
+    expect(minimalWorkspaceOnboardOverrides()).toMatchObject({
+      rich: false,
+      advancedSetup: false,
+      dataStart: "local",
+      authProvider: "none",
+      generatorAuthBackend: "none",
+      onboardingFlow: "none",
+      legalDocumentMode: "none",
+      legalUpdateGate: "none",
+      testToMain: false,
+    });
+  });
+
+  it("builds isolated app generator arguments from one workspace plan", () => {
+    expect(
+      buildWorkspaceAppCreateArgs(
+        [
+          "creative-suite",
+          "--npm",
+          "--nativewind",
+          "--expo-router",
+          "--no-install",
+        ],
+        "studio",
+        "pnpm",
+        "--uniwind",
+      ),
+    ).toEqual([
+      "studio",
+      "--expo-router",
+      "--no-install",
+      "--pnpm",
+      "--uniwind",
+    ]);
+    expect(
+      buildWorkspaceAppCreateArgs(
+        ["creative-suite", "--expo-router"],
+        "companion",
+        "pnpm",
+        "--uniwind",
+      ),
+    ).toContain("--no-install");
+  });
+
+  it("runs Expo Doctor ephemerally for workspace apps", () => {
+    expect(buildWorkspaceExpoDoctorCommand("pnpm")).toEqual({
+      command: "pnpm",
+      args: ["--ignore-workspace", "dlx", "expo-doctor"],
+      display: "pnpm --ignore-workspace dlx expo-doctor",
+    });
+  });
+
+  it("installs missing Windows Uniwind bindings at the workspace root", () => {
+    expect(
+      buildWorkspaceAddDevDependencyCommand(
+        "pnpm",
+        "@tailwindcss/oxide-win32-x64-msvc@4.3.2",
+      ),
+    ).toEqual({
+      command: "pnpm",
+      args: ["add", "-Dw", "@tailwindcss/oxide-win32-x64-msvc@4.3.2"],
+      display: "pnpm add -Dw @tailwindcss/oxide-win32-x64-msvc@4.3.2",
+    });
   });
 
   it("builds install, latest SDK, expo repair, Expo font peer, formatting, and doctor commands in the required order", () => {
@@ -341,7 +513,9 @@ describe("create-expo-super-stack CLI helpers", () => {
   });
 
   it("fails loudly when the generated project does not target SDK 56", async () => {
-    const projectPath = await mkdtemp(path.join(os.tmpdir(), "super-stack-sdk-check-"));
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-sdk-check-"),
+    );
     try {
       await writeFile(
         path.join(projectPath, "package.json"),
@@ -439,6 +613,13 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(
       prepareCreateExpoStackArgsForWrapper(["demo-app", "--expo-router"]),
     ).toEqual(["demo-app", "--expo-router"]);
+    expect(
+      prepareCreateExpoStackArgsForWrapper([
+        "demo-app",
+        "--expo-router",
+        "--uniwind",
+      ]),
+    ).toEqual(["demo-app", "--expo-router", "--stylesheet"]);
     expect(
       prepareCreateExpoStackArgsForWrapper([
         "demo-app",
@@ -663,7 +844,13 @@ describe("create-expo-super-stack CLI helpers", () => {
         recursive: true,
       });
       await writeFile(
-        path.join(projectPath, "src", "app", "exposition", "stylist-sync+api.ts"),
+        path.join(
+          projectPath,
+          "src",
+          "app",
+          "exposition",
+          "stylist-sync+api.ts",
+        ),
         "export {};",
         "utf8",
       );
@@ -743,8 +930,9 @@ describe("create-expo-super-stack CLI helpers", () => {
           "utf8",
         ),
       ).resolves.toContain("LegacyHome");
-      await expect(readFile(path.join(projectPath, "app", "modal.tsx"), "utf8"))
-        .rejects.toThrow();
+      await expect(
+        readFile(path.join(projectPath, "app", "modal.tsx"), "utf8"),
+      ).rejects.toThrow();
     } finally {
       await rm(projectPath, { recursive: true, force: true });
     }

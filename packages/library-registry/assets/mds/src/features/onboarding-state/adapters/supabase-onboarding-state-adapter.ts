@@ -18,7 +18,7 @@ import {
 } from './onboarding-state-supabase';
 
 const getClient: SupabaseClientFactory = () =>
-  getSupabaseClient() as ReturnType<SupabaseClientFactory>;
+  getSupabaseClient() as unknown as ReturnType<SupabaseClientFactory>;
 
 export const onboardingStateAdapter = createSupabaseOnboardingStateAdapter(getClient);
 export const legalAcceptanceAdapter = createSupabaseLegalAcceptanceAdapter(getClient);

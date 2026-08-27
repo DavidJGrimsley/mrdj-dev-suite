@@ -27,7 +27,7 @@ const cache = {
 };
 
 const getClient: SupabaseClientFactory = () =>
-  getSupabaseClient() as ReturnType<SupabaseClientFactory>;
+  getSupabaseClient() as unknown as ReturnType<SupabaseClientFactory>;
 
 export const onboardingStateAdapter = createZustandSupabaseOnboardingStateAdapter(getClient, cache);
 export const legalAcceptanceAdapter = createZustandSupabaseLegalAcceptanceAdapter(getClient, cache);

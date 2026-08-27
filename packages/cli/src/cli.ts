@@ -673,6 +673,10 @@ async function main(): Promise<void> {
             describe: 'Record where this library item should be surfaced or wired in',
             type: 'string',
           })
+          .option('target', {
+            describe: 'Relative registered app path to receive generated library files',
+            type: 'string',
+          })
           .option('yes', {
             alias: 'y',
             describe: 'Confirm the preflighted add without prompting',
