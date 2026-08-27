@@ -66,3 +66,37 @@ export async function findExpoRouterApiRouteFiles(
   }
   return files;
 }
+
+export function isRouteGroupDirName(name: string): boolean {
+  return name.startsWith('(') && name.endsWith(')') && name.length > 2;
+}
+
+export function isExpoRouterLayoutFile(filePath: string): boolean {
+  return /^_layout(?:\.[^.]+)?\.(tsx|ts|jsx|js)$/.test(path.basename(filePath));
+}
+
+export function isExpoRouterSpecialFile(filePath: string): boolean {
+  const basename = path.basename(filePath);
+  return basename.startsWith('+') || isExpoRouterLayoutFile(filePath);
+}
+
+export function isTestLikeFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/');
+  return /\/__tests__\/|\.test\.|\.spec\./.test(normalized);
+}
+
+export function toPosixPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/');
+}
+
+export function appRelativePath(appDir: string, filePath: string): string {
+  return relative(appDir, filePath);
+}
+
+export function routeGroupSegments(appRelative: string): string[] {
+  return appRelative.split('/').filter((segment) => isRouteGroupDirName(segment));
+}
+
+export function isRootLayoutPath(projectRelative: string): boolean {
+  return /^(src\/)?app\/_layout(?:\.[^./]+)?\.(tsx|ts|jsx|js)$/.test(projectRelative);
+}

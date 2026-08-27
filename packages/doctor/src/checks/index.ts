@@ -3,6 +3,17 @@ export {
   checkAnimationPerformance,
   scanFileAnimationPerformance,
 } from './animation-performance.js';
+export {
+  checkApiSafety,
+  scanFileApiSafety,
+  checkAuthChecks,
+  checkMethodValidation,
+  checkInputValidation,
+  checkServiceRole,
+  checkRateLimiting,
+  checkErrorExposure,
+  checkCors,
+} from './api-safety.js';
 export { checkEnvHygiene, scanFileEnvHygiene } from './env-hygiene.js';
 export {
   checkCredentialExposure,
@@ -11,6 +22,14 @@ export {
   checkServerImports,
   scanFileRuntimeSecurity,
 } from './runtime-security.js';
+export {
+  checkRouterSafety,
+  scanFileRouterSafety,
+  checkRouteGroups,
+  checkLayouts,
+  checkNavigationPatterns,
+  checkMixedConcerns,
+} from './router-safety.js';
 export { runEslintCheck } from './eslint.js';
 export { checkExpoConfiguration } from './expo-config.js';
 export { runExpoDoctorCheck } from './expo-doctor.js';

@@ -1,93 +1,117 @@
-# Doctor runtime security and env hygiene
+# MDS Doctor
 
-Doctor now has two complementary static checks for credential leaks and server/client boundary mistakes.
+`mds doctor` is the production-readiness check for Expo apps. It runs static scans plus optional package scripts depending on the selected mode.
+
+```bash
+mds doctor /path/to/expo-app --fast
+mds doctor /path/to/expo-app --ci
+mds doctor /path/to/expo-app --json
+```
+
+Explain a check:
+
+```bash
+mds explain "router safety"
+mds explain "api safety"
+```
+
+## Modes
+
+| Mode | What it runs |
+| --- | --- |
+| `--fast` | Static project checks plus lint/typecheck scripts. Default for `mds doctor` via the CLI wrapper. |
+| `--ci` | Fast checks plus tests, Expo Doctor, and release build scripts when the app defines them. |
+| `--full` | CI checks plus the broadest available build script. |
+
+Static checks always run. Router safety and API safety are static scans — they run in every mode.
+
+Warnings do not fail the process. Errors do. Heuristic router/API findings are **warnings**, except returning `error.stack` in a JSON body, which is an **error**.
 
 ## Runtime security
 
 Check name: `runtime security`
 
-This check runs only when the scanned project looks like an Expo app (`expo` / `expo-router` in `package.json`, or an `app.json` / `app.config.*` file). Node tooling packages are skipped.
+Runs for Expo-shaped projects and catches server/client boundary mistakes: server packages imported from client files, client imports of `*.server.ts`, API route modules, files that start with `'use server'`, Node core runtime modules in client routes, private env access in client code, hardcoded credential values in Expo config, unsafe Metro export conditions for server runtimes, and local-only HTTP endpoints in bundled client code.
 
-It does **not** replace the existing browser-global SSR scan (`window` / `document` / `localStorage`). That scan still lives in `ssr safety` and route architecture.
-
-### What it catches
-
-| Finding | Severity | Example |
-| --- | --- | --- |
-| Server packages imported from client files (`prisma`, `drizzle-orm`, `express`, `firebase-admin`, …) | error | `import { PrismaClient } from '@prisma/client'` in `app/index.tsx` |
-| Client imports of `*.server.ts`, `+api` modules, or files that start with `'use server'` | error | `import { db } from '../db.server'` |
-| `node:fs` / `node:child_process` / `node:http` / `node:net` / `node:cluster` on the client | error | `import fs from 'node:fs'` in a route component |
-| Private `process.env.FOO` in client code | error | `process.env.SUPABASE_SERVICE_ROLE_KEY` |
-| Hardcoded API keys in Expo config `extra` | error | `expo.extra.apiKey: "sk_live_…"` |
-| Metro export conditions overwritten without `"node"` while API routes / `'use server'` / `web.output: "server"` exist | warn | `unstable_conditionNames = ['require', 'react-native']` |
-| `fetch` / `axios` to `localhost`, `127.0.0.1`, `0.0.0.0`, or `10.0.2.2` | warn | `fetch('http://localhost:3000/api')` |
-
-### Passing example
-
-```tsx
-import { createClient } from '@supabase/supabase-js';
-
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-export const supabase = createClient(url, anon);
-```
-
-API routes (`*+api.ts`) may import `drizzle-orm` / `prisma`. Stock `getDefaultConfig` from `expo/metro-config` is enough for the Node runtime target.
-
-### Warning example
-
-```tsx
-export function loadOrders() {
-  return fetch('http://localhost:3000/api/orders');
-}
-```
-
-Use `process.env.EXPO_PUBLIC_API_URL` (or a similar public base URL) instead of baking the dev server into the client bundle.
-
-### Failing example
-
-```tsx
-import { PrismaClient } from '@prisma/client';
-
-export const db = new PrismaClient();
-export const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-```
-
-Move database clients and private env access into an Expo Router API route or a server-only module that the client never imports.
+API routes (`*+api.ts`) may import database/server packages. Stock `getDefaultConfig` from `expo/metro-config` is enough for the Node runtime target.
 
 ## Env hygiene
 
 Check name: `env hygiene`
 
-Env hygiene still flags secret-looking `EXPO_PUBLIC_*` names and hardcoded credential **values** in source and config. Reports include file, line, a safe identifier, detector, and remediation. They never print the secret itself.
+Flags secret-looking `EXPO_PUBLIC_*` names and hardcoded credential values in source and config. Reports include file, line, a safe identifier, detector, and remediation. They never print the secret itself.
 
-Additional template checks:
+Template checks warn when `.env.local` public keys are missing from `.env.example`, and error when committed env examples contain live-looking secrets. Empty values and placeholders such as `your-`, `changeme`, `example`, and `xxx` are allowed.
 
-- **Warn** if `.env.local` defines `EXPO_PUBLIC_*` keys that are missing from `.env.example` (or if no example file exists).
-- **Error** if `.env.example` / `.env.sample` / `.env.template` contains a live-looking secret value. Empty values and placeholders (`your-`, `changeme`, `example`, `xxx`) are fine.
-- Real gitignored env files (`.env`, `.env.local`) are the right place for secrets; Doctor does not treat those values as source leaks.
-- Known shapes now include Stripe `sk_` / `rk_`, Stripe publishable `pk_` (warn in source), OpenAI `sk-` / `sk-proj-`, AWS `AKIA…`, Bearer/JWT, Slack, GitHub, SendGrid, webhook secrets, and PEM private-key headers.
+Known shapes include Stripe, OpenAI, AWS, Bearer/JWT, Slack, GitHub, SendGrid, webhook secrets, and PEM private-key headers.
 
-### Passing example
+## Router safety
 
-`.env.example`
+Looks at Expo Router `app/` or `src/app/` trees.
 
+| Detector | Warns when |
+| --- | --- |
+| Route groups | A `(group)` folder has no `_layout` file, or groups nest more than two deep |
+| Layouts | Conventional `(tabs)` / `(drawer)` / `(auth)` / `(modal)` groups miss a layout; auth-shaped routes have no session/`Redirect`/`Protected` layout; root `_layout` is overloaded with data fetching |
+| Navigation | `router.push('/' + id)` or template-literal hrefs assemble paths instead of typed pathname objects |
+| Mixed concerns | A large screen mixes auth, data-layer imports, and helpers; a large `+api` file inlines business logic instead of wrapping a service |
+
+Platform layout variants (`_layout.web.tsx`, `_layout.native.tsx`) count as layouts. Test files are ignored.
+
+Static hrefs such as `href="/dashboard"` or `router.push('/(tabs)/settings')` are allowed.
+
+## API safety
+
+Looks at real Expo Router API routes (`*+api.ts` / `*+api.js` under `app/` or `src/app/`). Skips when the project has no Expo Router signal or no API files.
+
+| Detector | Behavior |
+| --- | --- |
+| Auth | Warns on **sensitive** paths (`billing`, `payment`, `db`, `admin`, `credential`, `auth`, …) that have no auth helper. `handleDbWrite`, `requireAuthUserId`, session helpers, and webhook signatures count. Public/proxy routes are not required to authenticate. |
+| HTTP methods | Named `GET`/`POST`/… exports pass. A default export that never inspects `request.method` warns. |
+| Input validation | `request.json()` / `request.formData()` without Zod or a parse helper (`handleDbWrite`, `parseBillingJson`) warns. Webhooks that read `arrayBuffer()` plus a signature do not need Zod. |
+| Service role | `process.env.*SERVICE_ROLE*` or `createClient(..., serviceRole)` without an auth gate warns. Comments and test mocks are ignored. |
+| Rate limiting | Warns on auth/billing/payment/credential/webhook endpoints with no `rateLimit` / `429` / `quota` signal. Ordinary `/api/db` CRUD helpers are not flagged. |
+| Error exposure | `stack: error.stack` in a JSON body is an **error**. Other stack/`JSON.stringify(error)` leaks warn. |
+| CORS | Warns on `Access-Control-Allow-Origin: *` or reflecting `Origin` without an allowlist. Missing CORS headers on same-origin routes is fine. |
+
+## Safe vs unsafe API routes
+
+Safe — thin wrapper, named method, schema, auth:
+
+```ts
+import { z } from 'zod';
+import { requireBillingAuthUserId } from '@/server/billing/routes';
+import { createStripeCheckoutSession } from '@/server/billing/stripe-service';
+
+const checkoutSchema = z.object({
+  offer: z.enum(['annual', 'monthly']),
+}).strict();
+
+export async function POST(request: Request): Promise<Response> {
+  const authUserId = await requireBillingAuthUserId(request);
+  const body = checkoutSchema.parse(await request.json());
+  return Response.json(await createStripeCheckoutSession(authUserId, body.offer, request.url));
+}
 ```
-EXPO_PUBLIC_API_URL=
-STRIPE_SECRET_KEY=
+
+Unsafe — untyped body, service role, stack leak, wildcard CORS:
+
+```ts
+import { createClient } from '@supabase/supabase-js';
+
+export default async function handler(request: Request) {
+  const body = (await request.json()) as { email: string };
+  const supabase = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  try {
+    await supabase.from('users').insert(body);
+    return Response.json({ ok: true }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+  } catch (error) {
+    return Response.json({ stack: error.stack });
+  }
+}
 ```
 
-`.env.local`
+## Related skills
 
-```
-EXPO_PUBLIC_API_URL=http://localhost:3000
-STRIPE_SECRET_KEY=sk_test_...
-```
-
-### Warning example
-
-`.env.local` contains `EXPO_PUBLIC_API_URL` but `.env.example` does not document it.
-
-### Failing example
-
-`.env.example` committed with `STRIPE_SECRET_KEY=sk_live_…`, or source containing `const stripeSecretKey = "sk_live_…"`.
+- `expo-router-architecture` — keep `app/` thin
+- `api-routes` — validate, authenticate, and return safe envelopes
