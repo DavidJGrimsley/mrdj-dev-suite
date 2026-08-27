@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   applySdk56SplashConfig,
   ensureGeneratedSystemAppearance,
-  renderGeneratedOnboardingConfig,
   renderInfo,
+  renderGeneratedOnboardingConfig,
   resolveLegalAddressOrRegionNote,
   resolveLegalBusinessName,
   resolveLegalContactEmail,
@@ -26,8 +26,36 @@ const onboardingTemplateUrl = new URL(
 
 const answers: OnboardAnswers = {
   appName: 'Sample App',
+  audience: 'Sample users',
+  coreFlows: 'Open the app',
+  dataNeeds: 'Local UI/app state',
+  deploymentTarget: 'Internal demo',
+  advancedPackageSetup: true,
+  includeCreateExpoComponents: false,
+  targetPlatforms: ['web'],
+  firstTargetPlatform: 'web',
+  platformFileStrategy: 'files-only',
+  webOutput: 'static',
+  deployedServer: 'none',
+  expoServerAdapter: 'none',
+  customBackend: false,
+  customBackendEntry: 'server.js',
+  usesExpoUi: false,
+  usesExpoUiUniversalComponents: false,
+  usesExpoNativeTabs: false,
+  easUses: [],
+  projectInfoReady: false,
+  projectStyleReady: false,
+  appDirectory: 'src',
+  platformLayoutMode: 'shared',
+  dataStart: 'local',
+  onboardingFlow: 'multi-screen',
+  legalDocumentMode: 'none',
   onboardingCompletionMode: 'auth',
-} as OnboardAnswers;
+  legalUpdateGate: 'none',
+  testToMainSafeguards: true,
+  defaults: [],
+};
 
 const tempDirs: string[] = [];
 
@@ -154,6 +182,17 @@ describe('legal project-memory values', () => {
     expect(resolveLegalAddressOrRegionNote({})).toBe(
       'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE'
     );
+  });
+});
+
+describe('renderInfo project shape', () => {
+  it('renders single Expo app defaults', () => {
+    const rendered = renderInfo('/tmp/app', {
+      ...answers,
+      defaults: [],
+    } as OnboardAnswers);
+
+    expect(rendered).toContain('- Project shape: single Expo app');
   });
 });
 

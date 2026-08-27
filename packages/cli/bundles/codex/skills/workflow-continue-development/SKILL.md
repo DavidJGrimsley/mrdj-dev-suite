@@ -31,7 +31,7 @@ Resume work on an onboarded project by following MDS phase order from `project/t
 
 - Treat a request to continue development with MDS as a request for the MDS MCP tool and phase rules first.
 - Do not jump directly into app edits until `continue_project` or the CLI fallback has identified the active phase and blockers.
-- When continue reports an Expo SDK upgrade from project state, follow official `upgrading-expo` instead of the next unchecked todo.
+- When continue reports Expo SDK attention from project state, follow official `upgrading-expo` instead of the next unchecked todo.
 - Never invoke `@mrdj/cli`; that package name is wrong. The published CLI package is `@mr.dj2u/cli` and its executable is `mds`.
 
 ## CLI / Manual Fallback

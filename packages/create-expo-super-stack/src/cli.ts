@@ -14,7 +14,15 @@ import {
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { cancel, isCancel, log, text } from "@clack/prompts";
+import {
+  cancel,
+  confirm,
+  isCancel,
+  log,
+  multiselect,
+  select,
+  text,
+} from "@clack/prompts";
 import {
   SUPER_STACK_SUCCESS_MESSAGE,
   collectOnboardPlan,
@@ -26,16 +34,30 @@ import {
   resolveGeneratorStylingSystem,
   scaffoldProjectMemory,
 } from "@mr.dj2u/cli/project-memory";
-import {
-  generateProjectRoadmap,
-} from "@mr.dj2u/cli/roadmap";
+import { generateProjectRoadmap } from "@mr.dj2u/cli/roadmap";
 import {
   buildLockfileInstallCommand,
   prepareCommandForSpawn as prepareSharedCommandForSpawn,
   runProjectCommand as runSharedProjectCommand,
 } from "@mr.dj2u/cli/package-install";
+import {
+  createWorkspaceManifest,
+  resolveWorkspacePath,
+  scaffoldWorkspaceRoot,
+  validateWorkspaceManifest,
+  wireGeneratedExpoApp,
+} from "@mr.dj2u/cli/workspace";
 
-import type { OnboardArgv } from "@mr.dj2u/cli/onboarding";
+import type { OnboardArgv, OnboardPlan } from "@mr.dj2u/cli/onboarding";
+import type {
+  NonExpoAppCategory,
+  ProjectShape,
+  WorkspaceApp,
+  WorkspaceAppInput,
+  WorkspaceManifest,
+  WorkspacePackageManager,
+  WorkspaceStylingSystem,
+} from "@mr.dj2u/cli/workspace";
 
 export interface ParsedArgs {
   projectName?: string;
@@ -91,7 +113,37 @@ export interface ParsedArgs {
     componentStrategyDecision?: "pending" | "confirmed";
     easUses?: string[];
     saveDefaults?: boolean;
+    projectShape?: ProjectShape;
+    workspacePlanPath?: string;
   };
+}
+
+export interface WorkspacePlanFile {
+  manifest: WorkspaceManifest;
+  expoApps?: Record<
+    string,
+    {
+      profile?: WorkspaceExpoProfile;
+      createExpoStackArgs?: string[];
+      onboard?: Partial<OnboardArgv>;
+    }
+  >;
+}
+
+export type WorkspaceExpoProfile = "minimal" | "cess";
+
+interface WorkspaceExpoExecutionPlan {
+  app: WorkspaceApp;
+  profile: WorkspaceExpoProfile;
+  parsed: ParsedArgs;
+  createExpoStackArgs: string[];
+  onboardPlan: OnboardPlan;
+}
+
+interface WorkspaceExecutionPlan {
+  workspacePath: string;
+  manifest: WorkspaceManifest;
+  expoApps: WorkspaceExpoExecutionPlan[];
 }
 
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
@@ -129,6 +181,15 @@ export async function main(): Promise<void> {
     console.log(renderHelpText());
     return;
   }
+  const projectShape = await resolveProjectShape(initialParsed);
+  if (projectShape === "multi-app-workspace") {
+    await runWorkspaceMain(initialParsed);
+    return;
+  }
+  await runSingleMain(initialParsed);
+}
+
+async function runSingleMain(initialParsed: ParsedArgs): Promise<void> {
   const parsed = withResolvedProjectName(
     initialParsed,
     await promptForMissingProjectName(initialParsed),
@@ -192,8 +253,11 @@ export async function main(): Promise<void> {
     force: parsed.mds.force,
     guidelinesTemplate: plan.guidelinesTemplate,
     guidelinesTemplatePath: plan.guidelinesTemplatePath,
-    manageUniwind: parsed.mds.skipCreate,
+    manageUniwind:
+      parsed.mds.skipCreate ||
+      resolveGeneratorStylingSystem(plan.answers) === "uniwind",
     richBoilerplate: plan.richBoilerplate,
+    supabaseLocalEnvironment: plan.supabaseLocalEnvironment,
   });
   const postScaffoldImportRepairs = movedAppDir
     ? await repairMovedSrcAppImports(projectPath)
@@ -210,7 +274,8 @@ export async function main(): Promise<void> {
   const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const typeSupportRepairs = await repairGeneratedTypeSupport(projectPath, {
     needsNodeTypes: hasStylistSyncRoute,
-    needsUniwindTypes: resolveGeneratorStylingSystem(plan.answers) === "uniwind",
+    needsUniwindTypes:
+      resolveGeneratorStylingSystem(plan.answers) === "uniwind",
   });
   const nativeWindUiPickerRepairs =
     await repairGeneratedNativeWindUiPicker(projectPath);
@@ -306,11 +371,15 @@ export async function main(): Promise<void> {
     }
     nextStepsCommands.push(buildExpoInstallFixCommand(packageManager).display);
     if (await shouldInstallExpoFontPeer(projectPath)) {
-      nextStepsCommands.push(buildExpoFontInstallCommand(packageManager).display);
+      nextStepsCommands.push(
+        buildExpoFontInstallCommand(packageManager).display,
+      );
     }
     nextStepsCommands.push(buildExpoDoctorCommand(packageManager).display);
   }
-  nextStepsCommands.push(buildRunScriptCommand(packageManager, "clear-expo-start"));
+  nextStepsCommands.push(
+    buildRunScriptCommand(packageManager, "clear-expo-start"),
+  );
   printCopyableCommands("Next steps", nextStepsCommands);
   console.log();
   console.log(SUPER_STACK_SUCCESS_MESSAGE);
@@ -320,11 +389,872 @@ export async function main(): Promise<void> {
   );
 }
 
+export async function resolveProjectShape(
+  parsed: ParsedArgs,
+): Promise<ProjectShape> {
+  if (parsed.mds.workspacePlanPath) return "multi-app-workspace";
+  if (parsed.mds.projectShape) return parsed.mds.projectShape;
+  if (parsed.mds.yes || parsed.mds.skipCreate) return "single-expo-app";
+  const answer = await select<ProjectShape>({
+    message: "What are you creating?",
+    options: [
+      {
+        value: "single-expo-app",
+        label: "One Expo app",
+        hint: "The existing Create Expo Super Stack flow",
+      },
+      {
+        value: "multi-app-workspace",
+        label: "A multi-app workspace",
+        hint: "Two or more apps under apps/* with shared packages and Turbo",
+      },
+    ],
+    initialValue: "single-expo-app",
+  });
+  return handlePromptCancel(answer);
+}
+
+async function runWorkspaceMain(parsed: ParsedArgs): Promise<void> {
+  const executionPlan = parsed.mds.workspacePlanPath
+    ? await loadWorkspaceExecutionPlan(parsed, parsed.mds.workspacePlanPath)
+    : await collectInteractiveWorkspacePlan(parsed);
+  await executeWorkspacePlan(executionPlan, parsed);
+}
+
+export async function loadWorkspacePlanFile(
+  filePath: string,
+): Promise<WorkspacePlanFile> {
+  const raw: unknown = JSON.parse(
+    await readFile(path.resolve(filePath), "utf8"),
+  );
+  const plan =
+    raw && typeof raw === "object" && "manifest" in raw
+      ? (raw as WorkspacePlanFile)
+      : ({ manifest: raw } as WorkspacePlanFile);
+  validateWorkspaceManifest(plan.manifest);
+  for (const [appId, appPlan] of Object.entries(plan.expoApps ?? {})) {
+    const app = plan.manifest.apps.find((entry) => entry.id === appId);
+    if (!app || app.kind !== "expo") {
+      throw new Error(
+        `Workspace Expo plan references an unregistered Expo app: ${appId}`,
+      );
+    }
+    if (
+      appPlan.profile &&
+      appPlan.profile !== "minimal" &&
+      appPlan.profile !== "cess"
+    ) {
+      throw new Error(
+        `Workspace Expo profile must be minimal or cess: ${appId}`,
+      );
+    }
+  }
+  return plan;
+}
+
+async function loadWorkspaceExecutionPlan(
+  parsed: ParsedArgs,
+  filePath: string,
+): Promise<WorkspaceExecutionPlan> {
+  const planFile = await loadWorkspacePlanFile(filePath);
+  const workspaceParent = parsed.mds.projectParentDir ?? process.cwd();
+  const workspacePath = path.resolve(workspaceParent, planFile.manifest.name);
+  const expoApps: WorkspaceExpoExecutionPlan[] = [];
+  for (const app of planFile.manifest.apps.filter(
+    (entry) => entry.kind === "expo",
+  )) {
+    const overrides = planFile.expoApps?.[app.id];
+    const profile = overrides?.profile ?? "cess";
+    const createExpoStackArgs = buildWorkspaceAppCreateArgs(
+      overrides?.createExpoStackArgs ?? parsed.createExpoStackArgs,
+      app.id,
+      planFile.manifest.packageManager,
+      inferWorkspaceStylingFlag(parsed.createExpoStackArgs),
+    );
+    const appParsed = parsedForWorkspaceApp(
+      parsed,
+      planFile.manifest,
+      app,
+      createExpoStackArgs,
+    );
+    const appPath = resolveWorkspacePath(workspacePath, app.path);
+    const onboardArgv: OnboardArgv = {
+      ...buildOnboardArgv(appPath, appParsed, false),
+      ...(profile === "minimal" ? minimalWorkspaceOnboardOverrides() : {}),
+      ...(overrides?.onboard ?? {}),
+      project: appPath,
+      appName: overrides?.onboard?.appName ?? app.displayName,
+      overview: overrides?.onboard?.overview ?? app.purpose,
+      generatorPackageManager: planFile.manifest.packageManager,
+    };
+    expoApps.push({
+      app,
+      profile,
+      parsed: appParsed,
+      createExpoStackArgs,
+      onboardPlan: defaultOnboardPlan(onboardArgv, appPath),
+    });
+  }
+  return { workspacePath, manifest: planFile.manifest, expoApps };
+}
+
+async function collectInteractiveWorkspacePlan(
+  parsed: ParsedArgs,
+): Promise<WorkspaceExecutionPlan> {
+  const displayName = parsed.projectName
+    ? titleFromName(path.basename(parsed.projectName))
+    : await promptRequiredText(
+        "What is the product or ecosystem name?",
+        "My Product",
+      );
+  const workspaceSlug = await promptRequiredText(
+    "What should the workspace folder be called?",
+    slugifyForPrompt(parsed.projectName ?? displayName),
+  );
+  const packageManager = await select<WorkspacePackageManager>({
+    message: "Which package manager should own the workspace?",
+    options: [
+      { value: "pnpm", label: "pnpm" },
+      { value: "npm", label: "npm" },
+      { value: "yarn", label: "yarn" },
+      { value: "bun", label: "bun" },
+    ],
+    initialValue: "pnpm",
+  }).then(handlePromptCancel);
+  const packageScope = await promptRequiredText(
+    "Which internal package scope should shared code use?",
+    `@${slugifyForPrompt(workspaceSlug)}`,
+  );
+  const expoCount = await promptInteger(
+    "How many Expo apps will be in this workspace?",
+    2,
+    1,
+  );
+  let nonExpoCount = await promptInteger(
+    "How many non-Expo apps will be in this workspace?",
+    0,
+    0,
+  );
+  if (expoCount + nonExpoCount < 2) {
+    log.warning("A CESS workspace needs at least two total apps.");
+    nonExpoCount = await promptInteger(
+      "How many non-Expo apps will be in this workspace?",
+      1,
+      1,
+    );
+  }
+  const appInputs: WorkspaceAppInput[] = [];
+  const navigationBySlug = new Map<string, string[]>();
+  for (let index = 0; index < expoCount; index += 1) {
+    const displayAppName = await promptRequiredText(
+      `Expo app ${index + 1} name`,
+      `App ${index + 1}`,
+    );
+    const slug = await promptRequiredText(
+      `Folder name for ${displayAppName}`,
+      slugifyForPrompt(displayAppName),
+    );
+    const purpose = await promptRequiredText(
+      `What is ${displayAppName}'s main purpose?`,
+      `${displayAppName} serves one part of the ${displayName} product ecosystem.`,
+    );
+    const navigation = await select<"expo-router" | "react-navigation">({
+      message: `Which navigation system should ${displayAppName} use?`,
+      options: [
+        { value: "expo-router", label: "Expo Router" },
+        { value: "react-navigation", label: "React Navigation" },
+      ],
+      initialValue: "expo-router",
+    }).then(handlePromptCancel);
+    navigationBySlug.set(slugifyForPrompt(slug), [
+      navigation === "expo-router" ? "--expo-router" : "--react-navigation",
+    ]);
+    appInputs.push({
+      displayName: displayAppName,
+      slug,
+      kind: "expo",
+      purpose,
+    });
+  }
+  for (let index = 0; index < nonExpoCount; index += 1) {
+    const displayAppName = await promptRequiredText(
+      `Non-Expo app ${index + 1} name`,
+      `Service ${index + 1}`,
+    );
+    const slug = await promptRequiredText(
+      `Folder name for ${displayAppName}`,
+      slugifyForPrompt(displayAppName),
+    );
+    const category = await select<NonExpoAppCategory>({
+      message: `What kind of app is ${displayAppName}?`,
+      options: [
+        { value: "website", label: "Website" },
+        { value: "backend", label: "Backend or API" },
+        { value: "worker", label: "Worker or job processor" },
+        { value: "other", label: "Other" },
+      ],
+      initialValue: "backend",
+    }).then(handlePromptCancel);
+    const purpose = await promptRequiredText(
+      `What is ${displayAppName}'s main purpose?`,
+      `${displayAppName} supports the ${displayName} product ecosystem.`,
+    );
+    const intendedStack = await promptOptionalText(
+      `Intended technology for ${displayAppName}, if known`,
+    );
+    appInputs.push({
+      displayName: displayAppName,
+      slug,
+      kind: "non-expo",
+      purpose,
+      category,
+      ...(intendedStack ? { intendedStack } : {}),
+    });
+  }
+
+  const styling = await select<string>({
+    message: "Which styling system should the Expo apps share?",
+    options: [
+      { value: "--uniwind", label: "Uniwind" },
+      { value: "--nativewind", label: "NativeWind" },
+      { value: "--nativewindui", label: "NativeWindUI" },
+      { value: "--tamagui", label: "Tamagui" },
+      { value: "--restyle", label: "Restyle" },
+      { value: "", label: "React Native StyleSheet" },
+    ],
+    initialValue: inferWorkspaceStylingFlag(parsed.createExpoStackArgs),
+  }).then(handlePromptCancel);
+  const sharedDesignDirection = await promptRequiredText(
+    "What visual direction should every app share?",
+    `A coherent, accessible ${displayName} design system with app-specific overrides only when needed.`,
+  );
+
+  let manifest = createWorkspaceManifest({
+    displayName,
+    slug: workspaceSlug,
+    packageScope,
+    packageManager,
+    expoVersion: EXPECTED_EXPO_PACKAGE_SPEC.replace(/^expo@/u, ""),
+    stylingSystem: stylingSystemFromFlag(styling),
+    sharedDesignDirection,
+    apps: appInputs,
+  });
+  const workspaceParent = parsed.mds.projectParentDir ?? process.cwd();
+  const workspacePath = path.resolve(workspaceParent, manifest.name);
+  const provisionalPlans: WorkspaceExpoExecutionPlan[] = [];
+  for (const app of manifest.apps.filter((entry) => entry.kind === "expo")) {
+    console.log();
+    log.info(`CESS intake for ${app.displayName} (${app.path})`);
+    const profile = await select<WorkspaceExpoProfile>({
+      message: `How much should MDS generate for ${app.displayName}?`,
+      options: [
+        {
+          value: "minimal",
+          label: "Minimal Expo app",
+          hint: "Workspace wiring and project memory without auth, onboarding, legal, or rich examples",
+        },
+        {
+          value: "cess",
+          label: "Full CESS intake",
+          hint: "Collect this app's complete product and architecture plan",
+        },
+      ],
+      initialValue: "cess",
+    }).then(handlePromptCancel);
+    const createExpoStackArgs = buildWorkspaceAppCreateArgs(
+      [...parsed.createExpoStackArgs, ...(navigationBySlug.get(app.id) ?? [])],
+      app.id,
+      packageManager,
+      styling,
+    );
+    const appParsed = parsedForWorkspaceApp(
+      parsed,
+      manifest,
+      app,
+      createExpoStackArgs,
+    );
+    const appPath = resolveWorkspacePath(workspacePath, app.path);
+    const onboardArgv: OnboardArgv = {
+      ...buildOnboardArgv(appPath, appParsed, false),
+      ...(profile === "minimal" ? minimalWorkspaceOnboardOverrides() : {}),
+      project: appPath,
+      appName: app.displayName,
+      overview: app.purpose,
+      generatorPackageManager: packageManager,
+    };
+    const onboardPlan =
+      profile === "minimal" || parsed.mds.yes
+        ? defaultOnboardPlan(onboardArgv, appPath)
+        : await collectOnboardPlan(onboardArgv, appPath);
+    app.platforms = onboardPlan.answers.targetPlatforms;
+    provisionalPlans.push({
+      app,
+      profile,
+      parsed: appParsed,
+      createExpoStackArgs,
+      onboardPlan,
+    });
+  }
+
+  const suggestedRoles = new Set<string>();
+  if (
+    provisionalPlans.filter(
+      ({ onboardPlan }) => onboardPlan.answers.authProvider !== "none",
+    ).length >= 2
+  ) {
+    suggestedRoles.add("hooks-state");
+  }
+  if (
+    provisionalPlans.filter(
+      ({ onboardPlan }) => onboardPlan.answers.customBackend,
+    ).length >= 2
+  ) {
+    suggestedRoles.add("sdk-client");
+  }
+  if (
+    provisionalPlans.filter(
+      ({ onboardPlan }) => onboardPlan.answers.dataStart === "supabase",
+    ).length >= 2
+  ) {
+    suggestedRoles.add("database-schema");
+  }
+  const optionalSharedPackages = await multiselect<
+    "hooks-state" | "sdk-client" | "database-schema"
+  >({
+    message: "Which additional responsibilities should be shared across apps?",
+    options: [
+      { value: "hooks-state", label: "Auth/state hooks" },
+      { value: "sdk-client", label: "API client and shared types" },
+      { value: "database-schema", label: "Database schema" },
+    ],
+    initialValues: [...suggestedRoles] as Array<
+      "hooks-state" | "sdk-client" | "database-schema"
+    >,
+    required: false,
+  }).then(handlePromptCancel);
+  manifest = createWorkspaceManifest({
+    displayName,
+    slug: workspaceSlug,
+    packageScope,
+    packageManager,
+    expoVersion: EXPECTED_EXPO_PACKAGE_SPEC.replace(/^expo@/u, ""),
+    stylingSystem: stylingSystemFromFlag(styling),
+    sharedDesignDirection,
+    apps: appInputs.map((input) => {
+      const planned = manifest.apps.find(
+        (app) => app.id === slugifyForPrompt(input.slug ?? input.displayName),
+      );
+      return {
+        ...input,
+        ...(planned?.platforms ? { platforms: planned.platforms } : {}),
+      };
+    }),
+    optionalSharedPackages,
+  });
+  const expoApps = provisionalPlans.map((plan) => ({
+    ...plan,
+    app: manifest.apps.find((app) => app.id === plan.app.id)!,
+  }));
+
+  console.log();
+  console.log(`Workspace: ${manifest.displayName} (${workspacePath})`);
+  for (const app of manifest.apps) {
+    console.log(
+      `- ${app.path}: ${app.displayName} [${app.kind}]${app.port ? ` port ${app.port}` : ""}`,
+    );
+  }
+  console.log(
+    `Shared packages: ${manifest.sharedPackages.map((item) => item.packageName).join(", ")}`,
+  );
+  const approved = await confirm({
+    message: "Generate this workspace now?",
+    initialValue: true,
+  }).then(handlePromptCancel);
+  if (!approved) {
+    cancel("Cancelled before generation. No workspace files were created.");
+    process.exit(0);
+  }
+  return { workspacePath, manifest, expoApps };
+}
+
+async function executeWorkspacePlan(
+  executionPlan: WorkspaceExecutionPlan,
+  rootParsed: ParsedArgs,
+): Promise<void> {
+  await assertWorkspaceTargetAvailable(
+    executionPlan.workspacePath,
+    rootParsed.mds.skipCreate,
+  );
+  console.log();
+  console.log(
+    `Creating ${executionPlan.manifest.displayName} at ${executionPlan.workspacePath}`,
+  );
+  const rootWrites = await scaffoldWorkspaceRoot(
+    executionPlan.workspacePath,
+    executionPlan.manifest,
+    {
+      force: rootParsed.mds.force,
+    },
+  );
+  for (const result of rootWrites) {
+    console.log(`${result.wrote ? "CREATED" : "KEPT"} ${result.filePath}`);
+  }
+
+  await mkdir(path.join(executionPlan.workspacePath, "apps"), {
+    recursive: true,
+  });
+  for (const appPlan of executionPlan.expoApps) {
+    console.log();
+    console.log(`Generating ${appPlan.app.displayName} in ${appPlan.app.path}`);
+    if (!rootParsed.mds.skipCreate) {
+      await runCreateExpoStack(
+        appPlan.createExpoStackArgs,
+        rootParsed.mds.createExpoStackBin,
+        path.join(executionPlan.workspacePath, "apps"),
+      );
+    }
+    await finishWorkspaceExpoApp(executionPlan, appPlan, rootParsed);
+  }
+
+  if (!rootParsed.mds.skipCreate) {
+    await initializeWorkspaceGit(executionPlan.workspacePath);
+  }
+  if (
+    !hasNoInstallFlag(rootParsed.createExpoStackArgs) &&
+    !rootParsed.mds.skipExpoFix
+  ) {
+    await runSharedProjectCommand(
+      buildWorkspaceInstallCommand(executionPlan.manifest.packageManager),
+      { cwd: executionPlan.workspacePath },
+    );
+    const expoApps = executionPlan.manifest.apps.filter(
+      (entry) => entry.kind === "expo",
+    );
+    const missingWindowsOxideBinding = (
+      await Promise.all(
+        expoApps.map((app) =>
+          resolveMissingWindowsTailwindOxideBinding(
+            resolveWorkspacePath(executionPlan.workspacePath, app.path),
+            executionPlan.workspacePath,
+          ),
+        ),
+      )
+    ).find(Boolean);
+    if (missingWindowsOxideBinding) {
+      await runSharedProjectCommand(
+        buildWorkspaceAddDevDependencyCommand(
+          executionPlan.manifest.packageManager,
+          missingWindowsOxideBinding,
+        ),
+        { cwd: executionPlan.workspacePath },
+      );
+    }
+    for (const app of expoApps) {
+      const appPath = resolveWorkspacePath(
+        executionPlan.workspacePath,
+        app.path,
+      );
+      await runSharedProjectCommand(
+        buildWorkspaceExpoInstallFixCommand(
+          executionPlan.manifest.packageManager,
+        ),
+        { cwd: appPath },
+      );
+      await runSharedProjectCommand(
+        buildPrettierWriteCommand(executionPlan.manifest.packageManager),
+        { cwd: appPath },
+      );
+    }
+    for (const app of expoApps) {
+      const appPath = resolveWorkspacePath(
+        executionPlan.workspacePath,
+        app.path,
+      );
+      try {
+        await runSharedProjectCommand(
+          buildWorkspaceExpoDoctorCommand(
+            executionPlan.manifest.packageManager,
+          ),
+          { cwd: appPath },
+        );
+      } catch (error) {
+        log.warning(
+          `Expo Doctor reported issues for ${app.path}. Workspace generation will finish; run a focused Doctor check for the complete report.`,
+        );
+        if (rootParsed.mds.force) throw error;
+      }
+    }
+  }
+  for (const app of executionPlan.manifest.apps.filter(
+    (entry) => entry.kind === "expo",
+  )) {
+    await assertExpectedExpoSdk(
+      resolveWorkspacePath(executionPlan.workspacePath, app.path),
+    );
+  }
+
+  console.log();
+  console.log("Workspace generation complete.");
+  printCopyableCommands("Run it", [
+    `cd ${quoteDisplayArg(executionPlan.workspacePath)}`,
+    buildRunScriptCommand(executionPlan.manifest.packageManager, "dev"),
+    `mds doctor ${quoteDisplayArg(executionPlan.workspacePath)} --ci`,
+  ]);
+  console.log("Generated apps:");
+  for (const app of executionPlan.manifest.apps)
+    console.log(
+      `- ${resolveWorkspacePath(executionPlan.workspacePath, app.path)}`,
+    );
+}
+
+async function finishWorkspaceExpoApp(
+  executionPlan: WorkspaceExecutionPlan,
+  appPlan: WorkspaceExpoExecutionPlan,
+  rootParsed: ParsedArgs,
+): Promise<void> {
+  const projectPath = resolveWorkspacePath(
+    executionPlan.workspacePath,
+    appPlan.app.path,
+  );
+  const { onboardPlan } = appPlan;
+  const movedAppDir =
+    onboardPlan.answers.appDirectory === "src"
+      ? await moveRootAppIntoSrc(projectPath)
+      : null;
+  const consolidatedSourceRepairs =
+    onboardPlan.answers.appDirectory === "src"
+      ? await consolidateRootSourceFolders(projectPath)
+      : [];
+  if (movedAppDir) await repairMovedSrcAppImports(projectPath);
+  const written = await scaffoldProjectMemory(
+    projectPath,
+    onboardPlan.answers,
+    {
+      force: rootParsed.mds.force,
+      guidelinesTemplate: onboardPlan.guidelinesTemplate,
+      guidelinesTemplatePath: onboardPlan.guidelinesTemplatePath,
+      manageUniwind:
+        rootParsed.mds.skipCreate ||
+        resolveGeneratorStylingSystem(onboardPlan.answers) === "uniwind",
+      richBoilerplate: onboardPlan.richBoilerplate,
+      supabaseLocalEnvironment: onboardPlan.supabaseLocalEnvironment,
+      workspaceRootPath: executionPlan.workspacePath,
+    },
+  );
+  if (movedAppDir) await repairMovedSrcAppImports(projectPath);
+  await repairExpoProjectIdentifiers(
+    projectPath,
+    appPlan.app.id,
+    onboardPlan.answers.targetPlatforms,
+  );
+  await repairExpoWebOutputForStylistLifecycle(
+    projectPath,
+    onboardPlan.answers.webOutput,
+  );
+  const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
+  await repairGeneratedTypeSupport(projectPath, {
+    needsNodeTypes: hasStylistSyncRoute,
+    needsUniwindTypes:
+      resolveGeneratorStylingSystem(onboardPlan.answers) === "uniwind",
+  });
+  await repairGeneratedNativeWindUiPicker(projectPath);
+  await repairGeneratedEslintConfig(projectPath);
+  const wiring = rootParsed.mds.skipCreate
+    ? []
+    : await wireGeneratedExpoApp(
+        executionPlan.workspacePath,
+        executionPlan.manifest,
+        appPlan.app,
+      );
+  for (const result of [...written, ...wiring]) {
+    console.log(`${result.wrote ? "CREATED" : "KEPT"} ${result.filePath}`);
+  }
+  for (const result of consolidatedSourceRepairs)
+    console.log(`UPDATED ${result}`);
+  if (onboardPlan.saveDefaults)
+    savePersonalOnboardDefaults(onboardPlan.answers);
+}
+
+export function minimalWorkspaceOnboardOverrides(): Partial<OnboardArgv> {
+  return {
+    rich: false,
+    advancedSetup: false,
+    createExpoComponents: false,
+    dataStart: "local",
+    authProvider: "none",
+    generatorAuthBackend: "none",
+    onboardingFlow: "none",
+    legalDocumentMode: "none",
+    onboardingCompletionMode: "enter-app",
+    legalUpdateGate: "none",
+    testToMain: false,
+    expoUi: false,
+    expoUiUniversal: false,
+    expoNativeTabs: false,
+    customBackend: false,
+    saveDefaults: false,
+  };
+}
+
+export function buildWorkspaceAppCreateArgs(
+  args: string[],
+  appId: string,
+  packageManager: WorkspacePackageManager,
+  stylingFlag: string,
+): string[] {
+  const managerFlags = new Set(["--npm", "--pnpm", "--yarn", "--bun"]);
+  const stylingFlags = new Set([
+    "--uniwind",
+    "--nativewind",
+    "--nativewindui",
+    "--tamagui",
+    "--restyle",
+  ]);
+  const filtered = args.filter(
+    (arg) => !managerFlags.has(arg) && !stylingFlags.has(arg),
+  );
+  const withProject = replaceProjectArg(filtered, appId);
+  const managerFlag = `--${packageManager}`;
+  return [
+    ...new Set([
+      ...withProject,
+      managerFlag,
+      ...(stylingFlag ? [stylingFlag] : []),
+      "--no-install",
+    ]),
+  ];
+}
+
+function parsedForWorkspaceApp(
+  parsed: ParsedArgs,
+  manifest: WorkspaceManifest,
+  app: WorkspaceApp,
+  createExpoStackArgs: string[],
+): ParsedArgs {
+  return {
+    ...parsed,
+    projectName: app.id,
+    createExpoStackArgs,
+    mds: {
+      ...parsed.mds,
+      projectShape: "single-expo-app",
+      projectParentDir: path.join(manifest.name, "apps"),
+      appName: app.displayName,
+    },
+  };
+}
+
+function inferWorkspaceStylingFlag(args: string[]): string {
+  return (
+    [
+      "--uniwind",
+      "--nativewind",
+      "--nativewindui",
+      "--tamagui",
+      "--restyle",
+    ].find((flag) => args.includes(flag)) ?? "--uniwind"
+  );
+}
+
+function stylingSystemFromFlag(flag: string): WorkspaceStylingSystem {
+  if (flag === "--nativewind") return "nativewind";
+  if (flag === "--nativewindui") return "nativewindui";
+  if (flag === "--tamagui") return "tamagui";
+  if (flag === "--restyle") return "restyle";
+  if (flag === "--uniwind") return "uniwind";
+  return "stylesheet";
+}
+
+function buildWorkspaceInstallCommand(
+  packageManager: WorkspacePackageManager,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["install", "--config.strict-dep-builds=false"],
+        display: "pnpm install --config.strict-dep-builds=false",
+      };
+    case "yarn":
+      return { command: "yarn", args: ["install"], display: "yarn install" };
+    case "bun":
+      return { command: "bun", args: ["install"], display: "bun install" };
+    case "npm":
+      return { command: "npm", args: ["install"], display: "npm install" };
+  }
+}
+
+function buildWorkspaceExpoInstallFixCommand(
+  packageManager: WorkspacePackageManager,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["exec", "expo", "install", "--fix"],
+        display: "pnpm exec expo install --fix",
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["expo", "install", "--fix"],
+        display: "yarn expo install --fix",
+      };
+    case "bun":
+      return {
+        command: "bunx",
+        args: ["expo", "install", "--fix"],
+        display: "bunx expo install --fix",
+      };
+    case "npm":
+      return {
+        command: "npx",
+        args: ["expo", "install", "--fix"],
+        display: "npx expo install --fix",
+      };
+  }
+}
+
+export function buildWorkspaceAddDevDependencyCommand(
+  packageManager: WorkspacePackageManager,
+  dependency: string,
+): CommandSpec {
+  switch (packageManager) {
+    case "pnpm":
+      return {
+        command: "pnpm",
+        args: ["add", "-Dw", dependency],
+        display: `pnpm add -Dw ${dependency}`,
+      };
+    case "yarn":
+      return {
+        command: "yarn",
+        args: ["add", "-D", "-W", dependency],
+        display: `yarn add -D -W ${dependency}`,
+      };
+    case "bun":
+      return {
+        command: "bun",
+        args: ["add", "-D", dependency],
+        display: `bun add -D ${dependency}`,
+      };
+    case "npm":
+      return {
+        command: "npm",
+        args: ["install", "--save-dev", dependency],
+        display: `npm install --save-dev ${dependency}`,
+      };
+  }
+}
+
+export function buildWorkspaceExpoDoctorCommand(
+  packageManager: WorkspacePackageManager,
+): CommandSpec {
+  return buildExpoDoctorCommand(packageManager);
+}
+
+async function initializeWorkspaceGit(workspacePath: string): Promise<void> {
+  try {
+    await access(path.join(workspacePath, ".git"));
+  } catch {
+    await runSharedProjectCommand(
+      { command: "git", args: ["init"], display: "git init" },
+      { cwd: workspacePath },
+    );
+  }
+}
+
+async function assertWorkspaceTargetAvailable(
+  workspacePath: string,
+  allowExisting: boolean,
+): Promise<void> {
+  try {
+    const entries = await readdir(workspacePath);
+    if (!allowExisting && entries.length > 0) {
+      throw new Error(
+        `Workspace target already exists and is not empty: ${workspacePath}`,
+      );
+    }
+  } catch (error) {
+    if ((error as { code?: string }).code !== "ENOENT") throw error;
+  }
+}
+
+async function promptInteger(
+  message: string,
+  fallback: number,
+  minimum: number,
+): Promise<number> {
+  const answer = await text({
+    message,
+    placeholder: String(fallback),
+    defaultValue: String(fallback),
+    validate: (value) => {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed >= minimum
+        ? undefined
+        : `Enter a whole number of at least ${minimum}.`;
+    },
+  });
+  return Number(handlePromptCancel(answer));
+}
+
+async function promptRequiredText(
+  message: string,
+  fallback: string,
+): Promise<string> {
+  const answer = await text({
+    message,
+    placeholder: fallback,
+    defaultValue: fallback,
+    validate: (value) =>
+      value.trim() ? undefined : "Enter a value or accept the visible default.",
+  });
+  return handlePromptCancel(answer).trim() || fallback;
+}
+
+async function promptOptionalText(
+  message: string,
+): Promise<string | undefined> {
+  const answer = await text({ message, placeholder: "Optional" });
+  const value = handlePromptCancel(answer).trim();
+  return value || undefined;
+}
+
+function handlePromptCancel<T>(value: T | symbol): T {
+  if (isCancel(value)) {
+    cancel("Cancelled. No generation was started.");
+    process.exit(0);
+  }
+  return value as T;
+}
+
+function slugifyForPrompt(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/['’]/gu, "")
+      .replace(/[^a-z0-9]+/gu, "-")
+      .replace(/^-+|-+$/gu, "") || "app"
+  );
+}
+
+function titleFromName(value: string): string {
+  return value
+    .split(/[-_\s]+/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function prepareCreateExpoStackArgsForWrapper(
   args: string[],
   _skipExpoFix = false,
 ): string[] {
-  return args;
+  // MDS owns Uniwind installation because the delegated generator does not
+  // expose it as a command-line styling option.
+  return args.map((arg) => (arg === "--uniwind" ? "--stylesheet" : arg));
 }
 
 export function parseArgs(args: string[]): ParsedArgs {
@@ -386,6 +1316,28 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === "--mds-yes" || arg === "--mds-non-interactive") {
       mds.yes = true;
+      continue;
+    }
+
+    if (arg.startsWith("--mds-project-shape=")) {
+      const value = arg.slice("--mds-project-shape=".length);
+      if (value === "single" || value === "single-expo-app")
+        mds.projectShape = "single-expo-app";
+      if (value === "workspace" || value === "multi-app-workspace")
+        mds.projectShape = "multi-app-workspace";
+      continue;
+    }
+
+    if (arg.startsWith("--mds-workspace-plan=")) {
+      mds.workspacePlanPath = arg.slice("--mds-workspace-plan=".length);
+      mds.projectShape = "multi-app-workspace";
+      continue;
+    }
+
+    if (arg === "--mds-workspace-plan" && args[index + 1]) {
+      mds.workspacePlanPath = args[index + 1];
+      mds.projectShape = "multi-app-workspace";
+      index += 1;
       continue;
     }
 
@@ -484,7 +1436,9 @@ export function parseArgs(args: string[]): ParsedArgs {
     }
 
     if (arg.startsWith("--mds-monetization-strategy=")) {
-      mds.monetizationStrategy = arg.slice("--mds-monetization-strategy=".length);
+      mds.monetizationStrategy = arg.slice(
+        "--mds-monetization-strategy=".length,
+      );
       continue;
     }
 
@@ -738,6 +1692,8 @@ export function renderHelpText(): string {
     "  create-expo-super-stack ../MyApp --expo-router --mds-yes",
     "",
     "Common mds options:",
+    "  --mds-project-shape=         single | workspace",
+    "  --mds-workspace-plan=<file>  Generate a confirmed workspace plan non-interactively",
     "  --mds-yes                     Run non-interactive onboarding defaults",
     "  --mds-save-defaults           Save onboarding answers as personal defaults",
     "  --mds-no-save-defaults        Do not save onboarding answers as personal defaults",
@@ -870,11 +1826,12 @@ async function runCreateExpoStack(
   cwd = process.cwd(),
 ): Promise<void> {
   const command = await resolveCreateExpoStackCommand(overrideBin);
+  const delegatedArgs = prepareCreateExpoStackArgsForWrapper(args);
   console.log(`Using create-expo-stack command: ${command.display}`);
   await new Promise<void>((resolve, reject) => {
     const spawnSpec = prepareCommandForSpawn({
       ...command,
-      args: [...command.args, ...args],
+      args: [...command.args, ...delegatedArgs],
     });
     const child = spawn(spawnSpec.command, spawnSpec.args, {
       cwd,
@@ -1234,12 +2191,19 @@ async function consolidateRootSourceFolders(
   return updatedPaths;
 }
 
-async function pathType(filePath: string): Promise<"directory" | "file" | null> {
+async function pathType(
+  filePath: string,
+): Promise<"directory" | "file" | null> {
   try {
     const stats = await lstat(filePath);
     return stats.isDirectory() ? "directory" : "file";
   } catch (error) {
-    if (typeof error === "object" && error && "code" in error && error.code === "ENOENT") {
+    if (
+      typeof error === "object" &&
+      error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
       return null;
     }
     throw error;
@@ -1264,7 +2228,13 @@ async function findDirectoryMergeConflicts(
     }
 
     if (entry.isDirectory() && targetType === "directory") {
-      conflicts.push(...(await findDirectoryMergeConflicts(sourcePath, targetPath, relativePath)));
+      conflicts.push(
+        ...(await findDirectoryMergeConflicts(
+          sourcePath,
+          targetPath,
+          relativePath,
+        )),
+      );
       continue;
     }
 
@@ -1638,7 +2608,9 @@ export async function repairGeneratedNativeWindUiPicker(
   return updatedPaths;
 }
 
-export async function repairGeneratedEslintConfig(projectPath: string): Promise<string[]> {
+export async function repairGeneratedEslintConfig(
+  projectPath: string,
+): Promise<string[]> {
   const eslintConfigPath = path.join(projectPath, "eslint.config.js");
   const raw = await readOptionalText(eslintConfigPath);
   if (!raw) {
@@ -1702,7 +2674,8 @@ export async function repairExpoProjectIdentifiers(
     changed = true;
   }
   const currentPlatforms = Array.isArray(expo.platforms) ? expo.platforms : [];
-  const normalizedTargetPlatforms = normalizeExpoConfigPlatforms(targetPlatforms);
+  const normalizedTargetPlatforms =
+    normalizeExpoConfigPlatforms(targetPlatforms);
   const hasStylistSyncRoute = await hasStylistSyncApiRoute(projectPath);
   const desiredPlatforms =
     hasStylistSyncRoute && normalizedTargetPlatforms.length > 0
@@ -1833,7 +2806,9 @@ function normalizeExpoConfigPlatforms(
   return Array.from(
     new Set(
       targetPlatforms
-        .map((platform) => normalizeExpoConfigPlatform(readString(platform) ?? platform))
+        .map((platform) =>
+          normalizeExpoConfigPlatform(readString(platform) ?? platform),
+        )
         .filter(
           (platform): platform is "web" | "ios" | "android" =>
             platform === "web" || platform === "ios" || platform === "android",
@@ -1848,7 +2823,11 @@ function normalizeExpoConfigPlatform(
   if (platform === "web" || platform === "ios" || platform === "android") {
     return platform;
   }
-  if (platform === "apple-tv" || platform === "appletv" || platform === "tvos") {
+  if (
+    platform === "apple-tv" ||
+    platform === "appletv" ||
+    platform === "tvos"
+  ) {
     return "ios";
   }
   if (platform === "android-tv" || platform === "androidtv") {
@@ -1920,7 +2899,10 @@ export async function repairExpoWebOutputForStylistLifecycle(
   return [appJsonPath];
 }
 
-function ensurePlatformIncluded<T extends string>(platforms: T[], platform: T): T[] {
+function ensurePlatformIncluded<T extends string>(
+  platforms: T[],
+  platform: T,
+): T[] {
   return platforms.includes(platform) ? platforms : [...platforms, platform];
 }
 
@@ -2073,7 +3055,13 @@ export function buildExpoLatestSdkCommand(
     case "pnpm":
       return {
         command: "pnpm",
-        args: ["--ignore-workspace", "exec", "expo", "install", EXPECTED_EXPO_PACKAGE_SPEC],
+        args: [
+          "--ignore-workspace",
+          "exec",
+          "expo",
+          "install",
+          EXPECTED_EXPO_PACKAGE_SPEC,
+        ],
         display: `pnpm --ignore-workspace exec expo install ${EXPECTED_EXPO_PACKAGE_SPEC}`,
         env: { PNPM_CONFIG_STRICT_DEP_BUILDS: "false" },
       };
@@ -2145,7 +3133,9 @@ function isPinnedExpoSdkRange(version: string): boolean {
   return trimmed.startsWith("~") || /^\d/u.test(trimmed);
 }
 
-export async function assertExpectedExpoSdk(projectPath: string): Promise<void> {
+export async function assertExpectedExpoSdk(
+  projectPath: string,
+): Promise<void> {
   const packageJson = await readJson(path.join(projectPath, "package.json"));
   const dependencies = isRecord(packageJson.dependencies)
     ? packageJson.dependencies
@@ -2337,6 +3327,7 @@ export function resolveWindowsTailwindOxidePackage({
 
 export async function resolveMissingWindowsTailwindOxideBinding(
   projectPath: string,
+  dependencyRootPath = projectPath,
 ): Promise<string | undefined> {
   const packageName = resolveWindowsTailwindOxidePackage();
   if (!packageName) {
@@ -2357,12 +3348,14 @@ export async function resolveMissingWindowsTailwindOxideBinding(
     return undefined;
   }
 
-  if (await pathExists(path.join(projectPath, "node_modules", packageName))) {
+  if (
+    await pathExists(path.join(dependencyRootPath, "node_modules", packageName))
+  ) {
     return undefined;
   }
 
   const oxidePackageJsonPath = path.join(
-    projectPath,
+    dependencyRootPath,
     "node_modules",
     "@tailwindcss",
     "oxide",
@@ -2471,7 +3464,9 @@ function printCopyableCommands(title: string, commands: string[]): void {
 }
 
 function renderCommandBox(commands: string[]): string {
-  const visibleCommands = commands.filter((command) => command.trim().length > 0);
+  const visibleCommands = commands.filter(
+    (command) => command.trim().length > 0,
+  );
   if (visibleCommands.length === 0) {
     return "";
   }
@@ -2502,7 +3497,10 @@ function buildOnboardArgv(
   parsed: ParsedArgs,
   easSelected?: boolean,
 ): OnboardArgv {
-  const generatorChoices = inferGeneratorChoices(parsed.createExpoStackArgs, easSelected);
+  const generatorChoices = inferGeneratorChoices(
+    parsed.createExpoStackArgs,
+    easSelected,
+  );
 
   return {
     project: projectPath,
@@ -2585,7 +3583,9 @@ export function inferGeneratorChoices(
         : hasFlag("--bun")
           ? "bun"
           : "npm",
-    navigationLibrary: hasFlag("--react-navigation") ? "react-navigation" : "expo-router",
+    navigationLibrary: hasFlag("--react-navigation")
+      ? "react-navigation"
+      : "expo-router",
     reactNavigationLayout: hasFlag("--tabs")
       ? "tabs"
       : hasFlag("--drawer+tabs")

@@ -172,6 +172,7 @@ export interface ProjectScaffoldOptions {
   manageUniwind?: boolean;
   richBoilerplate?: boolean;
   supabaseLocalEnvironment?: SupabaseLocalEnvironment;
+  workspaceRootPath?: string;
 }
 
 export interface WriteResult {
@@ -193,6 +194,7 @@ interface PackageJson {
 interface RichBoilerplateOptions {
   manageUniwind: boolean;
   supabaseLocalEnvironment?: SupabaseLocalEnvironment;
+  workspaceRootPath?: string;
 }
 
 let activeScaffoldGuard: { projectPath: string; inventory: EjectionInventory | null } | null = null;
@@ -719,6 +721,9 @@ export async function scaffoldProjectMemory(
   const infoPath = path.join(projectDir, 'info.md');
   const todoPath = path.join(projectDir, 'todo.md');
   const stylePath = path.join(projectDir, 'style.md');
+  const isWorkspaceApp =
+    options.workspaceRootPath !== undefined &&
+    path.resolve(options.workspaceRootPath) !== path.resolve(projectPath);
   const existingInfo = await readOptionalText(infoPath);
   const existingStyle = await readOptionalText(stylePath);
   const todoAlreadyExisted = await pathExists(todoPath);
@@ -728,7 +733,12 @@ export async function scaffoldProjectMemory(
     // TODO is the human-owned roadmap ledger. Even --force must not replace an
     // existing ledger; a new project is the only initialization case.
     writeIfAllowed(todoPath, renderTodo(answers), false),
-    writeProjectMemoryFile(stylePath, renderStyle(answers, existingStyle), force, true),
+    writeProjectMemoryFile(
+      stylePath,
+      isWorkspaceApp ? renderWorkspaceAppStyle(answers, existingStyle) : renderStyle(answers, existingStyle),
+      force,
+      true
+    ),
     writeIfAllowed(path.join(projectDir, 'guidelines.md'), guidelines, force),
     writeIfAllowed(path.join(projectPath, 'AGENTS.md'), renderAgentInstructions(answers), force),
     writeIfAllowed(path.join(projectPath, 'CLAUDE.md'), renderClaudeMd(answers), force),
@@ -768,6 +778,7 @@ export async function scaffoldProjectMemory(
       ...(await scaffoldRichBoilerplate(projectPath, answers, force, {
         manageUniwind: options.manageUniwind ?? true,
         supabaseLocalEnvironment: options.supabaseLocalEnvironment,
+        workspaceRootPath: options.workspaceRootPath,
       }))
     );
   }
@@ -955,6 +966,8 @@ async function scaffoldRichBoilerplateInner(
   options: RichBoilerplateOptions,
   results: WriteResult[]
 ): Promise<WriteResult[]> {
+  const workspaceRootPath = options.workspaceRootPath ?? projectPath;
+  const isWorkspaceApp = path.resolve(workspaceRootPath) !== path.resolve(projectPath);
   const stylingSystem = resolveGeneratorStylingSystem(answers, options);
   const includeNativeWindUiExposition = stylingSystem === 'nativewindui';
   const needsNativeWindMetroPatch =
@@ -1081,11 +1094,15 @@ async function scaffoldRichBoilerplateInner(
   await mkdir(path.join(projectPath, 'scripts'), { recursive: true });
 
   results.push(
-    await writeIfAllowed(
-      path.join(projectPath, 'project', 'theme.json'),
-      `${JSON.stringify(DEFAULT_STYLIST_THEME, null, 2)}\n`,
-      force
-    ),
+    ...(!isWorkspaceApp
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'project', 'theme.json'),
+            `${JSON.stringify(DEFAULT_STYLIST_THEME, null, 2)}\n`,
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'),
       requireLibraryTextAsset(
@@ -1587,18 +1604,18 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
-  if (answers.testToMainSafeguards) {
-    await mkdir(path.join(projectPath, '.github', 'workflows'), {
+  if (answers.testToMainSafeguards && !isWorkspaceApp) {
+    await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
       recursive: true,
     });
     results.push(
       await writeIfAllowed(
-        path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'),
+        path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
         renderGitHubPrChecksWorkflow(),
         force
       ),
       await writeIfAllowed(
-        path.join(projectPath, 'project', 'release-flow.md'),
+        path.join(workspaceRootPath, 'project', 'release-flow.md'),
         renderReleaseFlow(answers),
         force
       )
@@ -1783,6 +1800,7 @@ export function renderInfo(
     '',
     `- TypeScript: ${formatYesNo(answers.generatorScriptLanguage !== 'javascript')}`,
     `- Package Manager: ${answers.generatorPackageManager ?? 'npm'}`,
+    '- Project shape: single Expo app',
     `- Navigation: ${formatGeneratorNavigation(answers.generatorNavigationLibrary)}`,
     `- Type of Navigation: ${formatGeneratorNavigationType(answers.generatorReactNavigationLayout)}`,
     `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,
@@ -2102,7 +2120,34 @@ export function renderGuidelines(answers: OnboardAnswers): string {
       : []),
     `- Expo UI Universal components preference captured during onboarding: ${formatBoolean(answers.usesExpoUiUniversalComponents)}.`,
     '- Honor the Component Strategy section in project/info.md and do not start Phase 1 until Decision is confirmed.',
-    '- Treat monorepo scaffolding as future work until the single-app MVP is stable.',
+    '- Treat this project as one Expo app. Shared workspace rules, when present, are defined by the parent workspace memory.',
+    '',
+  ].join('\n');
+}
+
+export function renderWorkspaceAppStyle(
+  answers: OnboardAnswers,
+  existingStyle?: string | null
+): string {
+  const importedNotes = renderImportedNotes(existingStyle, STYLE_HEADINGS);
+  return [
+    `# ${answers.appName} Style Overrides`,
+    '',
+    '## Shared Foundation',
+    '',
+    '- Read the workspace root project/style.md and project/theme.json first.',
+    '- Import runtime shared tokens and primitives from the workspace UI package.',
+    '- Do not copy the shared token set into this file.',
+    '',
+    '## Intentional Overrides',
+    '',
+    '# TodoForContext(optional): Record only the colors, typography, layout, motion, or component decisions that intentionally differ for this app. Delete this marker when there are no overrides.',
+    '',
+    '## App-Specific References',
+    '',
+    '# TodoForContext(optional): Add screenshots, platform references, or brand requirements unique to this app.',
+    '',
+    ...importedNotes,
     '',
   ].join('\n');
 }

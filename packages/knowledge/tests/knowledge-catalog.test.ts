@@ -99,6 +99,11 @@ describe('knowledge catalog expansion', () => {
     expect(prompt?.content).toContain('create_expo_super_stack_intake_step');
     expect(prompt?.content).toContain('create_expo_super_stack_generate');
     expect(prompt?.content).toContain('mds_runtime_versions');
+    expect(prompt?.content).toContain('Before asking for an app name');
+    expect(prompt?.content).toContain('Choose `minimal` or `cess` for every Expo app');
+    expect(prompt?.content).toContain("each Expo app's profile");
+    expect(prompt?.content).toContain('projectShape: "multi-app-workspace"');
+    expect(prompt?.content).toContain('Do not call a generation tool while inventory or app answers are incomplete');
     expect(prompt?.content).toContain('Generating now. This typically takes 2-5 minutes.');
     expect(prompt?.content).toContain("While we wait, let's shout out and recognize how this is working.");
     expect(prompt?.content).toContain('Do not fall back to `--mds-yes`');

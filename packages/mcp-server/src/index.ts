@@ -1,9 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import { buildContinueSessionBrief } from '@mr.dj2u/cli/continue';
 import { applyLibraryAdd, inspectLibraryProject, planLibraryAdd } from '@mr.dj2u/cli/library';
 import { renderInfo } from '@mr.dj2u/cli/project-memory';
 import { generateProjectRoadmap } from '@mr.dj2u/cli/roadmap';
+import { validateWorkspaceManifest } from '@mr.dj2u/cli/workspace';
 import {
   getPromptSpec,
   getSkill,
@@ -351,6 +353,8 @@ export function listTools(): MCPTool[] {
           appName: { type: 'string' },
           answers: { type: 'object', additionalProperties: true },
           canonicalProjectInfoMarkdown: { type: 'string' },
+          projectShape: { type: 'string', enum: ['single-expo-app', 'multi-app-workspace'] },
+          workspacePlan: { type: 'object', additionalProperties: true },
           confirmed: { type: 'boolean' },
         },
         required: ['confirmed'],
@@ -860,16 +864,20 @@ function registerTools(server: McpServer): void {
         appName: z.string().optional(),
         answers: z.record(z.string(), z.unknown()).optional(),
         canonicalProjectInfoMarkdown: z.string().optional(),
+        projectShape: z.enum(['single-expo-app', 'multi-app-workspace']).optional(),
+        workspacePlan: z.record(z.string(), z.unknown()).optional(),
         confirmed: z.boolean(),
       },
     },
-    async ({ parentDir, appName, answers, canonicalProjectInfoMarkdown, confirmed }) =>
+    async ({ parentDir, appName, answers, canonicalProjectInfoMarkdown, projectShape, workspacePlan, confirmed }) =>
       toolJson(
         await generateCreateExpoSuperStack({
           parentDir,
           appName,
           answers,
           canonicalProjectInfoMarkdown,
+          projectShape,
+          workspacePlan,
           confirmed,
         })
       )
@@ -2164,6 +2172,9 @@ async function generateCreateExpoSuperStack(input: Record<string, unknown>): Pro
   stdoutTail: string;
   stderrTail: string;
 }> {
+  if (input.projectShape === 'multi-app-workspace' || readRecord(input.workspacePlan)) {
+    return generateCreateExpoSuperStackWorkspace(input);
+  }
   const parentDir = readString(input.parentDir);
   const appName = readString(input.appName);
   const answers = readRecord(input.answers);
@@ -2232,6 +2243,76 @@ async function generateCreateExpoSuperStack(input: Record<string, unknown>): Pro
     stdoutTail: tailText(result.stdout, 60),
     stderrTail: tailText(result.stderr, 40),
   };
+}
+
+async function generateCreateExpoSuperStackWorkspace(
+  input: Record<string, unknown>
+): Promise<{
+  status: 'generated';
+  projectPath: string;
+  summaryLines: string[];
+  runtime: ReturnType<typeof getMdsRuntimeVersions>;
+  roadmap: Awaited<ReturnType<typeof generateProjectRoadmap>>;
+  stdoutTail: string;
+  stderrTail: string;
+}> {
+  if (input.confirmed !== true) {
+    throw new Error(
+      'create_expo_super_stack_generate requires confirmed=true after the user explicitly approves the workspace summary.'
+    );
+  }
+  const parentDir = readString(input.parentDir);
+  const workspacePlan = readRecord(input.workspacePlan);
+  const manifest = workspacePlan ? readRecord(workspacePlan.manifest) : undefined;
+  if (!parentDir || !workspacePlan || !manifest) {
+    throw new Error('Workspace generation requires parentDir and workspacePlan.manifest.');
+  }
+  validateWorkspaceManifest(manifest);
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'mds-workspace-plan-'));
+  const planPath = path.join(tempDir, 'workspace-plan.json');
+  try {
+    await writeFile(planPath, `${JSON.stringify(workspacePlan, null, 2)}\n`, 'utf8');
+    const invocation = resolveSuperStackInvocationSpec();
+    const commandArgs = [
+      ...invocation.args,
+      '--mds-project-shape=workspace',
+      `--mds-workspace-plan=${planPath}`,
+      '--mds-yes',
+    ];
+    const result = await runCommandCapture(invocation.command, commandArgs, path.resolve(parentDir));
+    const projectPath = path.resolve(parentDir, manifest.name as string);
+    const requiredArtifacts = [
+      path.join(projectPath, 'project', 'workspace.json'),
+      path.join(projectPath, 'project', 'info.md'),
+      ...((manifest.apps as Array<{ path: string }>).flatMap((app) => [
+        path.join(projectPath, app.path, 'project', 'info.md'),
+        path.join(projectPath, app.path, 'project', 'todo.md'),
+      ])),
+    ];
+    const missingArtifacts = requiredArtifacts.filter((filePath) => !existsSync(filePath));
+    if (missingArtifacts.length > 0) {
+      throw new Error(
+        `create-expo-super-stack did not finish workspace scaffolding for ${projectPath}. Missing: ${missingArtifacts.join(', ')}.`
+      );
+    }
+    const roadmap = await generateProjectRoadmap(projectPath, { write: false, preserveStatus: true });
+    return {
+      status: 'generated',
+      projectPath,
+      summaryLines: [
+        `workspace: ${manifest.displayName as string} (${manifest.name as string})`,
+        ...((manifest.apps as Array<{ displayName: string; path: string; kind: string }>).map(
+          (app) => `${app.displayName}: ${app.path} [${app.kind}]`
+        )),
+      ],
+      runtime: getMdsRuntimeVersions(),
+      roadmap,
+      stdoutTail: tailText(result.stdout, 60),
+      stderrTail: tailText(result.stderr, 40),
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 function buildCanonicalProjectInfoMarkdown(input: {

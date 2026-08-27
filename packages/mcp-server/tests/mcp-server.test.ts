@@ -126,6 +126,11 @@ describe('mds MCP helpers', () => {
     expect(tools.some((tool) => tool.name === 'create_expo_super_stack_generate')).toBe(true);
     expect(tools.some((tool) => tool.name === 'generate_project_roadmap')).toBe(true);
     expect(tools.some((tool) => tool.name === 'mds_runtime_versions')).toBe(true);
+    const generateTool = tools.find((tool) => tool.name === 'create_expo_super_stack_generate') as
+      | { inputSchema?: { properties?: Record<string, unknown> } }
+      | undefined;
+    expect(generateTool?.inputSchema?.properties).toHaveProperty('projectShape');
+    expect(generateTool?.inputSchema?.properties).toHaveProperty('workspacePlan');
 
     const result = (await executeTool('list_skills', { query: 'deployment' })) as Array<{
       id: string;
@@ -881,6 +886,44 @@ describe('mds MCP helpers', () => {
         },
       })
     ).rejects.toThrow('Unsupported Create Expo Super Stack answer keys');
+  });
+
+  it('validates a workspace plan before invoking the shared generator', async () => {
+    await expect(
+      executeTool('create_expo_super_stack_generate', {
+        parentDir: 'F:/ReactNativeApps',
+        projectShape: 'multi-app-workspace',
+        confirmed: true,
+        workspacePlan: {
+          manifest: {
+            schemaVersion: 1,
+            name: 'incomplete-suite',
+            displayName: 'Incomplete Suite',
+            packageScope: '@incomplete',
+            packageManager: 'pnpm',
+            expoVersion: '~56.0.19',
+            stylingSystem: 'uniwind',
+            sharedDesignDirection: 'One shared visual language.',
+            taskRunner: 'turbo',
+            apps: [
+              {
+                id: 'app',
+                displayName: 'App',
+                packageName: '@incomplete/app',
+                path: 'apps/app',
+                kind: 'expo',
+                purpose: 'The only app.',
+                port: 8081,
+              },
+            ],
+            sharedPackages: [
+              { name: 'config', packageName: '@incomplete/config', path: 'packages/config', role: 'config' },
+              { name: 'ui', packageName: '@incomplete/ui', path: 'packages/ui', role: 'ui-theme' },
+            ],
+          },
+        },
+      })
+    ).rejects.toThrow('at least two registered apps');
   });
 
   it('returns shared intake-step guidance and runtime versions through MCP tools', async () => {
