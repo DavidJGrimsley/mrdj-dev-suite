@@ -162,6 +162,7 @@ export interface WriteResult {
 
 export interface RenderInfoOptions {
   preserveImportedNotes?: boolean;
+  workspaceApp?: boolean;
 }
 
 interface PackageJson {
@@ -597,7 +598,12 @@ export async function scaffoldProjectMemory(
   const existingStyle = await readOptionalText(stylePath);
   const guidelines = await resolveGuidelines(answers, options);
   const results = await Promise.all([
-    writeProjectMemoryFile(infoPath, renderInfo(projectPath, answers, existingInfo), force, true),
+    writeProjectMemoryFile(
+      infoPath,
+      renderInfo(projectPath, answers, existingInfo, { workspaceApp: isWorkspaceApp }),
+      force,
+      true
+    ),
     writeIfAllowed(todoPath, renderTodo(answers), force),
     writeProjectMemoryFile(
       stylePath,
@@ -1613,7 +1619,7 @@ export function renderInfo(
     '',
     `- TypeScript: ${formatYesNo(answers.generatorScriptLanguage !== 'javascript')}`,
     `- Package Manager: ${answers.generatorPackageManager ?? 'npm'}`,
-    '- Project shape: single Expo app',
+    `- Project shape: ${options.workspaceApp ? 'Expo app in a multi-app workspace' : 'single Expo app'}`,
     `- Navigation: ${formatGeneratorNavigation(answers.generatorNavigationLibrary)}`,
     `- Type of Navigation: ${formatGeneratorNavigationType(answers.generatorReactNavigationLayout)}`,
     `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,

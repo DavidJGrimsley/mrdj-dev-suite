@@ -1243,6 +1243,9 @@ function renderWorkspaceReadme(manifest: WorkspaceManifest): string {
 }
 
 function renderWorkspaceCiWorkflow(manifest: WorkspaceManifest): string {
+  const cache = ['npm', 'pnpm', 'yarn'].includes(manifest.packageManager)
+    ? `\n          cache: ${manifest.packageManager}`
+    : '';
   const install =
     manifest.packageManager === "pnpm"
       ? "pnpm install --frozen-lockfile"
@@ -1255,7 +1258,7 @@ function renderWorkspaceCiWorkflow(manifest: WorkspaceManifest): string {
     manifest.packageManager === "npm"
       ? `npm run ${script}`
       : `${manifest.packageManager} ${script}`;
-  return `name: MDS workspace checks\n\non:\n  pull_request:\n  push:\n    branches: [main, test]\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: ${manifest.packageManager}\n      - run: corepack enable\n      - run: ${install}\n      - run: ${run("lint")}\n      - run: ${run("typecheck")}\n      - run: ${run("test")}\n      - run: ${run("build")}\n`;
+  return `name: MDS workspace checks\n\non:\n  pull_request:\n  push:\n    branches: [main, test]\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20${cache}\n      - run: corepack enable\n      - run: ${install}\n      - run: ${run("lint")}\n      - run: ${run("typecheck")}\n      - run: ${run("test")}\n      - run: ${run("build")}\n`;
 }
 
 function renderWorkspaceReleaseFlow(manifest: WorkspaceManifest): string {

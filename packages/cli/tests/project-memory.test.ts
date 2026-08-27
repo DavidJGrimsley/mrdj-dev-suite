@@ -145,6 +145,12 @@ describe('renderInfo project shape', () => {
 
     expect(rendered).toContain('- Project shape: single Expo app');
   });
+
+  it('identifies an app generated inside a workspace', () => {
+    const rendered = renderInfo('/tmp/app', answers, undefined, { workspaceApp: true });
+
+    expect(rendered).toContain('- Project shape: Expo app in a multi-app workspace');
+  });
 });
 
 describe('ensureGeneratedSystemAppearance', () => {
