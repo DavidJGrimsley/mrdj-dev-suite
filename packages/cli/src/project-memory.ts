@@ -24,6 +24,16 @@ import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
 import type { ComponentStrategy, ComponentStrategyDecision } from './component-strategy.js';
+import {
+  MDS_REACT_DOCTOR_SCRIPT_NAME,
+  REACT_DOCTOR_PACKAGE,
+  REACT_DOCTOR_SCRIPT_NAME,
+  REACT_DOCTOR_VERSION,
+  buildDirectReactDoctorPackageScript,
+  buildReactDoctorPackageScript,
+  ensureReactDoctorConfig,
+  ensureReactDoctorReadmeSection,
+} from './react-doctor.js';
 
 export {
   COMPONENT_STRATEGY_HEADING,
@@ -490,6 +500,10 @@ const ZUSTAND_DEPENDENCIES = {
 
 const STYLIST_DEV_DEPENDENCIES = {
   '@types/node': '^25.9.1',
+} as const;
+
+const REACT_DOCTOR_DEV_DEPENDENCIES = {
+  [REACT_DOCTOR_PACKAGE]: REACT_DOCTOR_VERSION,
 } as const;
 
 const EXPO_UI_DEPENDENCIES = {
@@ -1452,6 +1466,8 @@ async function scaffoldRichBoilerplateInner(
   }
 
   await ensurePackageJson(projectPath, answers, options.manageUniwind);
+  results.push(await ensureReactDoctorConfig(projectPath, force));
+  results.push(await ensureReactDoctorReadmeSection(projectPath));
   if (shouldManageUniwind) {
     await ensureUniwindGlobalCss(projectPath);
     await ensureUniwindMetroConfig(projectPath);
@@ -1909,6 +1925,8 @@ export function renderGuidelines(answers: OnboardAnswers): string {
     '- If the user says `mds continue` or `MDS Continue`, first run the MDS Continue command from the app root and use its session brief to propose a plan. Do not jump straight into intake or file edits.',
     '- After adding a package, immediately run the project package manager. Prefer `mds library add` for MDS Library catalog items. Do not treat the task as complete if install failed. MDS cannot install packages added outside MDS-owned flows.',
     '- Run `mds doctor --ci` before pushing.',
+    '- Run `mds run react-doctor` (or `npm run react-doctor`) for React/RN quality scans. It is separate from Expo startup.',
+    '- Disable React Doctor with `MDS_REACT_DOCTOR=0` or `"mds": { "reactDoctor": false }` in package.json.',
     '- Use `mds clear-expo-start` when Metro or server ports get wedged.',
     ...(answers.testToMainSafeguards
       ? [
@@ -1983,6 +2001,7 @@ export function renderClaudeMd(answers: OnboardAnswers): string {
     '## Before every git commit',
     '',
     `Run \`npm run mds:doctor\` (or \`${MDS_NPX_COMMAND} doctor --fast .\`) before committing. Fix all errors first; warnings are OK to proceed with.`,
+    `Optionally run \`npm run react-doctor\` or \`${MDS_NPX_COMMAND} run react-doctor\` for React/RN quality scans (not part of Expo startup).`,
     '',
     '## Before moving to the next phase',
     '',
@@ -2089,6 +2108,10 @@ async function ensurePackageJson(
     'mds:continue': packageJson.scripts?.['mds:continue'] ?? `${MDS_NPX_COMMAND} continue`,
     'mds:doctor': packageJson.scripts?.['mds:doctor'] ?? `${MDS_NPX_COMMAND} doctor`,
     'mds:doctor:ci': packageJson.scripts?.['mds:doctor:ci'] ?? `${MDS_NPX_COMMAND} doctor --ci`,
+    [REACT_DOCTOR_SCRIPT_NAME]:
+      packageJson.scripts?.[REACT_DOCTOR_SCRIPT_NAME] ?? buildDirectReactDoctorPackageScript(),
+    [MDS_REACT_DOCTOR_SCRIPT_NAME]:
+      packageJson.scripts?.[MDS_REACT_DOCTOR_SCRIPT_NAME] ?? buildReactDoctorPackageScript(),
     'mds:stylist:sync':
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
     'stylist:sync:android':
@@ -2232,8 +2255,11 @@ async function ensurePackageJson(
 
   packageJson.devDependencies = {
     ...STYLIST_DEV_DEPENDENCIES,
+    ...REACT_DOCTOR_DEV_DEPENDENCIES,
     ...packageJson.devDependencies,
     '@mr.dj2u/cli': packageJson.devDependencies?.['@mr.dj2u/cli'] ?? `^${MDS_CLI_VERSION}`,
+    [REACT_DOCTOR_PACKAGE]:
+      packageJson.devDependencies?.[REACT_DOCTOR_PACKAGE] ?? REACT_DOCTOR_VERSION,
   };
 
   if (usesCssUtilityStyling(stylingSystem)) {

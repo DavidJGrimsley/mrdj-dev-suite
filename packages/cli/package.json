@@ -48,6 +48,10 @@
     "./package-install": {
       "import": "./dist/package-install.js",
       "types": "./dist/package-install.d.ts"
+    },
+    "./react-doctor": {
+      "import": "./dist/react-doctor.js",
+      "types": "./dist/react-doctor.d.ts"
     }
   },
   "main": "./dist/cli.js",
