@@ -4,6 +4,13 @@ export {
   scanFileAnimationPerformance,
 } from './animation-performance.js';
 export { checkEnvHygiene, scanFileEnvHygiene } from './env-hygiene.js';
+export {
+  checkCredentialExposure,
+  checkRuntimeSecurity,
+  checkSSRSafety,
+  checkServerImports,
+  scanFileRuntimeSecurity,
+} from './runtime-security.js';
 export { runEslintCheck } from './eslint.js';
 export { checkExpoConfiguration } from './expo-config.js';
 export { runExpoDoctorCheck } from './expo-doctor.js';

@@ -94,6 +94,16 @@ const DOCTOR_TOPICS = [
     aliases: ['environment hygiene', 'secrets', 'expo public'],
   },
   {
+    id: 'runtime security',
+    name: 'Runtime Security',
+    description:
+      'Checks that server-only modules, private process.env access, and Expo config credentials do not leak into the client bundle.',
+    nextStep:
+      'Move database clients, Express, and secrets behind API routes or server modules, and keep client env access on EXPO_PUBLIC_* variables.',
+    relatedResources: ['ssr-safety', 'expo-ssr-safety', 'env-hygiene', 'env-vars'],
+    aliases: ['runtime-security', 'server imports', 'server-only imports', 'client bundle security'],
+  },
+  {
     id: 'app architecture',
     name: 'App Architecture',
     description: 'Checks Expo Router route files for oversized screens and business/data logic in app/.',

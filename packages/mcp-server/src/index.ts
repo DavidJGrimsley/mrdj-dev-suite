@@ -1661,13 +1661,25 @@ function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
     resources.add('mds://guides/animation-performance');
     resources.add('mds://patterns/animation-motion-selection');
   }
-  if (text.includes('env') || text.includes('secret') || text.includes('public')) {
+  if (text.includes('env') || text.includes('secret') || text.includes('public') || text.includes('credential')) {
     resources.add('mds://rules/env-hygiene');
     resources.add('mds://skills/env-vars');
   }
-  if (text.includes('ssr') || text.includes('window') || text.includes('document') || text.includes('localstorage')) {
+  if (
+    text.includes('ssr') ||
+    text.includes('window') ||
+    text.includes('document') ||
+    text.includes('localstorage') ||
+    text.includes('runtime security') ||
+    text.includes('server-only') ||
+    text.includes('localhost')
+  ) {
     resources.add('mds://rules/ssr-safety');
     resources.add('mds://skills/expo-ssr-safety');
+  }
+  if (text.includes('runtime security')) {
+    resources.add('mds://rules/env-hygiene');
+    resources.add('mds://skills/env-vars');
   }
   if (text.includes('seo') || text.includes('metadata') || text.includes('canonical')) {
     resources.add('mds://rules/seo-metadata');
