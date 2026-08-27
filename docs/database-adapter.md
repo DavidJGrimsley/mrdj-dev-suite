@@ -16,7 +16,7 @@ import { getAdapter } from '../db';
 
 const db = getAdapter();
 const comments = await db.query({
-  table: 'mds_guestbook',
+  table: 'mds_demo_guestbook_comments',
   orderBy: { column: 'created_at', ascending: false },
 });
 ```

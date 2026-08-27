@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DatabaseConflictError,
+  DatabaseAdapterError,
   DatabaseUnsupportedError,
 } from "../assets/mds/src/db/adapter.ts";
+import { createFirebaseDatabaseAdapter } from "../assets/mds/src/db/firebase.ts";
 import {
   createSupabaseDatabaseAdapter,
   type SupabaseDatabaseClient,
@@ -16,6 +18,13 @@ type TestSchema = {
     display_name: string;
     message: string;
     created_at: string;
+  };
+};
+
+type FirebaseSchema = {
+  notes: {
+    id: string;
+    title: string;
   };
 };
 
@@ -192,5 +201,30 @@ describe("database adapter contract assets", () => {
       }),
     ]);
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the Firebase skeleton contract honest about unsupported capabilities", async () => {
+    const adapter = createFirebaseDatabaseAdapter<FirebaseSchema>(() => ({}));
+
+    expect(adapter.capabilities).toEqual({
+      transactions: false,
+      subscriptions: false,
+      rls: false,
+      authIntegration: false,
+    });
+
+    await expect(adapter.query({ table: "notes" })).rejects.toBeInstanceOf(DatabaseUnsupportedError);
+    await expect(adapter.mutate({ table: "notes", type: "delete" })).rejects.toBeInstanceOf(
+      DatabaseUnsupportedError,
+    );
+    await expect(adapter.transaction(async () => "done")).rejects.toBeInstanceOf(
+      DatabaseUnsupportedError,
+    );
+
+    const onError = vi.fn((error: DatabaseAdapterError) => error);
+    const cleanup = adapter.subscribe({ table: "notes" }, () => {}, onError);
+    cleanup();
+
+    expect(onError).toHaveBeenCalledWith(expect.any(DatabaseUnsupportedError));
   });
 });

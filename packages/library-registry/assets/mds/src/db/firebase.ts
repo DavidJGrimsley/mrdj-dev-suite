@@ -1,4 +1,5 @@
 import {
+  DatabaseAdapterError,
   DatabaseUnsupportedError,
   type DatabaseAdapter,
   type DatabaseChangeEvent,
@@ -28,9 +29,9 @@ export function createFirebaseDatabaseAdapter<Schema extends DatabaseSchema>(
     version: options.version ?? '0.1.0',
     capabilities: {
       transactions: false,
-      subscriptions: true,
-      rls: true,
-      authIntegration: true,
+      subscriptions: false,
+      rls: false,
+      authIntegration: false,
     },
 
     async query<Table extends DatabaseTableName<Schema>>(
@@ -51,7 +52,8 @@ export function createFirebaseDatabaseAdapter<Schema extends DatabaseSchema>(
       );
     },
 
-    async transaction<Result>(): Promise<Result> {
+    async transaction<Result>(fn: (client: DatabaseAdapter<Schema>) => Promise<Result>): Promise<Result> {
+      void fn;
       throw new DatabaseUnsupportedError(
         'Firebase transaction support is not wired in this generated skeleton. Use runTransaction after defining document paths for your schema.',
       );
@@ -60,7 +62,7 @@ export function createFirebaseDatabaseAdapter<Schema extends DatabaseSchema>(
     subscribe<Table extends DatabaseTableName<Schema>>(
       input: DatabaseSubscribeInput<Schema, Table>,
       onChange: (event: DatabaseChangeEvent<Schema[Table]>) => void,
-      onError?: (error: DatabaseUnsupportedError) => void,
+      onError?: (error: DatabaseAdapterError) => void,
     ) {
       void input;
       void onChange;
