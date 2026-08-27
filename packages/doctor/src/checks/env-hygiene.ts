@@ -157,7 +157,7 @@ async function findUndocumentedPublicEnv(
       if (exampleKeys.has(entry.key)) {
         continue;
       }
-      const marker = `${entry.key}`;
+      const marker = `${relative(projectPath, localFile)}:${entry.key}`;
       if (seen.has(marker)) {
         continue;
       }
