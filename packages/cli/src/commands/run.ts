@@ -70,7 +70,7 @@ export async function runReactDoctorTool(argv: RunArgv): Promise<void> {
 
   const monorepo = await isMonorepoWorkspaceRoot(projectPath);
   if (monorepo) {
-    console.log(chalk.gray('Detected monorepo workspace root; scanning with react-doctor -y.'));
+    console.log(chalk.gray('Detected monorepo workspace root; React Doctor will scan workspace-aware project files.'));
   }
 
   const invocation = buildReactDoctorCommandInvocation({

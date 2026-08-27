@@ -86,6 +86,9 @@ describe('react-doctor helpers', () => {
     expect(buildReactDoctorCommandInvocation({ json: true, blocking: 'error' }).display).toBe(
       'npx react-doctor -y --no-telemetry --json --blocking error'
     );
+    expect(buildReactDoctorCommandInvocation({ noTelemetry: false }).display).toBe(
+      'npx react-doctor -y'
+    );
     expect(buildReactDoctorPackageScript()).toBe('npx mds run react-doctor');
     expect(buildDirectReactDoctorPackageScript()).toBe('npx react-doctor -y --no-telemetry');
   });

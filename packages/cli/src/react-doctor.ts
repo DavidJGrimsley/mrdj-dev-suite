@@ -222,8 +222,11 @@ export function buildReactDoctorCommandInvocation(
     args.push(directory);
   }
 
-  // Non-interactive + monorepo-safe defaults. Does not attach to Expo startup.
-  args.push('-y', '--no-telemetry');
+  // Non-interactive default. Does not attach to Expo startup.
+  args.push('-y');
+  if (options.noTelemetry !== false) {
+    args.push('--no-telemetry');
+  }
 
   if (options.json) {
     args.push('--json');

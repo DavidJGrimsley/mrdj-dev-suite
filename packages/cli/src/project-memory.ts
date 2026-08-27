@@ -2258,8 +2258,6 @@ async function ensurePackageJson(
     ...REACT_DOCTOR_DEV_DEPENDENCIES,
     ...packageJson.devDependencies,
     '@mr.dj2u/cli': packageJson.devDependencies?.['@mr.dj2u/cli'] ?? `^${MDS_CLI_VERSION}`,
-    [REACT_DOCTOR_PACKAGE]:
-      packageJson.devDependencies?.[REACT_DOCTOR_PACKAGE] ?? REACT_DOCTOR_VERSION,
   };
 
   if (usesCssUtilityStyling(stylingSystem)) {
