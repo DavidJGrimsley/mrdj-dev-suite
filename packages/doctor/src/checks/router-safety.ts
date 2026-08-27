@@ -4,6 +4,7 @@ import type { DoctorCheckResult } from '../types.js';
 import {
   appRelativePath,
   findExpoRouterAppDirs,
+  isExpoRouterApiRouteSourceFile,
   isExpoRouterLayoutFile,
   isExpoRouterSpecialFile,
   isRootLayoutPath,
@@ -132,9 +133,10 @@ export async function checkRouteGroups(projectPath: string): Promise<RouterSafet
   for (const appDir of appDirs) {
     const files = await collectRouteSourceFiles(projectPath, [appDir]);
     const groups = collectGroupInfo(appDir, files);
+    const appDirKey = relative(projectPath, appDir);
 
     for (const group of groups.values()) {
-      const key = `${group.relPath}:${group.hasLayout}:${group.depth}`;
+      const key = `${appDirKey}:${group.relPath}:${group.hasLayout}:${group.depth}`;
       if (seen.has(key)) {
         continue;
       }
@@ -251,7 +253,7 @@ export function checkMixedConcerns(
   const lineCount = contents.split(/\r?\n/).length;
   const findings: RouterSafetyFinding[] = [];
 
-  if (path.basename(filePath).includes('+api')) {
+  if (isExpoRouterApiRouteSourceFile(filePath)) {
     const hasInlineDb = INLINE_DB_RE.test(scanned);
     if (
       lineCount > API_NOT_THIN_LINE_THRESHOLD ||

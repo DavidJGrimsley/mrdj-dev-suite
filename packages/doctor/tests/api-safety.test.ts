@@ -79,6 +79,21 @@ describe('api safety', () => {
     expect(findings.some((finding) => finding.kind === 'missing-auth')).toBe(true);
   });
 
+  it('does not treat webhook signature comments as auth checks', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, 'src/app/api/billing/checkout+api.ts');
+    const contents = [
+      '// TODO: add stripe-signature verification before this ships.',
+      'export async function POST() {',
+      '  return Response.json({ ok: true });',
+      '}',
+      '',
+    ].join('\n');
+
+    const findings = checkAuthChecks(projectPath, filePath, contents);
+    expect(findings.some((finding) => finding.kind === 'missing-auth')).toBe(true);
+  });
+
   it('treats handleDbWrite as both auth and validation', async () => {
     const projectPath = await createTempProject();
     const filePath = path.join(projectPath, 'src/app/api/db/clients/[action]+api.ts');

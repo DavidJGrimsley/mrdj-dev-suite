@@ -106,6 +106,29 @@ describe('router safety', () => {
     expect(findings.some((finding) => finding.kind === 'missing-conventional-layout')).toBe(true);
   });
 
+  it('reports duplicate route-group issues in both app roots', async () => {
+    const projectPath = await createTempProject();
+    await writeExpoPackage(projectPath);
+    await writeSource(
+      projectPath,
+      'app/(tabs)/index.tsx',
+      'export default function Home() { return null; }\n'
+    );
+    await writeSource(
+      projectPath,
+      'src/app/(tabs)/index.tsx',
+      'export default function WorkspaceHome() { return null; }\n'
+    );
+
+    const findings = await checkRouteGroups(projectPath);
+    const files = findings
+      .filter((finding) => finding.kind === 'missing-conventional-layout')
+      .map((finding) => finding.file)
+      .sort();
+
+    expect(files).toEqual(['app/(tabs)', 'src/app/(tabs)']);
+  });
+
   it('warns when auth-shaped routes have no auth-aware layout', async () => {
     const projectPath = await createTempProject();
     await writeExpoPackage(projectPath);
@@ -236,6 +259,14 @@ describe('router safety', () => {
 
     const findings = checkMixedConcerns(projectPath, filePath, contents);
     expect(findings.some((finding) => finding.kind === 'api-business-logic')).toBe(true);
+  });
+
+  it('does not treat TSX +api-shaped files as API routes', async () => {
+    const projectPath = await createTempProject();
+    const filePath = path.join(projectPath, 'src/app/api/items+api.tsx');
+    const findings = checkMixedConcerns(projectPath, filePath, thickApiRoute());
+
+    expect(findings.some((finding) => finding.kind === 'api-business-logic')).toBe(false);
   });
 
   it('includes router safety in runDoctor and scanFile', async () => {

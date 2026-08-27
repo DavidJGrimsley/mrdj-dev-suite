@@ -39,6 +39,10 @@ export function isExpoRouterApiRouteFile(
     return false;
   }
 
+  return isExpoRouterApiRouteSourceFile(filePath);
+}
+
+export function isExpoRouterApiRouteSourceFile(filePath: string): boolean {
   const extension = path.extname(filePath);
   if (!API_ROUTE_EXTENSIONS.has(extension)) {
     return false;

@@ -349,7 +349,8 @@ function classifyApiFile(
 }
 
 function hasAuthSignal(contents: string): boolean {
-  return AUTH_SIGNAL_RE.test(stripJsComments(contents)) || WEBHOOK_SIGNATURE_RE.test(contents);
+  const scanned = stripJsComments(contents);
+  return AUTH_SIGNAL_RE.test(scanned) || WEBHOOK_SIGNATURE_RE.test(scanned);
 }
 
 function toApiResult(findings: ApiSafetyFinding[], fileScan = false): DoctorCheckResult {
