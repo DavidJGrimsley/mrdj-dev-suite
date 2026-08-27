@@ -469,7 +469,7 @@ function findExpoConfigCredentialFindings(
   const lines = stripCommentsPreservingLines(contents).split(/\r?\n/);
 
   for (const [lineIndex, line] of lines.entries()) {
-    if (isCommentOnlyLine(line) || /process\.env\.EXPO_PUBLIC_/.test(line)) {
+    if (isCommentOnlyLine(line)) {
       continue;
     }
 
@@ -689,7 +689,7 @@ async function projectUsesServerRuntime(
   const sourceFiles = await findFiles(projectPath, (filePath) =>
     SOURCE_EXTENSIONS.has(path.extname(filePath))
   );
-  for (const filePath of sourceFiles.slice(0, 200)) {
+  for (const filePath of sourceFiles) {
     const contents = await readOptionalText(filePath);
     if (contents && hasUseServerDirective(contents)) {
       return true;

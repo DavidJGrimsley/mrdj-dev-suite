@@ -31,6 +31,33 @@ describe('env hygiene templates and credential shapes', () => {
     expect(details).toContain('undocumented-expo-public-env');
   });
 
+  it('reports undocumented public env keys in every local env file', async () => {
+    const projectPath = await createTempProject();
+    await mkdir(path.join(projectPath, 'apps', 'mobile'), { recursive: true });
+    await mkdir(path.join(projectPath, 'apps', 'web'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'apps', 'mobile', '.env.local'),
+      'EXPO_PUBLIC_API_URL=https://mobile.dev.local\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'apps', 'web', '.env.local'),
+      'EXPO_PUBLIC_API_URL=https://web.dev.local\n',
+      'utf8'
+    );
+    await writeFile(path.join(projectPath, '.env.example'), 'STRIPE_SECRET_KEY=\n', 'utf8');
+
+    const result = await checkEnvHygiene(projectPath);
+    const findings = ((result.details?.findings as Array<{ file: string; identifier: string }>) ??
+      []).filter((finding) => finding.identifier === 'EXPO_PUBLIC_API_URL');
+
+    expect(result.status).toBe('warn');
+    expect(findings.map((finding) => finding.file).sort()).toEqual([
+      'apps/mobile/.env.local',
+      'apps/web/.env.local',
+    ]);
+  });
+
   it('passes when public keys in .env.local are documented in .env.example', async () => {
     const projectPath = await createTempProject();
     await writeFile(

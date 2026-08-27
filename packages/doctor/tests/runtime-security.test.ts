@@ -170,6 +170,37 @@ describe('runtime security', () => {
     expect(JSON.stringify(result.details)).toContain('metro-missing-node-condition');
   });
 
+  it('warns when a use server directive appears after many source files', async () => {
+    const projectPath = await createExpoProject();
+    for (let index = 0; index < 205; index += 1) {
+      await writeSource(
+        projectPath,
+        `src/fillers/file-${String(index).padStart(3, '0')}.ts`,
+        'export const ok = true;\n'
+      );
+    }
+    await writeSource(
+      projectPath,
+      'src/fillers/server-action.ts',
+      "'use server';\nexport async function save() { return true; }\n"
+    );
+    await writeFile(
+      path.join(projectPath, 'metro.config.js'),
+      [
+        "const { getDefaultConfig } = require('expo/metro-config');",
+        'const config = getDefaultConfig(__dirname);',
+        "config.resolver.unstable_conditionNames = ['require', 'react-native'];",
+        'module.exports = config;',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const result = await checkRuntimeSecurity(projectPath);
+    expect(result.status).toBe('warn');
+    expect(JSON.stringify(result.details)).toContain('metro-missing-node-condition');
+  });
+
   it('passes stock expo/metro-config getDefaultConfig when API routes exist', async () => {
     const projectPath = await createExpoProject();
     await writeSource(
@@ -203,6 +234,23 @@ describe('runtime security', () => {
         null,
         2
       ) + '\n',
+      'utf8'
+    );
+
+    const result = await checkRuntimeSecurity(projectPath);
+    const details = JSON.stringify(result.details);
+
+    expect(result.status).toBe('error');
+    expect(details).toContain('expo-config-hardcoded-credential');
+    expect(details).not.toContain(secretValue);
+  });
+
+  it('still catches hardcoded Expo credentials on lines with public env reads', async () => {
+    const projectPath = await createExpoProject();
+    const secretValue = 'sk_live_' + 'I'.repeat(24);
+    await writeFile(
+      path.join(projectPath, 'app.config.js'),
+      `export default { expo: { extra: { url: process.env.EXPO_PUBLIC_URL, apiKey: "${secretValue}" } } };\n`,
       'utf8'
     );
 
