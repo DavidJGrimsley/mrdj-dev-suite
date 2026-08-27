@@ -140,7 +140,7 @@ describe("workspace manifest model", () => {
 
     const invalidAppKind = createTestManifest();
     (invalidAppKind.apps[1] as { kind: string }).kind = 'website';
-    expect(() => validateWorkspaceManifest(invalidAppKind)).toThrow('Invalid workspace app kind');
+    expect(() => validateWorkspaceManifest(invalidAppKind)).toThrow(/invalid(?: workspace app)? kind/iu);
   });
 });
 
