@@ -158,6 +158,9 @@ export function validateWorkspaceManifest(value: unknown): asserts value is Work
     throw new Error('Workspace displayName is required.');
   }
   const packageScope = normalizePackageScope(typeof value.packageScope === 'string' ? value.packageScope : '');
+  if (value.packageScope !== packageScope) {
+    throw new Error('Workspace packageScope must be lowercase and normalized.');
+  }
   if (!['npm', 'pnpm', 'yarn', 'bun'].includes(String(value.packageManager))) {
     throw new Error('Workspace packageManager must be npm, pnpm, yarn, or bun.');
   }
@@ -253,7 +256,7 @@ export async function readWorkspaceManifest(workspacePath: string): Promise<Work
     validateWorkspaceManifest(parsed);
     return parsed;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if (isMissingFileError(error)) return null;
     throw error;
   }
 }
@@ -391,7 +394,7 @@ async function readDirectories(directory: string): Promise<string[]> {
       .map((entry) => entry.name)
       .sort();
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    if (isMissingFileError(error)) return [];
     throw error;
   }
 }
@@ -401,13 +404,17 @@ async function readJson(filePath: string): Promise<Record<string, unknown> | nul
     const value: unknown = JSON.parse(await readFile(filePath, 'utf8'));
     return isRecord(value) ? value : null;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if (isMissingFileError(error)) return null;
     throw error;
   }
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return isRecord(error) && error.code === 'ENOENT';
 }
 
 async function pathExists(filePath: string): Promise<boolean> {

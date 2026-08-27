@@ -91,6 +91,14 @@ describe('workspace manifest model', () => {
     const duplicatePorts = createTestManifest();
     duplicatePorts.apps[1]!.port = duplicatePorts.apps[0]!.port;
     expect(() => validateWorkspaceManifest(duplicatePorts)).toThrow('Duplicate Expo development port');
+
+    const nonNormalizedScope = createTestManifest();
+    nonNormalizedScope.packageScope = '@Creatisphere';
+    expect(() => validateWorkspaceManifest(nonNormalizedScope)).toThrow('lowercase and normalized');
+
+    const invalidAppKind = createTestManifest();
+    (invalidAppKind.apps[0] as { kind: string }).kind = 'website';
+    expect(() => validateWorkspaceManifest(invalidAppKind)).toThrow('Invalid workspace app kind');
   });
 });
 

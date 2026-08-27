@@ -23,6 +23,7 @@ import {
 } from '../project-memory.js';
 import { generateProjectRoadmap } from '../roadmap.js';
 import {
+  DEFAULT_EXPO_PORT,
   discoverWorkspace,
   readWorkspaceManifest,
   scaffoldWorkspaceMemory,
@@ -309,8 +310,8 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
 async function confirmDiscoveredWorkspaceApps(
   source: WorkspaceManifest
 ): Promise<WorkspaceManifest> {
-  const manifest = structuredClone(source);
-  let nextPort = 8081;
+  const manifest = JSON.parse(JSON.stringify(source)) as WorkspaceManifest;
+  let nextPort = DEFAULT_EXPO_PORT;
   for (const app of manifest.apps) {
     const kind = await askChoice(
       `How should ${app.path} be classified?`,
