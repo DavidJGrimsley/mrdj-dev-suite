@@ -1093,6 +1093,79 @@ const mdsItems: LibraryItem[] = [
     },
   }),
   defineItem({
+    id: "mds/db",
+    name: "Database adapter contract",
+    description:
+      "Provider-neutral database adapter contract with Supabase implementation and Firebase skeleton.",
+    kind: "integration",
+    tags: ["database", "data", "adapter", "supabase", "firebase", "eject:data"],
+    categories: ["data", "support"],
+    compatibility: SDK_56_ALIAS,
+    relatedItems: ["mds/auth", "mds/data-local", "mds/onboarding-state"],
+    variants: [
+      {
+        id: "supabase",
+        name: "Supabase adapter",
+        description:
+          "Copies the provider-neutral contract, typed app schema, Supabase adapter, and Supabase-only factory.",
+        dependencies: [
+          runtime("@supabase/supabase-js", "^2.112.3"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+        ],
+        assets: [
+          mdsAsset("src/db/supabase.ts", "src/db/supabase.ts", "support"),
+          mdsAsset("src/db/index.supabase.ts", "src/db/index.ts", "support"),
+          mdsAsset("src/services/supabase.ts", "src/services/supabase.ts", "support"),
+          mdsAsset("env/supabase.env.example", ".env.example", "support"),
+        ],
+        integration: [
+          "Use getAdapter() from src/db/index.ts instead of importing Supabase directly from screens or feature logic.",
+          "Keep Supabase service-role and secret keys out of Expo client code.",
+          "Use Postgres functions or server routes for atomic multi-step writes; the generated client transaction method is a callback boundary only.",
+        ],
+      },
+      {
+        id: "firebase",
+        name: "Firebase skeleton",
+        description:
+          "Copies the provider-neutral contract, typed app schema, Firebase skeleton adapter, and Firebase-only factory.",
+        dependencies: [
+          runtime("firebase", "^12.17.1"),
+          runtime("@react-native-async-storage/async-storage", "2.2.0", "expo"),
+        ],
+        assets: [
+          mdsAsset("src/db/firebase.ts", "src/db/firebase.ts", "support"),
+          mdsAsset("src/db/index.firebase.ts", "src/db/index.ts", "support"),
+          mdsAsset("src/services/firebase.ts", "src/services/firebase.ts", "support"),
+          mdsAsset("env/firebase.env.example", ".env.example", "support"),
+        ],
+        integration: [
+          "Treat the Firebase adapter as a skeleton until Firestore collection paths, auth rules, and query mapping are defined.",
+          "Wire Firestore onSnapshot for subscriptions after the app schema is finalized.",
+          "Use Firebase JS SDK for this source-copy variant; React Native Firebase requires a development build and native config plugins.",
+        ],
+      },
+    ],
+    assets: [
+      mdsAsset("src/db/adapter.ts", "src/db/adapter.ts", "support"),
+      mdsAsset("src/types/database.ts", "src/types/database.ts", "support"),
+    ],
+    integration: {
+      summary:
+        "Copy the stable database adapter contract and one provider implementation into generated apps.",
+      instructions: [
+        "Keep product code typed against DatabaseAdapter and the app-specific AppDatabase schema.",
+        "Choose exactly one provider variant so src/db/index.ts imports only the selected backend.",
+        "Extend src/types/database.ts with the app's real table or collection rows before building product data flows.",
+      ],
+      notes: [
+        "This is a narrow data boundary, not an ORM, migration system, or query builder.",
+        "The Supabase adapter supports reads, writes, realtime subscriptions, and contract-level error mapping.",
+        "The Firebase variant is intentionally a skeleton because Firestore document paths are app-specific.",
+      ],
+    },
+  }),
+  defineItem({
     id: "mds/settings",
     name: "Settings screen",
     description:

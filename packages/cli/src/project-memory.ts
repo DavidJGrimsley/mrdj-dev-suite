@@ -881,6 +881,10 @@ async function scaffoldRichBoilerplateInner(
     navigationShell.library === 'expo-router' && answers.usesExpoUiUniversalComponents
       ? await loadLibraryTextAssets('mds/expo-sdk-56', libraryContext)
       : undefined;
+  const dbAssets =
+    answers.dataStart === 'supabase'
+      ? await loadLibraryTextAssets('mds/db', libraryContext, 'supabase')
+      : undefined;
   const nativeWindUiAssets = includeNativeWindUiExposition
     ? await loadLibraryTextAssets(
         'nativewindui/exposition',
@@ -935,8 +939,10 @@ async function scaffoldRichBoilerplateInner(
     });
   }
   await mkdir(path.join(projectPath, 'src', 'data'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'db'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'services'), { recursive: true });
   await mkdir(path.join(projectPath, 'src', 'theme'), { recursive: true });
+  await mkdir(path.join(projectPath, 'src', 'types'), { recursive: true });
   await mkdir(path.join(projectPath, 'scripts'), { recursive: true });
 
   results.push(
@@ -1374,8 +1380,11 @@ async function scaffoldRichBoilerplateInner(
     const authAlreadyWroteSupabaseClient = Boolean(
       authAssets?.has('src/services/supabase.ts')
     );
+    const dbAssetsIncludeSupabaseClient = Boolean(dbAssets?.has('src/services/supabase.ts'));
     results.push(
+      ...(dbAssets ? await writeLibraryAssetMap(projectPath, dbAssets, force) : []),
       ...(authAlreadyWroteSupabaseClient
+        || dbAssetsIncludeSupabaseClient
         ? []
         : [
             await writeIfAllowed(
@@ -4090,6 +4099,8 @@ function renderSupabaseClient(): string {
 
 function renderSupabaseDemoDataService(): string {
   return [
+    "import { DatabaseUnauthorizedError } from '../db/adapter';",
+    "import { getAdapter } from '../db';",
     "import { getSupabaseClient } from './supabase';",
     '',
     'export interface GuestbookComment {',
@@ -4099,16 +4110,32 @@ function renderSupabaseDemoDataService(): string {
     '  createdAt: string;',
     '}',
     '',
+    'export interface SupabaseDatabaseStatus {',
+    '  name: string;',
+    '  version: string;',
+    '  capabilities: {',
+    '    transactions: boolean;',
+    '    subscriptions: boolean;',
+    '    rls: boolean;',
+    '    authIntegration: boolean;',
+    '  };',
+    '  guestbookReads: string;',
+    '  guardedWrites: string;',
+    '}',
+    '',
     'export interface SupabaseDataOverview {',
     '  signupCount: number;',
     '  guestbook: GuestbookComment[];',
     '  isSignedIn: boolean;',
+    '  database: SupabaseDatabaseStatus;',
     '}',
     '',
     'export interface GuestbookInput {',
     '  displayName: string;',
     '  message: string;',
     '}',
+    '',
+    "type GuestbookReadSource = 'adapter' | 'rpc';",
     '',
     'function isRecord(value: unknown): value is Record<string, unknown> {',
     "  return typeof value === 'object' && value !== null;",
@@ -4150,6 +4177,39 @@ function renderSupabaseDemoDataService(): string {
     '    .filter((row): row is GuestbookComment => Boolean(row));',
     '}',
     '',
+    'async function loadGuestbookRows(): Promise<{ rows: unknown[]; source: GuestbookReadSource }> {',
+    '  const database = getAdapter();',
+    '  try {',
+    '    return {',
+    '      rows: await database.query({',
+    "        table: 'mds_demo_guestbook_comments',",
+    "        select: ['id', 'display_name', 'message', 'created_at'],",
+    "        orderBy: { column: 'created_at', ascending: false },",
+    '        limit: 10,',
+    '      }),',
+    "      source: 'adapter',",
+    '    };',
+    '  } catch (error) {',
+    '    if (!(error instanceof DatabaseUnauthorizedError)) {',
+    '      throw error;',
+    '    }',
+    '',
+    '    const client = getSupabaseClient();',
+    "    const { data, error: rpcError } = await client.rpc('mds_guestbook_recent', {",
+    '      limit_count: 10,',
+    '    });',
+    '',
+    '    if (rpcError) {',
+    '      throw new Error(rpcError.message);',
+    '    }',
+    '',
+    '    return {',
+    '      rows: Array.isArray(data) ? data : [],',
+    "      source: 'rpc',",
+    '    };',
+    '  }',
+    '}',
+    '',
     'function toErrorMessage(error: unknown): string {',
     '  if (error instanceof Error) {',
     '    return error.message;',
@@ -4159,10 +4219,11 @@ function renderSupabaseDemoDataService(): string {
     '',
     'export async function getSupabaseDataOverview(): Promise<SupabaseDataOverview> {',
     '  const client = getSupabaseClient();',
+    '  const database = getAdapter();',
     '  const [sessionResult, signupCountResult, guestbookResult] = await Promise.all([',
     '    client.auth.getSession(),',
     "    client.rpc('mds_demo_signup_count'),",
-    "    client.rpc('mds_guestbook_recent', { limit_count: 10 }),",
+    '    loadGuestbookRows(),',
     '  ]);',
     '',
     '  if (sessionResult.error) {',
@@ -4171,16 +4232,25 @@ function renderSupabaseDemoDataService(): string {
     '  if (signupCountResult.error) {',
     '    throw new Error(signupCountResult.error.message);',
     '  }',
-    '  if (guestbookResult.error) {',
-    '    throw new Error(guestbookResult.error.message);',
-    '  }',
     '',
     '  const signupCount = Number(signupCountResult.data ?? 0);',
     '',
     '  return {',
     '    signupCount: Number.isFinite(signupCount) ? signupCount : 0,',
-    '    guestbook: normalizeGuestbookRows(guestbookResult.data),',
+    '    guestbook: normalizeGuestbookRows(guestbookResult.rows),',
     '    isSignedIn: Boolean(sessionResult.data.session),',
+    '    database: {',
+    '      name: database.name,',
+    '      version: database.version,',
+    '      capabilities: {',
+    '        transactions: database.capabilities.transactions,',
+    '        subscriptions: database.capabilities.subscriptions,',
+    '        rls: Boolean(database.capabilities.rls),',
+    '        authIntegration: Boolean(database.capabilities.authIntegration),',
+    '      },',
+    "      guestbookReads: guestbookResult.source === 'adapter' ? 'Guestbook reads are using the database adapter directly.' : 'Guestbook reads are using the server RPC fallback until table select grants are ready.',",
+    "      guardedWrites: 'Guestbook writes use the mds_guestbook_sign RPC so auth and user-id validation stay server-side.',",
+    '    },',
     '  };',
     '}',
     '',
@@ -4283,6 +4353,7 @@ function renderSupabaseDataExpositionMigration(): string {
     '',
     'alter table public.mds_demo_guestbook_comments enable row level security;',
     'revoke all on public.mds_demo_guestbook_comments from anon, authenticated;',
+    'grant select on public.mds_demo_guestbook_comments to anon, authenticated;',
     '',
     'drop policy if exists "Anyone can read guestbook comments" on public.mds_demo_guestbook_comments;',
     'create policy "Anyone can read guestbook comments"',
@@ -6008,12 +6079,30 @@ function renderSupabaseDataScreen(answers: OnboardAnswers): string {
     '  const guestbook = overview?.guestbook ?? [];',
     '  const submitDisabled =',
     '    !overview?.isSignedIn || !displayName.trim() || !message.trim() || isSubmitting;',
+    '  const database = overview?.database;',
+    '  const capabilitySummary = database',
+    '    ? [',
+    "        database.capabilities.subscriptions ? 'realtime on' : 'realtime off',",
+    "        database.capabilities.rls ? 'RLS on' : 'RLS off',",
+    "        database.capabilities.authIntegration ? 'auth linked' : 'auth separate',",
+    '        database.capabilities.transactions',
+    "          ? 'client transactions'",
+    "          : 'server/RPC for multi-step writes',",
+    "      ].join(' | ')",
+    "    : 'Loading adapter capabilities...';",
     '',
     '  return (',
     '    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content} style={[styles.screen, { backgroundColor: colors.background }]}>',
     `      <Text style={[styles.title, { color: colors.text, fontFamily: theme.typography.fontFamily, fontWeight: theme.typography.fontFamily === "System" || theme.typography.fontFamily === "monospace" ? "800" : "normal" }]}>Data Exposition</Text>`,
-    `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. This page reads and writes through the service adapter so screens stay independent from backend details.</Text>`,
+    `      <Text style={[styles.intro, { color: colors.text }]}>${answers.appName} is set to start with Supabase. This page reads through the database adapter and keeps guarded writes on the server side.</Text>`,
     '      <ExpositionNotice />',
+    '      <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
+    '        <Text style={[styles.sectionTitle, { color: colors.text }]}>Database adapter active: {database?.name ?? "Supabase"}</Text>',
+    '        <Text style={[styles.body, { color: colors.text }]}>Adapter v{database?.version ?? "..."}</Text>',
+    '        <Text style={[styles.body, { color: colors.text }]}>{capabilitySummary}</Text>',
+    '        <Text style={[styles.body, { color: colors.text }]}>{database?.guardedWrites ?? "Guestbook writes stay guarded by a server-side RPC."}</Text>',
+    '        <Text style={[styles.body, { color: colors.text }]}>{database?.guestbookReads ?? "Guestbook reads prefer the database adapter and fall back to a server RPC when table grants are still catching up."}</Text>',
+    '      </View>',
     '      <View style={styles.statGrid}>',
     '        <View style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.primary, borderRadius: theme.layout.radius }]}>',
     '          <Text style={[styles.sectionTitle, { color: colors.text }]}>Users signed up</Text>',

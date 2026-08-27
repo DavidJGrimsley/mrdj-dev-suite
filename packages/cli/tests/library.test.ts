@@ -221,6 +221,67 @@ describe('MDS Library CLI services', () => {
     expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
   });
 
+  it('adds the database adapter contract with the Supabase variant', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'mds/db', {
+      variant: 'supabase',
+    });
+
+    expect(plan.canApply).toBe(true);
+    expect(plan.variant).toBe('supabase');
+    expect(plan.commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dependencies: expect.arrayContaining(['@supabase/supabase-js@^2.112.3']),
+        }),
+        expect.objectContaining({
+          dependencies: expect.arrayContaining([
+            '@react-native-async-storage/async-storage@2.2.0',
+          ]),
+        }),
+      ])
+    );
+    expect(plan.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ destination: 'src/db/adapter.ts' }),
+        expect.objectContaining({ destination: 'src/db/supabase.ts' }),
+        expect.objectContaining({ destination: 'src/db/index.ts' }),
+        expect.objectContaining({ destination: 'src/types/database.ts' }),
+        expect.objectContaining({ destination: 'src/services/supabase.ts' }),
+        expect.objectContaining({ destination: '.env.example' }),
+      ])
+    );
+
+    const result = await applyLibraryAdd(projectPath, 'mds/db', {
+      confirmed: true,
+      installDependencies: false,
+      planHash: plan.planHash,
+      variant: 'supabase',
+    });
+
+    expect(result.writtenFiles).toEqual(
+      expect.arrayContaining([
+        'src/db/adapter.ts',
+        'src/db/supabase.ts',
+        'src/db/index.ts',
+        'src/types/database.ts',
+        'src/services/supabase.ts',
+        '.env.example',
+      ])
+    );
+    await expect(readFile(path.join(projectPath, 'src', 'db', 'index.ts'), 'utf8')).resolves.toContain(
+      'createSupabaseDatabaseAdapter'
+    );
+    await expect(readFile(path.join(projectPath, 'src', 'db', 'index.ts'), 'utf8')).resolves.not.toContain(
+      'firebase'
+    );
+
+    const secondPlan = await planLibraryAdd(projectPath, 'mds/db', {
+      variant: 'supabase',
+    });
+    expect(secondPlan.files.every((file) => file.action === 'skip-identical')).toBe(true);
+  });
+
   it('adds the legal update gate variant with route and adapter assets', async () => {
     const projectPath = await createExpoProject();
     const plan = await planLibraryAdd(projectPath, 'mds/legal-documents', {

@@ -1234,8 +1234,41 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'services', 'supabase.ts'), 'utf8')
     ).resolves.toContain('@react-native-async-storage/async-storage');
     await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'adapter.ts'), 'utf8')
+    ).resolves.toContain('DatabaseAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'index.ts'), 'utf8')
+    ).resolves.toContain("getAdapter(type: 'supabase' = 'supabase')");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'db', 'supabase.ts'), 'utf8')
+    ).resolves.toContain('createSupabaseDatabaseAdapter');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'types', 'database.ts'), 'utf8')
+    ).resolves.toContain('mds_demo_guestbook_comments');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("import { getAdapter } from '../db';");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("table: 'mds_demo_guestbook_comments'");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("mds_guestbook_recent");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain('DatabaseUnauthorizedError');
+    await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Supabase environments and branches');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Database adapter active');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('server/RPC for multi-step writes');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Guestbook reads prefer the database adapter');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Users signed up');
@@ -1257,6 +1290,12 @@ describe('runOnboardCommand', () => {
         'utf8'
       )
     ).resolves.toContain('mds_demo_signup_count');
+    await expect(
+      readFile(
+        path.join(projectPath, 'supabase', 'migrations', '0002_mds_data_exposition.sql'),
+        'utf8'
+      )
+    ).resolves.toContain('grant select on public.mds_demo_guestbook_comments to anon, authenticated;');
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).rejects.toThrow();

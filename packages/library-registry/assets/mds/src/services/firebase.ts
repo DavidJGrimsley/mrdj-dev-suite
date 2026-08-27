@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
+import type { Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -43,6 +45,7 @@ function createFirebaseAuth(): Auth {
 }
 
 export const firebaseAuth = firebaseApp ? createFirebaseAuth() : null;
+export const firebaseDb: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
 
 export function getFirebaseAuth(): Auth {
   if (!isFirebaseConfigured || !firebaseAuth) {
@@ -55,4 +58,13 @@ export function getFirebaseAuth(): Auth {
 
 export function assertFirebaseConfigured(): void {
   void getFirebaseAuth();
+}
+
+export function getFirebaseDb(): Firestore {
+  if (!isFirebaseConfigured || !firebaseDb) {
+    throw new Error(
+      'Set EXPO_PUBLIC_FIREBASE_API_KEY, EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN, EXPO_PUBLIC_FIREBASE_PROJECT_ID, and EXPO_PUBLIC_FIREBASE_APP_ID before using Firebase.',
+    );
+  }
+  return firebaseDb;
 }
