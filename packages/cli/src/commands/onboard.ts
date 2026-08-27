@@ -22,9 +22,16 @@ import {
   scaffoldProjectMemory,
 } from '../project-memory.js';
 import { generateProjectRoadmap } from '../roadmap.js';
+import {
+  discoverWorkspace,
+  readWorkspaceManifest,
+  scaffoldWorkspaceMemory,
+  validateWorkspaceManifest,
+} from '../workspace.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
 
 import type { PackageCommandRunner, PackageJsonSubset } from '../package-install.js';
+import type { NonExpoAppCategory, WorkspaceManifest } from '../workspace.js';
 
 import type {
   AuthProviderChoice,
@@ -92,6 +99,7 @@ export interface OnboardArgv {
   onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMain?: boolean;
+  projectShape?: 'single-expo-app' | 'multi-app-workspace';
   saveDefaults?: boolean;
   noInstall?: boolean;
   install?: boolean;
@@ -207,6 +215,40 @@ interface PersonalOnboardDefaults {
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   const projectPath = path.resolve(argv.project ?? '.');
+  const existingManifest = await readWorkspaceManifest(projectPath);
+  const discovery = existingManifest ? null : await discoverWorkspace(projectPath);
+  const detectedManifest = existingManifest ?? discovery?.manifest ?? null;
+  const useWorkspace =
+    argv.projectShape === 'multi-app-workspace' ||
+    (!argv.yes &&
+      argv.projectShape !== 'single-expo-app' &&
+      detectedManifest !== null &&
+      (await askYesNo(
+        `MDS found ${detectedManifest.apps.length} apps under apps/*. Onboard this as one workspace?`,
+        true
+      )));
+
+  if (useWorkspace) {
+    if (!detectedManifest) {
+      throw new Error(
+        'Workspace onboarding requires project/workspace.json or at least two applications under apps/*, including one Expo app.'
+      );
+    }
+    const manifest = discovery && !argv.yes
+      ? await confirmDiscoveredWorkspaceApps(discovery.manifest)
+      : detectedManifest;
+    validateWorkspaceManifest(manifest);
+    const written = await scaffoldWorkspaceMemory(projectPath, manifest, Boolean(argv.force));
+    await writeMcpJsonToProject(projectPath);
+    console.log(chalk.bold('mds onboard workspace'));
+    console.log(chalk.dim(projectPath));
+    console.log(existingManifest ? 'Using project/workspace.json.' : 'Discovered and registered the existing workspace.');
+    for (const result of written) {
+      console.log(`${result.wrote ? chalk.green('CREATED') : chalk.gray('KEPT')} ${result.filePath}`);
+    }
+    console.log(`Registered apps: ${manifest.apps.map((app) => app.path).join(', ')}`);
+    return;
+  }
   const plan = argv.yes
     ? defaultOnboardPlan(argv, projectPath)
     : await collectOnboardPlan(argv, projectPath);
@@ -262,6 +304,45 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
       'The project docs are still too generic for a high-confidence derived roadmap, so let your agent ask clarifying questions and then rerun `mds roadmap`.'
     );
   }
+}
+
+async function confirmDiscoveredWorkspaceApps(
+  source: WorkspaceManifest
+): Promise<WorkspaceManifest> {
+  const manifest = structuredClone(source);
+  let nextPort = 8081;
+  for (const app of manifest.apps) {
+    const kind = await askChoice(
+      `How should ${app.path} be classified?`,
+      [
+        { value: 'expo' as const, label: 'Expo app' },
+        { value: 'non-expo' as const, label: 'Non-Expo app' },
+      ],
+      app.kind
+    );
+    app.kind = kind;
+    if (kind === 'expo') {
+      app.port = nextPort++;
+      app.platforms ??= ['web', 'ios', 'android'];
+      delete app.category;
+      delete app.intendedStack;
+    } else {
+      delete app.port;
+      delete app.platforms;
+      app.category = await askChoice<NonExpoAppCategory>(
+        `What role does ${app.path} have?`,
+        [
+          { value: 'website', label: 'Website' },
+          { value: 'backend', label: 'Backend or API' },
+          { value: 'worker', label: 'Worker' },
+          { value: 'other', label: 'Other' },
+        ],
+        app.category ?? 'other'
+      );
+    }
+  }
+  validateWorkspaceManifest(manifest);
+  return manifest;
 }
 
 export async function collectOnboardPlan(

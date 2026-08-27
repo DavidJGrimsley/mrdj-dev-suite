@@ -48,6 +48,10 @@
     "./package-install": {
       "import": "./dist/package-install.js",
       "types": "./dist/package-install.d.ts"
+    },
+    "./workspace": {
+      "import": "./dist/workspace.js",
+      "types": "./dist/workspace.d.ts"
     }
   },
   "main": "./dist/cli.js",
