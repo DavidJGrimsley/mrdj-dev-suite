@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { runDoctorCli } from '../src/cli-main.js';
+import { validateWorkspaceManifest } from '../src/workspace-manifest.js';
 
 const tempDirs: string[] = [];
 
@@ -106,6 +107,36 @@ describe('doctor CLI', () => {
     await expect(runDoctorCli([projectPath, '--target', '../outside'])).rejects.toThrow(
       'Workspace path escapes the workspace'
     );
+    await expect(runDoctorCli([projectPath, '--target', ' C:\\outside'])).rejects.toThrow(
+      'Workspace path must be relative'
+    );
+  });
+
+  it('labels a missing standalone project path accurately', async () => {
+    const projectPath = await createTempProject();
+    await rm(projectPath, { recursive: true, force: true });
+
+    const result = await runDoctorCli([projectPath, '--ci', '--json', '--no-scripts']);
+    const parsed = JSON.parse(result.output) as {
+      checks?: Array<{ name?: string; message?: string }>;
+    };
+
+    expect(parsed.checks).toContainEqual(
+      expect.objectContaining({
+        name: 'project path',
+        message: `Project path does not exist: ${path.resolve(projectPath)}`,
+      })
+    );
+  });
+
+  it('rejects non-normalized workspace package scopes', async () => {
+    const projectPath = await createWorkspaceProject();
+    const manifest = JSON.parse(
+      await readFile(path.join(projectPath, 'project', 'workspace.json'), 'utf8')
+    ) as Record<string, unknown>;
+    manifest.packageScope = '@Creative';
+
+    expect(() => validateWorkspaceManifest(manifest)).toThrow('lowercase and normalized');
   });
 
   it('reports aggregate workspace and per-app metadata', async () => {

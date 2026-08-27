@@ -126,10 +126,11 @@ async function runProjectDoctor(
   const checks = [];
 
   if (!(await pathExists(resolvedProjectPath))) {
+    const isFocusedTarget = Boolean(targetMetadata);
     checks.push({
-      name: 'target package',
+      name: isFocusedTarget ? 'target package' : 'project path',
       status: 'error' as const,
-      message: `Target package path does not exist: ${resolvedProjectPath}`,
+      message: `${isFocusedTarget ? 'Target package' : 'Project'} path does not exist: ${resolvedProjectPath}`,
     });
     return createReport(
       resolvedProjectPath,
