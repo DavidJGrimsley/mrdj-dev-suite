@@ -1224,6 +1224,12 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
     ).resolves.toContain("table: 'mds_demo_guestbook_comments'");
     await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain("mds_guestbook_recent");
+    await expect(
+      readFile(path.join(projectPath, 'src', 'services', 'supabase-demo-data.ts'), 'utf8')
+    ).resolves.toContain('DatabaseUnauthorizedError');
+    await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Supabase environments and branches');
     await expect(
@@ -1232,6 +1238,9 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('server/RPC for multi-step writes');
+    await expect(
+      readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
+    ).resolves.toContain('Guestbook reads prefer the database adapter');
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Users signed up');

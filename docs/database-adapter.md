@@ -21,7 +21,7 @@ const comments = await db.query({
 });
 ```
 
-The generated Supabase data exposition uses the adapter for direct guestbook table reads. Guestbook writes still call the generated `mds_guestbook_sign` RPC because that server-side function trims input, checks auth, writes the signed-in user id, and returns the saved row.
+The generated Supabase data exposition uses the adapter for direct guestbook table reads. If a generated app is pointed at a Supabase project that has not yet received the latest `grant select` migration, the screen falls back to the generated `mds_guestbook_recent` RPC so the demo still shows data while the database catches up. Guestbook writes still call the generated `mds_guestbook_sign` RPC because that server-side function trims input, checks auth, writes the signed-in user id, and returns the saved row.
 
 The Supabase adapter supports reads, writes, realtime subscriptions, and contract-level error mapping. Its `transaction` method is a callback boundary for code organization, not an atomic Postgres transaction. Use a Postgres function or server route when a flow needs atomic multi-step writes.
 
