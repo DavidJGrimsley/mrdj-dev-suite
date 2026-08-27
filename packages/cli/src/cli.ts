@@ -127,6 +127,10 @@ async function main(): Promise<void> {
             type: 'string',
             default: '.',
           })
+          .option('project-shape', {
+            describe: 'Onboard one Expo app or discover/register a multi-app workspace',
+            choices: ['single-expo-app', 'multi-app-workspace'] as const,
+          })
           .option('yes', {
             describe: 'Use default answers and scaffold project memory without prompts',
             type: 'boolean',

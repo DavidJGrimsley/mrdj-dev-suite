@@ -1,0 +1,9 @@
+{
+  "name": "mds-coordinator",
+  "version": "1.0.0",
+  "description": "Coordinate MDS Blitz work across branches, worktrees, agents, tests, and pull requests. Use when sequencing roadmap work, dispatching implementation agents, verifying agent claims, reconciling PR state, or performing post-merge cleanup.",
+  "author": "MDS Blitz Coordinator",
+  "tags": ["coordination", "git", "worktrees", "ci/cd"],
+  "commands": ["mds-coordinator"],
+  "enabled": true
+}
