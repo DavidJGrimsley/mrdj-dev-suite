@@ -259,22 +259,22 @@ All three tracks must merge before proceeding to Wave 4.
 
 ### Current ready and blocked tasks
 
-From `F:\SoftwareDev\MDS\BlitzCoordinationTodo.md` Wave 3 tasks
+From `<MDS_ROOT>\BlitzCoordinationTodo.md` Wave 3 tasks
 (lines 172-208), these tasks are ready to start now because their recorded
 dependencies are satisfied:
 
 - **#17** (`feat/library-db-contract`) - worktree:
-   `F:\SoftwareDev\MDS\MDS-library-db-contract`
+   `<MDS_ROOT>\MDS-library-db-contract`
    `AGENT-PROMPT.md` is ready. Dispatch to Tier 4, medium-high: this is a new
    adapter contract.
 
 - **#19** (`feat/library-settings-auth-surface`) - worktree:
-   `F:\SoftwareDev\MDS\MDS-library-settings-auth-surface`
+   `<MDS_ROOT>\MDS-library-settings-auth-surface`
    `AGENT-PROMPT.md` is ready. Dispatch to Tier 3, medium: this is UI
    composition over existing adapters.
 
 - **#21** (`feat/monorepo-intake-model`) - worktree:
-   `F:\SoftwareDev\MDS\MDS-monorepo-intake-model`
+   `<MDS_ROOT>\MDS-monorepo-intake-model`
    `AGENT-PROMPT.md` is ready. Dispatch to Tier 4, medium-high: this is new
    model design with downstream impact.
 
@@ -290,7 +290,7 @@ When a task appears ready:
 
 1. Verify every declared dependency is complete in `BlitzCoordinationTodo.md`.
 2. Check whether its worktree already exists, for example with
-    `Get-ChildItem F:\SoftwareDev\MDS\MDS-*<task-name>*`.
+    `Get-ChildItem <MDS_ROOT>\MDS-*<task-name>*`.
 3. If it exists, check whether work is already active with `git status -sb` in
     that worktree.
 4. If it does not exist, create it from the branch name recorded in the
@@ -304,8 +304,8 @@ For #17, use this concrete sequence:
 
 - The tracker identifies `feat/library-db-contract` as the branch.
 - The prepared worktree is
-   `F:\SoftwareDev\MDS\MDS-library-db-contract`.
-- Read `F:\SoftwareDev\MDS\MDS-library-db-contract\AGENT-PROMPT.md`.
+   `<MDS_ROOT>\MDS-library-db-contract`.
+- Read `<MDS_ROOT>\MDS-library-db-contract\AGENT-PROMPT.md`.
 - Dispatch it to a Tier-4 model, such as Claude Sonnet 5, GPT-5.6, or Grok
    4.5.
 - Mark the tracker entry from `[ ]` to `[in-progress]` only when that worker
@@ -314,7 +314,7 @@ For #17, use this concrete sequence:
 ### Tracker reference
 
 For current state, always return to
-`F:\SoftwareDev\MDS\BlitzCoordinationTodo.md` lines 161-209:
+`<MDS_ROOT>\BlitzCoordinationTodo.md` lines 161-209:
 
 - Find dependencies in each task description, such as `depends on #X`.
 - Use the tier recommendation written next to the task.
