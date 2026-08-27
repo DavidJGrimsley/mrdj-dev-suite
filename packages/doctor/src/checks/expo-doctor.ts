@@ -18,11 +18,9 @@ export async function runExpoDoctorCheck(args: {
     args.packageJson.dependencies?.expo ?? args.packageJson.devDependencies?.expo
   );
   if (!hasExpo) {
-    return createSkippedCheck(
-      'expo doctor',
-      'Skipped because no Expo dependency was detected.',
-      { reason: 'non-expo project' }
-    );
+    return createSkippedCheck('expo doctor', 'Skipped because no Expo dependency was detected.', {
+      reason: 'non-expo project',
+    });
   }
   if (args.mode === 'fast') {
     return createSkippedCheck(
@@ -45,9 +43,24 @@ export async function runExpoDoctorCheck(args: {
 
   const packageManager = await detectPackageManager(args.projectPath, args.packageJson);
   const command = buildRunScriptCommand(packageManager, scriptName);
-  return commandResultToCheck(
-    'expo doctor',
-    command,
-    await runShellCommand(command, args.projectPath, args.timeoutMs)
+  const result = await runShellCommand(command, args.projectPath, args.timeoutMs);
+  const check = commandResultToCheck('expo doctor', command, result);
+  if (check.status === 'error' && isKnownSdk56HermesRegression(result.stdout, result.stderr)) {
+    return {
+      ...check,
+      status: 'warn',
+      message:
+        'Expo Doctor reported the known Expo SDK 56 Hermes regression; upgrade to SDK 57 to resolve it.',
+    };
+  }
+  return check;
+}
+
+function isKnownSdk56HermesRegression(stdout: string, stderr: string): boolean {
+  const output = `${stdout}\n${stderr}`;
+  return (
+    output.includes('Hermes V1') &&
+    output.includes('known memory regression') &&
+    !output.includes('duplicate dependencies')
   );
 }

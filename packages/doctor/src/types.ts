@@ -30,8 +30,88 @@ export interface DoctorScoreBreakdown {
   components: DoctorScoreComponent[];
 }
 
+export interface DoctorTargetMetadata {
+  workspacePath: string;
+  target: string;
+  targetPath: string;
+  appId?: string;
+  packageName?: string;
+  kind?: 'expo' | 'non-expo' | 'shared';
+}
+
+export interface DoctorWorkspaceAppReport {
+  id: string;
+  displayName: string;
+  path: string;
+  kind: 'expo' | 'non-expo';
+  status: 'pass' | 'warn' | 'error' | 'registered';
+  report?: DoctorReport;
+}
+
+export interface DoctorWorkspaceMetadata {
+  name: string;
+  displayName: string;
+  packageManager: string;
+  taskRunner: string;
+  apps: DoctorWorkspaceAppReport[];
+  sharedPackages: DoctorWorkspacePackageReport[];
+}
+
+export interface DoctorWorkspacePackageReport {
+  name: string;
+  packageName: string;
+  path: string;
+  role: DoctorSharedWorkspacePackageRole;
+}
+
+export type DoctorWorkspacePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export type DoctorWorkspaceAppKind = 'expo' | 'non-expo';
+export type DoctorSharedWorkspacePackageRole =
+  | 'config'
+  | 'ui-theme'
+  | 'hooks-state'
+  | 'sdk-client'
+  | 'database-schema';
+
+export interface DoctorWorkspaceApp {
+  id: string;
+  displayName: string;
+  packageName?: string;
+  path: string;
+  kind: DoctorWorkspaceAppKind;
+  purpose: string;
+  platforms?: string[];
+  port?: number;
+  category?: 'website' | 'backend' | 'worker' | 'other';
+  intendedStack?: string;
+}
+
+export interface DoctorSharedWorkspacePackage {
+  name: string;
+  packageName: string;
+  path: string;
+  role: DoctorSharedWorkspacePackageRole;
+}
+
+export interface DoctorWorkspaceManifest {
+  schemaVersion: 1;
+  name: string;
+  displayName: string;
+  packageScope: string;
+  packageManager: DoctorWorkspacePackageManager;
+  expoVersion: string;
+  stylingSystem: 'uniwind' | 'nativewind' | 'nativewindui' | 'tamagui' | 'restyle' | 'stylesheet';
+  sharedDesignDirection: string;
+  taskRunner: 'turbo';
+  apps: DoctorWorkspaceApp[];
+  sharedPackages: DoctorSharedWorkspacePackage[];
+}
+
 export interface DoctorReport {
   projectPath: string;
+  scope?: 'project' | 'workspace';
+  target?: DoctorTargetMetadata;
+  workspace?: DoctorWorkspaceMetadata;
   timestamp: string;
   mode: DoctorMode;
   selection?: DoctorModeSelection;
@@ -53,6 +133,7 @@ export interface DoctorOptions {
   timeoutMs?: number;
   selectionDefaultMode?: DoctorMode;
   reactDoctorRunner?: ReactDoctorRunner;
+  target?: string;
 }
 
 export interface ReactDoctorRunnerArgs {
