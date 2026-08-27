@@ -11,7 +11,7 @@ export function normalizeWorkspaceRelativePath(value: string): string {
     !input ||
     input.includes('\0') ||
     path.posix.isAbsolute(input) ||
-    path.win32.isAbsolute(value)
+    path.win32.isAbsolute(input)
   ) {
     throw new Error(`Workspace path must be relative: ${value}`);
   }
@@ -42,7 +42,10 @@ export function validateWorkspaceManifest(
     throw new Error('Workspace name must be a lowercase product slug.');
   }
   if (!manifest.displayName?.trim()) throw new Error('Workspace displayName is required.');
-  normalizePackageScope(manifest.packageScope ?? '');
+  const packageScope = normalizePackageScope(manifest.packageScope ?? '');
+  if (manifest.packageScope !== packageScope) {
+    throw new Error('Workspace packageScope must be lowercase and normalized.');
+  }
   if (!['npm', 'pnpm', 'yarn', 'bun'].includes(manifest.packageManager ?? '')) {
     throw new Error('Workspace packageManager must be npm, pnpm, yarn, or bun.');
   }
