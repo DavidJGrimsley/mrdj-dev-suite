@@ -12,7 +12,7 @@ export function resolveAuthGuardDecision(
   if (state.session?.user) {
     return 'authorized';
   }
-  if (options.fallback) {
+  if (options.fallback !== undefined && options.fallback !== null) {
     return 'fallback';
   }
   return options.fallbackHref ? 'redirect' : 'fallback';

@@ -1301,6 +1301,109 @@ describe('runOnboardCommand', () => {
     ).rejects.toThrow();
   });
 
+  it('aligns generated router dependencies to an existing Expo 57 project', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-expo57-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'expo57-app',
+          version: '1.0.0',
+          main: 'index.ts',
+          scripts: {},
+          dependencies: {
+            expo: '~57.0.17',
+            'expo-status-bar': '~57.0.1',
+            react: '19.2.3',
+            'react-native': '0.86.3',
+          },
+          devDependencies: {
+            '@types/react': '~19.2.2',
+            typescript: '~6.0.3',
+          },
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'tsconfig.json'),
+      JSON.stringify(
+        {
+          extends: 'expo/tsconfig.base',
+          compilerOptions: {
+            strict: true,
+          },
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: projectPath,
+      yes: true,
+      noInstall: true,
+      appName: 'Expo 57 App',
+      authProvider: 'supabase',
+      legalDocumentMode: 'public-routes',
+      onboardingCompletionMode: 'auth',
+      legalBusinessName: 'Expo 57 Legal LLC',
+      legalContactEmail: 'privacy@expo57.test',
+      legalAddressOrRegionNote: 'New York, USA',
+    });
+
+    const packageJson = JSON.parse(
+      await readFile(path.join(projectPath, 'package.json'), 'utf8')
+    ) as {
+      main?: string;
+      dependencies: Record<string, string>;
+    };
+    expect(packageJson.main).toBe('expo-router/entry');
+    expect(packageJson.dependencies['expo-constants']).toBe('~57.0.15');
+    expect(packageJson.dependencies['expo-font']).toBe('~57.0.1');
+    expect(packageJson.dependencies['expo-router']).toBe('~57.0.17');
+    expect(packageJson.dependencies['expo-linking']).toBe('~57.0.8');
+    expect(packageJson.dependencies['expo-system-ui']).toBe('~57.0.3');
+    expect(packageJson.dependencies['react-native-safe-area-context']).toBe('~5.7.0');
+    expect(packageJson.dependencies['expo-sqlite']).toBe('~57.0.2');
+    expect(packageJson.dependencies['expo-splash-screen']).toBe('~57.0.8');
+    expect(packageJson.dependencies['expo-navigation-bar']).toBe('~57.0.2');
+    expect(packageJson.dependencies['@expo/ui']).toBe('~57.0.14');
+    expect(packageJson.dependencies['react-native-gesture-handler']).toBe('~2.32.0');
+    expect(packageJson.dependencies['react-native-reanimated']).toBe('4.5.1');
+    expect(packageJson.dependencies['react-native-screens']).toBe('~4.26.0');
+    expect(packageJson.dependencies['react-native-keyboard-controller']).toBe('1.21.9');
+    expect(packageJson.dependencies['react-native-worklets']).toBe('0.10.1');
+    expect(packageJson.dependencies['reanimated-color-picker']).toBe('^5.1.2');
+
+    const tsconfig = await readFile(path.join(projectPath, 'tsconfig.json'), 'utf8');
+    expect(tsconfig).toContain('"@/*"');
+    expect(tsconfig).toContain('"./src/*"');
+    expect(tsconfig).toContain('"node"');
+    expect(tsconfig).toContain('"uniwind/types"');
+    expect(tsconfig).not.toContain('"baseUrl"');
+
+    await expect(readFile(path.join(projectPath, 'expo-env.d.ts'), 'utf8')).resolves.toContain(
+      'expo/types'
+    );
+    await expect(readFile(path.join(projectPath, 'css-env.d.ts'), 'utf8')).resolves.toContain(
+      "declare module '*.css';"
+    );
+    await expect(readFile(path.join(projectPath, 'uniwind-types.d.ts'), 'utf8')).resolves.toContain(
+      "declare module 'uniwind'"
+    );
+
+    const settingsRoute = await readFile(path.join(projectPath, 'src', 'app', 'settings.tsx'), 'utf8');
+    expect(settingsRoute).toContain("import SettingsScreen from '../features/settings/settings-screen';");
+    expect(settingsRoute).toContain('const auth = useAuthAdapter();');
+    expect(settingsRoute).not.toContain('createPlaceholderAuthAdapter');
+  });
+
   it('generates MDS auth routes, docs, and protected layouts when auth is selected', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-auth-'));
     tempDirs.push(projectPath);

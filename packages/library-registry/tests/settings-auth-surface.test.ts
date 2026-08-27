@@ -23,6 +23,12 @@ describe('settings/auth surface helpers', () => {
       resolveAuthGuardDecision({ isLoading: false, session: null }, { fallback: 'login-screen' })
     ).toBe('fallback');
     expect(
+      resolveAuthGuardDecision({ isLoading: false, session: null }, { fallback: 0 })
+    ).toBe('fallback');
+    expect(
+      resolveAuthGuardDecision({ isLoading: false, session: null }, { fallback: '' })
+    ).toBe('fallback');
+    expect(
       resolveAuthGuardDecision({ isLoading: false, session: null }, { fallbackHref: '/sign-in' })
     ).toBe('redirect');
   });

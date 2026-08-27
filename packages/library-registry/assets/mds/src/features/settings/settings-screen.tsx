@@ -46,7 +46,7 @@ export default function SettingsScreen({
   );
   const [notice, setNotice] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const dangerForeground = getReadableTextColor(colors.error, theme.colors.light.text);
+  const dangerForeground = getReadableTextColor(colors.warning, theme.colors.light.text);
 
   async function handleSignOut() {
     if (isSigningOut) {
@@ -167,7 +167,7 @@ export default function SettingsScreen({
             style={[
               styles.primaryButton,
               {
-                backgroundColor: user ? colors.error : colors.surface,
+                backgroundColor: user ? colors.warning : colors.surface,
                 borderRadius: theme.layout.radius,
                 opacity: !user || isSigningOut ? 0.7 : 1,
               },

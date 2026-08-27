@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '../../theme/provider';
 import { resolveAuthGuardDecision, type AuthGuardDecision } from './auth-guard-logic';
 
-import type { AuthAdapter, AuthAdapterState } from './auth-types';
+import type { AuthAdapter } from './auth-types';
 
 export interface AuthGuardProps {
   auth: AuthAdapter;
