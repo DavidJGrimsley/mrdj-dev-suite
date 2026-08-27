@@ -4,6 +4,7 @@ export {
   scanFileAnimationPerformance,
 } from './animation-performance.js';
 export { checkEnvHygiene, scanFileEnvHygiene } from './env-hygiene.js';
+export { checkSupabaseEnvironment } from './supabase-environment.js';
 export { runEslintCheck } from './eslint.js';
 export { checkExpoConfiguration } from './expo-config.js';
 export { runExpoDoctorCheck } from './expo-doctor.js';

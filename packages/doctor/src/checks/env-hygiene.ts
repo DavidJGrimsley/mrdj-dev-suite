@@ -56,7 +56,10 @@ export async function scanFileEnvHygiene(
         name: 'env hygiene',
         status: 'error',
         message: 'Unsafe environment or credential patterns were found.',
-        details: { findings: findings.slice(0, MAX_FINDINGS), truncated: findings.length > MAX_FINDINGS },
+        details: {
+          findings: findings.slice(0, MAX_FINDINGS),
+          truncated: findings.length > MAX_FINDINGS,
+        },
       }
     : {
         name: 'env hygiene',
@@ -107,7 +110,8 @@ function findPublicSecretNames(
         kind: 'public-secret-name',
         identifier,
         detector: 'expo-public-secret-name',
-        remediation: 'Move private values to a server-only environment variable without the EXPO_PUBLIC_ prefix.',
+        remediation:
+          'Move private values to a server-only environment variable without the EXPO_PUBLIC_ prefix.',
       });
     }
   }
@@ -130,17 +134,24 @@ function findHardcodedCredentialValues(
     const assignment = readSensitiveAssignment(line);
     if (!assignment) {
       if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(line)) {
-        findings.push(createCredentialFinding(projectPath, filePath, lineIndex, {
-          identifier: 'private key',
-          detector: 'private-key-literal',
-        }));
+        findings.push(
+          createCredentialFinding(projectPath, filePath, lineIndex, {
+            identifier: 'private key',
+            detector: 'private-key-literal',
+          })
+        );
       }
+      continue;
+    }
+
+    if (isAllowedPublicSupabaseAssignment(assignment.identifier, assignment.value)) {
       continue;
     }
 
     const providerDetector = detectKnownCredentialShape(assignment.value);
     const genericDetector =
-      providerDetector ?? (looksLikeCredentialValue(assignment.value) ? 'sensitive-assignment-literal' : null);
+      providerDetector ??
+      (looksLikeCredentialValue(assignment.value) ? 'sensitive-assignment-literal' : null);
     if (!genericDetector || isPlaceholderValue(assignment.value)) {
       continue;
     }
@@ -156,6 +167,19 @@ function findHardcodedCredentialValues(
   return findings;
 }
 
+function isAllowedPublicSupabaseAssignment(identifier: string, value: string): boolean {
+  if (
+    ![
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+      'EXPO_PUBLIC_SUPABASE_KEY',
+    ].includes(identifier)
+  ) {
+    return false;
+  }
+  return !/^sb_secret_/u.test(value.trim());
+}
+
 function createCredentialFinding(
   projectPath: string,
   filePath: string,
@@ -168,12 +192,15 @@ function createCredentialFinding(
     kind: 'hardcoded-credential-value',
     ...(options.identifier ? { identifier: options.identifier } : {}),
     detector: options.detector,
-    remediation: 'Move the literal credential into an ignored local env file or secret manager and read it through process.env.',
+    remediation:
+      'Move the literal credential into an ignored local env file or secret manager and read it through process.env.',
   };
 }
 
 function readSensitiveAssignment(line: string): { identifier: string; value: string } | null {
-  const envMatch = line.match(/^\s*([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASS|KEY|SERVICE_ROLE|PRIVATE)[A-Z0-9_]*)\s*=\s*['"]?([^'"\s#]+)['"]?/);
+  const envMatch = line.match(
+    /^\s*([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASS|KEY|SERVICE_ROLE|PRIVATE)[A-Z0-9_]*)\s*=\s*['"]?([^'"\s#]+)['"]?/
+  );
   if (envMatch?.[1] && envMatch[2]) {
     return { identifier: envMatch[1], value: envMatch[2] };
   }
@@ -182,7 +209,10 @@ function readSensitiveAssignment(line: string): { identifier: string; value: str
     /(?:^|[{\s,.;])\s*["']?([A-Za-z0-9_$.-]*(?:apiKey|api_key|secret|token|password|passwd|serviceRole|service_role|privateKey|private_key|clientSecret|client_secret|webhookSecret|webhook_secret|jwtSecret|jwt_secret|databaseUrl|database_url|connectionString|connection_string|authorization)[A-Za-z0-9_$.-]*)["']?\s*[:=]\s*(['"`])([^'"`]+)\2/i
   );
   if (codeMatch?.[1] && codeMatch[3]) {
-    return { identifier: codeMatch[1], value: stripBearerPrefix(codeMatch[3].trim()) };
+    return {
+      identifier: codeMatch[1],
+      value: stripBearerPrefix(codeMatch[3].trim()),
+    };
   }
 
   return null;
@@ -261,7 +291,9 @@ function isScannableCredentialFile(filePath: string): boolean {
     return false;
   }
   const extension = path.extname(filePath);
-  return SOURCE_EXTENSIONS.has(extension) || CONFIG_EXTENSIONS.has(extension) || isRealEnvFile(basename);
+  return (
+    SOURCE_EXTENSIONS.has(extension) || CONFIG_EXTENSIONS.has(extension) || isRealEnvFile(basename)
+  );
 }
 
 function isRealEnvFile(basename: string): boolean {
@@ -269,9 +301,14 @@ function isRealEnvFile(basename: string): boolean {
 }
 
 function isExampleEnvFile(basename: string): boolean {
-  return /\.(example|sample|template)$/i.test(basename) || /(^|[.-])(example|sample|template)([.-]|$)/i.test(basename);
+  return (
+    /\.(example|sample|template)$/i.test(basename) ||
+    /(^|[.-])(example|sample|template)([.-]|$)/i.test(basename)
+  );
 }
 
 function isLockfile(basename: string): boolean {
-  return basename === 'package-lock.json' || basename === 'pnpm-lock.yaml' || basename === 'yarn.lock';
+  return (
+    basename === 'package-lock.json' || basename === 'pnpm-lock.yaml' || basename === 'yarn.lock'
+  );
 }

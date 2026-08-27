@@ -8,6 +8,7 @@ import {
   DEFAULT_DOCTOR_MODE,
   FULL_MODE_GUIDANCE,
   fixDoctor,
+  formatHumanReport,
   formatModeHelp,
   runDoctor,
 } from '@mr.dj2u/doctor';
@@ -26,23 +27,16 @@ import { runOnboardCommand } from './commands/onboard.js';
 import { runRoadmapCommand } from './commands/roadmap.js';
 import { runReportCommand } from './commands/report.js';
 import { runSkillsListCommand, runSkillsShowCommand } from './commands/skills.js';
-import {
-  runStylistEjectCommand,
-  runStylistSyncCommand,
-} from './commands/stylist.js';
+import { runStylistEjectCommand, runStylistSyncCommand } from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
+import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
-import type {
-  LibraryAddArgv,
-  LibraryListArgv,
-  LibraryShowArgv,
-} from './commands/library.js';
+import type { LibraryAddArgv, LibraryListArgv, LibraryShowArgv } from './commands/library.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { RoadmapArgv } from './commands/roadmap.js';
@@ -53,6 +47,7 @@ import type { ShipArgv } from './commands/test-and-iterate.js';
 
 export interface DoctorArgv {
   path?: string;
+  target?: string;
   fix?: boolean;
   json?: boolean;
   ci?: boolean;
@@ -81,13 +76,18 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('target', {
+            describe: 'Relative registered app or shared package path to scan inside a workspace',
+            type: 'string',
+          })
           .option('json', {
             describe: 'Print the structured Doctor report as JSON',
             type: 'boolean',
             default: false,
           })
           .option('ci', {
-            describe: 'Run the CI-equivalent profile: lint, typecheck, tests, Expo Doctor, release build',
+            describe:
+              'Run the CI-equivalent profile: lint, typecheck, tests, Expo Doctor, release build',
             type: 'boolean',
             default: false,
           })
@@ -97,7 +97,8 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('fast', {
-            describe: 'Run the fast profile: static checks plus lint/typecheck; skips tests, Expo Doctor, and builds',
+            describe:
+              'Run the fast profile: static checks plus lint/typecheck; skips tests, Expo Doctor, and builds',
             type: 'boolean',
             default: false,
           })
@@ -319,8 +320,7 @@ async function main(): Promise<void> {
             type: 'boolean',
           })
           .option('install', {
-            describe:
-              'Install newly declared dependencies immediately (disable with --no-install)',
+            describe: 'Install newly declared dependencies immediately (disable with --no-install)',
             type: 'boolean',
             default: true,
           }),
@@ -339,7 +339,8 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('json', {
-            describe: 'Print the structured roadmap result as JSON instead of writing project/todo.md',
+            describe:
+              'Print the structured roadmap result as JSON instead of writing project/todo.md',
             type: 'boolean',
             default: false,
           }),
@@ -564,7 +565,8 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('server-path', {
-            describe: 'Absolute path to a built MCP server entry (explicit local development override)',
+            describe:
+              'Absolute path to a built MCP server entry (explicit local development override)',
             type: 'string',
           })
           .option('command', {
@@ -604,7 +606,8 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('server-path', {
-            describe: 'Absolute path to a built MCP server entry (explicit local development override)',
+            describe:
+              'Absolute path to a built MCP server entry (explicit local development override)',
             type: 'string',
           })
           .option('command', {
@@ -653,7 +656,13 @@ async function main(): Promise<void> {
           })
           .option('source', {
             describe: 'Filter list results by source catalog',
-            choices: ['mds', 'create-expo-app', 'create-expo-stack', 'nativewindui', 'swmansion'] as const,
+            choices: [
+              'mds',
+              'create-expo-app',
+              'create-expo-stack',
+              'nativewindui',
+              'swmansion',
+            ] as const,
           })
           .option('compatible', {
             describe: 'Show only list results compatible with the current Expo project',
@@ -844,17 +853,19 @@ async function handleDoctor(argv: DoctorArgv): Promise<void> {
         mode,
         runScripts: argv.scripts,
         timeoutMs: argv.timeoutMs,
+        target: argv.target,
       })
     : await runDoctor(argv.path ?? '.', {
         mode,
         runScripts: argv.scripts,
         timeoutMs: argv.timeoutMs,
+        target: argv.target,
       });
 
   if (argv.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    printDoctorReport(report);
+    console.log(formatHumanReport(report));
   }
 
   if (report.summary.errors > 0) {
@@ -871,56 +882,6 @@ function resolveDoctorMode(argv: DoctorArgv): DoctorMode {
   if (argv.ci) return 'ci';
   if (argv.fast) return 'fast';
   return DEFAULT_DOCTOR_MODE;
-}
-
-function printDoctorReport(report: DoctorReport): void {
-  const selection = report.selection ?? {
-    defaultMode: 'fast',
-    runScripts: false,
-    description: 'No selection metadata available.',
-    fullModeGuidance: '',
-  };
-
-  console.log(chalk.bold(`mds doctor (${report.mode})`));
-  console.log(chalk.dim(report.projectPath));
-  console.log(chalk.dim(`mode: ${selection.description}`));
-  console.log(chalk.dim(`default: ${selection.defaultMode}`));
-  console.log(chalk.dim(`scripts: ${selection.runScripts ? 'enabled' : 'disabled'}`));
-  console.log(chalk.dim(`full mode: ${selection.fullModeGuidance}`));
-  console.log();
-
-  for (const check of report.checks) {
-    printCheck(check);
-  }
-
-  console.log();
-  console.log(
-    [
-      chalk.cyan(`score ${report.summary.score}/100`),
-      chalk.red(`${report.summary.errors} errors`),
-      chalk.yellow(`${report.summary.warnings} warnings`),
-      chalk.green(`${report.summary.passed} passed`),
-      chalk.gray(`${report.summary.skipped} skipped`),
-    ].join(' | ')
-  );
-}
-
-function printCheck(check: DoctorCheckResult): void {
-  const label = {
-    pass: chalk.green('PASS'),
-    warn: chalk.yellow('WARN'),
-    error: chalk.red('FAIL'),
-    skip: chalk.gray('SKIP'),
-  }[check.status];
-
-  console.log(`${label} ${chalk.bold(check.name)}: ${check.message}`);
-
-  if (check.status !== 'pass' && check.details) {
-    const detailText = JSON.stringify(check.details, null, 2);
-    for (const line of detailText.split('\n')) {
-      console.log(chalk.dim(`  ${line}`));
-    }
-  }
 }
 
 main().catch((error: unknown) => {
