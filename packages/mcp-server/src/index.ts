@@ -2283,10 +2283,13 @@ async function generateCreateExpoSuperStackWorkspace(
     const projectPath = path.resolve(parentDir, manifest.name as string);
     const requiredArtifacts = [
       path.join(projectPath, 'project', 'workspace.json'),
-      path.join(projectPath, 'project', 'info.md'),
+      ...['info.md', 'todo.md', 'style.md', 'guidelines.md'].map((fileName) =>
+        path.join(projectPath, 'project', fileName)
+      ),
       ...((manifest.apps as Array<{ path: string }>).flatMap((app) => [
-        path.join(projectPath, app.path, 'project', 'info.md'),
-        path.join(projectPath, app.path, 'project', 'todo.md'),
+        ...['info.md', 'todo.md', 'style.md', 'guidelines.md'].map((fileName) =>
+          path.join(projectPath, app.path, 'project', fileName)
+        ),
       ])),
     ];
     const missingArtifacts = requiredArtifacts.filter((filePath) => !existsSync(filePath));

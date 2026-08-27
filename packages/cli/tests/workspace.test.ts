@@ -226,6 +226,28 @@ describe("workspace generation", () => {
     });
   });
 
+  it("does not configure unsupported setup-node caching for Bun workspaces", async () => {
+    const workspacePath = await mkdtemp(path.join(os.tmpdir(), "mds-bun-workspace-"));
+    tempDirs.push(workspacePath);
+    const manifest = createWorkspaceManifest({
+      displayName: "Bun Workspace",
+      packageManager: "bun",
+      apps: [
+        { displayName: "Mobile", kind: "expo", purpose: "Serve mobile users." },
+        { displayName: "Site", kind: "non-expo", purpose: "Serve the public website." },
+      ],
+    });
+
+    await scaffoldWorkspaceRoot(workspacePath, manifest);
+    const workflow = await readFile(
+      path.join(workspacePath, ".github", "workflows", "mds-pr-checks.yml"),
+      "utf8",
+    );
+
+    expect(workflow).toContain("bun install --frozen-lockfile");
+    expect(workflow).not.toContain("cache: bun");
+  });
+
   it("wires generated Expo apps to root packages and removes nested repository artifacts", async () => {
     const workspacePath = await mkdtemp(
       path.join(os.tmpdir(), "mds-wire-workspace-"),

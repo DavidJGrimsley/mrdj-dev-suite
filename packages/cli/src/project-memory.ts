@@ -182,6 +182,7 @@ export interface WriteResult {
 
 export interface RenderInfoOptions {
   preserveImportedNotes?: boolean;
+  workspaceApp?: boolean;
 }
 
 interface PackageJson {
@@ -729,7 +730,12 @@ export async function scaffoldProjectMemory(
   const todoAlreadyExisted = await pathExists(todoPath);
   const guidelines = await resolveGuidelines(answers, options);
   const results = await Promise.all([
-    writeProjectMemoryFile(infoPath, renderInfo(projectPath, answers, existingInfo), force, true),
+    writeProjectMemoryFile(
+      infoPath,
+      renderInfo(projectPath, answers, existingInfo, { workspaceApp: isWorkspaceApp }),
+      force,
+      true
+    ),
     // TODO is the human-owned roadmap ledger. Even --force must not replace an
     // existing ledger; a new project is the only initialization case.
     writeIfAllowed(todoPath, renderTodo(answers), false),
@@ -1800,7 +1806,7 @@ export function renderInfo(
     '',
     `- TypeScript: ${formatYesNo(answers.generatorScriptLanguage !== 'javascript')}`,
     `- Package Manager: ${answers.generatorPackageManager ?? 'npm'}`,
-    '- Project shape: single Expo app',
+    `- Project shape: ${options.workspaceApp ? 'Expo app in a multi-app workspace' : 'single Expo app'}`,
     `- Navigation: ${formatGeneratorNavigation(answers.generatorNavigationLibrary)}`,
     `- Type of Navigation: ${formatGeneratorNavigationType(answers.generatorReactNavigationLayout)}`,
     `- Expo Router app directory: ${formatAppDirectory(answers.appDirectory)}`,
