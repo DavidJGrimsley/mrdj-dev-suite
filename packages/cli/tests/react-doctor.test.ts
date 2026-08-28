@@ -19,7 +19,7 @@ import {
   resolveReactDoctorDisabledFromPackageJson,
   REACT_DOCTOR_VERSION,
 } from '../src/react-doctor.js';
-import { isSupportedRunTool } from '../src/commands/run.js';
+import { isSupportedRunTool, runReactDoctorTool } from '../src/commands/run.js';
 import { scaffoldProjectMemory } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
@@ -89,8 +89,44 @@ describe('react-doctor helpers', () => {
     expect(buildReactDoctorCommandInvocation({ noTelemetry: false }).display).toBe(
       'npx react-doctor -y'
     );
+    expect(
+      buildReactDoctorCommandInvocation({
+        json: true,
+        jsonOut: 'C:\\Temp\\react-doctor.json',
+      }).display
+    ).toBe('npx react-doctor -y --no-telemetry --json --json-out C:\\Temp\\react-doctor.json');
     expect(buildReactDoctorPackageScript()).toBe('npx mds run react-doctor');
     expect(buildDirectReactDoctorPackageScript()).toBe('npx react-doctor -y --no-telemetry');
+  });
+
+  it('keeps wrapper status text off stdout for JSON runs', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-rd-json-'));
+    tempDirs.push(projectPath);
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({ name: 'disabled-json', mds: { reactDoctor: false } }),
+      'utf8'
+    );
+    const originalLog = console.log;
+    const originalError = console.error;
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    console.log = (message?: unknown) => {
+      stdout.push(String(message ?? ''));
+    };
+    console.error = (message?: unknown) => {
+      stderr.push(String(message ?? ''));
+    };
+
+    try {
+      await runReactDoctorTool({ path: projectPath, json: true });
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+    }
+
+    expect(stdout).toEqual([]);
+    expect(stderr.join('\n')).toContain('mds run react-doctor');
   });
 
   it('honors disable env flags and package.json knobs', () => {

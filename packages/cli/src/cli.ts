@@ -392,6 +392,10 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('json-out', {
+            describe: 'Pass --json-out through to react-doctor',
+            type: 'string',
+          })
           .option('verbose', {
             describe: 'Pass --verbose through to react-doctor',
             type: 'boolean',

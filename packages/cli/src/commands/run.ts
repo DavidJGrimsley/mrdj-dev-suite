@@ -19,6 +19,7 @@ export interface RunArgv {
   verbose?: boolean;
   project?: string;
   blocking?: 'error' | 'warning' | 'none';
+  jsonOut?: string;
   yes?: boolean;
 }
 
@@ -46,17 +47,18 @@ export function isSupportedRunTool(value: string): value is SupportedRunTool {
 export async function runReactDoctorTool(argv: RunArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
   const disabled = await resolveReactDoctorDisabled(projectPath);
+  const log = argv.json ? console.error : console.log;
 
-  console.log(chalk.bold('mds run react-doctor'));
-  console.log(chalk.dim(projectPath));
-  console.log();
+  log(chalk.bold('mds run react-doctor'));
+  log(chalk.dim(projectPath));
+  log();
 
   if (disabled.disabled && !argv.force) {
-    console.log(chalk.yellow('React Doctor is disabled for this project.'));
+    log(chalk.yellow('React Doctor is disabled for this project.'));
     if (disabled.reason) {
-      console.log(chalk.gray(disabled.reason));
+      log(chalk.gray(disabled.reason));
     }
-    console.log(
+    log(
       chalk.gray(
         'Enable it by unsetting MDS_REACT_DOCTOR / MDS_DISABLE_REACT_DOCTOR / REACT_DOCTOR_DISABLED, or set package.json mds.reactDoctor back to true. Pass --force to run once.'
       )
@@ -65,12 +67,12 @@ export async function runReactDoctorTool(argv: RunArgv): Promise<void> {
   }
 
   if (disabled.disabled && argv.force) {
-    console.log(chalk.gray(`Running with --force even though disabled (${disabled.reason}).`));
+    log(chalk.gray(`Running with --force even though disabled (${disabled.reason}).`));
   }
 
   const monorepo = await isMonorepoWorkspaceRoot(projectPath);
   if (monorepo) {
-    console.log(chalk.gray('Detected monorepo workspace root; React Doctor will scan workspace-aware project files.'));
+    log(chalk.gray('Detected monorepo workspace root; React Doctor will scan workspace-aware project files.'));
   }
 
   const invocation = buildReactDoctorCommandInvocation({
@@ -80,9 +82,10 @@ export async function runReactDoctorTool(argv: RunArgv): Promise<void> {
     verbose: Boolean(argv.verbose),
     project: argv.project,
     blocking: argv.blocking,
+    jsonOut: argv.jsonOut,
   });
 
-  console.log(chalk.cyan(`Starting: ${invocation.display}`));
+  log(chalk.cyan(`Starting: ${invocation.display}`));
   await runStructuredCommand(invocation, projectPath);
 }
 

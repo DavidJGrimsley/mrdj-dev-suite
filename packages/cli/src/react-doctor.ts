@@ -31,6 +31,7 @@ export interface BuildReactDoctorCommandOptions {
   verbose?: boolean;
   project?: string;
   blocking?: 'error' | 'warning' | 'none';
+  jsonOut?: string;
   extraArgs?: string[];
   noTelemetry?: boolean;
 }
@@ -48,6 +49,7 @@ export function renderReactDoctorConfig(): string {
         '**/android/**',
         '**/ios/**',
         '**/.turbo/**',
+        '**/temp/**',
       ],
     },
     warnings: true,
@@ -230,6 +232,9 @@ export function buildReactDoctorCommandInvocation(
 
   if (options.json) {
     args.push('--json');
+  }
+  if (options.jsonOut?.trim()) {
+    args.push('--json-out', options.jsonOut.trim());
   }
   if (options.verbose) {
     args.push('--verbose');
