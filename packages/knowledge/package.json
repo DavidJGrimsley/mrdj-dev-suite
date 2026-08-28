@@ -33,6 +33,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc && node scripts/copy-content.mjs",
+    "build:runtime": "tsc && node scripts/copy-content.mjs --skip-plugin-bundles",
     "build:plugin": "tsc && node scripts/generate-codex-plugin.mjs",
     "build:vscode": "tsc && node scripts/generate-vscode-copilot.mjs",
     "type-check": "tsc --noEmit",

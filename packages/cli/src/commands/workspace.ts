@@ -92,7 +92,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     return;
   }
 
-  const result = getWorkspaceStatus(target, { fetch: argv.fetch ?? true });
+  const result = getWorkspaceStatus(target, { fetch: argv.fetch ?? false });
   if (argv.json) {
     console.log(JSON.stringify(result, null, 2));
   } else {

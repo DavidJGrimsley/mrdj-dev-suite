@@ -343,7 +343,7 @@ async function main(): Promise<void> {
           .option('fetch', {
             describe: 'Fetch and prune remotes before evaluating freshness',
             type: 'boolean',
-            default: true,
+            default: false,
           })
           .option('json', {
             describe: 'Print structured JSON output',

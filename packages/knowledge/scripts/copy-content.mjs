@@ -15,6 +15,7 @@ const source = path.join(packageRoot, 'src', 'content');
 const destination = path.join(packageRoot, 'dist', 'content');
 
 export async function runCopyContent() {
+  const shouldGeneratePluginBundles = !process.argv.includes('--skip-plugin-bundles');
   await rm(destination, { recursive: true, force: true });
   await mkdir(path.dirname(destination), { recursive: true });
   const markdownFiles = await listMarkdownFiles(source);
@@ -35,7 +36,7 @@ export async function runCopyContent() {
     'utf8'
   );
 
-  if (process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
+  if (shouldGeneratePluginBundles && process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
     try {
       await generateCodexPluginBundleFromKnowledge({ packageRoot });
     } catch (error) {
@@ -48,7 +49,7 @@ export async function runCopyContent() {
     }
   }
 
-  if (process.env.MRDJ_SKIP_VSCODE_COPILOT_GENERATION !== '1') {
+  if (shouldGeneratePluginBundles && process.env.MRDJ_SKIP_VSCODE_COPILOT_GENERATION !== '1') {
     try {
       await generateVscodeCopilotBundleFromKnowledge({ packageRoot });
     } catch (error) {
@@ -60,6 +61,8 @@ export async function runCopyContent() {
       );
     }
   }
+
+  if (!shouldGeneratePluginBundles) return;
 
   // Generate plugin skill files in the Claude Code plugin format:
   // skills/<skill-id>/SKILL.md with YAML frontmatter extracted from the skill body.

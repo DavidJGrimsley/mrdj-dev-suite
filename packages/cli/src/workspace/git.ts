@@ -35,6 +35,22 @@ export interface GitWorktreeInfo {
   prunable?: string;
 }
 
+export function deriveGitFreshness(options: {
+  dirty: boolean;
+  ahead: number;
+  behind: number;
+  fetchAttempted?: boolean;
+  fetchSucceeded?: boolean;
+}): GitFreshness {
+  if (options.dirty) return 'DIRTY';
+  if (options.ahead > 0 && options.behind > 0) return 'DIVERGED';
+  if (options.ahead > 0) return 'AHEAD';
+  if (options.behind > 0) return 'BEHIND_SAFE_TO_FF';
+  return options.fetchAttempted && options.fetchSucceeded === false
+    ? 'OFFLINE_OR_UNKNOWN'
+    : 'CURRENT';
+}
+
 function git(repoPath: string, args: string[]): string {
   return execFileSync('git', ['-C', repoPath, ...args], {
     encoding: 'utf8',
@@ -109,12 +125,13 @@ export function inspectGitRepository(
     const ahead = Number.parseInt(aheadText ?? '0', 10);
     const behind = Number.parseInt(behindText ?? '0', 10);
 
-    let freshness: GitFreshness;
-    if (dirty) freshness = 'DIRTY';
-    else if (ahead > 0 && behind > 0) freshness = 'DIVERGED';
-    else if (ahead > 0) freshness = 'AHEAD';
-    else if (behind > 0) freshness = 'BEHIND_SAFE_TO_FF';
-    else freshness = fetchAttempted && fetchSucceeded === false ? 'OFFLINE_OR_UNKNOWN' : 'CURRENT';
+    const freshness = deriveGitFreshness({
+      dirty,
+      ahead,
+      behind,
+      fetchAttempted,
+      fetchSucceeded,
+    });
 
     return {
       path: resolved,
@@ -151,6 +168,10 @@ export function listGitWorktrees(repoPath: string): GitWorktreeInfo[] {
   const output = git(resolved, ['worktree', 'list', '--porcelain']);
   if (!output) return [];
 
+  return parseGitWorktreeList(output);
+}
+
+export function parseGitWorktreeList(output: string): GitWorktreeInfo[] {
   return output
     .split(/\r?\n\r?\n/)
     .map((block) => block.trim())
