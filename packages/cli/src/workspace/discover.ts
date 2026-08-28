@@ -71,9 +71,15 @@ export function discoverWorkspace(startPath = '.'): DiscoveredWorkspace | undefi
       if (!fs.existsSync(manifestPath)) continue;
 
       const manifest = parseWorkspaceManifest(readJson(manifestPath));
-      const projectPath = path.dirname(manifestPath);
+      const manifestDirectory = path.dirname(manifestPath);
       const workspaceRoot =
-        path.basename(projectPath) === 'project' ? path.dirname(projectPath) : ancestor;
+        path.basename(manifestDirectory) === 'project'
+          ? path.dirname(manifestDirectory)
+          : ancestor;
+      const projectPath = path.resolve(
+        workspaceRoot,
+        manifest.project?.path ?? (path.basename(manifestDirectory) === 'project' ? 'project' : '.')
+      );
 
       if (sourceLink && sourceLink.value.workspaceId !== manifest.workspaceId) {
         continue;
@@ -99,7 +105,7 @@ export function discoverWorkspace(startPath = '.'): DiscoveredWorkspace | undefi
       if (manifest.workspaceId === sourceLink.value.workspaceId) {
         return {
           workspaceRoot: parent,
-          projectPath: path.join(parent, 'project'),
+          projectPath: path.resolve(parent, manifest.project?.path ?? 'project'),
           manifestPath: siblingProjectManifest,
           manifest,
           startedFrom,
