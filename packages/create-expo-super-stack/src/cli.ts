@@ -73,6 +73,8 @@ export interface ParsedArgs {
     skipExpoFix: boolean;
     testToMain?: boolean;
     projectParentDir?: string;
+    workspace?: boolean;
+    workspaceRoot?: string;
     yes: boolean;
     skipCreate: boolean;
     platforms?: string[];
@@ -157,6 +159,12 @@ export async function main(): Promise<void> {
     projectParentDir,
     projectName,
   );
+  if (parsed.mds.workspace && parsed.mds.workspaceRoot) {
+    await mkdir(path.join(parsed.mds.workspaceRoot, "temp"), { recursive: true });
+    await mkdir(path.join(parsed.mds.workspaceRoot, "generated"), { recursive: true });
+    console.log(`Workspace layout prepared: ${parsed.mds.workspaceRoot}`);
+    console.log("After adding Git remotes, run `mds workspace init <main-checkout> --project-remote <url> --apply --yes`.");
+  }
   const easSelected = await detectEasSetup(
     projectPath,
     parsed.createExpoStackArgs,
@@ -380,6 +388,11 @@ export function parseArgs(args: string[]): ParsedArgs {
 
     if (arg === "--mds-skip-create") {
       mds.skipCreate = true;
+      continue;
+    }
+
+    if (arg === "--mds-workspace") {
+      mds.workspace = true;
       continue;
     }
 
@@ -726,6 +739,7 @@ export function renderHelpText(): string {
     "  --mds-save-defaults           Save onboarding answers as personal defaults",
     "  --mds-no-save-defaults        Do not save onboarding answers as personal defaults",
     "  --mds-skip-create             Skip create-expo-stack and only run onboarding in an existing app",
+    "  --mds-workspace               Generate into <app>-i2Workspace/<app>-main",
     "  --mds-skip-expo-fix           Skip dependency install/fix/doctor repair pass",
     "  --mds-guidelines-template     Use bundled MDS project/guidelines template",
     "  --mds-no-guidelines-template  Do not use the bundled MDS project/guidelines template",
@@ -755,31 +769,39 @@ export function withResolvedProjectName(
 ): ParsedArgs {
   const target = resolveProjectTarget(parsed.projectName ?? projectName);
   const resolvedProjectName = target.projectName;
+  const workspaceRoot = parsed.mds.workspace
+    ? path.join(target.parentDir, `${resolvedProjectName}-i2Workspace`)
+    : undefined;
+  const generatedProjectName = parsed.mds.workspace
+    ? `${resolvedProjectName}-main`
+    : resolvedProjectName;
   const createExpoStackArgs = parsed.mds.skipCreate
     ? parsed.createExpoStackArgs
-    : replaceProjectArg(parsed.createExpoStackArgs, resolvedProjectName);
+    : replaceProjectArg(parsed.createExpoStackArgs, generatedProjectName);
 
   if (parsed.projectName) {
     return {
       ...parsed,
-      projectName: resolvedProjectName,
+      projectName: generatedProjectName,
       createExpoStackArgs,
       mds: {
         ...parsed.mds,
-        projectParentDir: target.parentDir,
+        projectParentDir: workspaceRoot ?? target.parentDir,
         appName: parsed.mds.appName ?? resolvedProjectName,
+        ...(workspaceRoot ? { workspaceRoot } : {}),
       },
     };
   }
 
   return {
     ...parsed,
-    projectName: resolvedProjectName,
+    projectName: generatedProjectName,
     createExpoStackArgs,
     mds: {
       ...parsed.mds,
-      projectParentDir: target.parentDir,
+      projectParentDir: workspaceRoot ?? target.parentDir,
       appName: parsed.mds.appName ?? resolvedProjectName,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
     },
   };
 }

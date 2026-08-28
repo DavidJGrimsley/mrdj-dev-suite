@@ -2,16 +2,22 @@ import path from 'node:path';
 
 import chalk from 'chalk';
 
-import { planWorkspaceAdoption } from '../workspace/adopt.js';
+import { applyWorkspaceAdoption, planWorkspaceAdoption } from '../workspace/adopt.js';
 import { discoverWorkspace } from '../workspace/discover.js';
 import { getWorkspaceStatus, workspaceHasUnsafeState } from '../workspace/status.js';
 
 export interface WorkspaceArgv {
-  action?: 'discover' | 'status' | 'doctor' | 'adopt';
+  action?: 'discover' | 'status' | 'doctor' | 'adopt' | 'init';
   path?: string;
   fetch?: boolean;
   json?: boolean;
   dryRun?: boolean;
+  apply?: boolean;
+  yes?: boolean;
+  stash?: boolean;
+  projectRemote?: string;
+  workspaceName?: string;
+  workspaceRoot?: string;
 }
 
 function printWorkspaceStatus(result: ReturnType<typeof getWorkspaceStatus>): void {
@@ -42,6 +48,11 @@ function printWorkspaceStatus(result: ReturnType<typeof getWorkspaceStatus>): vo
 
   console.log();
   console.log(`Temp: ${result.tempPath}${result.tempExists ? '' : ' (not created)'}`);
+  console.log(`Generated: ${result.generatedPath}${result.generatedExists ? '' : ' (not created)'}`);
+  if (result.integrityIssues.length > 0) {
+    console.log();
+    for (const issue of result.integrityIssues) console.log(chalk.red(`  integrity: ${issue}`));
+  }
 }
 
 export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
@@ -65,30 +76,45 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     return;
   }
 
-  if (action === 'adopt') {
-    const plan = planWorkspaceAdoption(target);
+  if (action === 'adopt' || action === 'init') {
+    const plan = planWorkspaceAdoption(target, {
+      projectRemote: argv.projectRemote,
+      workspaceName: argv.workspaceName,
+      workspaceRoot: argv.workspaceRoot,
+    });
+    const applied = argv.apply === true
+      ? applyWorkspaceAdoption(plan, { stash: argv.stash, yes: argv.yes })
+      : plan;
     if (argv.json) {
-      console.log(JSON.stringify(plan, null, 2));
+      console.log(JSON.stringify({ ...applied, applied: argv.apply === true }, null, 2));
       return;
     }
 
-    console.log(chalk.bold('MDS workspace adoption plan'));
-    console.log(`Source: ${plan.sourcePath}`);
-    console.log(`Workspace: ${plan.workspaceRoot}`);
-    console.log(`Project control repo: ${plan.projectPath}`);
-    console.log(`Normalized main checkout: ${plan.normalizedMainPath}`);
-    console.log(`Temp: ${plan.tempPath}`);
-    if (plan.existingProjectMemory.length > 0) {
+    console.log(chalk.bold(`MDS workspace ${argv.apply ? 'initialization' : 'initialization plan'}`));
+    console.log(`Source: ${applied.sourcePath}`);
+    console.log(`Workspace: ${applied.workspaceRoot}`);
+    console.log(`Project control repo: ${applied.projectPath}`);
+    console.log(`Normalized main checkout: ${applied.normalizedMainPath}`);
+    console.log(`Temp: ${applied.tempPath}`);
+    console.log(`Generated: ${applied.generatedPath}`);
+    console.log(`Worktrees: ${applied.worktrees.length}`);
+    if (applied.existingProjectMemory.length > 0) {
       console.log();
       console.log('Existing project memory to migrate:');
-      for (const file of plan.existingProjectMemory) console.log(`  - ${file}`);
+      for (const file of applied.existingProjectMemory) console.log(`  - ${file}`);
     }
-    if (plan.warnings.length > 0) {
+    if (applied.warnings.length > 0) {
       console.log();
-      for (const warning of plan.warnings) console.log(chalk.yellow(`WARNING ${warning}`));
+      for (const warning of applied.warnings) console.log(chalk.yellow(`WARNING ${warning}`));
+    }
+    if (applied.errors.length > 0) {
+      console.log();
+      for (const error of applied.errors) console.log(chalk.red(`BLOCKED ${error}`));
     }
     console.log();
-    console.log(chalk.dim('Adoption is planning-only in this version; no files or Git repositories were changed.'));
+    console.log(argv.apply
+      ? chalk.green('Workspace initialization applied.')
+      : chalk.dim('Planning only. Re-run with --apply --yes --project-remote <url> to make changes.'));
     return;
   }
 

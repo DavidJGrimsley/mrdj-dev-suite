@@ -5,11 +5,11 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { planWorkspaceAdoption } from '../src/workspace/adopt.js';
+import { applyWorkspaceInitialization, planWorkspaceAdoption, planWorkspaceInitialization } from '../src/workspace/index.js';
 import { runWorkspaceCommand } from '../src/commands/workspace.js';
 import { discoverWorkspace, resolveWorkspaceProjectMemoryPath } from '../src/workspace/discover.js';
 import { deriveGitFreshness, inspectGitRepository, parseGitWorktreeList } from '../src/workspace/git.js';
-import { parseWorkspaceManifest } from '../src/workspace/schema.js';
+import { parseWorkspaceManifest, parseWorkspaceWorktreeRegistry } from '../src/workspace/schema.js';
 import { getWorkspaceStatus } from '../src/workspace/status.js';
 
 const created: string[] = [];
@@ -138,7 +138,7 @@ describe('workspace control plane', () => {
   it('plans an explicit i2Workspace directory rather than assuming test-apps', () => {
     const root = tempDir();
     fs.mkdirSync(path.join(root, 'project'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'example'), { recursive: true });
+    initializeGitRepository(path.join(root, 'example'), path.join(root, 'example.git'));
 
     const plan = planWorkspaceAdoption(path.join(root, 'example'));
     const workspaceRoot = path.join(root, 'example-i2Workspace');
@@ -149,8 +149,89 @@ describe('workspace control plane', () => {
     expect(plan.manifest.temp?.path).toBe('temp');
     expect(plan.manifest.repositories[0]?.mainFolder).toBe('example-main');
     expect(plan.normalizedMainPath).toBe(path.join(workspaceRoot, 'example-main'));
-    expect(fs.readdirSync(root).sort()).toEqual(['example', 'project']);
     expect(fs.existsSync(plan.tempPath)).toBe(false);
+  });
+
+  it('plans every healthy worktree and requires a project remote before apply', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', path.join(root, 'feature'), '-b', 'feature/test'], { stdio: 'ignore' });
+
+    const missingRemote = planWorkspaceInitialization(sourcePath);
+    expect(missingRemote.errors).toContainEqual(expect.stringContaining('--project-remote'));
+
+    const plan = planWorkspaceInitialization(sourcePath, {
+      projectRemote: path.join(root, 'project.git'),
+      workspaceName: 'sample',
+    });
+    expect(plan.worktrees).toHaveLength(2);
+    expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-main'));
+    expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-test'));
+  });
+
+  it('moves clean worktrees, seeds and pushes a remote control repo, and is discoverable', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    fs.mkdirSync(path.join(sourcePath, 'project'), { recursive: true });
+    fs.writeFileSync(path.join(sourcePath, 'project', 'info.md'), '# App\n', 'utf8');
+    execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add project memory'], { stdio: 'ignore' });
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', path.join(root, 'feature'), '-b', 'feature/test'], { stdio: 'ignore' });
+    const stalePath = path.join(root, 'stale');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', stalePath, '-b', 'feature/stale'], { stdio: 'ignore' });
+    fs.rmSync(stalePath, { recursive: true, force: true });
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    expect(plan.prunableWorktrees).toHaveLength(1);
+    const applied = applyWorkspaceInitialization(plan, { yes: true });
+    const workspaceRoot = path.join(root, 'sample-i2Workspace');
+    expect(fs.existsSync(path.join(workspaceRoot, 'sample-main'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceRoot, 'sample-feature-test'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceRoot, 'temp'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceRoot, 'generated'))).toBe(true);
+    expect(applied.worktrees).toHaveLength(2);
+    const registry = parseWorkspaceWorktreeRegistry(JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), 'utf8')) as unknown);
+    expect(registry.worktrees).toHaveLength(2);
+    expect(execFileSync('git', ['--git-dir', projectRemote, 'rev-parse', 'refs/heads/main'], { encoding: 'utf8' }).trim()).toMatch(/^[a-f0-9]{40}$/);
+    const status = getWorkspaceStatus(workspaceRoot);
+    expect(status.found).toBe(true);
+    if (status.found) expect(status.integrityIssues).toEqual([]);
+
+    const rerunPlan = planWorkspaceInitialization(path.join(workspaceRoot, 'sample-main'), { projectRemote, workspaceName: 'sample' });
+    expect(() => applyWorkspaceInitialization(rerunPlan, { yes: true })).not.toThrow();
+  });
+
+  it('preserves a feature source checkout and creates a clean default-branch main checkout', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['-C', sourcePath, 'checkout', '-b', 'feature/onboarding'], { stdio: 'ignore' });
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    expect(plan.worktrees).toHaveLength(1);
+    expect(plan.worktrees[0]?.role).toBe('feature');
+    const applied = applyWorkspaceInitialization(plan, { yes: true });
+    expect(applied.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-onboarding'));
+    expect(applied.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-main'));
+    expect(execFileSync('git', ['-C', path.join(root, 'sample-i2Workspace', 'sample-main'), 'branch', '--show-current'], { encoding: 'utf8' }).trim()).toBe('main');
+  });
+
+  it('requires an explicit stash before migrating dirty worktrees', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    fs.writeFileSync(path.join(sourcePath, 'dirty.txt'), 'dirty\n', 'utf8');
+    execFileSync('git', ['init', '--bare', path.join(root, 'project.git')], { stdio: 'ignore' });
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote: path.join(root, 'project.git') });
+    expect(() => applyWorkspaceInitialization(plan, { yes: true })).toThrow(/--stash/);
   });
 
   it('plans an i2Workspace sibling for a legacy grouped main checkout', () => {
@@ -158,7 +239,7 @@ describe('workspace control plane', () => {
     const legacyWorkspaceRoot = path.join(parent, 'Time2Pay');
     const workspaceRoot = path.join(parent, 'Time2Pay-i2Workspace');
     const sourcePath = path.join(legacyWorkspaceRoot, 'time2pay-main');
-    fs.mkdirSync(sourcePath, { recursive: true });
+    initializeGitRepository(sourcePath, path.join(parent, 'time2pay.git'));
 
     const plan = planWorkspaceAdoption(sourcePath);
 
@@ -168,22 +249,22 @@ describe('workspace control plane', () => {
     expect(plan.manifest.name).toBe('Time2Pay');
     expect(plan.manifest.repositories[0]).toMatchObject({
       mainFolder: 'time2pay-main',
-      worktreePrefix: 'Time2Pay-',
+      worktreePrefix: 'time2pay-',
     });
-    expect(plan.warnings).toContainEqual(expect.stringContaining('must move'));
+    expect(plan.worktrees[0]?.targetPath).toBe(path.join(workspaceRoot, 'time2pay-main'));
   });
 
   it('does not nest an i2Workspace directory when planning from its normalized main checkout', () => {
     const workspaceRoot = path.join(tempDir(), 'PokePages-i2Workspace');
     const sourcePath = path.join(workspaceRoot, 'PokePages-main');
-    fs.mkdirSync(sourcePath, { recursive: true });
+    initializeGitRepository(sourcePath, path.join(path.dirname(workspaceRoot), 'pokepages.git'));
 
     const plan = planWorkspaceAdoption(sourcePath);
 
     expect(plan.workspaceRoot).toBe(workspaceRoot);
     expect(plan.normalizedMainPath).toBe(sourcePath);
     expect(plan.manifest.workspaceId).toBe('pokepages');
-    expect(plan.warnings).not.toContainEqual(expect.stringContaining('must move'));
+    expect(plan.worktrees[0]?.targetPath).toBe(sourcePath);
   });
 
   it('does not fetch by default and records an explicit fetch request', () => {
@@ -259,8 +340,8 @@ describe('workspace control plane', () => {
     const adoptOutput = await captureConsole(() =>
       runWorkspaceCommand({ action: 'adopt', path: sourcePath, dryRun: true })
     );
-    expect(adoptOutput).toContain('MDS workspace adoption plan');
-    expect(adoptOutput).toContain('Adoption is planning-only');
+    expect(adoptOutput).toContain('MDS workspace initialization plan');
+    expect(adoptOutput).toContain('Planning only');
   });
 
   it('classifies every synchronization state without mutating Git state', () => {

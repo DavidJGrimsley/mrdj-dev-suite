@@ -3,9 +3,10 @@ import path from 'node:path';
 
 import { discoverWorkspace } from './discover.js';
 import { inspectGitRepository, listGitWorktrees } from './git.js';
+import { SOURCE_WORKSPACE_LINK_PATH, WORKSPACE_WORKTREE_REGISTRY_FILENAME, parseSourceWorkspaceLink, parseWorkspaceWorktreeRegistry } from './schema.js';
 
 import type { GitRepositoryStatus, GitWorktreeInfo } from './git.js';
-import type { WorkspaceRepositoryConfig } from './schema.js';
+import type { WorkspaceRepositoryConfig, WorkspaceWorktreeRegistry } from './schema.js';
 
 export interface WorkspaceRepositoryStatus {
   config: WorkspaceRepositoryConfig;
@@ -25,6 +26,10 @@ export interface WorkspaceStatus {
   repositories: WorkspaceRepositoryStatus[];
   tempPath: string;
   tempExists: boolean;
+  generatedPath: string;
+  generatedExists: boolean;
+  registry?: WorkspaceWorktreeRegistry;
+  integrityIssues: string[];
 }
 
 export interface WorkspaceNotFoundStatus {
@@ -43,13 +48,56 @@ export function getWorkspaceStatus(
     return { found: false, startedFrom: path.resolve(startPath) };
   }
 
+  const integrityIssues: string[] = [];
+  const registryPath = path.join(workspace.projectPath, WORKSPACE_WORKTREE_REGISTRY_FILENAME);
+  let registry: WorkspaceWorktreeRegistry | undefined;
+  if (!fs.existsSync(registryPath)) {
+    integrityIssues.push(`Missing worktree registry: ${registryPath}`);
+  } else {
+    try {
+      registry = parseWorkspaceWorktreeRegistry(JSON.parse(fs.readFileSync(registryPath, 'utf8')) as unknown);
+      if (registry.workspaceId !== workspace.manifest.workspaceId) {
+        integrityIssues.push('Worktree registry workspaceId does not match the manifest.');
+      }
+    } catch (error) {
+      integrityIssues.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   const repositories = workspace.manifest.repositories.map((config) => {
     const mainPath = path.resolve(workspace.workspaceRoot, config.mainFolder);
+    const worktrees = listGitWorktrees(mainPath);
+    if (!worktrees.some((worktree) => path.resolve(worktree.path) === mainPath)) {
+      integrityIssues.push(`Missing normalized main checkout: ${mainPath}`);
+    }
+    for (const worktree of worktrees) {
+      if (worktree.prunable) integrityIssues.push(`Prunable worktree registration: ${worktree.path}`);
+      if (!fs.existsSync(worktree.path)) integrityIssues.push(`Missing registered worktree path: ${worktree.path}`);
+      const linkPath = path.join(worktree.path, SOURCE_WORKSPACE_LINK_PATH);
+      if (!fs.existsSync(linkPath)) {
+        integrityIssues.push(`Missing workspace link: ${linkPath}`);
+      } else {
+        try {
+          const link = parseSourceWorkspaceLink(JSON.parse(fs.readFileSync(linkPath, 'utf8')) as unknown);
+          if (link.workspaceId !== workspace.manifest.workspaceId) integrityIssues.push(`Workspace link mismatch: ${linkPath}`);
+        } catch {
+          integrityIssues.push(`Invalid workspace link: ${linkPath}`);
+        }
+      }
+    }
+    if (registry) {
+      for (const entry of registry.worktrees.filter((entry) => entry.repositoryId === config.id)) {
+        const entryPath = path.resolve(workspace.workspaceRoot, entry.path);
+        if (!fs.existsSync(entryPath) || !worktrees.some((worktree) => path.resolve(worktree.path) === entryPath)) {
+          integrityIssues.push(`Registry entry is not an active Git worktree: ${entry.path}`);
+        }
+      }
+    }
     return {
       config,
       mainPath,
       git: inspectGitRepository(mainPath, { fetch: options.fetch }),
-      worktrees: listGitWorktrees(mainPath),
+      worktrees,
     };
   });
 
@@ -57,6 +105,7 @@ export function getWorkspaceStatus(
     workspace.workspaceRoot,
     workspace.manifest.temp?.path ?? 'temp'
   );
+  const generatedPath = path.resolve(workspace.workspaceRoot, 'generated');
 
   return {
     found: true,
@@ -69,6 +118,10 @@ export function getWorkspaceStatus(
     repositories,
     tempPath,
     tempExists: fs.existsSync(tempPath),
+    generatedPath,
+    generatedExists: fs.existsSync(generatedPath),
+    ...(registry ? { registry } : {}),
+    integrityIssues,
   };
 }
 
@@ -78,6 +131,7 @@ function isUnsafeGitFreshness(freshness: GitRepositoryStatus['freshness']): bool
 
 export function workspaceHasUnsafeState(status: WorkspaceStatus): boolean {
   return (
+    status.integrityIssues.length > 0 ||
     isUnsafeGitFreshness(status.projectGit.freshness) ||
     status.repositories.some((repository) => isUnsafeGitFreshness(repository.git.freshness))
   );

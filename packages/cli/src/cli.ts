@@ -337,7 +337,7 @@ async function main(): Promise<void> {
         builder
           .positional('action', {
             describe: 'Workspace action',
-            choices: ['discover', 'status', 'doctor', 'adopt'] as const,
+            choices: ['discover', 'status', 'doctor', 'adopt', 'init'] as const,
           })
           .positional('path', {
             describe: 'Workspace, project, source checkout, or existing repository path',
@@ -355,9 +355,36 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('dry-run', {
-            describe: 'Reserved for future mutating adoption; adoption is planning-only in this version',
+            describe: 'Print the workspace migration plan without changing files (default)',
             type: 'boolean',
             default: true,
+          })
+          .option('apply', {
+            describe: 'Apply a workspace initialization plan',
+            type: 'boolean',
+            default: false,
+          })
+          .option('yes', {
+            describe: 'Confirm the destructive filesystem and Git operations required by --apply',
+            type: 'boolean',
+            default: false,
+          })
+          .option('stash', {
+            describe: 'Stash dirty worktrees before applying initialization',
+            type: 'boolean',
+            default: false,
+          })
+          .option('project-remote', {
+            describe: 'Required Git remote URL for the workspace project control repository',
+            type: 'string',
+          })
+          .option('workspace-name', {
+            describe: 'Override the name used for normalized worktree folders',
+            type: 'string',
+          })
+          .option('workspace-root', {
+            describe: 'Override the target *-i2Workspace directory',
+            type: 'string',
           }),
       async (argv) => {
         await runWorkspaceCommand(argv as WorkspaceArgv);
