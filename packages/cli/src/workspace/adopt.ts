@@ -39,26 +39,40 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-function deriveWorkspaceNaming(sourceName: string, workspaceRoot: string): {
+function deriveWorkspaceNaming(sourceName: string, sourceParent: string): {
   workspaceName: string;
   mainFolder: string;
+  workspaceRoot: string;
 } {
   const existingMainMatch = /^(.*)-main$/i.exec(sourceName);
   if (!existingMainMatch || !existingMainMatch[1]) {
     return {
       workspaceName: sourceName,
       mainFolder: `${sourceName}-main`,
+      workspaceRoot: path.join(sourceParent, `${sourceName}-i2Workspace`),
     };
   }
 
   const sourceWorkspaceName = existingMainMatch[1];
-  const parentName = path.basename(workspaceRoot);
-  const workspaceName =
-    slugify(parentName) === slugify(sourceWorkspaceName) ? parentName : sourceWorkspaceName;
+  const parentName = path.basename(sourceParent);
+  if (slugify(parentName) === slugify(sourceWorkspaceName)) {
+    return {
+      workspaceName: parentName,
+      mainFolder: sourceName,
+      workspaceRoot: path.join(path.dirname(sourceParent), `${parentName}-i2Workspace`),
+    };
+  }
+
+  const workspaceRootName = `${sourceWorkspaceName}-i2Workspace`;
+  const workspaceRoot =
+    slugify(parentName) === slugify(workspaceRootName)
+      ? sourceParent
+      : path.join(sourceParent, workspaceRootName);
 
   return {
-    workspaceName,
+    workspaceName: sourceWorkspaceName,
     mainFolder: sourceName,
+    workspaceRoot,
   };
 }
 
@@ -69,8 +83,8 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
   }
 
   const sourceName = path.basename(resolvedSource);
-  const workspaceRoot = path.dirname(resolvedSource);
-  const { workspaceName, mainFolder } = deriveWorkspaceNaming(sourceName, workspaceRoot);
+  const sourceParent = path.dirname(resolvedSource);
+  const { workspaceName, mainFolder, workspaceRoot } = deriveWorkspaceNaming(sourceName, sourceParent);
   const projectPath = path.join(workspaceRoot, 'project');
   const normalizedMainPath = path.join(workspaceRoot, mainFolder);
   const tempPath = path.join(workspaceRoot, 'temp');
@@ -95,12 +109,15 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
   if (!remote) {
     warnings.push('No origin remote was detected; repository linkage must be supplied before setup.');
   }
+  if (fs.existsSync(workspaceRoot) && resolvedSource !== normalizedMainPath) {
+    warnings.push('The target i2Workspace directory already exists; adoption must reconcile it rather than overwrite it.');
+  }
   if (fs.existsSync(projectPath)) {
     warnings.push('A sibling project/ directory already exists; adoption must reconcile it rather than overwrite it.');
   }
   if (resolvedSource !== normalizedMainPath) {
     warnings.push(
-      `The existing source directory is not normalized. A later safe normalization can rename it to ${path.basename(normalizedMainPath)}.`
+      `The existing source directory must move to ${normalizedMainPath} during adoption.`
     );
   }
 
@@ -113,7 +130,7 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
         id: 'source',
         remote: remote ?? 'REQUIRED',
         defaultBranch: detectedDefaultBranch,
-        mainFolder: sourceName,
+        mainFolder,
         worktreePrefix: `${workspaceName}-`,
       },
     ],

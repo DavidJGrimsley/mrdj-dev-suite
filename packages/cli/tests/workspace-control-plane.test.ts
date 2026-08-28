@@ -105,37 +105,55 @@ describe('workspace control plane', () => {
     expect(resolveWorkspaceProjectMemoryPath(root)).toBe(legacyProject);
   });
 
-  it('uses a generic temp directory rather than assuming test-apps', () => {
+  it('plans an explicit i2Workspace directory rather than assuming test-apps', () => {
     const root = tempDir();
     fs.mkdirSync(path.join(root, 'project'), { recursive: true });
     fs.mkdirSync(path.join(root, 'example'), { recursive: true });
 
     const plan = planWorkspaceAdoption(path.join(root, 'example'));
+    const workspaceRoot = path.join(root, 'example-i2Workspace');
 
-    expect(plan.tempPath).toBe(path.join(root, 'temp'));
+    expect(plan.workspaceRoot).toBe(workspaceRoot);
+    expect(plan.projectPath).toBe(path.join(workspaceRoot, 'project'));
+    expect(plan.tempPath).toBe(path.join(workspaceRoot, 'temp'));
     expect(plan.manifest.temp?.path).toBe('temp');
-    expect(plan.manifest.repositories[0]?.mainFolder).toBe('example');
-    expect(plan.normalizedMainPath).toBe(path.join(root, 'example-main'));
+    expect(plan.manifest.repositories[0]?.mainFolder).toBe('example-main');
+    expect(plan.normalizedMainPath).toBe(path.join(workspaceRoot, 'example-main'));
     expect(fs.readdirSync(root).sort()).toEqual(['example', 'project']);
     expect(fs.existsSync(plan.tempPath)).toBe(false);
   });
 
-  it('keeps an already-normalized main checkout stable during adoption planning', () => {
-    const workspaceRoot = path.join(tempDir(), 'Time2Pay');
-    const sourcePath = path.join(workspaceRoot, 'time2pay-main');
+  it('plans an i2Workspace sibling for a legacy grouped main checkout', () => {
+    const parent = tempDir();
+    const legacyWorkspaceRoot = path.join(parent, 'Time2Pay');
+    const workspaceRoot = path.join(parent, 'Time2Pay-i2Workspace');
+    const sourcePath = path.join(legacyWorkspaceRoot, 'time2pay-main');
     fs.mkdirSync(sourcePath, { recursive: true });
 
     const plan = planWorkspaceAdoption(sourcePath);
 
     expect(plan.workspaceRoot).toBe(workspaceRoot);
-    expect(plan.normalizedMainPath).toBe(sourcePath);
+    expect(plan.normalizedMainPath).toBe(path.join(workspaceRoot, 'time2pay-main'));
     expect(plan.manifest.workspaceId).toBe('time2pay');
     expect(plan.manifest.name).toBe('Time2Pay');
     expect(plan.manifest.repositories[0]).toMatchObject({
       mainFolder: 'time2pay-main',
       worktreePrefix: 'Time2Pay-',
     });
-    expect(plan.warnings).not.toContainEqual(expect.stringContaining('not normalized'));
+    expect(plan.warnings).toContainEqual(expect.stringContaining('must move'));
+  });
+
+  it('does not nest an i2Workspace directory when planning from its normalized main checkout', () => {
+    const workspaceRoot = path.join(tempDir(), 'PokePages-i2Workspace');
+    const sourcePath = path.join(workspaceRoot, 'PokePages-main');
+    fs.mkdirSync(sourcePath, { recursive: true });
+
+    const plan = planWorkspaceAdoption(sourcePath);
+
+    expect(plan.workspaceRoot).toBe(workspaceRoot);
+    expect(plan.normalizedMainPath).toBe(sourcePath);
+    expect(plan.manifest.workspaceId).toBe('pokepages');
+    expect(plan.warnings).not.toContainEqual(expect.stringContaining('must move'));
   });
 
   it('does not fetch by default and records an explicit fetch request', () => {
