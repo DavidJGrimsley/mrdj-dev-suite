@@ -20,7 +20,12 @@ onboarding pass.
    local data guidance, MCP/Codex/Claude instructions, and CI/release safeguards.
 6. Scaffold only selected pieces.
 7. Add generated cleanup scripts such as `clear-expo-start` and `free-port`.
-8. Install added dependencies immediately with the project's package manager,
+8. Add default-enabled React Doctor support: `react-doctor` in `devDependencies`,
+   `doctor.config.json`, README section, and `mds run react-doctor` /
+   `npm run react-doctor` scripts. React Doctor stays off the Expo/Metro startup
+   path for minimal overhead. Disable with `MDS_REACT_DOCTOR=0` or
+   `"mds": { "reactDoctor": false }` in `package.json`.
+9. Install added dependencies immediately with the project's package manager,
    then validate that newly declared packages exist in `node_modules`. Standalone
    `mds onboard` does this lockfile install unless `--no-install` is passed.
    `create-expo-super-stack` then continues with create-time Expo repair:

@@ -5,9 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkSeoMetadata, checkStylingDependencies } from '../src/checks/index.js';
+import {
+  checkSeoMetadata,
+  checkStylingDependencies,
+  summarizeReactDoctorReport,
+} from '../src/checks/index.js';
 import { runDoctor, scanFile } from '../src/index.js';
 import { parseCommandLine, resolveShellCommandInvocation } from '../src/utils.js';
+import type { CommandResult, ReactDoctorRunner } from '../src/types.js';
 
 const tempDirs: string[] = [];
 const FIXTURE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -116,6 +121,202 @@ describe('runDoctor', () => {
     expect(report.checks.find((check) => check.name === 'lint')?.status).toBe('skip');
     expect(report.checks.find((check) => check.name === 'typecheck')?.status).toBe('skip');
     expect(report.checks.find((check) => check.name === 'tests')?.status).toBe('skip');
+    expect(report.checks.find((check) => check.name === 'react doctor')?.status).toBe('skip');
+  });
+
+  it('includes React Doctor for React projects and folds its score into the summary', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'react-doctor-app',
+      dependencies: {
+        react: '^19.0.0',
+      },
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        typecheck: 'node -e "process.exit(0)"',
+        test: 'node -e "process.exit(0)"',
+        build: 'node -e "process.exit(0)"',
+      },
+    });
+
+    const runner = createReactDoctorRunner({
+      diagnostics: [
+        {
+          filePath: 'src/app.tsx',
+          normalizedFilePath: 'src/app.tsx',
+          plugin: 'react-doctor',
+          rule: 'no-adjust-state-on-prop-change',
+          severity: 'error',
+          category: 'Bugs',
+          message: 'Avoid adjusting state during render.',
+          line: 12,
+        },
+        {
+          filePath: 'src/list.tsx',
+          normalizedFilePath: 'src/list.tsx',
+          plugin: 'react-doctor',
+          rule: 'no-array-index-as-key',
+          severity: 'warning',
+          category: 'Performance',
+          message: 'Avoid array index keys.',
+          line: 8,
+        },
+      ],
+      summary: {
+        errorCount: 1,
+        warningCount: 1,
+        totalDiagnosticCount: 2,
+        affectedFileCount: 2,
+      },
+      projects: [
+        {
+          directory: projectPath,
+          framework: 'react',
+          analyzedFileCount: 20,
+          diagnostics: [],
+        },
+      ],
+    });
+
+    const report = await runDoctor(projectPath, {
+      mode: 'ci',
+      runScripts: true,
+      reactDoctorRunner: runner,
+    });
+    const check = report.checks.find((entry) => entry.name === 'react doctor');
+    const reactScore = report.summary.scoreBreakdown.components.find(
+      (component) => component.name === 'react-doctor'
+    );
+
+    expect(check?.status).toBe('warn');
+    expect(check?.details).toMatchObject({
+      score: 96,
+      diagnostics: {
+        errors: 1,
+        warnings: 1,
+        total: 2,
+      },
+    });
+    expect(reactScore).toMatchObject({ score: 96, desiredWeight: 35 });
+    expect(report.summary.score).toBeLessThan(100);
+  });
+
+  it('runs React Doctor for monorepo roots even when the root has no React dependency', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'workspace-root',
+      private: true,
+      workspaces: ['apps/*'],
+      scripts: {},
+    });
+
+    let sawMonorepo = false;
+    const runner: ReactDoctorRunner = async ({ reportPath, monorepo }) => {
+      sawMonorepo = monorepo;
+      await writeFile(
+        reportPath,
+        JSON.stringify({
+          schemaVersion: 3,
+          reactDetected: true,
+          version: '0.9.12',
+          diagnostics: [],
+          summary: {
+            errorCount: 0,
+            warningCount: 0,
+            totalDiagnosticCount: 0,
+            affectedFileCount: 0,
+          },
+          projects: [],
+        }),
+        'utf8'
+      );
+      return commandPassed();
+    };
+
+    const report = await runDoctor(projectPath, {
+      mode: 'ci',
+      runScripts: true,
+      reactDoctorRunner: runner,
+    });
+
+    expect(sawMonorepo).toBe(true);
+    expect(report.checks.find((entry) => entry.name === 'react doctor')?.status).toBe('pass');
+  });
+
+  it('skips React Doctor for non-React packages', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'plain-node',
+      scripts: {},
+    });
+
+    const report = await runDoctor(projectPath, { mode: 'ci', runScripts: true });
+
+    expect(report.checks.find((entry) => entry.name === 'react doctor')?.status).toBe('skip');
+  });
+
+  it('writes one managed React Doctor todo block only when fix mode is enabled', async () => {
+    const projectPath = await createTempProject();
+    await writeProjectFile(projectPath, 'package.json', {
+      name: 'react-doctor-todo',
+      dependencies: {
+        expo: '^56.0.0',
+      },
+      scripts: {},
+    });
+    const runner = createReactDoctorRunner({
+      diagnostics: Array.from({ length: 4 }, (_, index) => ({
+        filePath: `src/file-${index}.tsx`,
+        normalizedFilePath: `src/file-${index}.tsx`,
+        plugin: 'react-doctor',
+        rule: 'set-state-in-effect',
+        severity: 'error',
+        category: 'Bugs',
+        message: 'Avoid setState in effects.',
+      })),
+      summary: {
+        errorCount: 4,
+        warningCount: 0,
+        totalDiagnosticCount: 4,
+        affectedFileCount: 4,
+      },
+      projects: [{ directory: projectPath, framework: 'expo', analyzedFileCount: 10 }],
+    });
+
+    await runDoctor(projectPath, {
+      mode: 'ci',
+      runScripts: true,
+      fix: true,
+      reactDoctorRunner: runner,
+    });
+    await runDoctor(projectPath, {
+      mode: 'ci',
+      runScripts: true,
+      fix: true,
+      reactDoctorRunner: runner,
+    });
+
+    const todo = await readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8');
+    expect(todo.match(/mds-doctor:react-doctor:start/g)).toHaveLength(1);
+    expect(todo).toContain('High Priority: React Doctor Findings');
+  });
+
+  it('computes the local React Doctor score when telemetry score is absent', () => {
+    const summary = summarizeReactDoctorReport({
+      diagnostics: [],
+      projects: [{ analyzedFileCount: 20 }],
+      summary: {
+        errorCount: 2,
+        warningCount: 10,
+        totalDiagnosticCount: 12,
+        affectedFileCount: 4,
+      },
+    });
+
+    expect(summary).toMatchObject({
+      score: 91,
+      scoreSource: 'mds-local',
+    });
   });
 
   it('preserves disabled scripts in a report without package.json', async () => {
@@ -636,4 +837,29 @@ async function writeFixtureFile(
 
 async function readFixture(fixtureRelativePath: string): Promise<string> {
   return readFile(path.join(FIXTURE_ROOT, fixtureRelativePath), 'utf8');
+}
+
+function createReactDoctorRunner(report: Record<string, unknown>): ReactDoctorRunner {
+  return async ({ reportPath }) => {
+    await writeFile(
+      reportPath,
+      JSON.stringify({
+        schemaVersion: 3,
+        reactDetected: true,
+        version: '0.9.12',
+        ...report,
+      }),
+      'utf8'
+    );
+    return commandPassed();
+  };
+}
+
+function commandPassed(): CommandResult {
+  return {
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false,
+  };
 }

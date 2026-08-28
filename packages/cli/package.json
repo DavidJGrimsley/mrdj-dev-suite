@@ -56,6 +56,10 @@
     "./workspace": {
       "import": "./dist/workspace.js",
       "types": "./dist/workspace.d.ts"
+    },
+    "./react-doctor": {
+      "import": "./dist/react-doctor.js",
+      "types": "./dist/react-doctor.d.ts"
     }
   },
   "main": "./dist/cli.js",

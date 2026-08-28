@@ -34,6 +34,9 @@ export async function readPackageJson(filePath: string): Promise<PackageJson | n
       scripts: readStringRecord(parsed.scripts),
       dependencies: readStringRecord(parsed.dependencies),
       devDependencies: readStringRecord(parsed.devDependencies),
+      mds: isRecord(parsed.mds) ? parsed.mds : undefined,
+      reactDoctor: parsed.reactDoctor,
+      workspaces: parsed.workspaces,
     };
   } catch {
     return null;

@@ -11,7 +11,7 @@
     {
       "name": "time2pay",
       "github_url": "https://github.com/DavidJGrimsley/time2pay.git",
-      "local_path": "T2P\\time2pay",
+      "local_path": "Time2Pay\\time2pay-main",
       "branches_to_test": ["main"]
     },
     {

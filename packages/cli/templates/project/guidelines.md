@@ -84,6 +84,10 @@ it for the app before treating it as final.
   the task as complete if install failed. MDS cannot install packages
   added outside MDS-owned flows.
 - Run `mds doctor --ci` before pushing.
+- Run `mds run react-doctor` (or `npm run react-doctor`) for React/RN quality
+  scans. It is default-enabled but separate from Expo/Metro startup.
+- Disable React Doctor with `MDS_REACT_DOCTOR=0` or
+  `"mds": { "reactDoctor": false }` in `package.json`.
 - Use `mds clear-expo-start` when Metro or server ports get wedged.
 - When enabled, develop through feature branches into `test`, then promote
   validated work from `test` to `main`.

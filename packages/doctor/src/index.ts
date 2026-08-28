@@ -90,6 +90,7 @@ export async function runDoctor(
       fix: options.fix ?? false,
       runScripts,
       timeoutMs: options.timeoutMs ?? 120_000,
+      reactDoctorRunner: options.reactDoctorRunner,
     }))
   );
 
