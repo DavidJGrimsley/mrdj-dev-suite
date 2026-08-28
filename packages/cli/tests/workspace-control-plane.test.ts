@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,8 +6,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { planWorkspaceAdoption } from '../src/workspace/adopt.js';
+import { runWorkspaceCommand } from '../src/commands/workspace.js';
 import { discoverWorkspace, resolveWorkspaceProjectMemoryPath } from '../src/workspace/discover.js';
-import { deriveGitFreshness, parseGitWorktreeList } from '../src/workspace/git.js';
+import { deriveGitFreshness, inspectGitRepository, parseGitWorktreeList } from '../src/workspace/git.js';
 import { parseWorkspaceManifest } from '../src/workspace/schema.js';
 import { getWorkspaceStatus } from '../src/workspace/status.js';
 
@@ -42,10 +44,38 @@ function writeWorkspaceManifest(root: string, projectPath = 'project'): void {
   });
 }
 
+function initializeGitRepository(repoPath: string, remotePath: string, remoteName = 'origin'): void {
+  execFileSync('git', ['init', '--bare', remotePath], { stdio: 'ignore' });
+  execFileSync('git', ['init', repoPath], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'config', 'user.email', 'test@example.com'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'config', 'user.name', 'MDS Test'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'add', '.'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'commit', '--allow-empty', '-m', 'initial'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'branch', '-M', 'main'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'remote', 'add', remoteName, remotePath], { stdio: 'ignore' });
+  execFileSync('git', ['-C', repoPath, 'push', '-u', remoteName, 'main'], { stdio: 'ignore' });
+}
+
+async function captureConsole(action: () => Promise<void>): Promise<string> {
+  const originalLog = console.log;
+  let output = '';
+  console.log = (value?: unknown) => {
+    output += `${String(value ?? '')}\n`;
+  };
+
+  try {
+    await action();
+    return output.trim();
+  } finally {
+    console.log = originalLog;
+  }
+}
+
 afterEach(() => {
   for (const directory of created.splice(0)) {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+  process.exitCode = undefined;
 });
 
 describe('workspace control plane', () => {
@@ -172,6 +202,65 @@ describe('workspace control plane', () => {
     expect(localStatus.repositories[0]?.git.fetchAttempted).toBe(false);
     expect(fetchedStatus.projectGit.fetchAttempted).toBe(true);
     expect(fetchedStatus.repositories[0]?.git.fetchAttempted).toBe(true);
+  });
+
+  it('fetches through a configured upstream remote rather than assuming origin', () => {
+    const root = tempDir();
+    const repoPath = path.join(root, 'repo');
+    const remotePath = path.join(root, 'upstream.git');
+    fs.mkdirSync(repoPath, { recursive: true });
+    initializeGitRepository(repoPath, remotePath, 'upstream');
+
+    const status = inspectGitRepository(repoPath, { fetch: true });
+
+    expect(status).toMatchObject({
+      freshness: 'CURRENT',
+      upstream: 'upstream/main',
+      fetchAttempted: true,
+      fetchSucceeded: true,
+    });
+  });
+
+  it('covers workspace command JSON/text output and blocks unsafe managed repositories', async () => {
+    const root = tempDir();
+    const projectPath = path.join(root, 'project');
+    const sourcePath = path.join(root, 'example-main');
+    fs.mkdirSync(projectPath, { recursive: true });
+    fs.mkdirSync(sourcePath, { recursive: true });
+    writeWorkspaceManifest(root);
+    initializeGitRepository(projectPath, path.join(root, 'project.git'));
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    fs.writeFileSync(path.join(sourcePath, 'uncommitted.txt'), 'unsafe\n', 'utf8');
+
+    const discoverOutput = await captureConsole(() =>
+      runWorkspaceCommand({ action: 'discover', path: root, json: true })
+    );
+    expect(JSON.parse(discoverOutput)).toMatchObject({ workspaceRoot: root, projectPath });
+
+    const statusOutput = await captureConsole(() =>
+      runWorkspaceCommand({ action: 'status', path: root, json: true })
+    );
+    expect(JSON.parse(statusOutput)).toMatchObject({
+      found: true,
+      projectGit: { freshness: 'CURRENT', fetchAttempted: false },
+      repositories: [{ git: { freshness: 'DIRTY', fetchAttempted: false } }],
+    });
+
+    const doctorOutput = await captureConsole(() =>
+      runWorkspaceCommand({ action: 'doctor', path: root, json: true })
+    );
+    expect(JSON.parse(doctorOutput)).toMatchObject({
+      found: true,
+      repositories: [{ git: { freshness: 'DIRTY' } }],
+    });
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+
+    const adoptOutput = await captureConsole(() =>
+      runWorkspaceCommand({ action: 'adopt', path: sourcePath, dryRun: true })
+    );
+    expect(adoptOutput).toContain('MDS workspace adoption plan');
+    expect(adoptOutput).toContain('Adoption is planning-only');
   });
 
   it('classifies every synchronization state without mutating Git state', () => {

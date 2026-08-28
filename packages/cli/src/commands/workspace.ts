@@ -4,7 +4,7 @@ import chalk from 'chalk';
 
 import { planWorkspaceAdoption } from '../workspace/adopt.js';
 import { discoverWorkspace } from '../workspace/discover.js';
-import { getWorkspaceStatus, workspaceHasUnsafeProjectState } from '../workspace/status.js';
+import { getWorkspaceStatus, workspaceHasUnsafeState } from '../workspace/status.js';
 
 export interface WorkspaceArgv {
   action?: 'discover' | 'status' | 'doctor' | 'adopt';
@@ -104,7 +104,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    if (workspaceHasUnsafeProjectState(result)) {
+    if (workspaceHasUnsafeState(result)) {
       if (!argv.json) {
         console.log();
         console.log(chalk.red('BLOCKED: project truth is not in a safe synchronized state.'));

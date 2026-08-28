@@ -72,8 +72,17 @@ export function getWorkspaceStatus(
   };
 }
 
-export function workspaceHasUnsafeProjectState(status: WorkspaceStatus): boolean {
-  return ['DIRTY', 'AHEAD', 'DIVERGED', 'OFFLINE_OR_UNKNOWN', 'NOT_GIT'].includes(
-    status.projectGit.freshness
+function isUnsafeGitFreshness(freshness: GitRepositoryStatus['freshness']): boolean {
+  return ['DIRTY', 'AHEAD', 'DIVERGED', 'OFFLINE_OR_UNKNOWN', 'NOT_GIT'].includes(freshness);
+}
+
+export function workspaceHasUnsafeState(status: WorkspaceStatus): boolean {
+  return (
+    isUnsafeGitFreshness(status.projectGit.freshness) ||
+    status.repositories.some((repository) => isUnsafeGitFreshness(repository.git.freshness))
   );
+}
+
+export function workspaceHasUnsafeProjectState(status: WorkspaceStatus): boolean {
+  return workspaceHasUnsafeState(status);
 }

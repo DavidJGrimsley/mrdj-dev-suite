@@ -67,6 +67,30 @@ function isGitRepository(repoPath: string): boolean {
   }
 }
 
+function getUpstream(repoPath: string): string | undefined {
+  try {
+    return git(repoPath, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  } catch {
+    return undefined;
+  }
+}
+
+function getFetchRemote(repoPath: string, upstream: string | undefined): string | undefined {
+  const upstreamRemote = upstream?.split('/', 1)[0];
+  if (upstreamRemote) return upstreamRemote;
+
+  try {
+    const remotes = git(repoPath, ['remote'])
+      .split(/\r?\n/)
+      .map((remote) => remote.trim())
+      .filter(Boolean);
+    if (remotes.includes('origin')) return 'origin';
+    return remotes.length === 1 ? remotes[0] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function inspectGitRepository(
   repoPath: string,
   options: { fetch?: boolean } = {}
@@ -82,15 +106,22 @@ export function inspectGitRepository(
   }
 
   const fetchAttempted = Boolean(options.fetch);
+  const upstream = getUpstream(resolved);
   let fetchSucceeded: boolean | undefined;
   let fetchWarning: string | undefined;
   if (options.fetch) {
-    try {
-      git(resolved, ['fetch', '--prune', 'origin']);
-      fetchSucceeded = true;
-    } catch (error) {
+    const remote = getFetchRemote(resolved, upstream);
+    if (!remote) {
       fetchSucceeded = false;
-      fetchWarning = error instanceof Error ? error.message : String(error);
+      fetchWarning = 'No Git remote is available for fetch.';
+    } else {
+      try {
+        git(resolved, ['fetch', '--prune', remote]);
+        fetchSucceeded = true;
+      } catch (error) {
+        fetchSucceeded = false;
+        fetchWarning = error instanceof Error ? error.message : String(error);
+      }
     }
   }
 
@@ -98,13 +129,6 @@ export function inspectGitRepository(
   const dirty = porcelain.length > 0;
   const branch = git(resolved, ['rev-parse', '--abbrev-ref', 'HEAD']);
   const head = git(resolved, ['rev-parse', 'HEAD']);
-
-  let upstream: string | undefined;
-  try {
-    upstream = git(resolved, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
-  } catch {
-    upstream = undefined;
-  }
 
   if (!upstream) {
     return {
