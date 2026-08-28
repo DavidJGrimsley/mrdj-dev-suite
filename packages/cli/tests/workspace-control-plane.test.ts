@@ -120,6 +120,24 @@ describe('workspace control plane', () => {
     expect(fs.existsSync(plan.tempPath)).toBe(false);
   });
 
+  it('keeps an already-normalized main checkout stable during adoption planning', () => {
+    const workspaceRoot = path.join(tempDir(), 'Time2Pay');
+    const sourcePath = path.join(workspaceRoot, 'time2pay-main');
+    fs.mkdirSync(sourcePath, { recursive: true });
+
+    const plan = planWorkspaceAdoption(sourcePath);
+
+    expect(plan.workspaceRoot).toBe(workspaceRoot);
+    expect(plan.normalizedMainPath).toBe(sourcePath);
+    expect(plan.manifest.workspaceId).toBe('time2pay');
+    expect(plan.manifest.name).toBe('Time2Pay');
+    expect(plan.manifest.repositories[0]).toMatchObject({
+      mainFolder: 'time2pay-main',
+      worktreePrefix: 'Time2Pay-',
+    });
+    expect(plan.warnings).not.toContainEqual(expect.stringContaining('not normalized'));
+  });
+
   it('does not fetch by default and records an explicit fetch request', () => {
     const root = tempDir();
     fs.mkdirSync(path.join(root, 'project'), { recursive: true });

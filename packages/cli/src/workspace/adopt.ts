@@ -39,6 +39,29 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+function deriveWorkspaceNaming(sourceName: string, workspaceRoot: string): {
+  workspaceName: string;
+  mainFolder: string;
+} {
+  const existingMainMatch = /^(.*)-main$/i.exec(sourceName);
+  if (!existingMainMatch || !existingMainMatch[1]) {
+    return {
+      workspaceName: sourceName,
+      mainFolder: `${sourceName}-main`,
+    };
+  }
+
+  const sourceWorkspaceName = existingMainMatch[1];
+  const parentName = path.basename(workspaceRoot);
+  const workspaceName =
+    slugify(parentName) === slugify(sourceWorkspaceName) ? parentName : sourceWorkspaceName;
+
+  return {
+    workspaceName,
+    mainFolder: sourceName,
+  };
+}
+
 export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan {
   const resolvedSource = path.resolve(sourcePath);
   if (!fs.existsSync(resolvedSource) || !fs.statSync(resolvedSource).isDirectory()) {
@@ -47,8 +70,9 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
 
   const sourceName = path.basename(resolvedSource);
   const workspaceRoot = path.dirname(resolvedSource);
+  const { workspaceName, mainFolder } = deriveWorkspaceNaming(sourceName, workspaceRoot);
   const projectPath = path.join(workspaceRoot, 'project');
-  const normalizedMainPath = path.join(workspaceRoot, `${sourceName}-main`);
+  const normalizedMainPath = path.join(workspaceRoot, mainFolder);
   const tempPath = path.join(workspaceRoot, 'temp');
   const remote = runGit(resolvedSource, ['remote', 'get-url', 'origin']);
   const detectedDefaultBranch =
@@ -66,7 +90,7 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
         .sort()
     : [];
 
-  const workspaceId = slugify(sourceName) || 'project';
+  const workspaceId = slugify(workspaceName) || 'project';
   const warnings: string[] = [];
   if (!remote) {
     warnings.push('No origin remote was detected; repository linkage must be supplied before setup.');
@@ -83,14 +107,14 @@ export function planWorkspaceAdoption(sourcePath: string): WorkspaceAdoptionPlan
   const manifest: WorkspaceManifest = {
     schemaVersion: WORKSPACE_MANIFEST_VERSION,
     workspaceId,
-    name: sourceName,
+    name: workspaceName,
     repositories: [
       {
         id: 'source',
         remote: remote ?? 'REQUIRED',
         defaultBranch: detectedDefaultBranch,
-        mainFolder: path.basename(resolvedSource),
-        worktreePrefix: `${sourceName}-`,
+        mainFolder: sourceName,
+        worktreePrefix: `${workspaceName}-`,
       },
     ],
     project: { path: 'project' },
