@@ -40,12 +40,13 @@ function walkAncestors(startPath: string): string[] {
     current = path.dirname(current);
   }
 
-  while (true) {
+  let parent = path.dirname(current);
+  while (parent !== current) {
     result.push(current);
-    const parent = path.dirname(current);
-    if (parent === current) break;
     current = parent;
+    parent = path.dirname(current);
   }
+  result.push(current);
   return result;
 }
 
