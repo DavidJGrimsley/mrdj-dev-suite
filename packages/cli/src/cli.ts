@@ -31,6 +31,7 @@ import {
   runStylistSyncCommand,
 } from './commands/stylist.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
+import { runWorkspaceCommand } from './commands/workspace.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
@@ -50,6 +51,7 @@ import type { ReportArgv } from './commands/report.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
+import type { WorkspaceArgv } from './commands/workspace.js';
 
 export interface DoctorArgv {
   path?: string;
@@ -326,6 +328,39 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runOnboardCommand(argv as OnboardArgv);
+      }
+    )
+    .command(
+      'workspace <action> [path]',
+      'Inspect, validate, or plan adoption of an MDS/I² workspace',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Workspace action',
+            choices: ['discover', 'status', 'doctor', 'adopt'] as const,
+          })
+          .positional('path', {
+            describe: 'Workspace, project, source checkout, or existing repository path',
+            type: 'string',
+            default: '.',
+          })
+          .option('fetch', {
+            describe: 'Fetch and prune remotes before evaluating freshness',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print structured JSON output',
+            type: 'boolean',
+            default: false,
+          })
+          .option('dry-run', {
+            describe: 'Reserved for future mutating adoption; adoption is planning-only in this version',
+            type: 'boolean',
+            default: true,
+          }),
+      async (argv) => {
+        await runWorkspaceCommand(argv as WorkspaceArgv);
       }
     )
     .command(

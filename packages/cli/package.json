@@ -25,6 +25,10 @@
       "import": "./dist/project-memory.js",
       "types": "./dist/project-memory.d.ts"
     },
+    "./workspace-control-plane": {
+      "import": "./dist/workspace/index.js",
+      "types": "./dist/workspace/index.d.ts"
+    },
     "./onboarding": {
       "import": "./dist/commands/onboard.js",
       "types": "./dist/commands/onboard.d.ts"
@@ -56,11 +60,12 @@
   },
   "main": "./dist/cli.js",
   "scripts": {
-    "build": "pnpm --filter @mr.dj2u/library-registry build && tsc",
-    "type-check": "pnpm --filter @mr.dj2u/library-registry build && tsc --noEmit",
+    "prepare:runtime-dependencies": "pnpm --filter @mr.dj2u/doctor build && pnpm --filter @mr.dj2u/knowledge build:runtime && pnpm --filter @mr.dj2u/library-registry build",
+    "build": "pnpm run prepare:runtime-dependencies && tsc",
+    "type-check": "pnpm run prepare:runtime-dependencies && tsc --noEmit",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "test": "pnpm --filter @mr.dj2u/library-registry build && node ./scripts/run-vitest.mjs",
+    "test": "pnpm run prepare:runtime-dependencies && node ./scripts/run-vitest.mjs",
     "sync:bundles": "node ./scripts/copy-agent-bundles.mjs",
     "check:bundles": "node ./scripts/copy-agent-bundles.mjs --check",
     "prepack": "node ./scripts/copy-agent-bundles.mjs --check && node ../../scripts/verify-publish-manifest.mjs .",
