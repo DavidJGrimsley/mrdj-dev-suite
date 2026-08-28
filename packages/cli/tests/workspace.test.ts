@@ -61,6 +61,32 @@ describe('workspace control plane', () => {
     expect(discovered?.manifest.workspaceId).toBe('example');
   });
 
+  it('honors a configured project path from a root-level workspace manifest', () => {
+    const root = tempDir();
+    const controlPath = path.join(root, 'control');
+    fs.mkdirSync(controlPath, { recursive: true });
+    writeJson(path.join(root, 'mds.workspace.json'), {
+      schemaVersion: 1,
+      workspaceId: 'example',
+      name: 'Example Project',
+      repositories: [
+        {
+          id: 'source',
+          remote: 'https://github.com/example/example.git',
+          defaultBranch: 'main',
+          mainFolder: 'example-main',
+          worktreePrefix: 'example-',
+        },
+      ],
+      project: { path: 'control' },
+    });
+
+    const discovered = discoverWorkspace(root);
+
+    expect(discovered?.workspaceRoot).toBe(root);
+    expect(discovered?.projectPath).toBe(controlPath);
+  });
+
   it('falls back to repo-local project memory for legacy projects', () => {
     const root = tempDir();
     const legacyProject = path.join(root, 'project');
