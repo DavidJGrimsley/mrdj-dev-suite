@@ -69,6 +69,7 @@ function handoffArguments(argv: WorkspaceArgv, sourcePath: string): string[] {
   if (argv.workspaceName) args.push('--workspace-name', argv.workspaceName);
   if (argv.workspaceRoot) args.push('--workspace-root', argv.workspaceRoot);
   if (argv.workspaceParent) args.push('--workspace-parent', argv.workspaceParent);
+  for (const auxiliary of argv.includeAuxiliary ?? []) args.push('--include-auxiliary', auxiliary);
   if (argv.consolidateLegacyProject) args.push('--consolidate-legacy-project');
   if (argv.json) args.push('--json');
   return args;
@@ -188,6 +189,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       workspaceRoot: argv.workspaceRoot,
       workspaceParent: argv.workspaceParent,
       consolidateLegacyProject: argv.consolidateLegacyProject,
+      includeAuxiliary: argv.includeAuxiliary,
     });
     if (argv.apply === true && argv.yes === true && !argv.handoffChild && workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
       const pid = launchWorkspaceInitHandoff(argv, plan);

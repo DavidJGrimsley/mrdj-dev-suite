@@ -24,6 +24,7 @@ export interface WorkspaceInitOptions {
   workspaceParent?: string;
   projectRemote?: string;
   consolidateLegacyProject?: boolean;
+  includeAuxiliary?: string[];
 }
 
 type ProjectRemoteSource = 'provided' | 'inferred';
@@ -219,7 +220,7 @@ function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegi
   };
 }
 
-function validateExistingWorkspaceRoot(workspaceRoot: string, worktrees: WorkspaceInitWorktree[], errors: string[], warnings: string[]): void {
+function validateExistingWorkspaceRoot(workspaceRoot: string, worktrees: WorkspaceInitWorktree[], errors: string[], warnings: string[], auxiliaryDirectories: string[] = []): void {
   if (!fs.existsSync(workspaceRoot)) return;
 
   const knownEntries = new Set([
@@ -227,6 +228,7 @@ function validateExistingWorkspaceRoot(workspaceRoot: string, worktrees: Workspa
     'temp',
     'generated',
     WORKSPACE_INIT_JOURNAL_FILENAME,
+    ...auxiliaryDirectories,
     ...worktrees.map((worktree) => path.basename(worktree.targetPath)),
   ].map((entry) => entry.toLowerCase()));
   const unexpected = fs.readdirSync(workspaceRoot)
@@ -326,7 +328,7 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     if (targets.has(normalized)) errors.push(`Multiple worktrees normalize to ${worktree.targetPath}.`);
     targets.add(normalized);
   }
-  validateExistingWorkspaceRoot(workspaceRoot, worktrees, errors, warnings);
+  validateExistingWorkspaceRoot(workspaceRoot, worktrees, errors, warnings, options.includeAuxiliary ?? []);
 
   const legacyProjectPath = path.join(primaryPath, 'project');
   const existingProjectMemory = fs.existsSync(legacyProjectPath)
