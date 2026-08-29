@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyWorkspaceInitialization,
@@ -570,6 +570,30 @@ describe('workspace control plane', () => {
         )
       ).toEqual([]);
     }
+  });
+
+  it('rolls back relocation and removes a newly-created empty destination after a move failure', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const initialized = applyWorkspaceInitialization(planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' }), { yes: true });
+    const parent = path.join(root, 'relocated');
+    fs.mkdirSync(parent);
+    const plan = planWorkspaceRelocation(initialized.workspaceRoot, { workspaceParent: parent });
+    const sourceProject = path.join(initialized.workspaceRoot, 'project');
+    const originalRename = fs.renameSync;
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (path.resolve(String(from)) === path.resolve(sourceProject)) throw new Error('simulated lock');
+      return originalRename(from, to);
+    });
+
+    expect(() => applyWorkspaceRelocation(plan, { yes: true })).toThrow('completed moves were rolled back');
+    rename.mockRestore();
+
+    expect(fs.existsSync(sourceProject)).toBe(true);
+    expect(fs.existsSync(path.join(parent, 'sample-i2Workspace'))).toBe(false);
   });
 
   it('plans clean legacy project merges and blocks conflicting consolidation', () => {

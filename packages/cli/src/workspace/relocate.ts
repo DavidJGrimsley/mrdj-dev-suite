@@ -134,6 +134,7 @@ export function applyWorkspaceRelocation(plan: WorkspaceRelocationPlan, options:
   if (!options.yes) throw new Error('Refusing to relocate without --yes.');
   if (plan.errors.length > 0) throw new Error(`Cannot relocate workspace:\n${plan.errors.join('\n')}`);
   if (workspaceRelocationRequiresSafeWorkingDirectory(plan)) throw new Error('Workspace relocation must run from outside the workspace being moved.');
+  const targetRootExisted = fs.existsSync(plan.targetRoot);
   fs.mkdirSync(plan.targetRoot, { recursive: true });
   const completed: WorkspaceRelocateMove[] = [];
   writeJournal(plan, completed);
@@ -169,6 +170,9 @@ export function applyWorkspaceRelocation(plan: WorkspaceRelocationPlan, options:
     }
     if (failures.length === 0) {
       fs.rmSync(path.join(plan.sourceRoot, JOURNAL), { force: true });
+      if (!targetRootExisted && fs.existsSync(plan.targetRoot) && fs.readdirSync(plan.targetRoot).length === 0) {
+        fs.rmdirSync(plan.targetRoot);
+      }
       throw new Error(`Workspace relocation failed and completed moves were rolled back: ${error instanceof Error ? error.message : String(error)}`);
     }
     writeJournal(plan, completed);
