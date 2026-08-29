@@ -5,7 +5,12 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { applyWorkspaceInitialization, planWorkspaceAdoption, planWorkspaceInitialization } from '../src/workspace/index.js';
+import {
+  applyWorkspaceInitialization,
+  planWorkspaceAdoption,
+  planWorkspaceInitialization,
+  workspaceInitializationRequiresSafeWorkingDirectory,
+} from '../src/workspace/index.js';
 import { runWorkspaceCommand } from '../src/commands/workspace.js';
 import { discoverWorkspace, resolveWorkspaceProjectMemoryPath } from '../src/workspace/discover.js';
 import { deriveGitFreshness, inspectGitRepository, parseGitWorktreeList } from '../src/workspace/git.js';
@@ -184,6 +189,104 @@ describe('workspace control plane', () => {
     expect(plan.projectRemoteSource).toBe('inferred');
     expect(plan.projectRemoteRepository).toBe('ExampleOrg/example-app-project');
     expect(plan.warnings).toContain('Project control repository will be created during apply if needed: ExampleOrg/example-app-project.');
+  });
+
+  it('uses the source remote name by default and retains an explicit naming override', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'custom-local-folder');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['-C', sourcePath, 'remote', 'set-url', 'origin', 'https://github.com/example-org/actual-product.git'], { stdio: 'ignore' });
+
+    const remotePlan = planWorkspaceInitialization(sourcePath);
+    expect(remotePlan.workspaceName).toBe('actual-product');
+    expect(remotePlan.workspaceRoot).toBe(path.join(root, 'actual-product-i2Workspace'));
+    expect(remotePlan.normalizedMainPath).toBe(path.join(root, 'actual-product-i2Workspace', 'actual-product-main'));
+
+    const overridePlan = planWorkspaceInitialization(sourcePath, { workspaceName: 'client-alias' });
+    expect(overridePlan.workspaceName).toBe('client-alias');
+    expect(overridePlan.workspaceRoot).toBe(path.join(root, 'client-alias-i2Workspace'));
+  });
+
+  it('falls back to the primary checkout name and derives the same plan from a linked worktree', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'actual-product');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['-C', sourcePath, 'remote', 'remove', 'origin'], { stdio: 'ignore' });
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const featurePath = path.join(root, 'local-feature-folder');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featurePath, '-b', 'feature/test'], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(featurePath, { projectRemote });
+    expect(plan.workspaceName).toBe('actual-product');
+    expect(plan.workspaceRoot).toBe(path.join(root, 'actual-product-i2Workspace'));
+    expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'actual-product-i2Workspace', 'actual-product-feature-test'));
+  });
+
+  it('allows a recognizable partial workspace but blocks unknown files and target collisions', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const initial = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    applyWorkspaceInitialization(initial, { yes: true });
+    const workspaceRoot = path.join(root, 'sample-i2Workspace');
+    fs.rmSync(path.join(workspaceRoot, 'project'), { recursive: true, force: true });
+    fs.rmSync(path.join(workspaceRoot, 'temp'), { recursive: true, force: true });
+    fs.rmSync(path.join(workspaceRoot, 'generated'), { recursive: true, force: true });
+
+    const resumed = planWorkspaceInitialization(path.join(workspaceRoot, 'sample-main'), { projectRemote, workspaceName: 'sample' });
+    expect(resumed.errors).toEqual([]);
+
+    fs.writeFileSync(path.join(workspaceRoot, 'unexpected.txt'), 'nope\n', 'utf8');
+    const unknown = planWorkspaceInitialization(path.join(workspaceRoot, 'sample-main'), { projectRemote, workspaceName: 'sample' });
+    expect(unknown.errors).toContainEqual(expect.stringContaining('unrecognized entries'));
+    fs.rmSync(path.join(workspaceRoot, 'unexpected.txt'));
+
+    const collisionRoot = tempDir();
+    const collisionSource = path.join(collisionRoot, 'app');
+    initializeGitRepository(collisionSource, path.join(collisionRoot, 'source.git'));
+    execFileSync('git', ['init', '--bare', path.join(collisionRoot, 'project.git')], { stdio: 'ignore' });
+    fs.mkdirSync(path.join(collisionRoot, 'sample-i2Workspace', 'sample-main'), { recursive: true });
+    const collision = planWorkspaceInitialization(collisionSource, { projectRemote: path.join(collisionRoot, 'project.git'), workspaceName: 'sample' });
+    expect(collision.errors).toContainEqual(expect.stringContaining('Workspace target already exists'));
+  });
+
+  it('requires a safe working directory only when a worktree will move', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote: path.join(root, 'project.git'), workspaceName: 'sample' });
+
+    expect(workspaceInitializationRequiresSafeWorkingDirectory(plan, sourcePath)).toBe(true);
+    expect(workspaceInitializationRequiresSafeWorkingDirectory(plan, root)).toBe(false);
+  });
+
+  it('rolls completed worktree moves back when a later move fails', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const featureOne = path.join(root, 'feature-one');
+    const featureTwo = path.join(root, 'feature-two');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featureOne, '-b', 'feature/one'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featureTwo, '-b', 'feature/two'], { stdio: 'ignore' });
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    const movableFeatures = plan.worktrees.filter((worktree) => !worktree.primary);
+    const blockedFeature = movableFeatures.at(-1);
+    expect(blockedFeature).toBeDefined();
+    fs.mkdirSync(path.dirname(blockedFeature!.targetPath), { recursive: true });
+    fs.writeFileSync(blockedFeature!.targetPath, 'block this move\n', 'utf8');
+
+    expect(() => applyWorkspaceInitialization(plan, { yes: true })).toThrow(/rolled back/);
+    expect(fs.existsSync(featureOne)).toBe(true);
+    expect(fs.existsSync(featureTwo)).toBe(true);
+    for (const feature of movableFeatures) {
+      expect(fs.existsSync(feature.targetPath)).toBe(feature === blockedFeature);
+    }
+    expect(fs.existsSync(path.join(root, 'sample-i2Workspace', '.mds-workspace-init.json'))).toBe(false);
   });
 
   it('rejects using the source app remote as the project control remote', () => {

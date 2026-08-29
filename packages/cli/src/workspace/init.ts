@@ -62,6 +62,14 @@ export interface WorkspaceInitializationPlan {
   manifest: WorkspaceManifest;
 }
 
+interface WorkspaceMoveJournal {
+  schemaVersion: 1;
+  workspaceRoot: string;
+  moves: Array<{ sourcePath: string; targetPath: string; primary: boolean }>;
+}
+
+const WORKSPACE_INIT_JOURNAL_FILENAME = '.mds-workspace-init.json';
+
 function runGit(repoPath: string, args: string[]): string | undefined {
   try {
     return execFileSync('git', ['-C', repoPath, ...args], {
@@ -86,6 +94,15 @@ function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
 }
 
+function isSamePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function isPathInside(candidate: string, parent: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
 function safeBranchName(branch: string): string {
   return slugify(branch.replace(/^refs\/heads\//, ''));
 }
@@ -106,17 +123,18 @@ function hasUnmergedChanges(repoPath: string): boolean {
   return (runGit(repoPath, ['diff', '--name-only', '--diff-filter=U']) ?? '').length > 0;
 }
 
-function defaultWorkspaceRoot(sourcePath: string, workspaceName: string): string {
-  const sourceName = path.basename(sourcePath);
-  const groupedMain = /^(.*)-main$/i.exec(sourceName);
-  const parent = path.dirname(sourcePath);
-  if (groupedMain?.[1] && slugify(path.basename(parent)) === slugify(`${groupedMain[1]}-i2Workspace`)) {
-    return parent;
+function defaultWorkspaceRoot(primaryPath: string, workspaceName: string): string {
+  const parent = path.dirname(primaryPath);
+  const groupedMain = /^(.*)-main$/i.exec(path.basename(primaryPath));
+  // A partially initialized workspace may use an old display name. Keep the
+  // replacement root alongside it instead of nesting another workspace.
+  if (/-i2workspace$/i.test(path.basename(parent))) {
+    return path.join(path.dirname(parent), `${workspaceName}-i2Workspace`);
   }
   if (groupedMain?.[1] && slugify(path.basename(parent)) === slugify(groupedMain[1])) {
-    return path.join(path.dirname(parent), `${path.basename(parent)}-i2Workspace`);
+    return path.join(path.dirname(parent), `${workspaceName}-i2Workspace`);
   }
-  return path.join(path.dirname(sourcePath), `${workspaceName}-i2Workspace`);
+  return path.join(parent, `${workspaceName}-i2Workspace`);
 }
 
 function getDefaultBranch(sourcePath: string): string {
@@ -141,6 +159,18 @@ function parseGitHubRemote(remote: string | undefined): GitHubRemote | undefined
   const owner = match[1];
   const repo = match[2];
   return { owner, repo, fullName: `${owner}/${repo}`, sshUrl: `git@github.com:${owner}/${repo}.git` };
+}
+
+function getRemoteRepositoryName(remote: string | undefined): string | undefined {
+  const github = parseGitHubRemote(remote);
+  if (github?.repo) return github.repo;
+  if (!remote) return undefined;
+  // Local filesystem remotes describe a storage location, not a stable
+  // repository identity. Fall back to the primary checkout in that case.
+  if (!/^(?:[a-z][a-z0-9+.-]*:\/\/|[^@\s]+@[^:\s]+:)/i.test(remote.trim())) return undefined;
+  const normalized = remote.trim().replace(/[\\/]$/, '').replace(/\.git$/i, '');
+  const match = /(?:[:/])([^/:]+)$/.exec(normalized);
+  return match?.[1] || undefined;
 }
 
 function inferProjectRemote(sourceRemote: string | undefined): Pick<WorkspaceInitializationPlan, 'projectRemote' | 'projectRemoteSource' | 'projectRemoteRepository'> {
@@ -202,28 +232,70 @@ function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegi
   };
 }
 
+function validateExistingWorkspaceRoot(workspaceRoot: string, worktrees: WorkspaceInitWorktree[], errors: string[], warnings: string[]): void {
+  if (!fs.existsSync(workspaceRoot)) return;
+
+  const knownEntries = new Set([
+    'project',
+    'temp',
+    'generated',
+    WORKSPACE_INIT_JOURNAL_FILENAME,
+    ...worktrees.map((worktree) => path.basename(worktree.targetPath)),
+  ].map((entry) => entry.toLowerCase()));
+  const unexpected = fs.readdirSync(workspaceRoot)
+    .filter((entry) => !knownEntries.has(entry.toLowerCase()));
+  if (unexpected.length > 0) {
+    errors.push(`Workspace root contains unrecognized entries: ${unexpected.join(', ')}.`);
+  }
+
+  for (const worktree of worktrees) {
+    if (!isSamePath(worktree.sourcePath, worktree.targetPath) && fs.existsSync(worktree.targetPath)) {
+      errors.push(`Workspace target already exists for ${worktree.sourcePath}: ${worktree.targetPath}`);
+    }
+  }
+  if (fs.existsSync(path.join(workspaceRoot, WORKSPACE_INIT_JOURNAL_FILENAME))) {
+    warnings.push('An interrupted workspace initialization journal is present; apply will resume only the recognized layout.');
+  }
+}
+
+export function workspaceInitializationRequiresSafeWorkingDirectory(
+  plan: WorkspaceInitializationPlan,
+  workingDirectory = process.cwd(),
+): boolean {
+  return plan.worktrees.some((worktree) =>
+    !isSamePath(worktree.sourcePath, worktree.targetPath)
+      && isPathInside(workingDirectory, worktree.sourcePath)
+  );
+}
+
 export function planWorkspaceInitialization(sourcePath: string, options: WorkspaceInitOptions = {}): WorkspaceInitializationPlan {
   const source = path.resolve(sourcePath);
   if (!fs.existsSync(source) || !fs.statSync(source).isDirectory()) throw new Error(`Cannot initialize missing directory: ${source}`);
   if (!runGit(source, ['rev-parse', '--is-inside-work-tree'])) throw new Error(`Cannot initialize non-Git directory: ${source}`);
 
-  const sourceName = path.basename(source);
+  const listed = listGitWorktrees(source);
+  const primaryPath = listed.find((worktree) => isPrimaryWorktree(worktree.path))?.path ?? source;
+  const sourceName = path.basename(primaryPath);
+  const remote = runGit(primaryPath, ['remote', 'get-url', 'origin']) ?? runGit(source, ['remote', 'get-url', 'origin']);
   const groupedMain = /^(.*)-main$/i.exec(sourceName);
-  const groupedMainName = groupedMain?.[1];
+  const groupedParentName = path.basename(path.dirname(primaryPath));
+  const localWorkspaceName = groupedMain?.[1] && slugify(groupedParentName) === slugify(groupedMain[1])
+    ? groupedParentName
+    : sourceName.replace(/-main$/i, '');
+  const remoteRepositoryName = getRemoteRepositoryName(remote);
   const workspaceName = options.workspaceName?.trim()
-    || (groupedMainName && slugify(path.basename(path.dirname(source))) === slugify(groupedMainName) ? path.basename(path.dirname(source)) : undefined)
-    || sourceName.replace(/-main$/i, '') || 'project';
-  const folderPrefix = options.workspaceName?.trim() || groupedMainName || workspaceName;
-  const workspaceRoot = path.resolve(options.workspaceRoot ?? defaultWorkspaceRoot(source, workspaceName));
-  const defaultBranch = getDefaultBranch(source);
-  const remote = runGit(source, ['remote', 'get-url', 'origin']);
+    || remoteRepositoryName
+    || localWorkspaceName
+    || 'project';
+  const folderPrefix = options.workspaceName?.trim() || remoteRepositoryName || groupedMain?.[1] || workspaceName;
+  const workspaceRoot = path.resolve(options.workspaceRoot ?? defaultWorkspaceRoot(primaryPath, workspaceName));
+  const defaultBranch = getDefaultBranch(primaryPath);
   const inferredProjectRemote = inferProjectRemote(remote);
   const projectRemote = options.projectRemote?.trim() || inferredProjectRemote.projectRemote;
   const projectRemoteSource: ProjectRemoteSource | undefined = options.projectRemote?.trim()
     ? 'provided'
     : inferredProjectRemote.projectRemoteSource;
   const projectRemoteRepository = projectRemoteSource === 'inferred' ? inferredProjectRemote.projectRemoteRepository : undefined;
-  const listed = listGitWorktrees(source);
   const prunableWorktrees = listed.filter((worktree) => Boolean(worktree.prunable) || !canReadGitRepository(worktree.path));
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -261,14 +333,13 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     if (targets.has(normalized)) errors.push(`Multiple worktrees normalize to ${worktree.targetPath}.`);
     targets.add(normalized);
   }
-  const sourceIsAlreadyTarget = worktrees.every((worktree) => path.resolve(worktree.sourcePath) === path.resolve(worktree.targetPath));
-  if (fs.existsSync(workspaceRoot) && !sourceIsAlreadyTarget) errors.push(`Workspace root already exists: ${workspaceRoot}`);
+  validateExistingWorkspaceRoot(workspaceRoot, worktrees, errors, warnings);
 
-  const legacyProjectPath = path.join(source, 'project');
+  const legacyProjectPath = path.join(primaryPath, 'project');
   const existingProjectMemory = fs.existsSync(legacyProjectPath)
     ? fs.readdirSync(legacyProjectPath, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => path.join('project', entry.name)).sort()
     : [];
-  const retrospectivePlan = planRetrospectiveProjectOnboarding(source, {
+  const retrospectivePlan = planRetrospectiveProjectOnboarding(primaryPath, {
     projectPath: path.join(workspaceRoot, 'project'),
     legacyProjectMemoryFound: existingProjectMemory.length > 0,
   });
@@ -319,29 +390,76 @@ function writeSourceLink(repoPath: string, workspaceId: string, projectRemote: s
   fs.writeFileSync(linkPath, `${JSON.stringify({ schemaVersion: WORKSPACE_MANIFEST_VERSION, workspaceId, projectRepository: projectRemote }, null, 2)}\n`, 'utf8');
 }
 
+function writeMoveJournal(workspaceRoot: string, moves: WorkspaceMoveJournal['moves']): void {
+  const journal: WorkspaceMoveJournal = { schemaVersion: 1, workspaceRoot, moves };
+  fs.writeFileSync(
+    path.join(workspaceRoot, WORKSPACE_INIT_JOURNAL_FILENAME),
+    `${JSON.stringify(journal, null, 2)}\n`,
+    'utf8',
+  );
+}
+
+function movePrimaryWorktree(sourcePath: string, targetPath: string): void {
+  if (path.parse(sourcePath).root.toLowerCase() !== path.parse(targetPath).root.toLowerCase()) {
+    throw new Error('The primary worktree must move within the same filesystem volume.');
+  }
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  try {
+    fs.renameSync(sourcePath, targetPath);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'EXDEV') {
+      throw new Error('The primary worktree must move within the same filesystem volume.');
+    }
+    throw error;
+  }
+  runGitOrThrow(targetPath, ['worktree', 'repair']);
+}
+
+function rollbackWorktreeMoves(completed: WorkspaceMoveJournal['moves'], primaryPath: string): string[] {
+  const failures: string[] = [];
+  for (const move of [...completed].reverse()) {
+    try {
+      if (move.primary) {
+        fs.renameSync(move.targetPath, move.sourcePath);
+        runGitOrThrow(move.sourcePath, ['worktree', 'repair']);
+      } else {
+        runGitOrThrow(primaryPath, ['worktree', 'move', move.targetPath, move.sourcePath]);
+      }
+    } catch (error) {
+      failures.push(`${move.targetPath} -> ${move.sourcePath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return failures;
+}
+
 function moveWorktrees(plan: WorkspaceInitializationPlan): void {
   const primary = plan.worktrees.find((worktree) => worktree.primary);
   const gitWorktreeCommandPath = primary?.sourcePath ?? plan.sourcePath;
-  for (const worktree of plan.worktrees.filter((item) => !item.primary)) {
-    if (path.resolve(worktree.sourcePath) !== path.resolve(worktree.targetPath)) {
-      fs.mkdirSync(path.dirname(worktree.targetPath), { recursive: true });
-      runGitOrThrow(gitWorktreeCommandPath, ['worktree', 'move', worktree.sourcePath, worktree.targetPath]);
-    }
-  }
-  if (primary && path.resolve(primary.sourcePath) !== path.resolve(primary.targetPath)) {
-    if (path.parse(primary.sourcePath).root.toLowerCase() !== path.parse(primary.targetPath).root.toLowerCase()) {
-      throw new Error('The primary worktree must move within the same filesystem volume.');
-    }
-    fs.mkdirSync(path.dirname(primary.targetPath), { recursive: true });
-    try {
-      fs.renameSync(primary.sourcePath, primary.targetPath);
-    } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'EXDEV') {
-        throw new Error('The primary worktree must move within the same filesystem volume.');
+  const completed: WorkspaceMoveJournal['moves'] = [];
+  writeMoveJournal(plan.workspaceRoot, completed);
+  try {
+    for (const worktree of plan.worktrees.filter((item) => !item.primary)) {
+      if (!isSamePath(worktree.sourcePath, worktree.targetPath)) {
+        fs.mkdirSync(path.dirname(worktree.targetPath), { recursive: true });
+        runGitOrThrow(gitWorktreeCommandPath, ['worktree', 'move', worktree.sourcePath, worktree.targetPath]);
+        completed.push({ sourcePath: worktree.sourcePath, targetPath: worktree.targetPath, primary: false });
+        writeMoveJournal(plan.workspaceRoot, completed);
       }
-      throw error;
     }
-    runGitOrThrow(primary.targetPath, ['worktree', 'repair']);
+    if (primary && !isSamePath(primary.sourcePath, primary.targetPath)) {
+      movePrimaryWorktree(primary.sourcePath, primary.targetPath);
+      completed.push({ sourcePath: primary.sourcePath, targetPath: primary.targetPath, primary: true });
+      writeMoveJournal(plan.workspaceRoot, completed);
+    }
+    fs.rmSync(path.join(plan.workspaceRoot, WORKSPACE_INIT_JOURNAL_FILENAME), { force: true });
+  } catch (error) {
+    const rollbackFailures = rollbackWorktreeMoves(completed, gitWorktreeCommandPath);
+    if (rollbackFailures.length === 0) {
+      fs.rmSync(path.join(plan.workspaceRoot, WORKSPACE_INIT_JOURNAL_FILENAME), { force: true });
+      throw new Error(`Workspace move failed and completed moves were rolled back: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    writeMoveJournal(plan.workspaceRoot, completed);
+    throw new Error(`Workspace move failed; rollback also failed. Recovery journal: ${path.join(plan.workspaceRoot, WORKSPACE_INIT_JOURNAL_FILENAME)}\n${rollbackFailures.join('\n')}`);
   }
 }
 
@@ -426,6 +544,9 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
 export function applyWorkspaceInitialization(plan: WorkspaceInitializationPlan, options: { stash?: boolean; yes?: boolean } = {}): WorkspaceInitializationPlan {
   if (!options.yes) throw new Error('Refusing to apply without --yes.');
   if (plan.errors.length > 0) throw new Error(`Cannot initialize workspace:\n${plan.errors.join('\n')}`);
+  if (workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
+    throw new Error('Workspace initialization must run from outside any worktree that will move. Re-run through the workspace init handoff.');
+  }
   const unmerged = plan.worktrees.filter((worktree) => worktree.unmerged);
   if (unmerged.length > 0) {
     throw new Error(

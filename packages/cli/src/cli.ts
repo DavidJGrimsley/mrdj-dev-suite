@@ -397,6 +397,11 @@ async function main(): Promise<void> {
           .option('workspace-root', {
             describe: 'Override the target *-i2Workspace directory',
             type: 'string',
+          })
+          .option('handoff-child', {
+            type: 'boolean',
+            default: false,
+            hidden: true,
           }),
       async (argv) => {
         await runWorkspaceCommand(argv as WorkspaceArgv);

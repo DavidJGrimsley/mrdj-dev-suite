@@ -7,7 +7,7 @@
 Always inspect first:
 
 ```bash
-mds workspace init /path/to/app-main
+mds workspace init .
 ```
 
 The plan lists every worktree, dirty checkout, stale registration, destination path, inferred control repository, legacy `project/` file it will seed, and whether retrospective onboarding will generate or fill missing project memory. Planning changes nothing.
@@ -15,12 +15,18 @@ The plan lists every worktree, dirty checkout, stale registration, destination p
 Apply only after the plan is correct:
 
 ```bash
-mds workspace init /path/to/app-main --apply --yes
+mds workspace init . --apply --yes
 ```
+
+The default workspace name comes from the source repository's `origin` name, not the current checkout folder. For example, a checkout in `C:\work\scratch` with origin `github.com:example/actual-product.git` becomes `actual-product-i2Workspace/actual-product-main`. Use `--workspace-name` only when the UD intentionally wants a different visible workspace name.
 
 For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. It matches the source repository visibility when GitHub reports it and otherwise creates the control repo as private. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
 
 If a checkout has intentional local changes, add `--stash`. This creates named Git stashes before any worktree is moved. Without that explicit flag, an apply refuses dirty repositories.
+
+On Windows, an apply started from a checkout that must move automatically hands off to a safe helper process outside the affected worktrees. The helper waits for the initiating process to release its working directory before moving anything. If the CLI runtime itself is inside a worktree that will move, use an installed MDS CLI or an isolated runner outside the repository.
+
+Initialization never installs or repairs package dependencies. A moved checkout may need an explicit, user-requested dependency repair afterwards; that is separate from workspace initialization.
 
 ## Result
 
@@ -57,7 +63,7 @@ This mode only writes the workspace control repository. It does not edit app sou
 
 ## Recovery and rollback
 
-An apply repairs prunable Git registrations, moves linked worktrees through Git, then repairs the primary checkout after its local move. If a command is interrupted, run `mds workspace status <workspace-root>` or `mds workspace doctor <workspace-root>` to see missing links, registry entries, or normalized paths before retrying.
+An apply repairs prunable Git registrations, moves linked worktrees through Git, then repairs the primary checkout after its local move. Each move is recorded in a temporary journal. If a move fails, initialization reverses completed moves; if rollback cannot finish, the journal remains for recovery. A recognizable partial workspace can be resumed, but unknown files or destination collisions block apply.
 
 Git moves are reversible with `git worktree move`. Intentional local changes are recoverable with `git stash list` and `git stash pop`. Do not delete a partial workspace root; use the reported status to repair it. Doctor also reports missing required project memory and unresolved `# TodoForContext(optional):` markers so a generated retrospective draft cannot masquerade as confirmed project truth.
 

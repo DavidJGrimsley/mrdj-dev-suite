@@ -1,5 +1,7 @@
 import { applyWorkspaceInitialization, planWorkspaceInitialization } from './init.js';
 
+export { workspaceInitializationRequiresSafeWorkingDirectory } from './init.js';
+
 import type { WorkspaceInitOptions, WorkspaceInitializationPlan } from './init.js';
 
 /** Adoption is the legacy name for workspace initialization. */

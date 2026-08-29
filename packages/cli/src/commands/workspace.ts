@@ -1,8 +1,14 @@
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import chalk from 'chalk';
 
-import { applyWorkspaceAdoption, planWorkspaceAdoption } from '../workspace/adopt.js';
+import {
+  applyWorkspaceAdoption,
+  planWorkspaceAdoption,
+  workspaceInitializationRequiresSafeWorkingDirectory,
+} from '../workspace/adopt.js';
 import { discoverWorkspace } from '../workspace/discover.js';
 import { getWorkspaceStatus, workspaceHasUnsafeState } from '../workspace/status.js';
 
@@ -18,6 +24,74 @@ export interface WorkspaceArgv {
   projectRemote?: string;
   workspaceName?: string;
   workspaceRoot?: string;
+  handoffChild?: boolean;
+}
+
+const HANDOFF_BOOTSTRAP = String.raw`
+const [parentPidRaw, entry, payload] = process.argv.slice(1);
+const parentPid = Number(parentPidRaw);
+const config = JSON.parse(payload);
+const parentAlive = () => {
+  try { process.kill(parentPid, 0); return true; } catch { return false; }
+};
+const start = () => {
+  const child = require('node:child_process').spawn(process.execPath, [entry, ...config.args], {
+    cwd: config.cwd,
+    stdio: 'inherit',
+  });
+  child.on('exit', (code) => process.exit(code ?? 1));
+};
+const deadline = Date.now() + 15000;
+const waitForParent = () => {
+  if (!parentAlive() || Date.now() >= deadline) return start();
+  setTimeout(waitForParent, 50);
+};
+waitForParent();
+`;
+
+function isPathInside(candidate: string, parent: string): boolean {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function handoffArguments(argv: WorkspaceArgv, sourcePath: string): string[] {
+  const args = ['workspace', 'init', sourcePath, '--apply', '--yes', '--handoff-child'];
+  if (argv.stash) args.push('--stash');
+  if (argv.projectRemote) args.push('--project-remote', argv.projectRemote);
+  if (argv.workspaceName) args.push('--workspace-name', argv.workspaceName);
+  if (argv.workspaceRoot) args.push('--workspace-root', argv.workspaceRoot);
+  if (argv.json) args.push('--json');
+  return args;
+}
+
+function launchWorkspaceInitHandoff(argv: WorkspaceArgv, plan: ReturnType<typeof planWorkspaceAdoption>): number {
+  const runtimeEntry = process.argv[1];
+  if (!runtimeEntry) {
+    throw new Error('Cannot start workspace initialization handoff because the CLI runtime is unavailable. Use an installed MDS CLI outside the repository.');
+  }
+  const entry = path.resolve(runtimeEntry);
+  if (!fs.existsSync(entry)) throw new Error('Cannot start workspace initialization handoff because the CLI runtime is unavailable. Use an installed MDS CLI outside the repository.');
+  if (plan.worktrees.some((worktree) => !isSamePath(worktree.sourcePath, worktree.targetPath) && isPathInside(entry, worktree.sourcePath))) {
+    throw new Error('Cannot start workspace initialization handoff from a CLI runtime inside a worktree that will move. Use an installed MDS CLI or an isolated runner outside the repository.');
+  }
+  const child = spawn(process.execPath, [
+    '-e',
+    HANDOFF_BOOTSTRAP,
+    String(process.pid),
+    entry,
+    JSON.stringify({ cwd: path.dirname(plan.workspaceRoot), args: handoffArguments(argv, plan.sourcePath) }),
+  ], {
+    cwd: path.dirname(plan.workspaceRoot),
+    detached: true,
+    stdio: 'inherit',
+  });
+  child.unref();
+  if (!child.pid) throw new Error('Unable to start the workspace initialization handoff.');
+  return child.pid;
+}
+
+function isSamePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
 }
 
 function printWorkspaceStatus(result: ReturnType<typeof getWorkspaceStatus>): void {
@@ -82,6 +156,11 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       workspaceName: argv.workspaceName,
       workspaceRoot: argv.workspaceRoot,
     });
+    if (argv.apply === true && argv.yes === true && !argv.handoffChild && workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
+      const pid = launchWorkspaceInitHandoff(argv, plan);
+      console.log(chalk.yellow(`Workspace initialization handed off to a safe helper process (PID ${pid}).`));
+      return;
+    }
     const applied = argv.apply === true
       ? applyWorkspaceAdoption(plan, { stash: argv.stash, yes: argv.yes })
       : plan;
