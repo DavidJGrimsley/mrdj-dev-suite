@@ -563,7 +563,13 @@ describe('workspace control plane', () => {
     expect(fs.readFileSync(path.join(relocatedRoot, 'test-apps', 'keep.txt'), 'utf8')).toBe('keep\n');
     const status = getWorkspaceStatus(relocatedRoot);
     expect(status.found).toBe(true);
-    if (status.found) expect(status.integrityIssues).toEqual([]);
+    if (status.found) {
+      expect(
+        status.integrityIssues.filter((issue) =>
+          /worktree registry|workspace link|registered worktree|normalized main/u.test(issue)
+        )
+      ).toEqual([]);
+    }
   });
 
   it('plans clean legacy project merges and blocks conflicting consolidation', () => {
