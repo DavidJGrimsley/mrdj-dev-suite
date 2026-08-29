@@ -94,6 +94,10 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     console.log(`Source: ${applied.sourcePath}`);
     console.log(`Workspace: ${applied.workspaceRoot}`);
     console.log(`Project control repo: ${applied.projectPath}`);
+    if (applied.projectRemote) {
+      const source = applied.projectRemoteSource === 'inferred' ? 'inferred' : 'provided';
+      console.log(`Project remote: ${applied.projectRemote} (${source})`);
+    }
     console.log(`Normalized main checkout: ${applied.normalizedMainPath}`);
     console.log(`Temp: ${applied.tempPath}`);
     console.log(`Generated: ${applied.generatedPath}`);
@@ -114,7 +118,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     console.log();
     console.log(argv.apply
       ? chalk.green('Workspace initialization applied.')
-      : chalk.dim('Planning only. Re-run with --apply --yes --project-remote <url> to make changes.'));
+      : chalk.dim('Planning only. Re-run with --apply --yes to make changes. Use --project-remote <url> to override the inferred control repo.'));
     return;
   }
 

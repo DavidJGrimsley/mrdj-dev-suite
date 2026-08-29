@@ -167,7 +167,7 @@ export async function main(): Promise<void> {
     await mkdir(path.join(parsed.mds.workspaceRoot, "temp"), { recursive: true });
     await mkdir(path.join(parsed.mds.workspaceRoot, "generated"), { recursive: true });
     console.log(`Workspace layout prepared: ${parsed.mds.workspaceRoot}`);
-    console.log("After adding Git remotes, run `mds workspace init <main-checkout> --project-remote <url> --apply --yes`.");
+    console.log("After adding the app Git remote, run `mds workspace init <main-checkout> --apply --yes`.");
   }
   const easSelected = await detectEasSetup(
     projectPath,

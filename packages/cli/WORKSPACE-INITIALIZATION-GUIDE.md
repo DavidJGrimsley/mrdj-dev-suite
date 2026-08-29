@@ -7,18 +7,18 @@
 Always inspect first:
 
 ```bash
-mds workspace init /path/to/app-main --project-remote git@github.com:example/app-project.git
+mds workspace init /path/to/app-main
 ```
 
-The plan lists every worktree, dirty checkout, stale registration, destination path, and legacy `project/` file it will seed into the new control repository. Planning changes nothing.
+The plan lists every worktree, dirty checkout, stale registration, destination path, inferred control repository, and legacy `project/` file it will seed into the new control repository. Planning changes nothing.
 
 Apply only after the plan is correct:
 
 ```bash
-mds workspace init /path/to/app-main \
-  --project-remote git@github.com:example/app-project.git \
-  --apply --yes
+mds workspace init /path/to/app-main --apply --yes
 ```
+
+For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. It matches the source repository visibility when GitHub reports it and otherwise creates the control repo as private. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
 
 If a checkout has intentional local changes, add `--stash`. This creates named Git stashes before any worktree is moved. Without that explicit flag, an apply refuses dirty repositories.
 

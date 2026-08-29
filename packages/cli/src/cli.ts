@@ -375,7 +375,7 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('project-remote', {
-            describe: 'Required Git remote URL for the workspace project control repository',
+            describe: 'Override the workspace project control repository remote; omitted GitHub sources infer/create <repo>-project',
             type: 'string',
           })
           .option('workspace-name', {

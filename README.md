@@ -166,16 +166,16 @@ Use `mds workspace init` to move an existing repository and all of its healthy G
 
 ```bash
 # Inspect the migration first
-mds workspace init /path/to/app-main --project-remote git@github.com:example/app-project.git
+mds workspace init /path/to/app-main
 
 # Apply it. Add --stash only when the plan identifies intentional local changes.
-mds workspace init /path/to/app-main --project-remote git@github.com:example/app-project.git --apply --yes --stash
+mds workspace init /path/to/app-main --apply --yes --stash
 
 # Generate a new app directly into the workspace-shaped layout.
 create-expo-super-stack my-app --mds-workspace --expo-router
 ```
 
-`--project-remote` is required for apply. The initializer commits and pushes the canonical `project/` control repository, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
+For GitHub source repositories, the initializer infers and creates `<repo>-project` as the canonical control repository unless `--project-remote` is provided. It commits and pushes `project/`, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
 
 #### Onboard
 

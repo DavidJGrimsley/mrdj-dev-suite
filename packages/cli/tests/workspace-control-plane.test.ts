@@ -152,7 +152,7 @@ describe('workspace control plane', () => {
     expect(fs.existsSync(plan.tempPath)).toBe(false);
   });
 
-  it('plans every healthy worktree and requires a project remote before apply', () => {
+  it('plans every healthy worktree and requires an explicit project remote for non-GitHub sources', () => {
     const root = tempDir();
     const sourcePath = path.join(root, 'app');
     const sourceRemote = path.join(root, 'source.git');
@@ -169,6 +169,21 @@ describe('workspace control plane', () => {
     expect(plan.worktrees).toHaveLength(2);
     expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-main'));
     expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-test'));
+  });
+
+  it('infers a creatable project control remote from a GitHub source origin', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['-C', sourcePath, 'remote', 'set-url', 'origin', 'git@github.com:ExampleOrg/example-app.git'], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(sourcePath);
+
+    expect(plan.errors).not.toContainEqual(expect.stringContaining('--project-remote'));
+    expect(plan.projectRemote).toBe('git@github.com:ExampleOrg/example-app-project.git');
+    expect(plan.projectRemoteSource).toBe('inferred');
+    expect(plan.projectRemoteRepository).toBe('ExampleOrg/example-app-project');
+    expect(plan.warnings).toContain('Project control repository will be created during apply if needed: ExampleOrg/example-app-project.');
   });
 
   it('rejects using the source app remote as the project control remote', () => {

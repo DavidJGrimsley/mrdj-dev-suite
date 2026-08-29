@@ -19,6 +19,8 @@ export interface WorkspaceInitOptions {
   projectRemote?: string;
 }
 
+type ProjectRemoteSource = 'provided' | 'inferred';
+
 export interface WorkspaceInitWorktree {
   sourcePath: string;
   targetPath: string;
@@ -40,6 +42,8 @@ export interface WorkspaceInitializationPlan {
   tempPath: string;
   generatedPath: string;
   projectRemote?: string;
+  projectRemoteSource?: ProjectRemoteSource;
+  projectRemoteRepository?: string;
   defaultBranch: string;
   worktrees: WorkspaceInitWorktree[];
   prunableWorktrees: GitWorktreeInfo[];
@@ -106,9 +110,73 @@ function getDefaultBranch(sourcePath: string): string {
   return runGit(sourcePath, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])?.replace(/^origin\//, '') ?? 'main';
 }
 
-function normalizeRemoteUrl(remote: string | undefined): string | undefined {
+interface GitHubRemote {
+  owner: string;
+  repo: string;
+  fullName: string;
+  sshUrl: string;
+}
+
+function parseGitHubRemote(remote: string | undefined): GitHubRemote | undefined {
   if (!remote) return undefined;
-  return remote.trim().replace(/\.git$/i, '').toLowerCase();
+  const trimmed = remote.trim();
+  const ssh = /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i.exec(trimmed);
+  const https = /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?\/?$/i.exec(trimmed);
+  const sshUrl = /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?\/?$/i.exec(trimmed);
+  const match = ssh ?? https ?? sshUrl;
+  if (!match?.[1] || !match[2]) return undefined;
+  const owner = match[1];
+  const repo = match[2];
+  return { owner, repo, fullName: `${owner}/${repo}`, sshUrl: `git@github.com:${owner}/${repo}.git` };
+}
+
+function inferProjectRemote(sourceRemote: string | undefined): Pick<WorkspaceInitializationPlan, 'projectRemote' | 'projectRemoteSource' | 'projectRemoteRepository'> {
+  const parsed = parseGitHubRemote(sourceRemote);
+  if (!parsed) return {};
+  const projectRepo = `${parsed.owner}/${parsed.repo}-project`;
+  return {
+    projectRemote: `git@github.com:${projectRepo}.git`,
+    projectRemoteSource: 'inferred',
+    projectRemoteRepository: projectRepo,
+  };
+}
+
+function normalizeRemoteUrl(remote: string | undefined): string | undefined {
+  const parsed = parseGitHubRemote(remote);
+  if (parsed) return `github:${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}`;
+  return remote?.trim().replace(/\.git$/i, '').toLowerCase();
+}
+
+function runGh(args: string[]): string {
+  return execFileSync('gh', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function runGhOrUndefined(args: string[]): string | undefined {
+  try {
+    return runGh(args);
+  } catch {
+    return undefined;
+  }
+}
+
+function getGitHubRepositoryVisibility(fullName: string): string | undefined {
+  const output = runGhOrUndefined(['repo', 'view', fullName, '--json', 'visibility']);
+  if (!output) return undefined;
+  try {
+    const parsed = JSON.parse(output) as { visibility?: string };
+    return parsed.visibility;
+  } catch {
+    return undefined;
+  }
+}
+
+function visibilityFlag(visibility: string | undefined): '--public' | '--private' | '--internal' {
+  if (visibility === 'PUBLIC') return '--public';
+  if (visibility === 'INTERNAL') return '--internal';
+  return '--private';
 }
 
 function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegistryEntry {
@@ -135,6 +203,13 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   const folderPrefix = options.workspaceName?.trim() || groupedMainName || workspaceName;
   const workspaceRoot = path.resolve(options.workspaceRoot ?? defaultWorkspaceRoot(source, workspaceName));
   const defaultBranch = getDefaultBranch(source);
+  const remote = runGit(source, ['remote', 'get-url', 'origin']);
+  const inferredProjectRemote = inferProjectRemote(remote);
+  const projectRemote = options.projectRemote?.trim() || inferredProjectRemote.projectRemote;
+  const projectRemoteSource: ProjectRemoteSource | undefined = options.projectRemote?.trim()
+    ? 'provided'
+    : inferredProjectRemote.projectRemoteSource;
+  const projectRemoteRepository = projectRemoteSource === 'inferred' ? inferredProjectRemote.projectRemoteRepository : undefined;
   const listed = listGitWorktrees(source);
   const prunableWorktrees = listed.filter((worktree) => Boolean(worktree.prunable) || !canReadGitRepository(worktree.path));
   const warnings: string[] = [];
@@ -159,7 +234,7 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   });
 
   if (worktrees.length === 0) errors.push('No healthy Git worktrees were found.');
-  if (!options.projectRemote) errors.push('A project control-repository remote is required (--project-remote).');
+  if (!projectRemote) errors.push('A project control-repository remote is required when the source origin is not a GitHub remote (--project-remote).');
   if (prunableWorktrees.length > 0) warnings.push(`${prunableWorktrees.length} prunable worktree registration(s) will be repaired during apply.`);
   if (worktrees.some((worktree) => worktree.dirty)) warnings.push('One or more worktrees are dirty; apply requires --stash.');
 
@@ -176,16 +251,21 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   const existingProjectMemory = fs.existsSync(legacyProjectPath)
     ? fs.readdirSync(legacyProjectPath, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => path.join('project', entry.name)).sort()
     : [];
-  const remote = runGit(source, ['remote', 'get-url', 'origin']);
-  if (normalizeRemoteUrl(options.projectRemote) === normalizeRemoteUrl(remote)) {
+  if (options.projectRemote && remote && normalizeRemoteUrl(options.projectRemote) === normalizeRemoteUrl(remote)) {
     errors.push('The project control-repository remote must be separate from the source app remote.');
+  }
+  if (projectRemoteSource === 'inferred' && projectRemoteRepository) {
+    warnings.push(`Project control repository will be created during apply if needed: ${projectRemoteRepository}.`);
   }
   if (!remote) warnings.push('Source repository has no origin remote; workspace status will flag it until one is configured.');
 
   return {
     sourcePath: source, sourceName, workspaceName, folderPrefix, workspaceRoot,
     projectPath: path.join(workspaceRoot, 'project'), normalizedMainPath: path.join(workspaceRoot, `${folderPrefix}-main`), tempPath: path.join(workspaceRoot, 'temp'), generatedPath: path.join(workspaceRoot, 'generated'),
-    ...(options.projectRemote ? { projectRemote: options.projectRemote } : {}), defaultBranch, worktrees, prunableWorktrees, existingProjectMemory, warnings, errors,
+    ...(projectRemote ? { projectRemote } : {}),
+    ...(projectRemoteSource ? { projectRemoteSource } : {}),
+    ...(projectRemoteRepository ? { projectRemoteRepository } : {}),
+    defaultBranch, worktrees, prunableWorktrees, existingProjectMemory, warnings, errors,
     manifest: {
       schemaVersion: WORKSPACE_MANIFEST_VERSION,
       workspaceId: slugify(workspaceName), name: workspaceName,
@@ -256,10 +336,33 @@ function copyLegacyProjectMemory(plan: WorkspaceInitializationPlan, legacyProjec
   }
 }
 
+function ensureInferredProjectRemote(plan: WorkspaceInitializationPlan): void {
+  if (plan.projectRemoteSource !== 'inferred' || !plan.projectRemoteRepository) return;
+  if (runGhOrUndefined(['repo', 'view', plan.projectRemoteRepository, '--json', 'nameWithOwner'])) return;
+
+  const sourceRemote = plan.manifest.repositories[0]?.remote;
+  const sourceRepository = parseGitHubRemote(sourceRemote)?.fullName;
+  const visibility = sourceRepository ? getGitHubRepositoryVisibility(sourceRepository) : undefined;
+  try {
+    runGh([
+      'repo',
+      'create',
+      plan.projectRemoteRepository,
+      visibilityFlag(visibility),
+      '--description',
+      `MDS workspace control repository for ${plan.workspaceName}`,
+    ]);
+  } catch (error) {
+    if (runGhOrUndefined(['repo', 'view', plan.projectRemoteRepository, '--json', 'nameWithOwner'])) return;
+    throw error;
+  }
+}
+
 function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[]): void {
   if (!plan.projectRemote) throw new Error('A project control-repository remote is required.');
   const legacySource = worktrees.find((worktree) => worktree.primary) ?? worktrees[0];
   if (!legacySource) throw new Error('Cannot initialize a project control repository without a source worktree.');
+  ensureInferredProjectRemote(plan);
   // A freshly created bare control remote has no refs yet; reachability is enough.
   runGitOrThrow(legacySource.targetPath, ['ls-remote', plan.projectRemote]);
   if (fs.existsSync(plan.projectPath)) {
