@@ -205,6 +205,14 @@ describe('workspace control plane', () => {
     const overridePlan = planWorkspaceInitialization(sourcePath, { workspaceName: 'client-alias' });
     expect(overridePlan.workspaceName).toBe('client-alias');
     expect(overridePlan.workspaceRoot).toBe(path.join(root, 'client-alias-i2Workspace'));
+
+    const chosenParent = path.join(root, 'shared-workspaces');
+    const parentPlan = planWorkspaceInitialization(sourcePath, { workspaceParent: chosenParent });
+    expect(parentPlan.workspaceRoot).toBe(path.join(chosenParent, 'actual-product-i2Workspace'));
+    expect(() => planWorkspaceInitialization(sourcePath, {
+      workspaceParent: chosenParent,
+      workspaceRoot: path.join(root, 'specific-root'),
+    })).toThrow('Use either --workspace-root or --workspace-parent, not both.');
   });
 
   it('falls back to the primary checkout name and derives the same plan from a linked worktree', () => {

@@ -398,6 +398,10 @@ async function main(): Promise<void> {
             describe: 'Override the target *-i2Workspace directory',
             type: 'string',
           })
+          .option('workspace-parent', {
+            describe: 'Place the new <repository>-i2Workspace directory in this parent folder',
+            type: 'string',
+          })
           .option('handoff-child', {
             type: 'boolean',
             default: false,

@@ -20,6 +20,8 @@ mds workspace init . --apply --yes
 
 The default workspace name comes from the source repository's `origin` name, not the current checkout folder. For example, a checkout in `C:\work\scratch` with origin `github.com:example/actual-product.git` becomes `actual-product-i2Workspace/actual-product-main`. Use `--workspace-name` only when the UD intentionally wants a different visible workspace name.
 
+Before Infie applies an initialization plan, she must ask the UD where the workspace root should live. The default suggestion is beside the source checkout; use `--workspace-parent <parent>` when the UD wants a clean shared parent, for example `mds workspace init . --workspace-parent F:\SoftwareDev`. That produces `F:\SoftwareDev\actual-product-i2Workspace`. `--workspace-root` remains the escape hatch for an exact full destination; do not combine it with `--workspace-parent`.
+
 For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. The control repository is always created as **private**, even when the source repository is public. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
 
 If a checkout has intentional local changes, add `--stash`. This creates named Git stashes before any worktree is moved. Without that explicit flag, an apply refuses dirty repositories.
@@ -69,4 +71,4 @@ Git moves are reversible with `git worktree move`. Intentional local changes are
 
 ## Infie invocation
 
-Infie should call the planning form first and only invoke the apply form after it has surfaced the plan. `--apply --yes` authorizes creation, commit, and push of the required control repository. Use `--workspace-name` and `--workspace-root` for shared parent folders whose Git checkout name is not the desired workspace name.
+Infie should call the planning form first and only invoke the apply form after it has surfaced the plan. `--apply --yes` authorizes creation, commit, and push of the required control repository. Ask for the workspace parent first, then use `--workspace-parent`; use `--workspace-root` only for an exact exceptional destination.

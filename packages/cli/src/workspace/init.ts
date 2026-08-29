@@ -20,6 +20,7 @@ import type { WorkspaceManifest, WorkspaceWorktreeRegistry, WorkspaceWorktreeReg
 export interface WorkspaceInitOptions {
   workspaceName?: string;
   workspaceRoot?: string;
+  workspaceParent?: string;
   projectRemote?: string;
 }
 
@@ -271,7 +272,13 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     || localWorkspaceName
     || 'project';
   const folderPrefix = options.workspaceName?.trim() || remoteRepositoryName || groupedMain?.[1] || workspaceName;
-  const workspaceRoot = path.resolve(options.workspaceRoot ?? defaultWorkspaceRoot(primaryPath, workspaceName));
+  if (options.workspaceRoot && options.workspaceParent) {
+    throw new Error('Use either --workspace-root or --workspace-parent, not both.');
+  }
+  const workspaceRoot = path.resolve(
+    options.workspaceRoot
+      ?? (options.workspaceParent ? path.join(options.workspaceParent, `${workspaceName}-i2Workspace`) : defaultWorkspaceRoot(primaryPath, workspaceName)),
+  );
   const defaultBranch = getDefaultBranch(primaryPath);
   const inferredProjectRemote = inferProjectRemote(remote);
   const projectRemote = options.projectRemote?.trim() || inferredProjectRemote.projectRemote;

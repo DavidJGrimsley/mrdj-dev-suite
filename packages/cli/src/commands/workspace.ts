@@ -24,6 +24,7 @@ export interface WorkspaceArgv {
   projectRemote?: string;
   workspaceName?: string;
   workspaceRoot?: string;
+  workspaceParent?: string;
   handoffChild?: boolean;
 }
 
@@ -60,6 +61,7 @@ function handoffArguments(argv: WorkspaceArgv, sourcePath: string): string[] {
   if (argv.projectRemote) args.push('--project-remote', argv.projectRemote);
   if (argv.workspaceName) args.push('--workspace-name', argv.workspaceName);
   if (argv.workspaceRoot) args.push('--workspace-root', argv.workspaceRoot);
+  if (argv.workspaceParent) args.push('--workspace-parent', argv.workspaceParent);
   if (argv.json) args.push('--json');
   return args;
 }
@@ -155,6 +157,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       projectRemote: argv.projectRemote,
       workspaceName: argv.workspaceName,
       workspaceRoot: argv.workspaceRoot,
+      workspaceParent: argv.workspaceParent,
     });
     if (argv.apply === true && argv.yes === true && !argv.handoffChild && workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
       const pid = launchWorkspaceInitHandoff(argv, plan);
