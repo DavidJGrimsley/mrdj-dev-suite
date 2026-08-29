@@ -342,6 +342,13 @@ Would this still be useful if the Expo docs/plugin improved tomorrow?)
 - [x] Generated `project/todo.md` gives agents a phase-ordered app build plan.
 - [x] Existing project memory can be normalized without losing original notes.
 
+## Retrospective Project Onboarding Follow-Ups
+
+- [ ] Upgrade retrospective onboarding from deterministic project-memory scaffolding to a meaningful historian pass: inspect deeper local Git history, branch names, merge commits, and available PR metadata; identify product themes, shipped milestones, architectural pivots, and abandoned experiments; then synthesize stronger `project/info.md` and `project/todo.md` drafts instead of mostly generic confirmation placeholders.
+- [ ] Keep the historian pass project-only and evidence-backed: do not edit app source, do not invent mission/market/business claims, cite findings in `project/onboarding-evidence.md`, and leave `# TodoForContext(optional):` markers wherever Git/README/package evidence is weak or ambiguous.
+- [ ] Add a UD confirmation workflow for historian output: ask focused questions for mission, target audience, monetization/release intent, uncertain architecture, and whether old branches/commits represent shipped product, dead experiments, or future roadmap.
+- [ ] Add fixture coverage using a synthetic app history with meaningful commits/branches/merges so generated `info.md`, `todo.md`, and `onboarding-evidence.md` prove that the historian pass is actually learning from history rather than only listing files.
+
 ## Mono repo support (turbo repo)
 - [ ] During onboarding, at the very beginning, before CES starts, there should be a question for "Do you want a web app & landing page/website (e.g. app.domain.com & domain.com) or just a web app or only other platforms?" This will generate an expo app (a modified generated superstack for each with shared packages) in two places in the apps folder with a packages folder that uses the same project memory, components, style files, etc for shared context but separate app folders and entry points. This is a simple way to support monorepos without having to ask about it directly. The web app folder can be maybe apps/app while the landing page is apps/site. 
 - [ ] If the user answered no to the previous question, show a question explicitly asking this needs to be a is a monorepo or not, with no as the default, and if yes, what package(s) the user wants to target (expo app and separate backend or something.). This will at first just be added to the project info and small todo item and then the agent can take it from there but maybe over time we can have a default setup for something like this. 
