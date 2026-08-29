@@ -367,6 +367,30 @@ describe('workspace control plane', () => {
     expect(() => applyWorkspaceInitialization(plan, { yes: true })).toThrow(/--stash/);
   });
 
+  it('refuses unresolved merge conflicts before attempting a stash', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    fs.writeFileSync(path.join(sourcePath, 'conflict.txt'), 'base\n', 'utf8');
+    execFileSync('git', ['-C', sourcePath, 'add', 'conflict.txt'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add conflict fixture'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'checkout', '-b', 'feature/conflict'], { stdio: 'ignore' });
+    fs.writeFileSync(path.join(sourcePath, 'conflict.txt'), 'feature\n', 'utf8');
+    execFileSync('git', ['-C', sourcePath, 'commit', '-am', 'feature edit'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'checkout', 'main'], { stdio: 'ignore' });
+    fs.writeFileSync(path.join(sourcePath, 'conflict.txt'), 'main\n', 'utf8');
+    execFileSync('git', ['-C', sourcePath, 'commit', '-am', 'main edit'], { stdio: 'ignore' });
+
+    expect(() => execFileSync('git', ['-C', sourcePath, 'merge', 'feature/conflict'], { stdio: 'ignore' })).toThrow();
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote });
+    expect(plan.errors).toContain(`Worktree has unresolved merge conflicts: ${sourcePath}`);
+    expect(() => applyWorkspaceInitialization(plan, { yes: true, stash: true })).toThrow(/unresolved merge conflicts/);
+    expect(execFileSync('git', ['-C', sourcePath, 'stash', 'list'], { encoding: 'utf8' }).trim()).toBe('');
+  });
+
   it('plans an i2Workspace sibling for a legacy grouped main checkout', () => {
     const parent = tempDir();
     const legacyWorkspaceRoot = path.join(parent, 'Time2Pay');

@@ -33,6 +33,7 @@ export interface WorkspaceInitWorktree {
   role: WorkspaceWorktreeRegistryEntry['role'];
   primary: boolean;
   dirty: boolean;
+  unmerged: boolean;
 }
 
 export interface WorkspaceInitializationPlan {
@@ -99,6 +100,10 @@ function isPrimaryWorktree(worktreePath: string): boolean {
 
 function isDirty(repoPath: string): boolean {
   return (runGit(repoPath, ['status', '--porcelain']) ?? 'UNREADABLE').length > 0;
+}
+
+function hasUnmergedChanges(repoPath: string): boolean {
+  return (runGit(repoPath, ['diff', '--name-only', '--diff-filter=U']) ?? '').length > 0;
 }
 
 function defaultWorkspaceRoot(sourcePath: string, workspaceName: string): string {
@@ -238,6 +243,7 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
       role,
       primary: isPrimaryWorktree(worktree.path),
       dirty: isDirty(worktree.path),
+      unmerged: hasUnmergedChanges(worktree.path),
     };
   });
 
@@ -245,6 +251,9 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   if (!projectRemote) errors.push('A project control-repository remote is required when the source origin is not a GitHub remote (--project-remote).');
   if (prunableWorktrees.length > 0) warnings.push(`${prunableWorktrees.length} prunable worktree registration(s) will be repaired during apply.`);
   if (worktrees.some((worktree) => worktree.dirty)) warnings.push('One or more worktrees are dirty; apply requires --stash.');
+  for (const worktree of worktrees.filter((item) => item.unmerged)) {
+    errors.push(`Worktree has unresolved merge conflicts: ${worktree.sourcePath}`);
+  }
 
   const targets = new Set<string>();
   for (const worktree of worktrees) {
@@ -343,7 +352,7 @@ function ensureMainCheckout(plan: WorkspaceInitializationPlan): WorkspaceInitWor
   const targetPath = path.join(plan.workspaceRoot, `${plan.folderPrefix}-main`);
   runGitOrThrow(primary.targetPath, ['worktree', 'add', targetPath, plan.defaultBranch]);
   const head = runGitOrThrow(targetPath, ['rev-parse', 'HEAD']);
-  return { sourcePath: targetPath, targetPath, branch: plan.defaultBranch, head, role: 'main', primary: false, dirty: false };
+  return { sourcePath: targetPath, targetPath, branch: plan.defaultBranch, head, role: 'main', primary: false, dirty: false, unmerged: false };
 }
 
 function copyLegacyProjectMemory(plan: WorkspaceInitializationPlan, legacyProjectPath: string): void {
@@ -417,6 +426,12 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
 export function applyWorkspaceInitialization(plan: WorkspaceInitializationPlan, options: { stash?: boolean; yes?: boolean } = {}): WorkspaceInitializationPlan {
   if (!options.yes) throw new Error('Refusing to apply without --yes.');
   if (plan.errors.length > 0) throw new Error(`Cannot initialize workspace:\n${plan.errors.join('\n')}`);
+  const unmerged = plan.worktrees.filter((worktree) => worktree.unmerged);
+  if (unmerged.length > 0) {
+    throw new Error(
+      `Cannot initialize workspace while worktrees have unresolved merge conflicts:\n${unmerged.map((worktree) => worktree.sourcePath).join('\n')}`
+    );
+  }
   const dirty = plan.worktrees.filter((worktree) => worktree.dirty);
   if (dirty.length > 0 && !options.stash) throw new Error('Dirty worktrees require --stash before initialization can apply.');
   if (dirty.length > 0) {
