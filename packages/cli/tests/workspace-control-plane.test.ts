@@ -236,6 +236,29 @@ describe('workspace control plane', () => {
     expect(() => applyWorkspaceInitialization(rerunPlan, { yes: true })).not.toThrow();
   });
 
+  it('flags active Git worktrees that are missing from the workspace registry', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    applyWorkspaceInitialization(plan, { yes: true });
+
+    const workspaceRoot = path.join(root, 'sample-i2Workspace');
+    const unregisteredPath = path.join(root, 'unregistered');
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'add', unregisteredPath, '-b', 'feature/unregistered'], { stdio: 'ignore' });
+
+    const status = getWorkspaceStatus(workspaceRoot);
+
+    expect(status.found).toBe(true);
+    if (!status.found) return;
+    expect(status.integrityIssues).toContainEqual(expect.stringContaining('Active Git worktree is missing from the registry:'));
+    expect(status.integrityIssues).toContainEqual(expect.stringContaining('unregistered'));
+  });
+
   it('treats unreadable worktree registrations as repair targets instead of stash targets', () => {
     const root = tempDir();
     const sourcePath = path.join(root, 'app');

@@ -39,6 +39,14 @@ export interface WorkspaceNotFoundStatus {
 
 export type WorkspaceStatusResult = WorkspaceStatus | WorkspaceNotFoundStatus;
 
+function resolveRegistryPath(workspaceRoot: string, entryPath: string): string {
+  return path.resolve(path.isAbsolute(entryPath) ? entryPath : path.join(workspaceRoot, entryPath));
+}
+
+function pathKey(value: string): string {
+  return path.resolve(value).toLowerCase();
+}
+
 export function getWorkspaceStatus(
   startPath = '.',
   options: { fetch?: boolean } = {}
@@ -86,10 +94,17 @@ export function getWorkspaceStatus(
       }
     }
     if (registry) {
-      for (const entry of registry.worktrees.filter((entry) => entry.repositoryId === config.id)) {
-        const entryPath = path.resolve(workspace.workspaceRoot, entry.path);
-        if (!fs.existsSync(entryPath) || !worktrees.some((worktree) => path.resolve(worktree.path) === entryPath)) {
+      const registryEntries = registry.worktrees.filter((entry) => entry.repositoryId === config.id);
+      const registryPaths = new Set(registryEntries.map((entry) => pathKey(resolveRegistryPath(workspace.workspaceRoot, entry.path))));
+      for (const entry of registryEntries) {
+        const entryPath = resolveRegistryPath(workspace.workspaceRoot, entry.path);
+        if (!fs.existsSync(entryPath) || !worktrees.some((worktree) => pathKey(worktree.path) === pathKey(entryPath))) {
           integrityIssues.push(`Registry entry is not an active Git worktree: ${entry.path}`);
+        }
+      }
+      for (const worktree of worktrees.filter((item) => !item.prunable && fs.existsSync(item.path))) {
+        if (!registryPaths.has(pathKey(worktree.path))) {
+          integrityIssues.push(`Active Git worktree is missing from the registry: ${worktree.path}`);
         }
       }
     }
