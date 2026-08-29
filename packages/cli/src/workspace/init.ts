@@ -482,6 +482,28 @@ function copyLegacyProjectMemory(plan: WorkspaceInitializationPlan, legacyProjec
   }
 }
 
+const CONTROL_PLANE_GUIDELINES_MARKER = '<!-- MDS_CONTROL_PLANE_CONTRACT -->';
+
+function ensureControlPlaneGuidelines(projectPath: string): void {
+  const guidelinesPath = path.join(projectPath, 'guidelines.md');
+  const existing = fs.existsSync(guidelinesPath) ? fs.readFileSync(guidelinesPath, 'utf8') : '# Project Guidelines\n';
+  if (existing.includes(CONTROL_PLANE_GUIDELINES_MARKER)) return;
+  const contract = [
+    CONTROL_PLANE_GUIDELINES_MARKER,
+    '',
+    '## Workspace Control-Plane Contract',
+    '',
+    '- This control repository `project/` directory is the only canonical human-readable project memory for an initialized workspace.',
+    '- Checkout-local legacy `project/` directories are read-only migration inputs; agents must not create, update, or regenerate planning files there.',
+    '- The UD may edit `todo.md` directly. Agents make narrow edits only and never replace or regenerate the entire file.',
+    '- Task agents return structured findings to Infie. Infie is the sole writer for shared human-readable project memory.',
+    '- Before a shared-memory update, Infie refreshes the control repository. Approved edits use a dedicated branch, push, and PR; direct main pushes are bootstrap or UD-authorized merge actions only.',
+    '- I² clients read the control repository default branch and use the same PR workflow. Keep agent-private coordination state outside project-memory Markdown.',
+    '',
+  ].join('\n');
+  fs.writeFileSync(guidelinesPath, `${existing.trimEnd()}\n\n${contract}`, 'utf8');
+}
+
 function ensureInferredProjectRemote(plan: WorkspaceInitializationPlan): void {
   if (plan.projectRemoteSource !== 'inferred' || !plan.projectRemoteRepository) return;
   if (runGhOrUndefined(['repo', 'view', plan.projectRemoteRepository, '--json', 'nameWithOwner'])) return;
@@ -524,6 +546,7 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
     projectPath: plan.projectPath,
     legacyProjectMemoryFound: plan.existingProjectMemory.length > 0,
   }));
+  ensureControlPlaneGuidelines(plan.projectPath);
   const registry: WorkspaceWorktreeRegistry = {
     schemaVersion: WORKSPACE_MANIFEST_VERSION, workspaceId: plan.manifest.workspaceId,
     worktrees: worktrees.map(toRegistryEntry),
