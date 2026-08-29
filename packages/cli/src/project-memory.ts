@@ -2912,7 +2912,7 @@ function renderGeneratedSettingsRoute(
     lines.push("      legalUrls={{ terms: '/terms', privacy: '/privacy' }}");
   }
   if (options.profileHref) {
-    lines.push(`      profileHref=\"${options.profileHref}\"`);
+    lines.push(`      profileHref="${options.profileHref}"`);
   }
   lines.push('    />', '  );', '}', '');
 
