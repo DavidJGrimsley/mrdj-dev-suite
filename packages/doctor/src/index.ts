@@ -6,6 +6,7 @@ import {
   checkEnvHygiene,
   checkExpoConfiguration,
   checkGitignoreEnv,
+  checkRuntimeSecurity,
   checkPackageScripts,
   checkProjectDocs,
   checkSeoMetadata,
@@ -78,6 +79,7 @@ export async function runDoctor(
   checks.push(checkStylingDependencies(packageJson));
   checks.push(await checkExpoConfiguration(packageJson, resolvedProjectPath));
   checks.push(await checkEnvHygiene(resolvedProjectPath));
+  checks.push(await checkRuntimeSecurity(resolvedProjectPath));
   checks.push(await checkAppArchitecture(packageJson, resolvedProjectPath));
   checks.push(await checkAnimationPerformance(resolvedProjectPath));
   checks.push(await checkSeoMetadata(resolvedProjectPath));

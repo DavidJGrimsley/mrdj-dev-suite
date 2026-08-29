@@ -477,6 +477,42 @@ describe('mds MCP helpers', () => {
     expect(animationPriority?.nextStep).toContain('Classify the motion first');
   });
 
+  it('routes runtime security errors to SSR and env knowledge resources', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-runtime-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'src', 'app'), { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'package.json'),
+      JSON.stringify({
+        name: 'demo',
+        main: 'expo-router/entry',
+        dependencies: { expo: '^54.0.0', 'expo-router': '^6.0.0' },
+        scripts: {},
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(projectPath, 'src', 'app', 'index.tsx'),
+      "import express from 'express';\nexport default function Home() { return express; }\n",
+      'utf8'
+    );
+
+    const result = (await executeTool('generate_refactor_plan', {
+      projectPath,
+      mode: 'fast',
+      runScripts: false,
+      focus: 'runtime',
+    })) as {
+      priorities: Array<{ check: string; relatedResources: string[] }>;
+    };
+
+    const runtimePriority = result.priorities.find((item) => item.check === 'runtime security');
+    expect(runtimePriority).toBeDefined();
+    expect(runtimePriority?.relatedResources).toContain('mds://rules/ssr-safety');
+    expect(runtimePriority?.relatedResources).toContain('mds://skills/expo-ssr-safety');
+    expect(runtimePriority?.relatedResources).toContain('mds://rules/env-hygiene');
+  });
+
   it('generates a target-aware deployment checklist', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-mcp-deploy-'));
     tempDirs.push(projectPath);

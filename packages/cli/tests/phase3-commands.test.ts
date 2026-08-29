@@ -38,6 +38,15 @@ describe('Phase 3 command helpers', () => {
     expect(result.matches[0]?.name).toBe('Env Hygiene');
   });
 
+  it('explains the runtime security Doctor check', async () => {
+    const result = await explainTopic('runtime-security');
+
+    expect(result.status).toBe('found');
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.type).toBe('doctor');
+    expect(result.matches[0]?.name).toBe('Runtime Security');
+  });
+
   it('surfaces ambiguous broad explain topics', async () => {
     const result = await explainTopic('expo');
 

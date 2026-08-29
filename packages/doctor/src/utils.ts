@@ -335,3 +335,11 @@ export function tail(output: string, maxLines = 30): string {
 export function relative(rootPath: string, filePath: string): string {
   return path.relative(rootPath, filePath).replace(/\\/g, '/');
 }
+
+export function isToolingOrTestPath(projectPath: string, filePath: string): boolean {
+  const rel = relative(projectPath, filePath);
+  if (/(^|\/)(\.claude|tests|__tests__|fixtures|worktrees|copilotInstructions|\.github|\.vscode)(\/|$)/.test(rel)) {
+    return true;
+  }
+  return /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(rel);
+}
