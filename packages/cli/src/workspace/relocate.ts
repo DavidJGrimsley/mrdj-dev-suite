@@ -80,13 +80,18 @@ export function planWorkspaceRelocation(startPath: string, options: WorkspaceRel
   const targetRoot = path.resolve(options.workspaceParent, path.basename(sourceRoot));
   const errors: string[] = [];
   const warnings: string[] = [];
+  if (!fs.existsSync(options.workspaceParent) || !fs.statSync(options.workspaceParent).isDirectory()) {
+    errors.push(`Workspace parent does not exist or is not a directory: ${path.resolve(options.workspaceParent)}`);
+  }
   const auxiliaryDirectories = [...new Set((options.includeAuxiliary ?? []).map((value) => value.trim()).filter(Boolean))];
   if (auxiliaryDirectories.some((value) => path.basename(value) !== value || value === '.' || value === '..')) {
     errors.push('Auxiliary directories must be direct child folder names.');
   }
   if (samePath(sourceRoot, targetRoot)) errors.push('Workspace relocation target is the current workspace root.');
   if (inside(targetRoot, sourceRoot) || inside(sourceRoot, targetRoot)) errors.push('Workspace relocation roots must not be nested.');
-  if (fs.existsSync(targetRoot) && fs.readdirSync(targetRoot).length > 0) errors.push(`Workspace relocation target is not empty: ${targetRoot}`);
+  if (fs.existsSync(targetRoot)) {
+    if (!fs.statSync(targetRoot).isDirectory() || fs.readdirSync(targetRoot).length > 0) errors.push(`Workspace relocation target is not empty: ${targetRoot}`);
+  }
 
   const moves: WorkspaceRelocateMove[] = [];
   const expected = new Set<string>(['project', 'temp', 'generated', JOURNAL, ...auxiliaryDirectories].map((value) => value.toLowerCase()));
