@@ -349,7 +349,7 @@ async function main(): Promise<void> {
         builder
           .positional('action', {
             describe: 'Workspace action',
-            choices: ['discover', 'status', 'doctor', 'adopt', 'init'] as const,
+            choices: ['discover', 'status', 'doctor', 'adopt', 'init', 'relocate'] as const,
           })
           .positional('path', {
             describe: 'Workspace, project, source checkout, or existing repository path',
@@ -401,6 +401,16 @@ async function main(): Promise<void> {
           .option('workspace-parent', {
             describe: 'Place the new <repository>-i2Workspace directory in this parent folder',
             type: 'string',
+          })
+          .option('include-auxiliary', {
+            describe: 'Include a direct child auxiliary directory when relocating; repeat for more than one',
+            type: 'array',
+            string: true,
+          })
+          .option('consolidate-legacy-project', {
+            describe: 'Merge legacy source project files into the control repo and open a source cleanup PR; requires --apply --yes',
+            type: 'boolean',
+            default: false,
           })
           .option('handoff-child', {
             type: 'boolean',

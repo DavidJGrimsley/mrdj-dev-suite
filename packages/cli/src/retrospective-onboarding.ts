@@ -379,6 +379,7 @@ function renderGuidelines(evidence: RetrospectiveOnboardingEvidence): string {
     '## Source Of Truth',
     '',
     '- The `project/` folder is the golden source of truth for product intent, roadmap, visual style, and technical rules.',
+    '- In an initialized MDS workspace, `mds workspace discover .` identifies the root control repository project folder; checkout-local legacy `project/` folders are migration inputs only.',
     '- This project memory was generated retrospectively from repository evidence and must be confirmed by the UD before deep implementation work.',
     '- Never make a product, architecture, or roadmap change that conflicts with confirmed project memory unless the UD explicitly updates it.',
     '',

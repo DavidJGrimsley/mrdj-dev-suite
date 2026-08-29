@@ -9,8 +9,11 @@ import {
   applyWorkspaceInitialization,
   planWorkspaceAdoption,
   planWorkspaceInitialization,
+  applyWorkspaceRelocation,
+  planWorkspaceRelocation,
   workspaceInitializationRequiresSafeWorkingDirectory,
 } from '../src/workspace/index.js';
+import { planLegacyProjectConsolidation } from '../src/workspace/legacy-project.js';
 import { runWorkspaceCommand } from '../src/commands/workspace.js';
 import { discoverWorkspace, resolveWorkspaceProjectMemoryPath } from '../src/workspace/discover.js';
 import { deriveGitFreshness, inspectGitRepository, parseGitWorktreeList } from '../src/workspace/git.js';
@@ -533,6 +536,64 @@ describe('workspace control plane', () => {
     expect(plan.normalizedMainPath).toBe(sourcePath);
     expect(plan.manifest.workspaceId).toBe('pokepages');
     expect(plan.worktrees[0]?.targetPath).toBe(sourcePath);
+  });
+
+  it('relocates a normalized workspace with an explicitly selected auxiliary directory', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', path.join(root, 'feature'), '-b', 'feature/test'], { stdio: 'ignore' });
+    const initialized = applyWorkspaceInitialization(planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' }), { yes: true });
+    const workspaceRoot = initialized.workspaceRoot;
+    fs.mkdirSync(path.join(workspaceRoot, 'test-apps'));
+    fs.writeFileSync(path.join(workspaceRoot, 'test-apps', 'keep.txt'), 'keep\n');
+    const parent = path.join(root, 'relocated');
+
+    const missingAuxiliary = planWorkspaceRelocation(workspaceRoot, { workspaceParent: parent });
+    expect(missingAuxiliary.errors).toContainEqual(expect.stringContaining('test-apps'));
+    const plan = planWorkspaceRelocation(workspaceRoot, { workspaceParent: parent, includeAuxiliary: ['test-apps'] });
+    expect(plan.errors).toEqual([]);
+    applyWorkspaceRelocation(plan, { yes: true });
+
+    const relocatedRoot = path.join(parent, 'sample-i2Workspace');
+    expect(fs.existsSync(workspaceRoot)).toBe(false);
+    expect(fs.readFileSync(path.join(relocatedRoot, 'test-apps', 'keep.txt'), 'utf8')).toBe('keep\n');
+    const status = getWorkspaceStatus(relocatedRoot);
+    expect(status.found).toBe(true);
+    if (status.found) expect(status.integrityIssues).toEqual([]);
+  });
+
+  it('plans clean legacy project merges and blocks conflicting consolidation', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    initializeGitRepository(sourcePath, path.join(root, 'source.git'));
+    fs.mkdirSync(path.join(sourcePath, 'project'), { recursive: true });
+    fs.writeFileSync(path.join(sourcePath, 'project', 'todo.md'), '# Todo\n\n- [ ] Base\n');
+    execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add legacy project'], { stdio: 'ignore' });
+    const featurePath = path.join(root, 'feature');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featurePath, '-b', 'feature/project-memory'], { stdio: 'ignore' });
+    fs.appendFileSync(path.join(featurePath, 'project', 'todo.md'), '- [ ] Feature\n');
+    execFileSync('git', ['-C', featurePath, 'commit', '-am', 'feature project note'], { stdio: 'ignore' });
+    const control = path.join(root, 'control');
+    fs.mkdirSync(control);
+    fs.writeFileSync(path.join(control, 'todo.md'), '# Todo\n\n- [ ] Base\n- [ ] Control\n');
+
+    const merged = planLegacyProjectConsolidation([
+      { worktreePath: sourcePath, primary: true },
+      { worktreePath: featurePath, primary: false },
+    ], control);
+    expect(merged.conflicts).toEqual([]);
+    expect(merged.files.find((file) => file.path === 'project/todo.md')).toMatchObject({ status: 'merge' });
+    expect(merged.files.find((file) => file.path === 'project/todo.md')?.content).toContain('Feature');
+    fs.writeFileSync(path.join(control, 'todo.md'), '# Todo\n\n- [ ] Different\n');
+    const conflicted = planLegacyProjectConsolidation([
+      { worktreePath: sourcePath, primary: true },
+      { worktreePath: featurePath, primary: false },
+    ], control);
+    expect(conflicted.conflicts).toContain('project/todo.md');
   });
 
   it('does not fetch by default and records an explicit fetch request', () => {

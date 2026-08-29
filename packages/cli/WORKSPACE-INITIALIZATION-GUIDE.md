@@ -20,7 +20,7 @@ mds workspace init . --apply --yes
 
 The default workspace name comes from the source repository's `origin` name, not the current checkout folder. For example, a checkout in `C:\work\scratch` with origin `github.com:example/actual-product.git` becomes `actual-product-i2Workspace/actual-product-main`. Use `--workspace-name` only when the UD intentionally wants a different visible workspace name.
 
-Before Infie applies an initialization plan, she must ask the UD where the workspace root should live. The default suggestion is beside the source checkout; use `--workspace-parent <parent>` when the UD wants a clean shared parent, for example `mds workspace init . --workspace-parent F:\SoftwareDev`. That produces `F:\SoftwareDev\actual-product-i2Workspace`. `--workspace-root` remains the escape hatch for an exact full destination; do not combine it with `--workspace-parent`.
+Before Infie applies an initialization plan, she must ask the UD where the workspace root should live and show the resulting path. The CLI accepts any `--workspace-parent <workspace-parent>`; it contains no machine-specific destination. The bare CLI keeps its source-parent fallback for compatibility, but Infie must not apply that fallback without the UD acknowledging it. `--workspace-root` remains the escape hatch for an exact full destination; do not combine it with `--workspace-parent`.
 
 For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. The control repository is always created as **private**, even when the source repository is public. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
 
@@ -29,6 +29,17 @@ If a checkout has intentional local changes, add `--stash`. This creates named G
 On Windows, an apply started from a checkout that must move automatically hands off to a safe helper process outside the affected worktrees. The helper waits for the initiating process to release its working directory before moving anything. If the CLI runtime itself is inside a worktree that will move, use an installed MDS CLI or an isolated runner outside the repository.
 
 Initialization never installs or repairs package dependencies. A moved checkout may need an explicit, user-requested dependency repair afterwards; that is separate from workspace initialization.
+
+To move an existing normalized workspace, use a relocation plan from an external CLI runtime:
+
+```bash
+mds workspace relocate . --workspace-parent <workspace-parent> --include-auxiliary <directory>
+mds workspace relocate . --workspace-parent <workspace-parent> --include-auxiliary <directory> --apply --yes
+```
+
+Only named auxiliary directories move with the generic workspace folders. Relocation journals every move, uses Git for linked worktrees, repairs the primary checkout last, and rolls completed moves back on failure.
+
+Every initialization inventories tracked legacy `project/` files from each active worktree. To merge clean differences into the control repository and create a dedicated source cleanup PR that removes those legacy files, add `--consolidate-legacy-project --apply --yes`. Conflicts block that cleanup; ordinary initialization never deletes tracked source project files.
 
 ## Result
 

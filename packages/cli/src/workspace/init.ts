@@ -13,6 +13,7 @@ import {
   applyRetrospectiveProjectOnboarding,
   planRetrospectiveProjectOnboarding,
 } from '../retrospective-onboarding.js';
+import { applyLegacyProjectConsolidation, planLegacyProjectConsolidation } from './legacy-project.js';
 
 import type { GitWorktreeInfo } from './git.js';
 import type { WorkspaceManifest, WorkspaceWorktreeRegistry, WorkspaceWorktreeRegistryEntry } from './schema.js';
@@ -22,6 +23,7 @@ export interface WorkspaceInitOptions {
   workspaceRoot?: string;
   workspaceParent?: string;
   projectRemote?: string;
+  consolidateLegacyProject?: boolean;
 }
 
 type ProjectRemoteSource = 'provided' | 'inferred';
@@ -54,6 +56,7 @@ export interface WorkspaceInitializationPlan {
   worktrees: WorkspaceInitWorktree[];
   prunableWorktrees: GitWorktreeInfo[];
   existingProjectMemory: string[];
+  legacyProjectMigration: ReturnType<typeof planLegacyProjectConsolidation>;
   retrospectiveOnboarding: {
     mode: 'generate' | 'fill-missing';
     evidenceSources: string[];
@@ -333,6 +336,13 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     projectPath: path.join(workspaceRoot, 'project'),
     legacyProjectMemoryFound: existingProjectMemory.length > 0,
   });
+  const legacyProjectMigration = planLegacyProjectConsolidation(
+    worktrees.map((worktree) => ({ worktreePath: worktree.sourcePath, primary: worktree.primary })),
+    path.join(workspaceRoot, 'project'),
+  );
+  if (options.consolidateLegacyProject && legacyProjectMigration.conflicts.length > 0) {
+    errors.push(`Legacy project consolidation has conflicts: ${legacyProjectMigration.conflicts.join(', ')}`);
+  }
   if (options.projectRemote && remote && normalizeRemoteUrl(options.projectRemote) === normalizeRemoteUrl(remote)) {
     errors.push('The project control-repository remote must be separate from the source app remote.');
   }
@@ -347,7 +357,7 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     ...(projectRemote ? { projectRemote } : {}),
     ...(projectRemoteSource ? { projectRemoteSource } : {}),
     ...(projectRemoteRepository ? { projectRemoteRepository } : {}),
-    defaultBranch, worktrees, prunableWorktrees, existingProjectMemory,
+    defaultBranch, worktrees, prunableWorktrees, existingProjectMemory, legacyProjectMigration,
     retrospectiveOnboarding: {
       mode: existingProjectMemory.length > 0 ? 'fill-missing' : 'generate',
       evidenceSources: retrospectivePlan.evidenceSources,
@@ -489,7 +499,7 @@ function ensureInferredProjectRemote(plan: WorkspaceInitializationPlan): void {
   }
 }
 
-function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[]): void {
+function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[], consolidateLegacyProject = false): void {
   if (!plan.projectRemote) throw new Error('A project control-repository remote is required.');
   const legacySource = worktrees.find((worktree) => worktree.primary) ?? worktrees[0];
   if (!legacySource) throw new Error('Cannot initialize a project control repository without a source worktree.');
@@ -507,6 +517,7 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
   if (legacyProjectPath && fs.existsSync(legacyProjectPath)) {
     copyLegacyProjectMemory(plan, legacyProjectPath);
   }
+  if (consolidateLegacyProject) applyLegacyProjectConsolidation(plan.legacyProjectMigration, plan.projectPath);
   applyRetrospectiveProjectOnboarding(planRetrospectiveProjectOnboarding(legacySource.targetPath, {
     projectPath: plan.projectPath,
     legacyProjectMemoryFound: plan.existingProjectMemory.length > 0,
@@ -528,7 +539,32 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
   }
 }
 
-export function applyWorkspaceInitialization(plan: WorkspaceInitializationPlan, options: { stash?: boolean; yes?: boolean } = {}): WorkspaceInitializationPlan {
+function createLegacyProjectCleanupPullRequest(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[]): void {
+  const primary = worktrees.find((worktree) => worktree.primary) ?? worktrees.find((worktree) => worktree.role === 'main');
+  if (!primary || primary.branch !== plan.defaultBranch) throw new Error('Legacy project cleanup requires the primary checkout on the default branch.');
+  const remote = plan.manifest.repositories[0]?.remote;
+  const repository = parseGitHubRemote(remote)?.fullName;
+  if (!repository) throw new Error('Legacy project cleanup PR requires a GitHub source remote.');
+  runGitOrThrow(primary.targetPath, ['fetch', '--prune', 'origin']);
+  const [aheadText, behindText] = runGitOrThrow(primary.targetPath, ['rev-list', '--left-right', '--count', `HEAD...origin/${plan.defaultBranch}`]).split(/\s+/);
+  if (Number(aheadText) !== 0 || Number(behindText) !== 0) {
+    throw new Error(`Legacy project cleanup requires an up-to-date ${plan.defaultBranch}; ask the UD to fast-forward first.`);
+  }
+  const branch = 'chore/consolidate-project-control-plane';
+  const checkout = path.join(plan.tempPath, 'legacy-project-cleanup');
+  if (fs.existsSync(checkout)) throw new Error(`Legacy project cleanup checkout already exists: ${checkout}`);
+  runGitOrThrow(primary.targetPath, ['worktree', 'add', '-b', branch, checkout, plan.defaultBranch]);
+  try {
+    runGitOrThrow(checkout, ['rm', '-r', '--', 'project']);
+    runGitOrThrow(checkout, ['commit', '-m', 'chore: consolidate project control plane']);
+    runGitOrThrow(checkout, ['push', '-u', 'origin', branch]);
+    runGh(['pr', 'create', '--repo', repository, '--base', plan.defaultBranch, '--head', branch, '--title', 'chore: consolidate project control plane', '--body', 'Moves canonical project memory to the workspace control repository.']);
+  } finally {
+    runGitOrThrow(primary.targetPath, ['worktree', 'remove', checkout]);
+  }
+}
+
+export function applyWorkspaceInitialization(plan: WorkspaceInitializationPlan, options: { stash?: boolean; yes?: boolean; consolidateLegacyProject?: boolean } = {}): WorkspaceInitializationPlan {
   if (!options.yes) throw new Error('Refusing to apply without --yes.');
   if (plan.errors.length > 0) throw new Error(`Cannot initialize workspace:\n${plan.errors.join('\n')}`);
   if (workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
@@ -552,7 +588,8 @@ export function applyWorkspaceInitialization(plan: WorkspaceInitializationPlan, 
   const finalWorktrees = createdMain ? [...plan.worktrees, createdMain] : plan.worktrees;
   fs.mkdirSync(plan.tempPath, { recursive: true });
   fs.mkdirSync(plan.generatedPath, { recursive: true });
-  createProjectControlRepo(plan, finalWorktrees);
+  createProjectControlRepo(plan, finalWorktrees, options.consolidateLegacyProject);
   for (const worktree of finalWorktrees) writeSourceLink(worktree.targetPath, plan.manifest.workspaceId, plan.projectRemote!);
+  if (options.consolidateLegacyProject) createLegacyProjectCleanupPullRequest(plan, finalWorktrees);
   return { ...plan, worktrees: finalWorktrees };
 }

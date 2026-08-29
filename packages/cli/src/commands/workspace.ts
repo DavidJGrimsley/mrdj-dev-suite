@@ -9,11 +9,16 @@ import {
   planWorkspaceAdoption,
   workspaceInitializationRequiresSafeWorkingDirectory,
 } from '../workspace/adopt.js';
+import {
+  applyWorkspaceRelocation,
+  planWorkspaceRelocation,
+  workspaceRelocationRequiresSafeWorkingDirectory,
+} from '../workspace/relocate.js';
 import { discoverWorkspace } from '../workspace/discover.js';
 import { getWorkspaceStatus, workspaceHasUnsafeState } from '../workspace/status.js';
 
 export interface WorkspaceArgv {
-  action?: 'discover' | 'status' | 'doctor' | 'adopt' | 'init';
+  action?: 'discover' | 'status' | 'doctor' | 'adopt' | 'init' | 'relocate';
   path?: string;
   fetch?: boolean;
   json?: boolean;
@@ -25,6 +30,8 @@ export interface WorkspaceArgv {
   workspaceName?: string;
   workspaceRoot?: string;
   workspaceParent?: string;
+  includeAuxiliary?: string[];
+  consolidateLegacyProject?: boolean;
   handoffChild?: boolean;
 }
 
@@ -62,6 +69,15 @@ function handoffArguments(argv: WorkspaceArgv, sourcePath: string): string[] {
   if (argv.workspaceName) args.push('--workspace-name', argv.workspaceName);
   if (argv.workspaceRoot) args.push('--workspace-root', argv.workspaceRoot);
   if (argv.workspaceParent) args.push('--workspace-parent', argv.workspaceParent);
+  if (argv.consolidateLegacyProject) args.push('--consolidate-legacy-project');
+  if (argv.json) args.push('--json');
+  return args;
+}
+
+function relocationHandoffArguments(argv: WorkspaceArgv, sourcePath: string): string[] {
+  const args = ['workspace', 'relocate', sourcePath, '--apply', '--yes', '--handoff-child'];
+  if (argv.workspaceParent) args.push('--workspace-parent', argv.workspaceParent);
+  for (const auxiliary of argv.includeAuxiliary ?? []) args.push('--include-auxiliary', auxiliary);
   if (argv.json) args.push('--json');
   return args;
 }
@@ -89,6 +105,19 @@ function launchWorkspaceInitHandoff(argv: WorkspaceArgv, plan: ReturnType<typeof
   });
   child.unref();
   if (!child.pid) throw new Error('Unable to start the workspace initialization handoff.');
+  return child.pid;
+}
+
+function launchWorkspaceRelocationHandoff(argv: WorkspaceArgv, plan: ReturnType<typeof planWorkspaceRelocation>): number {
+  const entry = process.argv[1] ? path.resolve(process.argv[1]) : undefined;
+  if (!entry || !fs.existsSync(entry) || isPathInside(entry, plan.sourceRoot)) {
+    throw new Error('Cannot start workspace relocation handoff from a CLI runtime inside the workspace. Use an installed MDS CLI or an isolated runner.');
+  }
+  const child = spawn(process.execPath, ['-e', HANDOFF_BOOTSTRAP, String(process.pid), entry, JSON.stringify({
+    cwd: path.dirname(plan.targetRoot), args: relocationHandoffArguments(argv, plan.sourceRoot),
+  })], { cwd: path.dirname(plan.targetRoot), detached: true, stdio: 'inherit' });
+  child.unref();
+  if (!child.pid) throw new Error('Unable to start the workspace relocation handoff.');
   return child.pid;
 }
 
@@ -158,6 +187,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       workspaceName: argv.workspaceName,
       workspaceRoot: argv.workspaceRoot,
       workspaceParent: argv.workspaceParent,
+      consolidateLegacyProject: argv.consolidateLegacyProject,
     });
     if (argv.apply === true && argv.yes === true && !argv.handoffChild && workspaceInitializationRequiresSafeWorkingDirectory(plan)) {
       const pid = launchWorkspaceInitHandoff(argv, plan);
@@ -165,7 +195,7 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       return;
     }
     const applied = argv.apply === true
-      ? applyWorkspaceAdoption(plan, { stash: argv.stash, yes: argv.yes })
+      ? applyWorkspaceAdoption(plan, { stash: argv.stash, yes: argv.yes, consolidateLegacyProject: argv.consolidateLegacyProject })
       : plan;
     if (argv.json) {
       console.log(JSON.stringify({ ...applied, applied: argv.apply === true }, null, 2));
@@ -191,6 +221,11 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
       console.log('Existing project memory to migrate:');
       for (const file of applied.existingProjectMemory) console.log(`  - ${file}`);
     }
+    if (applied.legacyProjectMigration.files.length > 0) {
+      console.log();
+      console.log('Legacy project consolidation:');
+      for (const file of applied.legacyProjectMigration.files) console.log(`  - ${file.status}: ${file.path}`);
+    }
     if (applied.warnings.length > 0) {
       console.log();
       for (const warning of applied.warnings) console.log(chalk.yellow(`WARNING ${warning}`));
@@ -203,6 +238,29 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     console.log(argv.apply
       ? chalk.green('Workspace initialization applied.')
       : chalk.dim('Planning only. Re-run with --apply --yes to make changes. Use --project-remote <url> to override the inferred control repo.'));
+    return;
+  }
+
+  if (action === 'relocate') {
+    const plan = planWorkspaceRelocation(target, {
+      workspaceParent: argv.workspaceParent,
+      includeAuxiliary: argv.includeAuxiliary,
+    });
+    if (argv.apply === true && argv.yes === true && !argv.handoffChild && workspaceRelocationRequiresSafeWorkingDirectory(plan)) {
+      const pid = launchWorkspaceRelocationHandoff(argv, plan);
+      console.log(chalk.yellow(`Workspace relocation handed off to a safe helper process (PID ${pid}).`));
+      return;
+    }
+    const applied = argv.apply === true ? applyWorkspaceRelocation(plan, { yes: argv.yes }) : plan;
+    if (argv.json) { console.log(JSON.stringify({ ...applied, applied: argv.apply === true }, null, 2)); return; }
+    console.log(chalk.bold(`MDS workspace ${argv.apply ? 'relocation' : 'relocation plan'}`));
+    console.log(`Source: ${applied.sourceRoot}`);
+    console.log(`Target: ${applied.targetRoot}`);
+    console.log(`Auxiliary directories: ${applied.auxiliaryDirectories.join(', ') || 'none'}`);
+    console.log(`Moves: ${applied.moves.length}`);
+    for (const warning of applied.warnings) console.log(chalk.yellow(`WARNING ${warning}`));
+    for (const error of applied.errors) console.log(chalk.red(`BLOCKED ${error}`));
+    console.log(argv.apply ? chalk.green('Workspace relocation applied.') : chalk.dim('Planning only. Re-run with --apply --yes to relocate.'));
     return;
   }
 
