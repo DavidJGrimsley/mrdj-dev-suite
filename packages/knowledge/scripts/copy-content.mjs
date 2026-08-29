@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -13,8 +13,16 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repoRoot = path.resolve(packageRoot, '..', '..');
 const source = path.join(packageRoot, 'src', 'content');
 const destination = path.join(packageRoot, 'dist', 'content');
+const copyLock = path.join(packageRoot, 'dist-content-copy.lock');
 
 export async function runCopyContent() {
+  await withCopyLock(async () => {
+    await copyContent();
+  });
+}
+
+async function copyContent() {
+  const shouldGeneratePluginBundles = !process.argv.includes('--skip-plugin-bundles');
   await rm(destination, { recursive: true, force: true });
   await mkdir(path.dirname(destination), { recursive: true });
   const markdownFiles = await listMarkdownFiles(source);
@@ -35,7 +43,7 @@ export async function runCopyContent() {
     'utf8'
   );
 
-  if (process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
+  if (shouldGeneratePluginBundles && process.env.MRDJ_SKIP_CODEX_PLUGIN_GENERATION !== '1') {
     try {
       await generateCodexPluginBundleFromKnowledge({ packageRoot });
     } catch (error) {
@@ -48,7 +56,7 @@ export async function runCopyContent() {
     }
   }
 
-  if (process.env.MRDJ_SKIP_VSCODE_COPILOT_GENERATION !== '1') {
+  if (shouldGeneratePluginBundles && process.env.MRDJ_SKIP_VSCODE_COPILOT_GENERATION !== '1') {
     try {
       await generateVscodeCopilotBundleFromKnowledge({ packageRoot });
     } catch (error) {
@@ -60,6 +68,8 @@ export async function runCopyContent() {
       );
     }
   }
+
+  if (!shouldGeneratePluginBundles) return;
 
   // Generate plugin skill files in the Claude Code plugin format:
   // skills/<skill-id>/SKILL.md with YAML frontmatter extracted from the skill body.
@@ -133,6 +143,40 @@ export async function runCopyContent() {
   console.log(
     `  generated ${skillFiles.length} knowledge + ${commandFiles.length} command skill dirs -> ${path.relative(repoRoot, claudeCodeSkillsDir)}`
   );
+}
+
+async function withCopyLock(action) {
+  await acquireCopyLock();
+  try {
+    await action();
+  } finally {
+    await rm(copyLock, { recursive: true, force: true });
+  }
+}
+
+async function acquireCopyLock() {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    try {
+      await mkdir(copyLock);
+      return;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+
+      try {
+        const lockAgeMs = Date.now() - (await stat(copyLock)).mtimeMs;
+        if (lockAgeMs > 5 * 60 * 1000) {
+          await rm(copyLock, { recursive: true, force: true });
+          continue;
+        }
+      } catch (statError) {
+        if (statError?.code !== 'ENOENT') throw statError;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  throw new Error('Timed out waiting for another knowledge content copy to finish.');
 }
 
 async function listMarkdownFiles(root) {

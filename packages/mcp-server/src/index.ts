@@ -8,12 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
-import {
-  DEFAULT_DOCTOR_MODE,
-  FULL_MODE_GUIDANCE,
-  runDoctor,
-  scanFile,
-} from '@mr.dj2u/doctor';
+import { DEFAULT_DOCTOR_MODE, FULL_MODE_GUIDANCE, runDoctor, scanFile } from '@mr.dj2u/doctor';
 import {
   buildCessIntakeStep,
   buildCreateExpoSuperStackArgv,
@@ -264,7 +259,8 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'generate_deploy_checklist',
-      description: 'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
+      description:
+        'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -452,10 +448,7 @@ export async function listResources(): Promise<MCPResource[]> {
   }));
 }
 
-export async function executeTool(
-  name: string,
-  input: Record<string, unknown>
-): Promise<unknown> {
+export async function executeTool(name: string, input: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case 'continue_project': {
       return buildContinueSessionBrief(readString(input.projectPath) ?? '.');
@@ -515,7 +508,10 @@ export async function executeTool(
       });
     }
     case 'generate_setup_tasks': {
-      return generateSetupTasks(readString(input.projectPath) ?? '.', readStringArray(input.defaults));
+      return generateSetupTasks(
+        readString(input.projectPath) ?? '.',
+        readStringArray(input.defaults)
+      );
     }
     case 'create_expo_super_stack_extract_info': {
       const infoMarkdown = readString(input.infoMarkdown);
@@ -630,7 +626,10 @@ function registerTools(server: McpServer): void {
       },
     },
     async ({ projectPath, mode, runScripts }) => {
-      const report = await runDoctor(projectPath, { mode: mode ?? DEFAULT_DOCTOR_MODE, runScripts });
+      const report = await runDoctor(projectPath, {
+        mode: mode ?? DEFAULT_DOCTOR_MODE,
+        runScripts,
+      });
       return toolJson(report);
     }
   );
@@ -718,7 +717,8 @@ function registerTools(server: McpServer): void {
     'generate_deploy_checklist',
     {
       title: 'Generate Deploy Checklist',
-      description: 'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
+      description:
+        'Generate a target-aware deployment checklist using Doctor findings and MDS guidance.',
       inputSchema: {
         projectPath: z.string(),
         target: z.enum(['web', 'ios', 'android', 'native', 'all']).optional(),
@@ -773,7 +773,8 @@ function registerTools(server: McpServer): void {
         defaults: z.array(z.string()).optional(),
       },
     },
-    async ({ projectPath, defaults }) => toolJson(generateSetupTasks(projectPath ?? '.', defaults ?? []))
+    async ({ projectPath, defaults }) =>
+      toolJson(generateSetupTasks(projectPath ?? '.', defaults ?? []))
   );
 
   server.registerTool(
@@ -1082,7 +1083,8 @@ function registerPrompts(server: McpServer): void {
   );
 }
 
-const INFO_TEMPLATE_URL = 'https://davidjgrimsley.com/public-facing/ai/mr-djs-dev-suite/templates/info.md';
+const INFO_TEMPLATE_URL =
+  'https://davidjgrimsley.com/public-facing/ai/mr-djs-dev-suite/templates/info.md';
 
 function fileIntakePhase(label: string): string {
   return [
@@ -1099,7 +1101,7 @@ function fileIntakePhase(label: string): string {
     '',
     'Wait for the user to attach/paste content or to opt out. Then:',
     '  - Parse what was provided and normalize it into canonical project memory structure. For each upcoming question, classify the answer as:',
-    "      'clear'      → skip the question; tell the user briefly: \"(using your info.md value: <short paraphrase>)\".",
+    '      \'clear\'      → skip the question; tell the user briefly: "(using your info.md value: <short paraphrase>)".',
     "      'ambiguous'  → ask the question, citing the relevant line from the file as context.",
     "      'unknown'    → ask normally.",
     '  - Never invent answers. If the file is silent on a question, ask normally.',
@@ -1135,13 +1137,10 @@ function readCanonicalPromptMarkdown(idOrSlug: string): string {
     promptSpec.resourcePath
   );
   const promptPath =
-    localPromptPath && existsSync(localPromptPath)
-      ? localPromptPath
-      : installedPromptPath;
+    localPromptPath && existsSync(localPromptPath) ? localPromptPath : installedPromptPath;
 
   return readFileSync(promptPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
-
 
 export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
   const promptParent = parentDir?.trim() ? parentDir : 'the current working directory';
@@ -1476,7 +1475,9 @@ async function generateRefactorPlan(
     recommendedOrder:
       priorities.length > 0
         ? priorities.map((item) => `${item.priority}. ${item.check}: ${item.nextStep}`)
-        : ['No Doctor warnings or errors matched this refactor request. Keep the current architecture intact.'],
+        : [
+            'No Doctor warnings or errors matched this refactor request. Keep the current architecture intact.',
+          ],
     verification: [
       `Run doctor_scan_project for ${report.projectPath} in ${report.mode} mode after the refactor.`,
       'If route, env, or SSR files changed, run doctor_scan_file on the touched files before the full scan.',
@@ -1562,10 +1563,18 @@ function buildDeployChecklist(
   const hasErrors = report.summary.errors > 0;
   const hasWarnings = report.summary.warnings > 0;
   const checkNames = report.checks.map((check) => `${check.name} ${check.message}`.toLowerCase());
-  const hasSeoSignal = checkNames.some((value) => value.includes('seo') || value.includes('metadata'));
-  const hasEnvSignal = checkNames.some((value) => value.includes('env') || value.includes('secret'));
-  const hasSsrSignal = checkNames.some((value) => value.includes('ssr') || value.includes('window'));
-  const hasExpoSignal = checkNames.some((value) => value.includes('expo config') || value.includes('expo configuration'));
+  const hasSeoSignal = checkNames.some(
+    (value) => value.includes('seo') || value.includes('metadata')
+  );
+  const hasEnvSignal = checkNames.some(
+    (value) => value.includes('env') || value.includes('secret')
+  );
+  const hasSsrSignal = checkNames.some(
+    (value) => value.includes('ssr') || value.includes('window')
+  );
+  const hasExpoSignal = checkNames.some(
+    (value) => value.includes('expo config') || value.includes('expo configuration')
+  );
 
   const items: DeployChecklistItem[] = [
     {
@@ -1591,8 +1600,12 @@ function buildDeployChecklist(
       id: 'expo-runtime',
       status: hasExpoSignal ? 'action' : 'manual',
       title: 'Verify Expo config and runtime targets',
-      detail: 'Confirm app config, platform list, web output, and build profiles match the release target.',
-      relatedResources: ['mds://patterns/project-configuration-patterns', 'mds://skills/deployment'],
+      detail:
+        'Confirm app config, platform list, web output, and build profiles match the release target.',
+      relatedResources: [
+        'mds://patterns/project-configuration-patterns',
+        'mds://skills/deployment',
+      ],
     },
   ];
 
@@ -1602,7 +1615,8 @@ function buildDeployChecklist(
         id: 'web-metadata',
         status: hasSeoSignal ? 'action' : 'manual',
         title: 'Verify web SEO metadata',
-        detail: 'Check title, description, canonical URL, Open Graph tags, sitemap, and robots strategy.',
+        detail:
+          'Check title, description, canonical URL, Open Graph tags, sitemap, and robots strategy.',
         relatedResources: ['mds://rules/seo-metadata', 'mds://skills/seo-metadata'],
       },
       {
@@ -1661,17 +1675,39 @@ function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
     resources.add('mds://guides/animation-performance');
     resources.add('mds://patterns/animation-motion-selection');
   }
-  if (text.includes('env') || text.includes('secret') || text.includes('public')) {
+  if (text.includes('env') || text.includes('secret') || text.includes('public') || text.includes('credential')) {
     resources.add('mds://rules/env-hygiene');
     resources.add('mds://skills/env-vars');
   }
-  if (text.includes('ssr') || text.includes('window') || text.includes('document') || text.includes('localstorage')) {
+  if (
+    text.includes('ssr') ||
+    text.includes('window') ||
+    text.includes('document') ||
+    text.includes('localstorage') ||
+    text.includes('runtime security') ||
+    text.includes('server-only') ||
+    text.includes('localhost')
+  ) {
     resources.add('mds://rules/ssr-safety');
     resources.add('mds://skills/expo-ssr-safety');
+  }
+  if (text.includes('runtime security')) {
+    resources.add('mds://rules/env-hygiene');
+    resources.add('mds://skills/env-vars');
   }
   if (text.includes('seo') || text.includes('metadata') || text.includes('canonical')) {
     resources.add('mds://rules/seo-metadata');
     resources.add('mds://skills/seo-metadata');
+  }
+  if (text.includes('api safety')) {
+    resources.add('mds://skills/api-routes');
+    resources.add('mds://patterns/api-api-routes');
+    resources.add('mds://patterns/api-error-handling');
+  }
+  if (text.includes('router safety')) {
+    resources.add('mds://skills/expo-router-architecture');
+    resources.add('mds://patterns/routing-route-groups');
+    resources.add('mds://rules/app-folder-architecture');
   }
   if (text.includes('app architecture') || text.includes('route') || text.includes('app/')) {
     resources.add('mds://rules/app-folder-architecture');
@@ -1680,7 +1716,12 @@ function relatedResourcesForCheck(check: DoctorCheckResult): string[] {
   if (text.includes('styling') || text.includes('uniwind') || text.includes('tailwind')) {
     resources.add('mds://skills/uniwind-theming');
   }
-  if (text.includes('expo') || text.includes('build') || text.includes('script') || text.includes('package')) {
+  if (
+    text.includes('expo') ||
+    text.includes('build') ||
+    text.includes('script') ||
+    text.includes('package')
+  ) {
     resources.add('mds://skills/deployment');
   }
 
@@ -1708,6 +1749,12 @@ function nextStepForCheck(check: DoctorCheckResult): string {
   if (text.includes('seo') || text.includes('metadata')) {
     return 'Add or normalize route metadata, canonical/indexing strategy, and web output verification.';
   }
+  if (text.includes('api safety')) {
+    return 'Validate HTTP methods and request schemas, enforce auth on sensitive endpoints, and keep error bodies from leaking internals.';
+  }
+  if (text.includes('router safety')) {
+    return 'Keep route groups and layouts intentional, avoid string-assembled hrefs, and move mixed business logic out of app/.';
+  }
   if (text.includes('app architecture') || text.includes('route')) {
     return 'Move business/data logic out of route files and keep app/ focused on routing shells.';
   }
@@ -1717,7 +1764,9 @@ function nextStepForCheck(check: DoctorCheckResult): string {
   return 'Apply the smallest targeted fix, then rerun Doctor to confirm the finding is resolved.';
 }
 
-function normalizeDeployTarget(value: string | undefined): 'web' | 'ios' | 'android' | 'native' | 'all' {
+function normalizeDeployTarget(
+  value: string | undefined
+): 'web' | 'ios' | 'android' | 'native' | 'all' {
   return value === 'web' ||
     value === 'ios' ||
     value === 'android' ||
@@ -1857,7 +1906,9 @@ function readString(value: unknown): string | undefined {
 }
 
 function readStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
 }
 
 function readBoolean(value: unknown): boolean | undefined {
@@ -1881,7 +1932,9 @@ function getMcpServerPackageJsonPath(): string {
   return path.resolve(moduleDir, '..', 'package.json');
 }
 
-export function classifyMcpServerRuntimeMode(packageJsonPath: string): 'local-node' | 'published-npx' {
+export function classifyMcpServerRuntimeMode(
+  packageJsonPath: string
+): 'local-node' | 'published-npx' {
   const normalized = packageJsonPath.replace(/\\/gu, '/').toLowerCase();
   if (normalized.includes('/packages/mcp-server/')) {
     return 'local-node';
@@ -1931,14 +1984,15 @@ function getMdsRuntimeVersions(): {
       'Local MCP runtime could not find packages/create-expo-super-stack/dist/cli.js, so generation will fall back to the published package.'
     );
   }
-  const versionVisibility = runtimeMode === 'published-npx' && !localCliPath ? 'isolated' : 'direct';
+  const versionVisibility =
+    runtimeMode === 'published-npx' && !localCliPath ? 'isolated' : 'direct';
   const versionVisibilityReason =
     invocation.source === 'local-build'
       ? 'This MCP session is using the local create-expo-super-stack build from the repo, so its version and path are directly inspectable.'
       : versionVisibility === 'isolated'
         ? runtimeMode === 'published-npx'
-        ? 'This MCP session is running from the published package, so local package versions are not directly inspectable from this process.'
-        : 'This MCP session can run create-expo-super-stack on demand, so that package may not appear as a locally installed dependency in this process.'
+          ? 'This MCP session is running from the published package, so local package versions are not directly inspectable from this process.'
+          : 'This MCP session can run create-expo-super-stack on demand, so that package may not appear as a locally installed dependency in this process.'
         : 'This MCP session can directly inspect the installed package versions it is using.';
 
   return {
@@ -1995,14 +2049,18 @@ function resolveCreateExpoSuperStackInfo(input: Record<string, unknown>): {
   const answers = {
     ...extracted.prefilledAnswers,
     ...overrides,
-    saveDefaults: readBoolean(overrides.saveDefaults) ?? extracted.prefilledAnswers.saveDefaults ?? false,
+    saveDefaults:
+      readBoolean(overrides.saveDefaults) ?? extracted.prefilledAnswers.saveDefaults ?? false,
   };
   const missingQuestionIds = validateCessGenerationReadiness({
     parentDir,
     appName,
     answers,
   });
-  const canConfirm = Boolean(parentDir && appName) && missingQuestionIds.length === 0 && extracted.ambiguousQuestionIds.length === 0;
+  const canConfirm =
+    Boolean(parentDir && appName) &&
+    missingQuestionIds.length === 0 &&
+    extracted.ambiguousQuestionIds.length === 0;
   const resolvedPlan = canConfirm
     ? resolveCessPlan({
         parentDir,
@@ -2031,14 +2089,14 @@ function resolveCreateExpoSuperStackInfo(input: Record<string, unknown>): {
     extracted,
     runtime: getMdsRuntimeVersions(),
     generateInput: canConfirm
-        ? {
-            parentDir: parentDir as string,
-            appName: appName as string,
-            answers,
-            canonicalProjectInfoMarkdown: canonicalProjectInfoMarkdown as string,
-            confirmed: true,
-          }
-        : undefined,
+      ? {
+          parentDir: parentDir as string,
+          appName: appName as string,
+          answers,
+          canonicalProjectInfoMarkdown: canonicalProjectInfoMarkdown as string,
+          confirmed: true,
+        }
+      : undefined,
   };
 }
 
@@ -2046,9 +2104,14 @@ function assertNoUnsupportedCessAliasKeys(answers: Record<string, unknown> | und
   if (!answers) {
     return;
   }
-  const unsupportedKeys = ['language', 'routing', 'style', 'auth', 'projectDocs', 'guidelines'].filter(
-    (key) => key in answers
-  );
+  const unsupportedKeys = [
+    'language',
+    'routing',
+    'style',
+    'auth',
+    'projectDocs',
+    'guidelines',
+  ].filter((key) => key in answers);
   if (unsupportedKeys.length > 0) {
     throw new Error(
       `Unsupported Create Expo Super Stack answer keys: ${unsupportedKeys.join(', ')}. ` +
@@ -2057,9 +2120,7 @@ function assertNoUnsupportedCessAliasKeys(answers: Record<string, unknown> | und
   }
 }
 
-async function generateCreateExpoSuperStack(
-  input: Record<string, unknown>
-): Promise<{
+async function generateCreateExpoSuperStack(input: Record<string, unknown>): Promise<{
   status: 'generated';
   projectPath: string;
   summaryLines: string[];
@@ -2102,7 +2163,10 @@ async function generateCreateExpoSuperStack(
   const invocation = resolveSuperStackInvocationSpec();
   const commandArgs = [...invocation.args, ...buildCreateExpoSuperStackArgv(plan)];
   const result = await runCommandCapture(invocation.command, commandArgs, plan.parentDir);
-  const missingArtifacts = findMissingSuperStackArtifacts(plan.projectPath, plan.onboardAnswers.appDirectory);
+  const missingArtifacts = findMissingSuperStackArtifacts(
+    plan.projectPath,
+    plan.onboardAnswers.appDirectory
+  );
   if (missingArtifacts.length > 0) {
     throw new Error(
       [
@@ -2204,11 +2268,7 @@ async function runCommandCapture(
 }
 
 function tailText(value: string, lines: number): string {
-  return value
-    .split(/\r?\n/u)
-    .filter(Boolean)
-    .slice(-lines)
-    .join('\n');
+  return value.split(/\r?\n/u).filter(Boolean).slice(-lines).join('\n');
 }
 
 function ensureTrailingNewline(value: string): string {
@@ -2288,7 +2348,9 @@ function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
   ];
 
   if (selected.includes('project-docs')) {
-    tasks.push('Create project/info.md, project/todo.md, project/style.md, and project/guidelines.md.');
+    tasks.push(
+      'Create project/info.md, project/todo.md, project/style.md, and project/guidelines.md.'
+    );
   }
   if (selected.includes('uniwind')) {
     tasks.push('Add or verify Tailwind v4 plus Uniwind configuration.');

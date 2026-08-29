@@ -8,6 +8,7 @@ import {
 } from '../utils.js';
 import { runEslintCheck, findScript } from './eslint.js';
 import { runExpoDoctorCheck } from './expo-doctor.js';
+import { runReactDoctorCheck } from './react-doctor.js';
 import { runTypeScriptCheck } from './typescript.js';
 
 export async function runScriptChecks(args: {
@@ -17,6 +18,7 @@ export async function runScriptChecks(args: {
   fix: boolean;
   runScripts: boolean;
   timeoutMs: number;
+  reactDoctorRunner?: import('../types.js').ReactDoctorRunner;
 }): Promise<DoctorCheckResult[]> {
   if (!args.runScripts) {
     return [
@@ -24,6 +26,7 @@ export async function runScriptChecks(args: {
       createScriptDisabledSkip('typecheck'),
       createScriptDisabledSkip('tests'),
       createScriptDisabledSkip('expo doctor'),
+      createScriptDisabledSkip('react doctor'),
       createScriptDisabledSkip('production build'),
     ];
   }
@@ -34,6 +37,7 @@ export async function runScriptChecks(args: {
     await runTypeScriptCheck(args),
     await runTestsCheck(args),
     await runExpoDoctorCheck(args),
+    await runReactDoctorCheck({ ...args, runner: args.reactDoctorRunner }),
     await runProductionBuildCheck(args),
     runFullBuildProfileSkip(args),
   ]) {

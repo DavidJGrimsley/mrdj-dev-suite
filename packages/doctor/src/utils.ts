@@ -34,6 +34,9 @@ export async function readPackageJson(filePath: string): Promise<PackageJson | n
       scripts: readStringRecord(parsed.scripts),
       dependencies: readStringRecord(parsed.dependencies),
       devDependencies: readStringRecord(parsed.devDependencies),
+      mds: isRecord(parsed.mds) ? parsed.mds : undefined,
+      reactDoctor: parsed.reactDoctor,
+      workspaces: parsed.workspaces,
     };
   } catch {
     return null;
@@ -331,4 +334,73 @@ export function tail(output: string, maxLines = 30): string {
 
 export function relative(rootPath: string, filePath: string): string {
   return path.relative(rootPath, filePath).replace(/\\/g, '/');
+}
+
+export function isToolingOrTestPath(projectPath: string, filePath: string): boolean {
+  const rel = relative(projectPath, filePath);
+  if (/(^|\/)(\.claude|tests|__tests__|fixtures|worktrees|copilotInstructions|\.github|\.vscode)(\/|$)/.test(rel)) {
+    return true;
+  }
+  return /\.(test|spec)\.(ts|tsx|js|jsx|mjs|cjs)$/.test(rel);
+}
+
+/** Replace JS/TS comments with spaces so regex scans ignore commented-out code. */
+export function stripJsComments(source: string): string {
+  let output = '';
+  let index = 0;
+  const length = source.length;
+
+  while (index < length) {
+    const char = source[index];
+    const next = source[index + 1];
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char;
+      output += char;
+      index += 1;
+      while (index < length) {
+        const current = source[index];
+        output += current ?? '';
+        if (current === '\\' && index + 1 < length) {
+          output += source[index + 1] ?? '';
+          index += 2;
+          continue;
+        }
+        if (current === quote) {
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      while (index < length && source[index] !== '\n') {
+        output += ' ';
+        index += 1;
+      }
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      output += '  ';
+      index += 2;
+      while (index < length) {
+        if (source[index] === '*' && source[index + 1] === '/') {
+          output += '  ';
+          index += 2;
+          break;
+        }
+        output += source[index] === '\n' ? '\n' : ' ';
+        index += 1;
+      }
+      continue;
+    }
+
+    output += char;
+    index += 1;
+  }
+
+  return output;
 }

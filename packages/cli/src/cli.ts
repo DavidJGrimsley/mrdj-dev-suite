@@ -30,7 +30,9 @@ import {
   runStylistEjectCommand,
   runStylistSyncCommand,
 } from './commands/stylist.js';
+import { runRunCommand } from './commands/run.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
+import { runWorkspaceCommand } from './commands/workspace.js';
 
 import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
@@ -47,9 +49,11 @@ import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
 import type { RoadmapArgv } from './commands/roadmap.js';
 import type { ReportArgv } from './commands/report.js';
+import type { RunArgv } from './commands/run.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
+import type { WorkspaceArgv } from './commands/workspace.js';
 
 export interface DoctorArgv {
   path?: string;
@@ -341,6 +345,39 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'workspace <action> [path]',
+      'Inspect, validate, or plan adoption of an MDS/I² workspace',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Workspace action',
+            choices: ['discover', 'status', 'doctor', 'adopt'] as const,
+          })
+          .positional('path', {
+            describe: 'Workspace, project, source checkout, or existing repository path',
+            type: 'string',
+            default: '.',
+          })
+          .option('fetch', {
+            describe: 'Fetch and prune remotes before evaluating freshness',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print structured JSON output',
+            type: 'boolean',
+            default: false,
+          })
+          .option('dry-run', {
+            describe: 'Reserved for future mutating adoption; adoption is planning-only in this version',
+            type: 'boolean',
+            default: true,
+          }),
+      async (argv) => {
+        await runWorkspaceCommand(argv as WorkspaceArgv);
+      }
+    )
+    .command(
       'roadmap [path]',
       'Derive or refresh project/todo.md from normalized project/info.md',
       (builder) =>
@@ -376,6 +413,51 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runContinueCommand(argv as ContinueArgv);
+      }
+    )
+    .command(
+      'run <tool> [path]',
+      'Run an MDS-integrated developer tool (react-doctor)',
+      (builder) =>
+        builder
+          .positional('tool', {
+            describe: 'Tool to run',
+            choices: ['react-doctor'] as const,
+          })
+          .positional('path', {
+            describe: 'Project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('force', {
+            describe: 'Run even when React Doctor is disabled via env or package.json',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Pass --json through to react-doctor',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json-out', {
+            describe: 'Pass --json-out through to react-doctor',
+            type: 'string',
+          })
+          .option('verbose', {
+            describe: 'Pass --verbose through to react-doctor',
+            type: 'boolean',
+            default: false,
+          })
+          .option('project', {
+            describe: 'Workspace package name(s) or directories for react-doctor --project',
+            type: 'string',
+          })
+          .option('blocking', {
+            describe: 'Pass --blocking through to react-doctor',
+            choices: ['error', 'warning', 'none'] as const,
+          }),
+      async (argv) => {
+        await runRunCommand(argv as RunArgv);
       }
     )
     .command(

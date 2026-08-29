@@ -18,6 +18,7 @@ Keep route files thin: routing and composition belong in `app/`, while business/
 - Confirm cross-route state is managed in stores/hooks instead of duplicated route-local logic.
 - Confirm route grouping/layout usage is intentional and not overloaded at root.
 - Confirm file size/complexity trends support long-term maintainability.
+- Doctor flags confusing groups, missing layouts, string-assembled hrefs, and mixed route concerns via the `router safety` check (`mds explain "router safety"`).
 
 ## Preferred structure
 
