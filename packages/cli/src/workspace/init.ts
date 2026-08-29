@@ -205,23 +205,6 @@ function runGhOrUndefined(args: string[]): string | undefined {
   }
 }
 
-function getGitHubRepositoryVisibility(fullName: string): string | undefined {
-  const output = runGhOrUndefined(['repo', 'view', fullName, '--json', 'visibility']);
-  if (!output) return undefined;
-  try {
-    const parsed = JSON.parse(output) as { visibility?: string };
-    return parsed.visibility;
-  } catch {
-    return undefined;
-  }
-}
-
-function visibilityFlag(visibility: string | undefined): '--public' | '--private' | '--internal' {
-  if (visibility === 'PUBLIC') return '--public';
-  if (visibility === 'INTERNAL') return '--internal';
-  return '--private';
-}
-
 function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegistryEntry {
   return {
     repositoryId: 'source',
@@ -484,15 +467,12 @@ function ensureInferredProjectRemote(plan: WorkspaceInitializationPlan): void {
   if (plan.projectRemoteSource !== 'inferred' || !plan.projectRemoteRepository) return;
   if (runGhOrUndefined(['repo', 'view', plan.projectRemoteRepository, '--json', 'nameWithOwner'])) return;
 
-  const sourceRemote = plan.manifest.repositories[0]?.remote;
-  const sourceRepository = parseGitHubRemote(sourceRemote)?.fullName;
-  const visibility = sourceRepository ? getGitHubRepositoryVisibility(sourceRepository) : undefined;
   try {
     runGh([
       'repo',
       'create',
       plan.projectRemoteRepository,
-      visibilityFlag(visibility),
+      '--private',
       '--description',
       `MDS workspace control repository for ${plan.workspaceName}`,
     ]);

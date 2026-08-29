@@ -20,7 +20,7 @@ mds workspace init . --apply --yes
 
 The default workspace name comes from the source repository's `origin` name, not the current checkout folder. For example, a checkout in `C:\work\scratch` with origin `github.com:example/actual-product.git` becomes `actual-product-i2Workspace/actual-product-main`. Use `--workspace-name` only when the UD intentionally wants a different visible workspace name.
 
-For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. It matches the source repository visibility when GitHub reports it and otherwise creates the control repo as private. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
+For GitHub source remotes, apply creates `<source-repo>-project` through the GitHub CLI if the control repository does not already exist. The control repository is always created as **private**, even when the source repository is public. If UD provides a specific control repo, pass it explicitly with `--project-remote git@github.com:example/app-project.git`.
 
 If a checkout has intentional local changes, add `--stash`. This creates named Git stashes before any worktree is moved. Without that explicit flag, an apply refuses dirty repositories.
 
