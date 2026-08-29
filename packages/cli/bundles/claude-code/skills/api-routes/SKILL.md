@@ -17,6 +17,7 @@ Keep route handlers thin and defensive: validate input, enforce auth/authorizati
 - Enforce auth first for privileged operations; never rely on client-provided roles.
 - Keep service-role credentials on server-only paths and avoid exposing them to client bundles.
 - Confirm error responses are structured and safe (no stack traces or secret values).
+- Doctor flags these patterns via the `api safety` check (`mds explain "api safety"`).
 
 ## Preferred structure
 

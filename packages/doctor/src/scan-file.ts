@@ -3,8 +3,11 @@ import path from 'node:path';
 
 import {
   scanFileAnimationPerformance,
+  scanFileApiSafety,
   scanFileAppArchitecture,
   scanFileEnvHygiene,
+  scanFileRuntimeSecurity,
+  scanFileRouterSafety,
   scanFileSsrSafety,
 } from './checks/index.js';
 import { createReport } from './reporter.js';
@@ -19,20 +22,28 @@ export async function scanFile(
   const projectPath = path.resolve(options.projectPath ?? findProjectRoot(resolvedFilePath));
 
   if (!(await pathExists(resolvedFilePath))) {
-    return createReport(projectPath, 'fast', [
-      {
-        name: 'file path',
-        status: 'error',
-        message: `File path does not exist: ${resolvedFilePath}`,
-      },
-    ], false);
+    return createReport(
+      projectPath,
+      'fast',
+      [
+        {
+          name: 'file path',
+          status: 'error',
+          message: `File path does not exist: ${resolvedFilePath}`,
+        },
+      ],
+      false
+    );
   }
 
   const packageJson = await readPackageJson(path.join(projectPath, 'package.json'));
   const checks = await Promise.all([
     scanFileEnvHygiene(projectPath, resolvedFilePath),
+    scanFileRuntimeSecurity(projectPath, resolvedFilePath),
     scanFileSsrSafety(projectPath, resolvedFilePath),
     scanFileAppArchitecture(projectPath, resolvedFilePath, packageJson ?? undefined),
+    scanFileRouterSafety(projectPath, resolvedFilePath),
+    scanFileApiSafety(projectPath, resolvedFilePath, packageJson ?? undefined),
     scanFileAnimationPerformance(projectPath, resolvedFilePath),
   ]);
 

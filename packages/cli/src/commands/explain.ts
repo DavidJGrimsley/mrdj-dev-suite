@@ -39,8 +39,10 @@ const DOCTOR_TOPICS = [
   {
     id: 'project docs',
     name: 'Project Docs',
-    description: 'Checks that project/info.md, project/todo.md, project/style.md, and project/guidelines.md exist.',
-    nextStep: 'Create or normalize the project memory files so agents have a stable source of truth.',
+    description:
+      'Checks that project/info.md, project/todo.md, project/style.md, and project/guidelines.md exist.',
+    nextStep:
+      'Create or normalize the project memory files so agents have a stable source of truth.',
     relatedResources: ['project-documentation-org', 'post-create-onboarding'],
     aliases: ['project-docs', 'project memory', 'docs'],
   },
@@ -57,14 +59,16 @@ const DOCTOR_TOPICS = [
     id: 'gitignore env',
     name: 'Gitignore Env',
     description: 'Checks that local environment files are ignored before secrets land in git.',
-    nextStep: 'Make sure .env, .env.local, and similar files are ignored while safe examples remain tracked.',
+    nextStep:
+      'Make sure .env, .env.local, and similar files are ignored while safe examples remain tracked.',
     relatedResources: ['env-hygiene', 'deployment-environment-config'],
     aliases: ['env gitignore', '.env', 'gitignore'],
   },
   {
     id: 'package scripts',
     name: 'Package Scripts',
-    description: 'Checks whether the project exposes useful local scripts for linting, testing, building, and Doctor.',
+    description:
+      'Checks whether the project exposes useful local scripts for linting, testing, building, and Doctor.',
     nextStep: 'Add missing scripts only when the package manager and framework support them.',
     relatedResources: ['deployment-ci-cd-patterns'],
     aliases: ['scripts', 'npm scripts'],
@@ -72,7 +76,8 @@ const DOCTOR_TOPICS = [
   {
     id: 'styling stack',
     name: 'Styling Stack',
-    description: 'Checks for the expected Uniwind/Tailwind styling setup and conflicting NativeWind artifacts.',
+    description:
+      'Checks for the expected Uniwind/Tailwind styling setup and conflicting NativeWind artifacts.',
     nextStep: 'Prefer Uniwind plus Tailwind v4 for new MDS app scaffolds.',
     relatedResources: ['styling-uniwind-setup', 'uniwind-theming'],
     aliases: ['styling', 'uniwind', 'tailwind'],
@@ -80,40 +85,87 @@ const DOCTOR_TOPICS = [
   {
     id: 'expo config',
     name: 'Expo Config',
-    description: 'Checks that Expo configuration is present and compatible with selected platforms and web output.',
-    nextStep: 'Inspect app.json or app.config.* and align platforms, web output, and EAS expectations.',
+    description:
+      'Checks that Expo configuration is present and compatible with selected platforms and web output.',
+    nextStep:
+      'Inspect app.json or app.config.* and align platforms, web output, and EAS expectations.',
     relatedResources: ['project-configuration-patterns', 'deployment-build-configuration'],
     aliases: ['expo configuration', 'app.json', 'app config'],
   },
   {
     id: 'env hygiene',
     name: 'Env Hygiene',
-    description: 'Checks for secret-looking values exposed through EXPO_PUBLIC variables or client code.',
+    description:
+      'Checks for secret-looking values exposed through EXPO_PUBLIC variables or client code.',
     nextStep: 'Move private keys server-side and keep client env vars publishable only.',
     relatedResources: ['env-hygiene', 'env-vars'],
     aliases: ['environment hygiene', 'secrets', 'expo public'],
   },
   {
+    id: 'runtime security',
+    name: 'Runtime Security',
+    description:
+      'Checks that server-only modules, private process.env access, and Expo config credentials do not leak into the client bundle.',
+    nextStep:
+      'Move database clients, Express, and secrets behind API routes or server modules, and keep client env access on EXPO_PUBLIC_* variables.',
+    relatedResources: ['ssr-safety', 'expo-ssr-safety', 'env-hygiene', 'env-vars'],
+    aliases: ['runtime-security', 'server imports', 'server-only imports', 'client bundle security'],
+  },
+  {
     id: 'app architecture',
     name: 'App Architecture',
-    description: 'Checks Expo Router route files for oversized screens and business/data logic in app/.',
-    nextStep: 'Move real UI into feature screens and keep route files focused on routing and layout.',
-    relatedResources: ['app-folder-architecture', 'expo-router-architecture', 'routing-file-based-routing'],
+    description:
+      'Checks Expo Router route files for oversized screens and business/data logic in app/.',
+    nextStep:
+      'Move real UI into feature screens and keep route files focused on routing and layout.',
+    relatedResources: [
+      'app-folder-architecture',
+      'expo-router-architecture',
+      'routing-file-based-routing',
+    ],
     aliases: ['app folder', 'route architecture', 'routes'],
+  },
+  {
+    id: 'router safety',
+    name: 'Router Safety',
+    description:
+      'Checks Expo Router groups, layouts, and navigation for missing layouts, overly nested groups, string-assembled hrefs, and mixed route concerns.',
+    nextStep:
+      'Keep route groups intentional, put auth gates in layouts, use typed pathname objects, and move business logic out of app/.',
+    relatedResources: [
+      'expo-router-architecture',
+      'routing-route-groups',
+      'routing-file-based-routing',
+    ],
+    aliases: ['router-safety', 'route groups', 'missing layout'],
+  },
+  {
+    id: 'api safety',
+    name: 'API Safety',
+    description:
+      'Checks Expo Router API routes for auth, HTTP method guards, Zod/input validation, service-role use, rate limiting, CORS, and error leakage.',
+    nextStep:
+      'Validate methods and input first, enforce auth on sensitive endpoints, keep service-role usage gated, and return safe error envelopes.',
+    relatedResources: ['api-routes', 'api-api-routes', 'api-error-handling'],
+    aliases: ['api-safety', 'api route safety'],
   },
   {
     id: 'seo metadata',
     name: 'SEO Metadata',
-    description: 'Checks web-facing metadata basics such as title, description, and indexing strategy.',
-    nextStep: 'Define route-level metadata and canonical/indexing expectations for production web output.',
+    description:
+      'Checks web-facing metadata basics such as title, description, and indexing strategy.',
+    nextStep:
+      'Define route-level metadata and canonical/indexing expectations for production web output.',
     relatedResources: ['seo-metadata'],
     aliases: ['seo', 'metadata'],
   },
   {
     id: 'script checks',
     name: 'Script Checks',
-    description: 'Runs lint, typecheck, tests, Expo Doctor, and build scripts when the selected Doctor mode asks for them.',
-    nextStep: 'Fix the failing script locally, rerun mds doctor, then push only after the CI-equivalent profile passes.',
+    description:
+      'Runs lint, typecheck, tests, Expo Doctor, and build scripts when the selected Doctor mode asks for them.',
+    nextStep:
+      'Fix the failing script locally, rerun mds doctor, then push only after the CI-equivalent profile passes.',
     relatedResources: ['deployment-ci-cd-patterns', 'deployment'],
     aliases: ['eslint', 'typescript', 'typecheck', 'expo doctor', 'build checks', 'ci'],
   },
@@ -150,9 +202,9 @@ export async function explainTopic(topic: string): Promise<ExplainResult> {
   const resources = listKnowledgeResources();
   const exactResourceMatches = await Promise.all(
     resources
-      .filter((resource) =>
-        resource.uri === query ||
-        [resource.id, resource.name].map(normalize).includes(normalized)
+      .filter(
+        (resource) =>
+          resource.uri === query || [resource.id, resource.name].map(normalize).includes(normalized)
       )
       .map(async (resource) => knowledgeMatchFromResource(resource))
   );
@@ -196,7 +248,9 @@ function doctorMatchFromTopic(candidate: (typeof DOCTOR_TOPICS)[number]): Explai
 function printExplainResult(result: ExplainResult): void {
   if (result.status === 'not-found') {
     console.log(chalk.red(`No MDS explanation matched "${result.query}".`));
-    console.log(chalk.gray('Try a Doctor check name like env hygiene, app architecture, or seo metadata.'));
+    console.log(
+      chalk.gray('Try a Doctor check name like env hygiene, app architecture, or seo metadata.')
+    );
     return;
   }
 
@@ -276,5 +330,8 @@ function resourceMatches(resource: KnowledgeResource, normalizedQuery: string): 
 }
 
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }

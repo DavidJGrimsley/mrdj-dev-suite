@@ -125,7 +125,7 @@ pnpm push:merge
 
 #### Doctor
 
-`mds doctor` is the production-readiness check. The CI profile is meant to run the same checks you expect before pushing: lint, typecheck, tests, Expo Doctor, and production build scripts when the target repo has them.
+`mds doctor` is the production-readiness check. The CI profile is meant to run the same checks you expect before pushing: lint, typecheck, tests, Expo Doctor, and production build scripts when the target repo has them. Router and API safety scans are documented in [docs/doctor.md](docs/doctor.md).
 
 ```bash
 node packages/cli/dist/cli.js doctor /path/to/expo-app --ci

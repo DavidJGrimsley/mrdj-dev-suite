@@ -38,6 +38,27 @@ describe('Phase 3 command helpers', () => {
     expect(result.matches[0]?.name).toBe('Env Hygiene');
   });
 
+  it('explains the runtime security Doctor check', async () => {
+    const result = await explainTopic('runtime-security');
+
+    expect(result.status).toBe('found');
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.type).toBe('doctor');
+    expect(result.matches[0]?.name).toBe('Runtime Security');
+  });
+
+  it('explains router safety and api safety Doctor topics', async () => {
+    const router = await explainTopic('router-safety');
+    const api = await explainTopic('api-safety');
+
+    expect(router.status).toBe('found');
+    expect(router.matches).toHaveLength(1);
+    expect(router.matches[0]?.id).toBe('router safety');
+    expect(api.status).toBe('found');
+    expect(api.matches).toHaveLength(1);
+    expect(api.matches[0]?.id).toBe('api safety');
+  });
+
   it('surfaces ambiguous broad explain topics', async () => {
     const result = await explainTopic('expo');
 

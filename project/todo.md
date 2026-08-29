@@ -197,8 +197,8 @@ This section restores the larger roadmap from `temp/plan.md`. The sprint board a
 - [ ] Add SSR safety checks for `window`, `document`, `localStorage`, `sessionStorage`, `navigator`, native-only imports in server paths, and client-only packages imported by server code.
 - [ ] Add env hygiene checks for secret-looking `EXPO_PUBLIC_` variables, Supabase service role exposure, Stripe secret exposure, private tokens in client code, missing required env vars, and undocumented runtime/build-time env differences.
 - [ ] Add SEO/metadata checks for missing title, description, canonical URL, Open Graph tags, route-level metadata, sitemap strategy, robots strategy, dynamic route metadata sources, and duplicate titles.
-- [ ] Add Expo Router best-practice checks for confusing route groups, missing layouts, overloaded root layout, improper API route naming, mixed route concerns, and bad navigation patterns.
-- [ ] Add API route safety checks for auth, request validation, Zod schemas, arbitrary JSON bodies, service role usage, method restrictions, and rate-limit strategy.
+- [x] Add Expo Router best-practice checks for confusing route groups, missing layouts, overloaded root layout, improper API route naming, mixed route concerns, and bad navigation patterns.
+- [x] Add API route safety checks for auth, request validation, Zod schemas, arbitrary JSON bodies, service role usage, method restrictions, and rate-limit strategy.
 - [ ] Add package compatibility checks for SSR, edge runtime, Node runtime, and native-only packages imported from web/server paths.
 
 > The seven unchecked items above are deeper capability expansion, not baseline

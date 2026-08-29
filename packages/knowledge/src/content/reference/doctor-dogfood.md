@@ -19,7 +19,7 @@ prove Doctor handles real Expo and monorepo shapes without crashing.
 
 - `doctor --json --scripts=false` completes for each target.
 - Reports include project docs, package scripts, env hygiene, Expo config, SSR,
-  SEO, and app architecture where applicable.
+  runtime security, SEO, and app architecture where applicable.
 - Findings are actionable and avoid leaking env values.
 
 ## Phase 1 Run Summary

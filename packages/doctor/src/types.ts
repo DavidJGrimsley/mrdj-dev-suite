@@ -18,6 +18,18 @@ export interface DoctorModeSelection {
   fullModeGuidance: string;
 }
 
+export interface DoctorScoreComponent {
+  name: 'mds' | 'react-doctor' | 'expo-doctor';
+  label: string;
+  score: number;
+  weight: number;
+  desiredWeight: number;
+}
+
+export interface DoctorScoreBreakdown {
+  components: DoctorScoreComponent[];
+}
+
 export interface DoctorReport {
   projectPath: string;
   timestamp: string;
@@ -30,6 +42,7 @@ export interface DoctorReport {
     warnings: number;
     passed: number;
     skipped: number;
+    scoreBreakdown: DoctorScoreBreakdown;
   };
 }
 
@@ -39,7 +52,17 @@ export interface DoctorOptions {
   runScripts?: boolean;
   timeoutMs?: number;
   selectionDefaultMode?: DoctorMode;
+  reactDoctorRunner?: ReactDoctorRunner;
 }
+
+export interface ReactDoctorRunnerArgs {
+  projectPath: string;
+  reportPath: string;
+  monorepo: boolean;
+  timeoutMs: number;
+}
+
+export type ReactDoctorRunner = (args: ReactDoctorRunnerArgs) => Promise<CommandResult>;
 
 export interface ScanFileOptions {
   projectPath?: string;
@@ -61,4 +84,7 @@ export interface PackageJson {
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  mds?: Record<string, unknown>;
+  reactDoctor?: unknown;
+  workspaces?: unknown;
 }

@@ -726,6 +726,8 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['ci:verify']).toBe('npx mds doctor --ci');
     expect(packageJson.scripts['free-port']).toBe('npx mds free-port');
     expect(packageJson.scripts['clear-expo-start']).toBe('npx mds clear-expo-start');
+    expect(packageJson.scripts['react-doctor']).toBe('npx react-doctor -y --no-telemetry');
+    expect(packageJson.scripts['mds:react-doctor']).toBe('npx mds run react-doctor');
     expect(packageJson.scripts['mds:stylist:sync']).toBe('npx mds stylist sync .');
     expect(packageJson.scripts['mds:eject']).toBe('npx mds eject .');
     expect(packageJson.scripts['mds:eject:exposition']).toBe('npx mds eject exposition .');
@@ -747,7 +749,14 @@ describe('runOnboardCommand', () => {
       version: string;
     };
     expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe(`^${cliPackageJson.version}`);
+    expect(packageJson.devDependencies['react-doctor']).toBe('^0.9.12');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
+    await expect(
+      readFile(path.join(projectPath, 'doctor.config.json'), 'utf8')
+    ).resolves.toContain('react.doctor/schema/config.json');
+    await expect(readFile(path.join(projectPath, 'README.md'), 'utf8')).resolves.toContain(
+      '## React Doctor (code quality checks)'
+    );
     await expect(access(path.join(projectPath, 'assets', 'images', 'splash-icon.png'))).resolves.toBeUndefined();
     await expect(
       access(path.join(projectPath, 'assets', 'images', 'splash-icon-dark.png'))
