@@ -9,6 +9,10 @@ import {
   WORKSPACE_WORKTREE_REGISTRY_FILENAME,
 } from './schema.js';
 import { listGitWorktrees } from './git.js';
+import {
+  applyRetrospectiveProjectOnboarding,
+  planRetrospectiveProjectOnboarding,
+} from '../retrospective-onboarding.js';
 
 import type { GitWorktreeInfo } from './git.js';
 import type { WorkspaceManifest, WorkspaceWorktreeRegistry, WorkspaceWorktreeRegistryEntry } from './schema.js';
@@ -48,6 +52,10 @@ export interface WorkspaceInitializationPlan {
   worktrees: WorkspaceInitWorktree[];
   prunableWorktrees: GitWorktreeInfo[];
   existingProjectMemory: string[];
+  retrospectiveOnboarding: {
+    mode: 'generate' | 'fill-missing';
+    evidenceSources: string[];
+  };
   warnings: string[];
   errors: string[];
   manifest: WorkspaceManifest;
@@ -251,6 +259,10 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   const existingProjectMemory = fs.existsSync(legacyProjectPath)
     ? fs.readdirSync(legacyProjectPath, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => path.join('project', entry.name)).sort()
     : [];
+  const retrospectivePlan = planRetrospectiveProjectOnboarding(source, {
+    projectPath: path.join(workspaceRoot, 'project'),
+    legacyProjectMemoryFound: existingProjectMemory.length > 0,
+  });
   if (options.projectRemote && remote && normalizeRemoteUrl(options.projectRemote) === normalizeRemoteUrl(remote)) {
     errors.push('The project control-repository remote must be separate from the source app remote.');
   }
@@ -265,7 +277,12 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     ...(projectRemote ? { projectRemote } : {}),
     ...(projectRemoteSource ? { projectRemoteSource } : {}),
     ...(projectRemoteRepository ? { projectRemoteRepository } : {}),
-    defaultBranch, worktrees, prunableWorktrees, existingProjectMemory, warnings, errors,
+    defaultBranch, worktrees, prunableWorktrees, existingProjectMemory,
+    retrospectiveOnboarding: {
+      mode: existingProjectMemory.length > 0 ? 'fill-missing' : 'generate',
+      evidenceSources: retrospectivePlan.evidenceSources,
+    },
+    warnings, errors,
     manifest: {
       schemaVersion: WORKSPACE_MANIFEST_VERSION,
       workspaceId: slugify(workspaceName), name: workspaceName,
@@ -376,6 +393,10 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
   if (legacyProjectPath && fs.existsSync(legacyProjectPath)) {
     copyLegacyProjectMemory(plan, legacyProjectPath);
   }
+  applyRetrospectiveProjectOnboarding(planRetrospectiveProjectOnboarding(legacySource.targetPath, {
+    projectPath: plan.projectPath,
+    legacyProjectMemoryFound: plan.existingProjectMemory.length > 0,
+  }));
   const registry: WorkspaceWorktreeRegistry = {
     schemaVersion: WORKSPACE_MANIFEST_VERSION, workspaceId: plan.manifest.workspaceId,
     worktrees: worktrees.map(toRegistryEntry),

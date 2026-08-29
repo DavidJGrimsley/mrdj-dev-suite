@@ -136,6 +136,16 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('retrospective', {
+            describe: 'Create project memory from an existing initialized workspace without app scaffolding',
+            type: 'boolean',
+            default: false,
+          })
+          .option('project-only', {
+            describe: 'Limit retrospective onboarding to the workspace control repository project memory files',
+            type: 'boolean',
+            default: false,
+          })
           .option('force', {
             describe: 'Overwrite existing project memory files',
             type: 'boolean',

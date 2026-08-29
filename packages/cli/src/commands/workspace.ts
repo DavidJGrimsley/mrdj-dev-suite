@@ -102,6 +102,8 @@ export async function runWorkspaceCommand(argv: WorkspaceArgv): Promise<void> {
     console.log(`Temp: ${applied.tempPath}`);
     console.log(`Generated: ${applied.generatedPath}`);
     console.log(`Worktrees: ${applied.worktrees.length}`);
+    console.log(`Retrospective onboarding: ${applied.retrospectiveOnboarding.mode === 'generate' ? 'generate project memory' : 'fill missing project memory'}`);
+    console.log(`Evidence: ${applied.retrospectiveOnboarding.evidenceSources.join(', ')}`);
     if (applied.existingProjectMemory.length > 0) {
       console.log();
       console.log('Existing project memory to migrate:');

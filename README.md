@@ -175,11 +175,13 @@ mds workspace init /path/to/app-main --apply --yes --stash
 create-expo-super-stack my-app --mds-workspace --expo-router
 ```
 
-For GitHub source repositories, the initializer infers and creates `<repo>-project` as the canonical control repository unless `--project-remote` is provided. It commits and pushes `project/`, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
+For GitHub source repositories, the initializer infers and creates `<repo>-project` as the canonical control repository unless `--project-remote` is provided. It commits and pushes `project/`, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. If the source app has no legacy `project/` memory, init now generates retrospective project memory from README/package/routes/config/Git history and leaves `# TodoForContext(optional):` markers for UD confirmation. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
 
 #### Onboard
 
 `mds onboard` runs after `rn-new`, `create-expo-app`, or `create-expo-stack`, not instead of them. It uses friendly Clack prompts to learn the app goal, audience, data model, styling choice, backend needs, release flow, and deployment target, then creates project memory and rich boilerplate by default.
+
+For initialized workspaces, `mds onboard --retrospective --project-only --yes --project /path/to/<app>-main` safely fills only the control-repo project memory from existing app evidence. It never edits app source or dependencies.
 
 Defaults and non-interactive runs (optional):
 

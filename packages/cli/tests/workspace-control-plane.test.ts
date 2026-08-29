@@ -205,6 +205,9 @@ describe('workspace control plane', () => {
     initializeGitRepository(sourcePath, sourceRemote);
     fs.mkdirSync(path.join(sourcePath, 'project'), { recursive: true });
     fs.writeFileSync(path.join(sourcePath, 'project', 'info.md'), '# App\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'todo.md'), '# Todo\n\n- [ ] Keep building.\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'style.md'), '# Style\n\nExisting style.\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'guidelines.md'), '# Guidelines\n\nExisting guidelines.\n', 'utf8');
     fs.mkdirSync(path.join(sourcePath, 'project', 'keys'), { recursive: true });
     fs.writeFileSync(path.join(sourcePath, 'project', 'keys', 'private.txt'), 'do not copy\n', 'utf8');
     execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
@@ -234,6 +237,49 @@ describe('workspace control plane', () => {
 
     const rerunPlan = planWorkspaceInitialization(path.join(workspaceRoot, 'sample-main'), { projectRemote, workspaceName: 'sample' });
     expect(() => applyWorkspaceInitialization(rerunPlan, { yes: true })).not.toThrow();
+  });
+
+  it('generates retrospective project memory when no legacy project folder exists', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    fs.writeFileSync(path.join(sourcePath, 'README.md'), '# Poke-ish Pages\n\nA web and mobile guide app for Pokemon events.\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'package.json'), JSON.stringify({
+      name: 'poke-ish-pages',
+      scripts: { build: 'expo export', start: 'expo start' },
+      dependencies: { expo: '^56.0.0', 'expo-router': '^6.0.0', '@supabase/supabase-js': '^2.0.0' },
+      devDependencies: {},
+    }, null, 2), 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'package-lock.json'), '{}\n', 'utf8');
+    fs.mkdirSync(path.join(sourcePath, 'src', 'app'), { recursive: true });
+    fs.writeFileSync(path.join(sourcePath, 'src', 'app', 'index.tsx'), 'export default function Home() { return null; }\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'drizzle.config.ts'), 'export default {};\n', 'utf8');
+    execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add app evidence'], { stdio: 'ignore' });
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    expect(plan.existingProjectMemory).toEqual([]);
+    expect(plan.retrospectiveOnboarding.mode).toBe('generate');
+    const applied = applyWorkspaceInitialization(plan, { yes: true });
+    const workspaceRoot = path.join(root, 'sample-i2Workspace');
+    const projectPath = path.join(workspaceRoot, 'project');
+
+    expect(applied.worktrees).toHaveLength(1);
+    expect(fs.existsSync(path.join(projectPath, 'package.json'))).toBe(false);
+    expect(fs.readFileSync(path.join(projectPath, 'info.md'), 'utf8')).toContain('# TodoForContext(optional): Confirm who this app is for');
+    expect(fs.readFileSync(path.join(projectPath, 'info.md'), 'utf8')).toContain('src/app/index.tsx');
+    expect(fs.readFileSync(path.join(projectPath, 'todo.md'), 'utf8')).toContain('Review generated `project/info.md`');
+    expect(fs.readFileSync(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).toContain('@supabase/supabase-js');
+    expect(fs.readFileSync(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).toContain('drizzle.config.ts');
+    expect(fs.readFileSync(path.join(projectPath, 'intake-agent.md'), 'utf8')).toContain('High-Priority UD Confirmations');
+
+    const status = getWorkspaceStatus(workspaceRoot);
+    expect(status.found).toBe(true);
+    if (!status.found) return;
+    expect(status.integrityIssues).toContainEqual(expect.stringContaining('Unresolved TodoForContext marker: project/info.md'));
   });
 
   it('flags active Git worktrees that are missing from the workspace registry', () => {

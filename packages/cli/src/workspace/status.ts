@@ -47,6 +47,43 @@ function pathKey(value: string): string {
   return path.resolve(value).toLowerCase();
 }
 
+function listMarkdownFiles(root: string): string[] {
+  if (!fs.existsSync(root)) return [];
+  const result: string[] = [];
+  const visit = (current: string): void => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.name === '.git' || entry.name === 'node_modules') continue;
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute);
+      } else if (entry.name.toLowerCase().endsWith('.md')) {
+        result.push(absolute);
+      }
+    }
+  };
+  visit(root);
+  return result;
+}
+
+function addProjectMemoryIssues(projectPath: string, integrityIssues: string[]): void {
+  for (const file of ['info.md', 'todo.md', 'style.md', 'guidelines.md']) {
+    const filePath = path.join(projectPath, file);
+    if (!fs.existsSync(filePath)) {
+      integrityIssues.push(`Missing project memory file: project/${file}`);
+    }
+  }
+
+  for (const file of listMarkdownFiles(projectPath)) {
+    const relative = path.relative(projectPath, file).replace(/\\/g, '/');
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    lines.forEach((line, index) => {
+      if (/^\s*-?\s*# TodoForContext\(optional\):/u.test(line)) {
+        integrityIssues.push(`Unresolved TodoForContext marker: project/${relative}:${index + 1}`);
+      }
+    });
+  }
+}
+
 export function getWorkspaceStatus(
   startPath = '.',
   options: { fetch?: boolean } = {}
@@ -121,6 +158,7 @@ export function getWorkspaceStatus(
     workspace.manifest.temp?.path ?? 'temp'
   );
   const generatedPath = path.resolve(workspace.workspaceRoot, 'generated');
+  addProjectMemoryIssues(workspace.projectPath, integrityIssues);
 
   return {
     found: true,

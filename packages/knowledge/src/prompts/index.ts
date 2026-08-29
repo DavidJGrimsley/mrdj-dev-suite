@@ -152,6 +152,17 @@ const PROMPT_SPECS: PromptSpec[] = [
     mcpArgs: [{ name: 'projectPath', description: 'Path to the existing Expo app folder.' }],
   },
   {
+    id: 'retrospective-project-onboarding',
+    slug: 'retrospective-project-onboarding',
+    title: 'Retrospective Project Onboarding',
+    description: 'Confirm project memory generated from an existing app and Git history after workspace init.',
+    resourcePath: 'prompts/retrospective-project-onboarding.md',
+    keywords: ['retrospective', 'project memory', 'workspace init', 'todo for context'],
+    surfaces: ['mcp-prompt'],
+    mcpPromptName: 'retrospective_project_onboarding',
+    mcpArgs: [{ name: 'projectPath', description: 'Path to the initialized workspace app checkout.' }],
+  },
+  {
     id: 'push-merge-loop',
     slug: 'push-merge-loop',
     title: 'Push Merge Loop',
