@@ -75,6 +75,7 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(help).toContain("--mds-supabase-publishable-key=<key>");
     expect(help).toContain("--mds-save-defaults");
     expect(help).toContain("--mds-no-guidelines-template");
+    expect(help).toContain("--mds-workspace");
     expect(help).toContain("-h, --help");
   });
 
@@ -270,6 +271,17 @@ describe("create-expo-super-stack CLI helpers", () => {
 
     expect(resolved.projectName).toBe("folder-name");
     expect(resolved.mds.appName).toBe("Display Name");
+  });
+
+  it("generates directly into a workspace-shaped main checkout when requested", () => {
+    const parsed = parseArgs(["my-app", "--mds-workspace", "--expo-router"]);
+    const resolved = withResolvedProjectName(parsed, "ignored");
+
+    expect(resolved.projectName).toBe("my-app-main");
+    expect(resolved.createExpoStackArgs).toEqual(["my-app-main", "--expo-router"]);
+    expect(resolved.mds.appName).toBe("my-app");
+    expect(resolved.mds.workspaceRoot).toContain("my-app-i2Workspace");
+    expect(resolved.mds.projectParentDir).toBe(resolved.mds.workspaceRoot);
   });
 
   it("parses product-memory MDS flags for generated project/info.md", () => {

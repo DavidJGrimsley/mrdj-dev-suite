@@ -1009,6 +1009,29 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    'retrospective_project_onboarding',
+    {
+      title: 'Retrospective Project Onboarding',
+      description:
+        'Confirm project memory generated from an existing app and Git history after workspace init.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+      },
+    },
+    ({ projectPath }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildRetrospectiveProjectOnboardingPromptText(projectPath),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'continue_mds_project',
     {
       title: 'Continue MDS Project',
@@ -1081,6 +1104,18 @@ function registerPrompts(server: McpServer): void {
       ],
     })
   );
+}
+
+export function buildRetrospectiveProjectOnboardingPromptText(projectPath?: string): string {
+  const target = projectPath ?? 'the initialized workspace app checkout';
+  const canonicalPrompt = readCanonicalPromptMarkdown('retrospective-project-onboarding').trim();
+  return [
+    `Run retrospective project onboarding for ${target}.`,
+    '',
+    'Start by discovering the workspace from the app checkout, then use the workspace control repository project memory.',
+    '',
+    canonicalPrompt,
+  ].join('\n');
 }
 
 const INFO_TEMPLATE_URL =

@@ -30,6 +30,10 @@ import {
   validateWorkspaceManifest,
 } from '../workspace.js';
 import { writeMcpJsonToProject } from './mcp-install.js';
+import {
+  applyRetrospectiveProjectOnboarding,
+  planRetrospectiveProjectOnboarding,
+} from '../retrospective-onboarding.js';
 
 import type { PackageCommandRunner, PackageJsonSubset } from '../package-install.js';
 import type { NonExpoAppCategory, WorkspaceManifest } from '../workspace.js';
@@ -108,6 +112,8 @@ export interface OnboardArgv {
   noInstall?: boolean;
   install?: boolean;
   installRunner?: PackageCommandRunner;
+  retrospective?: boolean;
+  projectOnly?: boolean;
 }
 
 export interface OnboardPlan {
@@ -222,6 +228,25 @@ interface PersonalOnboardDefaults {
 
 export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
   const projectPath = path.resolve(argv.project ?? '.');
+  if (argv.retrospective || argv.projectOnly) {
+    if (!argv.retrospective || !argv.projectOnly) {
+      throw new Error('Retrospective onboarding must be run with both --retrospective and --project-only.');
+    }
+    if (!argv.yes) {
+      throw new Error('Retrospective project-only onboarding requires --yes.');
+    }
+    const plan = planRetrospectiveProjectOnboarding(projectPath);
+    applyRetrospectiveProjectOnboarding(plan);
+    console.log(chalk.bold('mds retrospective onboarding'));
+    console.log(chalk.dim(plan.appPath));
+    console.log(`Project memory: ${plan.projectPath}`);
+    console.log(`Evidence sources: ${plan.evidenceSources.join(', ')}`);
+    for (const file of plan.files) {
+      console.log(`${file.willWrite ? chalk.green('CREATED') : chalk.gray('KEPT')} ${path.join(plan.projectPath, file.path)}`);
+    }
+    console.log(chalk.yellow('Review generated project memory with the UD and resolve TodoForContext markers before implementation work.'));
+    return;
+  }
   const existingManifest = await readWorkspaceManifest(projectPath);
   const discovery = existingManifest ? null : await discoverWorkspace(projectPath);
   const detectedManifest = existingManifest ?? discovery?.manifest ?? null;

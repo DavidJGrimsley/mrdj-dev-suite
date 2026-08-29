@@ -138,6 +138,16 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('retrospective', {
+            describe: 'Create project memory from an existing initialized workspace without app scaffolding',
+            type: 'boolean',
+            default: false,
+          })
+          .option('project-only', {
+            describe: 'Limit retrospective onboarding to the workspace control repository project memory files',
+            type: 'boolean',
+            default: false,
+          })
           .option('force', {
             describe: 'Overwrite existing project memory files',
             type: 'boolean',
@@ -351,7 +361,7 @@ async function main(): Promise<void> {
         builder
           .positional('action', {
             describe: 'Workspace action',
-            choices: ['discover', 'status', 'doctor', 'adopt'] as const,
+            choices: ['discover', 'status', 'doctor', 'adopt', 'init', 'relocate'] as const,
           })
           .positional('path', {
             describe: 'Workspace, project, source checkout, or existing repository path',
@@ -369,9 +379,55 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('dry-run', {
-            describe: 'Reserved for future mutating adoption; adoption is planning-only in this version',
+            describe: 'Print the workspace migration plan without changing files (default)',
             type: 'boolean',
             default: true,
+          })
+          .option('apply', {
+            describe: 'Apply a workspace initialization plan',
+            type: 'boolean',
+            default: false,
+          })
+          .option('yes', {
+            describe: 'Confirm the destructive filesystem and Git operations required by --apply',
+            type: 'boolean',
+            default: false,
+          })
+          .option('stash', {
+            describe: 'Stash dirty worktrees before applying initialization',
+            type: 'boolean',
+            default: false,
+          })
+          .option('project-remote', {
+            describe: 'Override the workspace project control repository remote; omitted GitHub sources infer/create <repo>-project',
+            type: 'string',
+          })
+          .option('workspace-name', {
+            describe: 'Override the name used for normalized worktree folders',
+            type: 'string',
+          })
+          .option('workspace-root', {
+            describe: 'Override the target *-i2Workspace directory',
+            type: 'string',
+          })
+          .option('workspace-parent', {
+            describe: 'Place the new <repository>-i2Workspace directory in this parent folder',
+            type: 'string',
+          })
+          .option('include-auxiliary', {
+            describe: 'Include a direct child auxiliary directory when relocating; repeat for more than one',
+            type: 'array',
+            string: true,
+          })
+          .option('consolidate-legacy-project', {
+            describe: 'Merge legacy source project files into the control repo and open a source cleanup PR; requires --apply --yes',
+            type: 'boolean',
+            default: false,
+          })
+          .option('handoff-child', {
+            type: 'boolean',
+            default: false,
+            hidden: true,
           }),
       async (argv) => {
         await runWorkspaceCommand(argv as WorkspaceArgv);

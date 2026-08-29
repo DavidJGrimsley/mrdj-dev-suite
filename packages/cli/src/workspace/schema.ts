@@ -1,5 +1,6 @@
 export const WORKSPACE_MANIFEST_VERSION = 1 as const;
 export const WORKSPACE_MANIFEST_FILENAME = 'mds.workspace.json';
+export const WORKSPACE_WORKTREE_REGISTRY_FILENAME = 'mds.worktrees.json';
 export const SOURCE_WORKSPACE_LINK_PATH = '.mds/workspace.json';
 
 export interface WorkspaceRepositoryConfig {
@@ -27,6 +28,20 @@ export interface SourceWorkspaceLink {
   schemaVersion: typeof WORKSPACE_MANIFEST_VERSION;
   workspaceId: string;
   projectRepository?: string;
+}
+
+export interface WorkspaceWorktreeRegistryEntry {
+  repositoryId: string;
+  path: string;
+  branch?: string;
+  head?: string;
+  role: 'main' | 'feature' | 'detached';
+}
+
+export interface WorkspaceWorktreeRegistry {
+  schemaVersion: typeof WORKSPACE_MANIFEST_VERSION;
+  workspaceId: string;
+  worktrees: WorkspaceWorktreeRegistryEntry[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -122,5 +137,34 @@ export function parseSourceWorkspaceLink(value: unknown): SourceWorkspaceLink {
     ...(value.projectRepository === undefined
       ? {}
       : { projectRepository: requireNonEmptyString(value.projectRepository, 'projectRepository') }),
+  };
+}
+
+export function parseWorkspaceWorktreeRegistry(value: unknown): WorkspaceWorktreeRegistry {
+  if (!isRecord(value)) throw new Error('Invalid worktree registry: expected a JSON object.');
+  if (value.schemaVersion !== WORKSPACE_MANIFEST_VERSION) {
+    throw new Error(`Unsupported worktree registry version: ${String(value.schemaVersion)}.`);
+  }
+  if (!Array.isArray(value.worktrees)) {
+    throw new Error('Invalid worktree registry: worktrees must be an array.');
+  }
+
+  return {
+    schemaVersion: WORKSPACE_MANIFEST_VERSION,
+    workspaceId: requireNonEmptyString(value.workspaceId, 'workspaceId'),
+    worktrees: value.worktrees.map((entry, index) => {
+      if (!isRecord(entry)) throw new Error(`Invalid worktree registry: worktrees[${index}] must be an object.`);
+      const role = entry.role;
+      if (role !== 'main' && role !== 'feature' && role !== 'detached') {
+        throw new Error(`Invalid worktree registry: worktrees[${index}].role is invalid.`);
+      }
+      return {
+        repositoryId: requireNonEmptyString(entry.repositoryId, `worktrees[${index}].repositoryId`),
+        path: requireNonEmptyString(entry.path, `worktrees[${index}].path`),
+        ...(entry.branch === undefined ? {} : { branch: requireNonEmptyString(entry.branch, `worktrees[${index}].branch`) }),
+        ...(entry.head === undefined ? {} : { head: requireNonEmptyString(entry.head, `worktrees[${index}].head`) }),
+        role,
+      };
+    }),
   };
 }

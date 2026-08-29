@@ -51,6 +51,75 @@ afterEach(async () => {
 });
 
 describe('runOnboardCommand', () => {
+  it('runs retrospective project-only onboarding from an initialized workspace checkout', async () => {
+    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'mds-retrospective-workspace-'));
+    tempDirs.push(workspaceRoot);
+    const appPath = path.join(workspaceRoot, 'sample-main');
+    const projectPath = path.join(workspaceRoot, 'project');
+    await mkdir(path.join(appPath, '.mds'), { recursive: true });
+    await mkdir(path.join(appPath, 'src', 'app'), { recursive: true });
+    await mkdir(projectPath, { recursive: true });
+    await writeFile(
+      path.join(projectPath, 'mds.workspace.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        workspaceId: 'sample',
+        name: 'Sample',
+        repositories: [
+          {
+            id: 'source',
+            remote: 'https://github.com/example/sample.git',
+            defaultBranch: 'main',
+            mainFolder: 'sample-main',
+            worktreePrefix: 'sample-',
+          },
+        ],
+        project: { path: 'project' },
+        temp: { path: 'temp' },
+      }, null, 2),
+      'utf8'
+    );
+    await writeFile(
+      path.join(appPath, '.mds', 'workspace.json'),
+      JSON.stringify({ schemaVersion: 1, workspaceId: 'sample' }, null, 2),
+      'utf8'
+    );
+    await writeFile(
+      path.join(appPath, 'README.md'),
+      '# Sample Memory\n\nA repo with enough evidence to draft project memory.\n',
+      'utf8'
+    );
+    await writeFile(
+      path.join(appPath, 'package.json'),
+      JSON.stringify({
+        name: 'sample-memory',
+        scripts: { start: 'expo start' },
+        dependencies: { expo: '^56.0.0', 'expo-router': '^6.0.0' },
+      }, null, 2),
+      'utf8'
+    );
+    await writeFile(
+      path.join(appPath, 'src', 'app', 'index.tsx'),
+      'export default function Index() { return null; }\n',
+      'utf8'
+    );
+
+    await runOnboardCommand({
+      project: appPath,
+      yes: true,
+      retrospective: true,
+      projectOnly: true,
+    });
+
+    await expect(readFile(path.join(projectPath, 'info.md'), 'utf8')).resolves.toContain(
+      '# TodoForContext(optional): Confirm who this app is for'
+    );
+    await expect(readFile(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).resolves.toContain(
+      'src/app/index.tsx'
+    );
+    await expect(stat(path.join(appPath, 'src', 'features'))).rejects.toThrow();
+  });
+
   it('creates project memory files in non-interactive mode', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-'));
     tempDirs.push(projectPath);
