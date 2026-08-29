@@ -65,6 +65,10 @@ function runGitOrThrow(repoPath: string, args: string[]): string {
   }).trim();
 }
 
+function canReadGitRepository(repoPath: string): boolean {
+  return runGit(repoPath, ['rev-parse', '--is-inside-work-tree']) === 'true';
+}
+
 function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'project';
 }
@@ -102,6 +106,11 @@ function getDefaultBranch(sourcePath: string): string {
   return runGit(sourcePath, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])?.replace(/^origin\//, '') ?? 'main';
 }
 
+function normalizeRemoteUrl(remote: string | undefined): string | undefined {
+  if (!remote) return undefined;
+  return remote.trim().replace(/\.git$/i, '').toLowerCase();
+}
+
 function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegistryEntry {
   return {
     repositoryId: 'source',
@@ -127,10 +136,10 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
   const workspaceRoot = path.resolve(options.workspaceRoot ?? defaultWorkspaceRoot(source, workspaceName));
   const defaultBranch = getDefaultBranch(source);
   const listed = listGitWorktrees(source);
-  const prunableWorktrees = listed.filter((worktree) => Boolean(worktree.prunable));
+  const prunableWorktrees = listed.filter((worktree) => Boolean(worktree.prunable) || !canReadGitRepository(worktree.path));
   const warnings: string[] = [];
   const errors: string[] = [];
-  const active = listed.filter((worktree) => !worktree.prunable && fs.existsSync(worktree.path));
+  const active = listed.filter((worktree) => !worktree.prunable && fs.existsSync(worktree.path) && canReadGitRepository(worktree.path));
   const worktrees = active.map((worktree) => {
     const role: WorkspaceInitWorktree['role'] = worktree.branch === defaultBranch ? 'main' : worktree.branch ? 'feature' : 'detached';
     const suffix = role === 'main'
@@ -168,6 +177,9 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
     ? fs.readdirSync(legacyProjectPath, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => path.join('project', entry.name)).sort()
     : [];
   const remote = runGit(source, ['remote', 'get-url', 'origin']);
+  if (normalizeRemoteUrl(options.projectRemote) === normalizeRemoteUrl(remote)) {
+    errors.push('The project control-repository remote must be separate from the source app remote.');
+  }
   if (!remote) warnings.push('Source repository has no origin remote; workspace status will flag it until one is configured.');
 
   return {

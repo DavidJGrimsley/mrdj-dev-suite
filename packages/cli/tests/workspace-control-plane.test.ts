@@ -171,6 +171,17 @@ describe('workspace control plane', () => {
     expect(plan.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-test'));
   });
 
+  it('rejects using the source app remote as the project control remote', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote: sourceRemote });
+
+    expect(plan.errors).toContain('The project control-repository remote must be separate from the source app remote.');
+  });
+
   it('moves clean worktrees, seeds and pushes a remote control repo, and is discoverable', () => {
     const root = tempDir();
     const sourcePath = path.join(root, 'app');
@@ -205,6 +216,22 @@ describe('workspace control plane', () => {
 
     const rerunPlan = planWorkspaceInitialization(path.join(workspaceRoot, 'sample-main'), { projectRemote, workspaceName: 'sample' });
     expect(() => applyWorkspaceInitialization(rerunPlan, { yes: true })).not.toThrow();
+  });
+
+  it('treats unreadable worktree registrations as repair targets instead of stash targets', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const brokenPath = path.join(root, 'broken');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', brokenPath, '-b', 'feature/broken'], { stdio: 'ignore' });
+    fs.unlinkSync(path.join(brokenPath, '.git'));
+
+    const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
+    expect(plan.prunableWorktrees.length).toBeGreaterThan(0);
+    expect(() => applyWorkspaceInitialization(plan, { yes: true })).not.toThrow();
   });
 
   it('preserves a feature source checkout and creates a clean default-branch main checkout', () => {
