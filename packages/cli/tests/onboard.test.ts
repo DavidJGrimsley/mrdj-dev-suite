@@ -1580,13 +1580,10 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain("route: '/' as Href");
     await expect(
       readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
-    ).resolves.toContain("import { createURL } from 'expo-linking';");
-    await expect(
-      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
     ).resolves.toContain('const auth = useAuthAdapter();');
     await expect(
       readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
-    ).resolves.toContain("legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}");
+    ).resolves.toContain("legalUrls={{ terms: '/terms', privacy: '/privacy' }}");
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'auth', 'auth-types.ts'), 'utf8')
     ).resolves.toContain('refreshSession(): Promise<void>;');
@@ -1625,16 +1622,13 @@ describe('runOnboardCommand', () => {
 
     await expect(
       readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
-    ).resolves.toContain("import { createURL } from 'expo-linking';");
-    await expect(
-      readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
     ).resolves.toContain('const auth = useAuthAdapter();');
     await expect(
       readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
-    ).resolves.toContain("legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}");
+    ).resolves.toContain("legalUrls={{ terms: '/terms', privacy: '/privacy' }}");
     await expect(
       readFile(path.join(projectPath, 'app', 'settings.tsx'), 'utf8')
-    ).resolves.toContain("profileHref={createURL('/account-setup')}");
+    ).resolves.toContain('profileHref="/account-setup"');
     await expect(
       readFile(path.join(projectPath, 'app', 'terms.tsx'), 'utf8')
     ).resolves.toContain('legal-page-route');

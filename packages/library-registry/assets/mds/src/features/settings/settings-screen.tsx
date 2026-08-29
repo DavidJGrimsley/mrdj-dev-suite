@@ -1,3 +1,5 @@
+import type { Href } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useMemo, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -27,7 +29,30 @@ export function resolveSettingsVersionInfo(
   return resolveSettingsVersionInfoFromConstants(source);
 }
 
-async function openSettingsHref(href: string): Promise<void> {
+function resolveInternalSettingsHref(href: string): Href | null {
+  if (href.startsWith('/')) {
+    return href as Href;
+  }
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const url = new URL(href, window.location.origin);
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+    return `${url.pathname}${url.search}${url.hash}` as Href;
+  } catch {
+    return null;
+  }
+}
+
+async function openSettingsHref(href: string, push: (href: Href) => void): Promise<void> {
+  const internalHref = resolveInternalSettingsHref(href);
+  if (internalHref) {
+    push(internalHref);
+    return;
+  }
   await Linking.openURL(href);
 }
 
@@ -36,6 +61,7 @@ export default function SettingsScreen({
   legalUrls,
   profileHref,
 }: SettingsScreenProps) {
+  const router = useRouter();
   const theme = useAppTheme();
   const colors = theme.activeColors;
   const user = auth.state.session?.user ?? null;
@@ -118,7 +144,7 @@ export default function SettingsScreen({
                 <Pressable
                   key={item.id}
                   accessibilityRole="button"
-                  onPress={() => void openSettingsHref(item.href)}
+                  onPress={() => void openSettingsHref(item.href, router.push)}
                   style={[
                     styles.linkCard,
                     {

@@ -33,15 +33,15 @@ export type SupabaseResult<T> = {
 export type SupabaseOnboardingClient = {
   from(table: string): {
     select(columns: string): {
-      eq(column: string, value: string): Promise<SupabaseResult<unknown>> & {
-        maybeSingle(): Promise<SupabaseResult<unknown>>;
+      eq(column: string, value: string): PromiseLike<SupabaseResult<unknown>> & {
+        maybeSingle(): PromiseLike<SupabaseResult<unknown>>;
       };
     };
     upsert(
       values: Record<string, unknown>,
       options?: { onConflict?: string },
-    ): Promise<SupabaseResult<null>>;
-    insert(values: Record<string, unknown>): Promise<SupabaseResult<null>>;
+    ): PromiseLike<SupabaseResult<null>>;
+    insert(values: Record<string, unknown>): PromiseLike<SupabaseResult<null>>;
   };
 };
 

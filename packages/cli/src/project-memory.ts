@@ -2888,12 +2888,10 @@ function renderGeneratedSettingsRoute(
     `      auth=${options.authEnabled ? '{auth}' : '{createPlaceholderAuthAdapter()}'}`
   );
   if (options.legalLinksEnabled) {
-    lines.push(
-      "      legalUrls={{ terms: createURL('/terms'), privacy: createURL('/privacy') }}"
-    );
+    lines.push("      legalUrls={{ terms: '/terms', privacy: '/privacy' }}");
   }
   if (options.profileHref) {
-    lines.push(`      profileHref={createURL('${options.profileHref}')}`);
+    lines.push(`      profileHref=\"${options.profileHref}\"`);
   }
   lines.push('    />', '  );', '}', '');
 
