@@ -550,6 +550,7 @@ describe('workspace control plane', () => {
     fs.mkdirSync(path.join(workspaceRoot, 'test-apps'));
     fs.writeFileSync(path.join(workspaceRoot, 'test-apps', 'keep.txt'), 'keep\n');
     const parent = path.join(root, 'relocated');
+    fs.mkdirSync(parent);
 
     const missingAuxiliary = planWorkspaceRelocation(workspaceRoot, { workspaceParent: parent });
     expect(missingAuxiliary.errors).toContainEqual(expect.stringContaining('test-apps'));
@@ -570,16 +571,25 @@ describe('workspace control plane', () => {
     const sourcePath = path.join(root, 'app');
     initializeGitRepository(sourcePath, path.join(root, 'source.git'));
     fs.mkdirSync(path.join(sourcePath, 'project'), { recursive: true });
-    fs.writeFileSync(path.join(sourcePath, 'project', 'todo.md'), '# Todo\n\n- [ ] Base\n');
+    fs.writeFileSync(
+      path.join(sourcePath, 'project', 'todo.md'),
+      '# Todo\n\n## First\n- [ ] Base\n\n## Last\n- [ ] Last\n'
+    );
     execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
     execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add legacy project'], { stdio: 'ignore' });
     const featurePath = path.join(root, 'feature');
     execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featurePath, '-b', 'feature/project-memory'], { stdio: 'ignore' });
-    fs.appendFileSync(path.join(featurePath, 'project', 'todo.md'), '- [ ] Feature\n');
+    fs.writeFileSync(
+      path.join(featurePath, 'project', 'todo.md'),
+      '# Todo\n\n## First\n- [ ] Base\n\n## Last\n- [ ] Feature\n'
+    );
     execFileSync('git', ['-C', featurePath, 'commit', '-am', 'feature project note'], { stdio: 'ignore' });
     const control = path.join(root, 'control');
     fs.mkdirSync(control);
-    fs.writeFileSync(path.join(control, 'todo.md'), '# Todo\n\n- [ ] Base\n- [ ] Control\n');
+    fs.writeFileSync(
+      path.join(control, 'todo.md'),
+      '# Todo\n\n## First\n- [ ] Control\n\n## Last\n- [ ] Last\n'
+    );
 
     const merged = planLegacyProjectConsolidation([
       { worktreePath: sourcePath, primary: true },
@@ -588,7 +598,10 @@ describe('workspace control plane', () => {
     expect(merged.conflicts).toEqual([]);
     expect(merged.files.find((file) => file.path === 'project/todo.md')).toMatchObject({ status: 'merge' });
     expect(merged.files.find((file) => file.path === 'project/todo.md')?.content).toContain('Feature');
-    fs.writeFileSync(path.join(control, 'todo.md'), '# Todo\n\n- [ ] Different\n');
+    fs.writeFileSync(
+      path.join(control, 'todo.md'),
+      '# Todo\n\n## First\n- [ ] Control\n\n## Last\n- [ ] Different\n'
+    );
     const conflicted = planLegacyProjectConsolidation([
       { worktreePath: sourcePath, primary: true },
       { worktreePath: featurePath, primary: false },
