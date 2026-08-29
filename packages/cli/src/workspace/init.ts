@@ -215,10 +215,11 @@ function writeSourceLink(repoPath: string, workspaceId: string, projectRemote: s
 
 function moveWorktrees(plan: WorkspaceInitializationPlan): void {
   const primary = plan.worktrees.find((worktree) => worktree.primary);
+  const gitWorktreeCommandPath = primary?.sourcePath ?? plan.sourcePath;
   for (const worktree of plan.worktrees.filter((item) => !item.primary)) {
     if (path.resolve(worktree.sourcePath) !== path.resolve(worktree.targetPath)) {
       fs.mkdirSync(path.dirname(worktree.targetPath), { recursive: true });
-      runGitOrThrow(plan.sourcePath, ['worktree', 'move', worktree.sourcePath, worktree.targetPath]);
+      runGitOrThrow(gitWorktreeCommandPath, ['worktree', 'move', worktree.sourcePath, worktree.targetPath]);
     }
   }
   if (primary && path.resolve(primary.sourcePath) !== path.resolve(primary.targetPath)) {
@@ -226,7 +227,14 @@ function moveWorktrees(plan: WorkspaceInitializationPlan): void {
       throw new Error('The primary worktree must move within the same filesystem volume.');
     }
     fs.mkdirSync(path.dirname(primary.targetPath), { recursive: true });
-    fs.renameSync(primary.sourcePath, primary.targetPath);
+    try {
+      fs.renameSync(primary.sourcePath, primary.targetPath);
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'EXDEV') {
+        throw new Error('The primary worktree must move within the same filesystem volume.');
+      }
+      throw error;
+    }
     runGitOrThrow(primary.targetPath, ['worktree', 'repair']);
   }
 }
@@ -239,6 +247,13 @@ function ensureMainCheckout(plan: WorkspaceInitializationPlan): WorkspaceInitWor
   runGitOrThrow(primary.targetPath, ['worktree', 'add', targetPath, plan.defaultBranch]);
   const head = runGitOrThrow(targetPath, ['rev-parse', 'HEAD']);
   return { sourcePath: targetPath, targetPath, branch: plan.defaultBranch, head, role: 'main', primary: false, dirty: false };
+}
+
+function copyLegacyProjectMemory(plan: WorkspaceInitializationPlan, legacyProjectPath: string): void {
+  for (const memoryPath of plan.existingProjectMemory) {
+    const fileName = path.basename(memoryPath);
+    fs.copyFileSync(path.join(legacyProjectPath, fileName), path.join(plan.projectPath, fileName));
+  }
 }
 
 function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[]): void {
@@ -256,7 +271,7 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
   }
   const legacyProjectPath = legacySource ? path.join(legacySource.targetPath, 'project') : undefined;
   if (legacyProjectPath && fs.existsSync(legacyProjectPath)) {
-    fs.cpSync(legacyProjectPath, plan.projectPath, { recursive: true, force: false, errorOnExist: false });
+    copyLegacyProjectMemory(plan, legacyProjectPath);
   }
   const registry: WorkspaceWorktreeRegistry = {
     schemaVersion: WORKSPACE_MANIFEST_VERSION, workspaceId: plan.manifest.workspaceId,

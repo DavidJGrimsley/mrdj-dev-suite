@@ -190,6 +190,8 @@ describe('workspace control plane', () => {
     initializeGitRepository(sourcePath, sourceRemote);
     fs.mkdirSync(path.join(sourcePath, 'project'), { recursive: true });
     fs.writeFileSync(path.join(sourcePath, 'project', 'info.md'), '# App\n', 'utf8');
+    fs.mkdirSync(path.join(sourcePath, 'project', 'keys'), { recursive: true });
+    fs.writeFileSync(path.join(sourcePath, 'project', 'keys', 'private.txt'), 'do not copy\n', 'utf8');
     execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
     execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add project memory'], { stdio: 'ignore' });
     execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
@@ -206,6 +208,7 @@ describe('workspace control plane', () => {
     expect(fs.existsSync(path.join(workspaceRoot, 'sample-feature-test'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceRoot, 'temp'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceRoot, 'generated'))).toBe(true);
+    expect(fs.existsSync(path.join(workspaceRoot, 'project', 'keys'))).toBe(false);
     expect(applied.worktrees).toHaveLength(2);
     const registry = parseWorkspaceWorktreeRegistry(JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), 'utf8')) as unknown);
     expect(registry.worktrees).toHaveLength(2);
@@ -232,6 +235,25 @@ describe('workspace control plane', () => {
     const plan = planWorkspaceInitialization(sourcePath, { projectRemote, workspaceName: 'sample' });
     expect(plan.prunableWorktrees.length).toBeGreaterThan(0);
     expect(() => applyWorkspaceInitialization(plan, { yes: true })).not.toThrow();
+  });
+
+  it('can initialize when the source path is a linked worktree that will be moved', () => {
+    const root = tempDir();
+    const sourcePath = path.join(root, 'app');
+    const sourceRemote = path.join(root, 'source.git');
+    const projectRemote = path.join(root, 'project.git');
+    initializeGitRepository(sourcePath, sourceRemote);
+    execFileSync('git', ['init', '--bare', projectRemote], { stdio: 'ignore' });
+    const featureOnePath = path.join(root, 'feature-one');
+    const featureTwoPath = path.join(root, 'feature-two');
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featureOnePath, '-b', 'feature/one'], { stdio: 'ignore' });
+    execFileSync('git', ['-C', sourcePath, 'worktree', 'add', featureTwoPath, '-b', 'feature/two'], { stdio: 'ignore' });
+
+    const plan = planWorkspaceInitialization(featureOnePath, { projectRemote, workspaceName: 'sample' });
+    const applied = applyWorkspaceInitialization(plan, { yes: true });
+
+    expect(applied.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-one'));
+    expect(applied.worktrees.map((worktree) => worktree.targetPath)).toContain(path.join(root, 'sample-i2Workspace', 'sample-feature-two'));
   });
 
   it('preserves a feature source checkout and creates a clean default-branch main checkout', () => {

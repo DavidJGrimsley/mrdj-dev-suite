@@ -143,6 +143,10 @@ export async function main(): Promise<void> {
 
   printIntro(projectName, createExpoStackArgs, projectParentDir);
 
+  if (parsed.mds.workspace && parsed.mds.workspaceRoot) {
+    await mkdir(parsed.mds.workspaceRoot, { recursive: true });
+  }
+
   if (!parsed.mds.skipCreate) {
     await runCreateExpoStack(
       createExpoStackArgs,
