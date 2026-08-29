@@ -554,7 +554,12 @@ const mdsItems: LibraryItem[] = [
         "src/features/legal/legal-documents.ts",
         "{{featuresDir}}/legal/legal-documents.ts",
         "support",
-        ["__MDS_APP_NAME__"],
+        [
+          "__MDS_APP_NAME__",
+          "__MDS_LEGAL_BUSINESS_NAME__",
+          "__MDS_LEGAL_CONTACT_EMAIL__",
+          "__MDS_LEGAL_ADDRESS_OR_REGION_NOTE__",
+        ],
       ),
       mdsAsset(
         "src/features/legal/legal-document-view.tsx",
@@ -610,7 +615,7 @@ const mdsItems: LibraryItem[] = [
     id: "mds/auth",
     name: "Auth flow",
     description:
-      "Provider-neutral authentication routes, UI, provider hooks, and backend-specific adapter variants.",
+      "Provider-neutral authentication routes, refreshable session adapters, a reusable guard, and backend-specific variants.",
     kind: "flow",
     tags: [
       "auth",
@@ -747,6 +752,16 @@ const mdsItems: LibraryItem[] = [
         "support",
       ),
       mdsAsset(
+        "src/features/auth/auth-guard.tsx",
+        "{{featuresDir}}/auth/auth-guard.tsx",
+        "support",
+      ),
+      mdsAsset(
+        "src/features/auth/auth-guard-logic.ts",
+        "{{featuresDir}}/auth/auth-guard-logic.ts",
+        "support",
+      ),
+      mdsAsset(
         "src/features/auth/auth-screen.tsx",
         "{{featuresDir}}/auth/auth-screen.tsx",
       ),
@@ -773,6 +788,7 @@ const mdsItems: LibraryItem[] = [
         "Keep /sign-in, /sign-up, and /reset-password public, then protect app routes from the root Expo Router layout.",
         "Choose exactly one auth provider variant so auth-adapter.tsx has a single implementation.",
         "Compose with mds/onboarding by setting onboarding completion to /sign-in when users should authenticate after onboarding.",
+        "Use AuthGuard for screen-level protection when a copied screen should refresh auth on focus or redirect independently from the root Stack.Protected shell.",
       ],
       notes: [
         "Protected routes are a client-side navigation guard; provider backends and database policies still enforce data access.",
@@ -1169,7 +1185,7 @@ const mdsItems: LibraryItem[] = [
     id: "mds/settings",
     name: "Settings screen",
     description:
-      "The generated MDS settings modal with a keyboard-controller form example.",
+      "A reusable settings surface with account summary, sign-out, legal links, and app version details.",
     kind: "screen",
     tags: ["settings", "form", "eject:settings"],
     categories: ["settings", "screens"],
@@ -1193,19 +1209,31 @@ const mdsItems: LibraryItem[] = [
         ],
       },
     ],
-    composedItems: ["swmansion/keyboard-form", "mds/theme-support"],
-    relatedItems: ["mds/onboarding"],
+    composedItems: ["mds/theme-support"],
+    relatedItems: ["mds/onboarding", "mds/legal-documents", "mds/auth"],
     assets: [
+      mdsAsset(
+        "src/features/auth/auth-types.ts",
+        "{{featuresDir}}/auth/auth-types.ts",
+        "support",
+      ),
       mdsAsset(
         "src/features/settings/settings-screen.tsx",
         "{{featuresDir}}/settings/settings-screen.tsx",
       ),
+      mdsAsset(
+        "src/features/settings/settings-screen-logic.ts",
+        "{{featuresDir}}/settings/settings-screen-logic.ts",
+        "support",
+      ),
     ],
     integration: {
       summary:
-        "Register the settings route as a modal in the root Expo Router stack.",
+        "Register the settings route as a modal in the root Expo Router stack and pass a real auth adapter when the app has authentication.",
       instructions: [
         "Add a settings route link from an application-owned screen or menu.",
+        "Pass local /terms and /privacy routes when legal documents are installed, and optionally pass an external GDPR URL when compliance copy lives off-app.",
+        "Use the placeholder route wrapper only as a starter; generated apps with auth should wire SettingsScreen to the active adapter.",
       ],
     },
   }),

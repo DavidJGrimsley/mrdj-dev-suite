@@ -249,6 +249,18 @@ async function main(): Promise<void> {
             describe: 'App display name',
             type: 'string',
           })
+          .option('legal-business-name', {
+            describe: 'Business name to personalize generated legal documents',
+            type: 'string',
+          })
+          .option('legal-contact-email', {
+            describe: 'Contact email to personalize generated legal documents',
+            type: 'string',
+          })
+          .option('legal-address-or-region-note', {
+            describe: 'Address or region note to personalize generated legal documents',
+            type: 'string',
+          })
           .option('audience', {
             describe: 'Who the app serves',
             type: 'string',

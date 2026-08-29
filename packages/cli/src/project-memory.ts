@@ -2,6 +2,8 @@ import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { detectProjectExpoSdk } from './expo-sdk-state.js';
 import { DEFAULT_STYLIST_THEME, renderGlobalCssThemeBlock } from './stylist-theme.js';
 import { loadLibraryTextAssets, requireLibraryTextAsset } from './library-generation.js';
 import { generateProjectRoadmap } from './roadmap.js';
@@ -93,6 +95,11 @@ export type GeneratorStylingSystem =
   | 'restyle'
   | 'stylesheet';
 
+export const LEGAL_BUSINESS_NAME_PLACEHOLDER = 'TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME';
+export const LEGAL_CONTACT_EMAIL_PLACEHOLDER = 'TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL';
+export const LEGAL_ADDRESS_OR_REGION_PLACEHOLDER =
+  'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE';
+
 export interface OnboardAnswers {
   appName: string;
   generatorScriptLanguage?: 'typescript' | 'javascript';
@@ -113,6 +120,9 @@ export interface OnboardAnswers {
   screens?: string;
   monetizationStrategy?: string;
   teamContext?: string;
+  legalBusinessName?: string;
+  legalContactEmail?: string;
+  legalAddressOrRegionNote?: string;
   laterScope?: string;
   researchNotes?: string;
   dataNeeds: string;
@@ -203,6 +213,8 @@ interface GeneratedLibraryRouteAssets {
   expoSdk56?: ReadonlyMap<string, string>;
 }
 
+type SupportedExpoSdkMajor = 56 | 57;
+
 export function resolveGeneratorStylingSystem(
   answers: Pick<OnboardAnswers, 'generatorStylingSystem' | 'defaults'>,
   options: { manageUniwind?: boolean } = {}
@@ -262,6 +274,9 @@ function buildGeneratedLibraryContext(
 
   return {
     projectName: answers.appName,
+    legalBusinessName: resolveLegalBusinessName(answers),
+    legalContactEmail: resolveLegalContactEmail(answers),
+    legalAddressOrRegionNote: resolveLegalAddressOrRegionNote(answers),
     expoSdk: 56,
     styling,
     appDirectory: answers.appDirectory === 'src' ? 'src/app' : 'app',
@@ -273,6 +288,30 @@ function buildGeneratedLibraryContext(
     componentsDirectory: 'src/components',
     featuresDirectory: 'src/features',
   };
+}
+
+function normalizeOptionalLegalValue(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+export function resolveLegalBusinessName(answers: Pick<OnboardAnswers, 'legalBusinessName'>): string {
+  return normalizeOptionalLegalValue(answers.legalBusinessName) ?? LEGAL_BUSINESS_NAME_PLACEHOLDER;
+}
+
+export function resolveLegalContactEmail(
+  answers: Pick<OnboardAnswers, 'legalContactEmail'>
+): string {
+  return normalizeOptionalLegalValue(answers.legalContactEmail) ?? LEGAL_CONTACT_EMAIL_PLACEHOLDER;
+}
+
+export function resolveLegalAddressOrRegionNote(
+  answers: Pick<OnboardAnswers, 'legalAddressOrRegionNote'>
+): string {
+  return (
+    normalizeOptionalLegalValue(answers.legalAddressOrRegionNote) ??
+    LEGAL_ADDRESS_OR_REGION_PLACEHOLDER
+  );
 }
 
 function shouldGenerateOnboarding(answers: OnboardAnswers): boolean {
@@ -451,22 +490,67 @@ export function renderGeneratedOnboardingConfig(source: string, answers: Onboard
  ].join(lineEnding);
 }
 
-const SOFTWARE_MANSION_CORE_DEPENDENCIES = {
-  'react-native-gesture-handler': '~2.31.1',
-  'react-native-reanimated': '4.3.1',
-  'react-native-screens': '4.27.0',
-  'react-native-svg': '15.15.4',
-  'react-native-keyboard-controller': '1.21.6',
-  'react-native-worklets': '0.8.3',
-} as const;
+const LEGACY_EXPO_SDK_MAJOR: SupportedExpoSdkMajor = 56;
 
-const EXPO_ROUTER_DEPENDENCIES = {
-  'expo-router': '~56.2.19',
-} as const;
+const SOFTWARE_MANSION_CORE_DEPENDENCIES: Record<
+  SupportedExpoSdkMajor,
+  Record<string, string>
+> = {
+  56: {
+    'react-native-gesture-handler': '~2.31.1',
+    'react-native-reanimated': '4.3.1',
+    'react-native-screens': '4.27.0',
+    'react-native-svg': '15.15.4',
+    'react-native-keyboard-controller': '1.21.6',
+    'react-native-worklets': '0.8.3',
+  },
+  57: {
+    'react-native-gesture-handler': '~2.32.0',
+    'react-native-reanimated': '4.5.1',
+    'react-native-screens': '~4.26.0',
+    'react-native-svg': '15.15.4',
+    'react-native-keyboard-controller': '1.21.9',
+    'react-native-worklets': '0.10.1',
+  },
+};
 
-const LOCAL_DATA_DEPENDENCIES = {
-  'expo-sqlite': '~56.0.4',
-} as const;
+const EXPO_ROUTER_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    'expo-router': '~56.2.19',
+  },
+  57: {
+    'expo-router': '~57.0.17',
+  },
+};
+
+const EXPO_ROUTER_SUPPORT_DEPENDENCIES: Record<
+  SupportedExpoSdkMajor,
+  Record<string, string>
+> = {
+  56: {
+    'expo-constants': '~56.0.15',
+    'expo-font': '~56.0.5',
+    'expo-linking': '~56.0.11',
+    'expo-system-ui': '~56.0.5',
+    'react-native-safe-area-context': '~5.7.0',
+  },
+  57: {
+    'expo-constants': '~57.0.15',
+    'expo-font': '~57.0.1',
+    'expo-linking': '~57.0.8',
+    'expo-system-ui': '~57.0.3',
+    'react-native-safe-area-context': '~5.7.0',
+  },
+};
+
+const LOCAL_DATA_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    'expo-sqlite': '~56.0.4',
+  },
+  57: {
+    'expo-sqlite': '~57.0.2',
+  },
+};
 
 const SUPABASE_DEPENDENCIES = {
   '@supabase/supabase-js': '^2.112.3',
@@ -478,21 +562,35 @@ const FIREBASE_AUTH_DEPENDENCIES = {
   firebase: '^12.17.1',
 } as const;
 
-const CONVEX_AUTH_DEPENDENCIES = {
-  '@auth/core': '0.41.1',
-  '@convex-dev/auth': '^0.0.95',
-  convex: '^1.43.0',
-  'expo-secure-store': '~56.0.4',
-} as const;
+const CONVEX_AUTH_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    '@auth/core': '0.41.1',
+    '@convex-dev/auth': '^0.0.95',
+    convex: '^1.43.0',
+    'expo-secure-store': '~56.0.4',
+  },
+  57: {
+    '@auth/core': '0.41.1',
+    '@convex-dev/auth': '^0.0.95',
+    convex: '^1.43.0',
+    'expo-secure-store': '~57.0.2',
+  },
+};
 
 const UNIWIND_DEPENDENCIES = {
   uniwind: '^1.6.4',
 } as const;
 
-const STYLIST_DEPENDENCIES = {
-  '@react-native-async-storage/async-storage': '2.2.0',
-  'reanimated-color-picker': '^4.2.0',
-} as const;
+const STYLIST_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    '@react-native-async-storage/async-storage': '2.2.0',
+    'reanimated-color-picker': '^4.2.0',
+  },
+  57: {
+    '@react-native-async-storage/async-storage': '2.2.0',
+    'reanimated-color-picker': '^5.1.2',
+  },
+};
 
 const ZUSTAND_DEPENDENCIES = {
   zustand: '^5.0.8',
@@ -502,21 +600,39 @@ const STYLIST_DEV_DEPENDENCIES = {
   '@types/node': '^25.9.1',
 } as const;
 
+const EXPO_UI_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    '@expo/ui': '~56.0.14',
+  },
+  57: {
+    '@expo/ui': '~57.0.14',
+  },
+};
+
 const REACT_DOCTOR_DEV_DEPENDENCIES = {
   [REACT_DOCTOR_PACKAGE]: REACT_DOCTOR_VERSION,
 } as const;
 
-const EXPO_UI_DEPENDENCIES = {
-  '@expo/ui': '~56.0.14',
-} as const;
+const ANDROID_NAVIGATION_BAR_DEPENDENCIES: Record<
+  SupportedExpoSdkMajor,
+  Record<string, string>
+> = {
+  56: {
+    'expo-navigation-bar': '~56.0.3',
+  },
+  57: {
+    'expo-navigation-bar': '~57.0.2',
+  },
+};
 
-const ANDROID_NAVIGATION_BAR_DEPENDENCIES = {
-  'expo-navigation-bar': '~56.0.3',
-} as const;
-
-const SPLASH_SCREEN_DEPENDENCIES = {
-  'expo-splash-screen': '~56.0.14',
-} as const;
+const SPLASH_SCREEN_DEPENDENCIES: Record<SupportedExpoSdkMajor, Record<string, string>> = {
+  56: {
+    'expo-splash-screen': '~56.0.14',
+  },
+  57: {
+    'expo-splash-screen': '~57.0.8',
+  },
+};
 
 export const SDK_56_SPLASH_ITEM_ID = 'expo/splash-screen';
 export const SDK_56_SPLASH_LIGHT_IMAGE = './assets/images/splash-icon.png';
@@ -571,6 +687,7 @@ const INFO_HEADINGS = [
   'Platforms',
   'Monetization Strategy',
   'Team Context',
+  'Legal & Compliance Contact',
   'Later Scope & Possibilities',
   'Research, Notes, and References',
   'Tech Stack & CESS Onboarding',
@@ -883,10 +1000,11 @@ async function scaffoldRichBoilerplateInner(
     navigationShell.library === 'expo-router' && shouldGenerateOnboardingAuthSupabase(answers)
       ? await loadLibraryTextAssets('mds/onboarding-auth-supabase', libraryContext)
       : undefined;
-  const settingsAssets =
-    navigationShell.library === 'expo-router'
-      ? await loadLibraryTextAssets('mds/settings', libraryContext)
-      : undefined;
+  const settingsAssets = await loadLibraryTextAssets(
+    'mds/settings',
+    libraryContext,
+    navigationShell.library === 'react-navigation' ? 'react-navigation' : undefined
+  );
   const stylistAssets =
     navigationShell.library === 'expo-router'
       ? await loadLibraryTextAssets('mds/stylist', libraryContext)
@@ -1233,6 +1351,19 @@ async function scaffoldRichBoilerplateInner(
             : []),
         ]
       : []),
+    ...(settingsAssets?.has('src/features/auth/auth-types.ts')
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'auth', 'auth-types.ts'),
+            requireLibraryTextAsset(
+              'mds/settings',
+              settingsAssets,
+              'src/features/auth/auth-types.ts'
+            ),
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'settings', 'settings-screen.tsx'),
       libraryAssetOrFallback(
@@ -1243,6 +1374,19 @@ async function scaffoldRichBoilerplateInner(
       ),
       force
     ),
+    ...(settingsAssets?.has('src/features/settings/settings-screen-logic.ts')
+      ? [
+          await writeIfAllowed(
+            path.join(projectPath, 'src', 'features', 'settings', 'settings-screen-logic.ts'),
+            requireLibraryTextAsset(
+              'mds/settings',
+              settingsAssets,
+              'src/features/settings/settings-screen-logic.ts'
+            ),
+            force
+          ),
+        ]
+      : []),
     await writeIfAllowed(
       path.join(projectPath, 'src', 'features', 'exposition', 'exposition-screen.tsx'),
       renderExpositionScreen(includeNativeWindUiExposition),
@@ -1461,11 +1605,19 @@ async function scaffoldRichBoilerplateInner(
   const shouldManageUniwind = options.manageUniwind && stylingSystem === 'uniwind';
   if (shouldManageUniwind) {
     results.push(
-      await writeIfAllowed(path.join(projectPath, 'global.css'), renderGlobalCss(), force)
+      await writeIfAllowed(path.join(projectPath, 'global.css'), renderGlobalCss(), force),
+      await writeIfAllowed(path.join(projectPath, 'css-env.d.ts'), renderCssEnvDts(), force),
+      await writeIfAllowed(path.join(projectPath, 'uniwind-types.d.ts'), renderUniwindTypesDts(), force)
     );
   }
 
   await ensurePackageJson(projectPath, answers, options.manageUniwind);
+  if (navigationShell.library === 'expo-router') {
+    results.push(
+      await writeIfAllowed(path.join(projectPath, 'expo-env.d.ts'), renderExpoEnvDts(), force)
+    );
+    await ensureTypeScriptConfig(projectPath, { includeUniwindTypes: shouldManageUniwind });
+  }
   results.push(await ensureReactDoctorConfig(projectPath, force));
   results.push(await ensureReactDoctorReadmeSection(projectPath));
   if (shouldManageUniwind) {
@@ -1604,6 +1756,13 @@ export function renderInfo(
     '',
     answers.teamContext?.trim() ||
       '# TodoForContext(optional): Add team size, roles, delegated responsibilities, stakeholders, and client contacts if useful.',
+    '',
+    '## Legal & Compliance Contact',
+    '',
+    `- Business Name: ${resolveLegalBusinessName(answers)}`,
+    `- Contact Email: ${resolveLegalContactEmail(answers)}`,
+    `- Address Or Region Note: ${resolveLegalAddressOrRegionNote(answers)}`,
+    '# TodoForContext(optional): Replace placeholder legal contact details before shipping generated terms, privacy, or GDPR-facing copy.',
     '',
     '## Later Scope & Possibilities',
     '',
@@ -2132,8 +2291,10 @@ async function ensurePackageJson(
     test: packageJson.scripts?.test ?? 'npm run lint && npm run typecheck',
   };
 
+  const expoSdkMajor = resolveExpoSdkMajor(packageJson);
+
   if (answers.generatorNavigationLibrary !== 'react-navigation') {
-    packageJson.main = typeof packageJson.main === 'string' ? packageJson.main : 'expo-router/entry';
+    packageJson.main = 'expo-router/entry';
   }
 
   const stylingSystem = resolveGeneratorStylingSystem(answers, { manageUniwind });
@@ -2174,42 +2335,43 @@ async function ensurePackageJson(
 
   packageJson.dependencies = {
     ...packageJson.dependencies,
-    ...STYLIST_DEPENDENCIES,
-    ...SOFTWARE_MANSION_CORE_DEPENDENCIES,
+    ...STYLIST_DEPENDENCIES[expoSdkMajor],
+    ...SOFTWARE_MANSION_CORE_DEPENDENCIES[expoSdkMajor],
   };
 
   if (answers.generatorNavigationLibrary !== 'react-navigation') {
     packageJson.dependencies = {
       ...packageJson.dependencies,
-      ...EXPO_ROUTER_DEPENDENCIES,
+      ...EXPO_ROUTER_DEPENDENCIES[expoSdkMajor],
+      ...EXPO_ROUTER_SUPPORT_DEPENDENCIES[expoSdkMajor],
     };
   }
 
   if (answers.dataStart === 'local') {
     packageJson.dependencies = {
-      ...LOCAL_DATA_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...LOCAL_DATA_DEPENDENCIES[expoSdkMajor],
     };
   }
 
   if (answers.dataStart === 'supabase' || answers.authProvider === 'supabase') {
     packageJson.dependencies = {
-      ...SUPABASE_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...SUPABASE_DEPENDENCIES,
     };
   }
 
   if (answers.authProvider === 'firebase') {
     packageJson.dependencies = {
-      ...FIREBASE_AUTH_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...FIREBASE_AUTH_DEPENDENCIES,
     };
   }
 
   if (answers.authProvider === 'convex') {
     packageJson.dependencies = {
-      ...CONVEX_AUTH_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...CONVEX_AUTH_DEPENDENCIES[expoSdkMajor],
     };
   }
 
@@ -2219,28 +2381,28 @@ async function ensurePackageJson(
     onboardingPersistence === 'zustand-supabase'
   ) {
     packageJson.dependencies = {
-      ...ZUSTAND_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...ZUSTAND_DEPENDENCIES,
     };
   }
 
   if (answers.usesExpoUi) {
     packageJson.dependencies = {
-      ...EXPO_UI_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...EXPO_UI_DEPENDENCIES[expoSdkMajor],
     };
   }
 
   packageJson.dependencies = {
-    ...ANDROID_NAVIGATION_BAR_DEPENDENCIES,
-    ...SPLASH_SCREEN_DEPENDENCIES,
     ...packageJson.dependencies,
+    ...ANDROID_NAVIGATION_BAR_DEPENDENCIES[expoSdkMajor],
+    ...SPLASH_SCREEN_DEPENDENCIES[expoSdkMajor],
   };
 
   if (manageUniwind && stylingSystem === 'uniwind') {
     packageJson.dependencies = {
-      ...UNIWIND_DEPENDENCIES,
       ...packageJson.dependencies,
+      ...UNIWIND_DEPENDENCIES,
     };
     delete packageJson.dependencies.nativewind;
     packageJson.dependencies.uniwind = UNIWIND_DEPENDENCIES.uniwind;
@@ -2268,6 +2430,51 @@ async function ensurePackageJson(
   }
 
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+}
+
+function resolveExpoSdkMajor(packageJson: PackageJson): SupportedExpoSdkMajor {
+  return detectProjectExpoSdk(packageJson).detectedMajor === 57 ? 57 : LEGACY_EXPO_SDK_MAJOR;
+}
+
+async function ensureTypeScriptConfig(
+  projectPath: string,
+  options: { includeUniwindTypes?: boolean } = {}
+): Promise<void> {
+  const tsconfigPath = path.join(projectPath, 'tsconfig.json');
+  const existing = await readJsonRecord(tsconfigPath);
+  const compilerOptions = isRecord(existing.compilerOptions)
+    ? { ...existing.compilerOptions }
+    : {};
+  const existingTypes = Array.isArray(compilerOptions.types)
+    ? compilerOptions.types.filter((value): value is string => typeof value === 'string')
+    : [];
+  const existingPaths = isRecord(compilerOptions.paths) ? { ...compilerOptions.paths } : {};
+
+  compilerOptions.paths = {
+    ...existingPaths,
+    '@/*': ['./src/*'],
+  };
+  compilerOptions.types = Array.from(
+    new Set([
+      ...existingTypes,
+      'node',
+      ...(options.includeUniwindTypes ? ['uniwind/types'] : []),
+    ])
+  );
+  if (compilerOptions.baseUrl === '.') {
+    delete compilerOptions.baseUrl;
+  }
+
+  const next = {
+    ...existing,
+    extends:
+      typeof existing.extends === 'string' && existing.extends.length > 0
+        ? existing.extends
+        : 'expo/tsconfig.base',
+    compilerOptions,
+  };
+
+  await writeFile(tsconfigPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
 }
 
 async function resolveGuidelines(
@@ -2543,7 +2750,7 @@ async function ensureUniwindMetroConfig(projectPath: string): Promise<void> {
     [
       'module.exports = withUniwindConfig(config, {',
       "  cssEntryFile: './global.css',",
-      "  dtsFile: './src/uniwind-types.d.ts',",
+      "  dtsFile: './uniwind-types.d.ts',",
       '});',
       '',
     ].join('\n')
@@ -2670,6 +2877,48 @@ function renderRouteExport(routeDir: string, targetModulePath: string): string {
   return `export { default } from '${toRelativeImportPath(routeDir, targetModulePath)}';\n`;
 }
 
+function renderGeneratedSettingsRoute(
+  routeDir: string,
+  settingsScreenPath: string,
+  options: {
+    authEnabled: boolean;
+    legalLinksEnabled: boolean;
+    profileHref?: string;
+  }
+): string {
+  const settingsImport = toRelativeImportPath(routeDir, settingsScreenPath);
+  const lines = [`import SettingsScreen from '${settingsImport}';`];
+  if (!options.authEnabled) {
+    lines[0] = `import SettingsScreen, { createPlaceholderAuthAdapter } from '${settingsImport}';`;
+  }
+
+  if (options.authEnabled) {
+    const authAdapterPath = toRelativeImportPath(
+      routeDir,
+      path.join(path.dirname(settingsScreenPath), '..', 'auth', 'auth-adapter')
+    );
+    lines.push(`import { useAuthAdapter } from '${authAdapterPath}';`);
+  }
+
+  lines.push('', 'export default function SettingsRoute() {');
+  if (options.authEnabled) {
+    lines.push('  const auth = useAuthAdapter();');
+  }
+  lines.push('  return (', '    <SettingsScreen');
+  lines.push(
+    `      auth=${options.authEnabled ? '{auth}' : '{createPlaceholderAuthAdapter()}'}`
+  );
+  if (options.legalLinksEnabled) {
+    lines.push("      legalUrls={{ terms: '/terms', privacy: '/privacy' }}");
+  }
+  if (options.profileHref) {
+    lines.push(`      profileHref="${options.profileHref}"`);
+  }
+  lines.push('    />', '  );', '}', '');
+
+  return lines.join('\n');
+}
+
 async function scaffoldNavigationRoutes(
   projectPath: string,
   appDir: string,
@@ -2724,6 +2973,9 @@ async function scaffoldNavigationRoutes(
   );
   const includeNativeWindUiExposition =
     resolveGeneratorStylingSystem(answers) === 'nativewindui';
+  const authEnabled = navigationShell.library === 'expo-router' && shouldGenerateAuth(answers);
+  const legalLinksEnabled =
+    answers.legalDocumentMode !== 'none' || shouldGenerateLegalUpdateGate(answers);
   const shouldWriteExpositionRouteWrappers =
     navigationShell.library !== 'expo-router' || navigationShell.layout === 'stack';
   const appDirectory = path.relative(projectPath, appDir).split(path.sep).join('/');
@@ -2844,12 +3096,12 @@ async function scaffoldNavigationRoutes(
       : []),
     await writeIfAllowed(
       path.join(appDir, 'settings.tsx'),
-      routeAssetOrFallback(
-        'mds/settings',
-        libraryAssets.settings,
-        `${appDirectory}/settings.tsx`,
-        () => renderRouteExport(appDir, settingsScreen)
-      ),
+      renderGeneratedSettingsRoute(appDir, settingsScreen, {
+        authEnabled,
+        legalLinksEnabled,
+        profileHref:
+          answers.onboardingCompletionMode === 'account-setup' ? '/account-setup' : undefined,
+      }),
       routeForce
     ),
     await writeIfAllowed(
@@ -3576,12 +3828,59 @@ async function readOptionalText(filePath: string): Promise<string | null> {
   }
 }
 
+async function readJsonRecord(filePath: string): Promise<Record<string, unknown>> {
+  const raw = await readOptionalText(filePath);
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isRecord(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function renderGlobalCss(): string {
   return [
     "@import 'tailwindcss';",
     "@import 'uniwind';",
     '',
     renderGlobalCssThemeBlock(DEFAULT_STYLIST_THEME),
+    '',
+  ].join('\n');
+}
+
+function renderCssEnvDts(): string {
+  return ['/// <reference types="uniwind/types" />', '', "declare module '*.css';", ''].join('\n');
+}
+
+function renderExpoEnvDts(): string {
+  return [
+    '/// <reference types="expo/types" />',
+    '',
+    '// NOTE: This file should not be edited and should be in your git ignore',
+    '',
+  ].join('\n');
+}
+
+function renderUniwindTypesDts(): string {
+  return [
+    '// NOTE: This file is generated by uniwind and it should not be edited manually.',
+    '/// <reference types="uniwind/types" />',
+    '',
+    "declare module 'uniwind' {",
+    '    export interface UniwindConfig {',
+    "        themes: readonly ['light', 'dark']",
+    '    }',
+    '}',
+    '',
+    'export {}',
     '',
   ].join('\n');
 }
@@ -3595,7 +3894,7 @@ function renderUniwindMetroConfig(): string {
     '',
     'module.exports = withUniwindConfig(config, {',
     "  cssEntryFile: './global.css',",
-    "  dtsFile: './src/uniwind-types.d.ts',",
+    "  dtsFile: './uniwind-types.d.ts',",
     '});',
     '',
   ].join('\n');

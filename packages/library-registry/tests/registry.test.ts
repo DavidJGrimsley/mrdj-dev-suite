@@ -353,7 +353,12 @@ describe("library resolution", () => {
       expect.arrayContaining([
         expect.objectContaining({
           destination: "src/features/legal/legal-documents.ts",
-          contentTokens: ["__MDS_APP_NAME__"],
+          contentTokens: expect.arrayContaining([
+            "__MDS_APP_NAME__",
+            "__MDS_LEGAL_BUSINESS_NAME__",
+            "__MDS_LEGAL_CONTACT_EMAIL__",
+            "__MDS_LEGAL_ADDRESS_OR_REGION_NOTE__",
+          ]),
         }),
         expect.objectContaining({
           destination: "src/features/legal/legal-document-modal.tsx",
@@ -481,6 +486,9 @@ describe("library resolution", () => {
           destination: "src/features/auth/auth-adapter.tsx",
         }),
         expect.objectContaining({
+          destination: "src/features/auth/auth-guard.tsx",
+        }),
+        expect.objectContaining({
           destination: "src/features/auth/auth-provider.tsx",
         }),
         expect.objectContaining({
@@ -567,12 +575,19 @@ describe("library resolution", () => {
     const authScreenAsset = base.assets.find(
       (asset) => asset.destination === "src/features/auth/auth-screen.tsx",
     );
+    const authGuardAsset = base.assets.find(
+      (asset) => asset.destination === "src/features/auth/auth-guard.tsx",
+    );
     expect(authScreenAsset).toBeDefined();
+    expect(authGuardAsset).toBeDefined();
     const authScreenSource = (await readLibraryAsset(authScreenAsset!)).toString("utf8");
+    const authGuardSource = (await readLibraryAsset(authGuardAsset!)).toString("utf8");
     expect(authScreenSource).toContain("backgroundColor: colors.background");
     expect(authScreenSource).toContain("color: colors.text");
     expect(authScreenSource).not.toContain("color: '#111827'");
     expect(authScreenSource).not.toContain("backgroundColor: '#ffffff'");
+    expect(authGuardSource).toContain("auth.refreshSession");
+    expect(authGuardSource).toContain("Checking session...");
   });
 
   it("resolves the database adapter contract with provider variants", async () => {
@@ -870,20 +885,24 @@ describe("library resolution", () => {
     const settingsScreen = settings.assets.find((value) =>
       value.destination.endsWith("settings/settings-screen.tsx"),
     );
+    const settingsLogic = settings.assets.find((value) =>
+      value.destination.endsWith("settings/settings-screen-logic.ts"),
+    );
     const stylistScreen = stylist.assets.find((value) =>
       value.destination.endsWith("exposition/stylist-screen.tsx"),
     );
 
     expect(settingsScreen).toBeDefined();
+    expect(settingsLogic).toBeDefined();
     expect(stylistScreen).toBeDefined();
-    expect((await readLibraryAsset(settingsScreen!)).toString("utf8")).toContain(
-      "components/swmansion/keyboard-form",
+    expect((await readLibraryAsset(settingsLogic!)).toString("utf8")).toContain(
+      "Manage profile",
     );
     expect((await readLibraryAsset(stylistScreen!)).toString("utf8")).toContain(
       "components/swmansion/animated-pressable",
     );
     expect((await readLibraryAsset(settingsScreen!)).toString("utf8")).not.toContain(
-      "components/exposition';",
+      "components/swmansion/keyboard-form",
     );
     expect((await readLibraryAsset(stylistScreen!)).toString("utf8")).not.toContain(
       "components/exposition';",

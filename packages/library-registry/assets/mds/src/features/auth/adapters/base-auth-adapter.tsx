@@ -56,15 +56,27 @@ export function useAuthAdapter(): AuthAdapter {
     return { ok: true } satisfies AuthActionResult;
   }, []);
 
+  const refreshSession = useCallback(async () => {
+    emit(activeSession);
+  }, []);
+
   return useMemo<AuthAdapter>(
     () => ({
       provider: 'base',
       state: { isLoading: false, session },
+      refreshSession,
       signInWithEmailPassword,
       signUpWithEmailPassword,
       requestPasswordReset,
       signOut,
     }),
-    [requestPasswordReset, session, signInWithEmailPassword, signOut, signUpWithEmailPassword],
+    [
+      refreshSession,
+      requestPasswordReset,
+      session,
+      signInWithEmailPassword,
+      signOut,
+      signUpWithEmailPassword,
+    ],
   );
 }

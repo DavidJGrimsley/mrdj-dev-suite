@@ -13,6 +13,16 @@ import type {
   LibraryResolutionIssue,
 } from '@mr.dj2u/library-registry';
 
+const CONTENT_TOKEN_VALUES = {
+  __MDS_APP_NAME__: (context: LibraryProjectContext) => context.projectName,
+  __MDS_LEGAL_BUSINESS_NAME__: (context: LibraryProjectContext) =>
+    context.legalBusinessName ?? 'TODO_REPLACE_WITH_LEGAL_BUSINESS_NAME',
+  __MDS_LEGAL_CONTACT_EMAIL__: (context: LibraryProjectContext) =>
+    context.legalContactEmail ?? 'TODO_REPLACE_WITH_PRIVACY_CONTACT_EMAIL',
+  __MDS_LEGAL_ADDRESS_OR_REGION_NOTE__: (context: LibraryProjectContext) =>
+    context.legalAddressOrRegionNote ?? 'TODO_REPLACE_WITH_BUSINESS_ADDRESS_OR_REGION_NOTE',
+} satisfies Record<string, (context: LibraryProjectContext) => string | undefined>;
+
 function normalizeProjectPath(filePath: string): string {
   return filePath.split(path.sep).join('/').replace(/^\.\//, '');
 }
@@ -38,13 +48,16 @@ export async function loadLibraryTextAssets(
     }
     const contents = await readLibraryAsset(asset);
     let rendered = contents.toString('utf8');
-    if (asset.contentTokens?.includes('__MDS_APP_NAME__')) {
-      if (!context.projectName) {
-        throw new Error(
-          `MDS Library asset ${asset.destination} requires a project name for __MDS_APP_NAME__.`
-        );
+    for (const token of asset.contentTokens ?? []) {
+      const readValue = CONTENT_TOKEN_VALUES[token];
+      if (!readValue) {
+        throw new Error(`MDS Library asset ${asset.destination} uses unsupported token ${token}.`);
       }
-      rendered = rendered.split('__MDS_APP_NAME__').join(context.projectName);
+      const value = readValue(context)?.trim();
+      if (!value) {
+        throw new Error(`MDS Library asset ${asset.destination} requires a value for ${token}.`);
+      }
+      rendered = rendered.split(token).join(value);
     }
     assets.set(normalizeProjectPath(asset.destination), rendered);
   }

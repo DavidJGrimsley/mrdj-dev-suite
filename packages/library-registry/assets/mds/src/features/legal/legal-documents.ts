@@ -79,7 +79,8 @@ export const legalDocuments: Record<LegalDocumentId, LegalDocument> = {
         title: 'Changes and Contact',
         body: [
           'These terms may be updated as product functionality, business requirements, or legal obligations change.',
-          'Add your support email, business address, and jurisdiction-specific notice requirements here.',
+          '__MDS_LEGAL_BUSINESS_NAME__ is the business responsible for these terms. Direct legal questions to __MDS_LEGAL_CONTACT_EMAIL__ and replace this line with your reviewed notice workflow.',
+          'Replace this placeholder with your business address, jurisdiction, and local notice requirements: __MDS_LEGAL_ADDRESS_OR_REGION_NOTE__.',
         ],
       },
     ],
@@ -132,8 +133,10 @@ export const legalDocuments: Record<LegalDocumentId, LegalDocument> = {
         id: 'rights-contact',
         title: 'Your Choices and Contact',
         body: [
-          'Users may have rights to access, correct, delete, export, or object to processing of their data depending on jurisdiction.',
-          'Add the real contact channel and request workflow for privacy questions before production use.',
+          'Users may have rights to access, correct, delete, export, restrict, or object to processing depending on jurisdiction, including GDPR and comparable privacy laws.',
+          'For GDPR-facing flows, document your lawful bases, cross-border transfer process, retention rules, and response timelines for data-subject requests.',
+          'Route privacy requests to __MDS_LEGAL_CONTACT_EMAIL__ on behalf of __MDS_LEGAL_BUSINESS_NAME__, and replace this placeholder workflow before production use.',
+          'Replace this location or jurisdiction note with the reviewed business address, EU representative, or regional contact process that applies: __MDS_LEGAL_ADDRESS_OR_REGION_NOTE__.',
         ],
       },
     ],

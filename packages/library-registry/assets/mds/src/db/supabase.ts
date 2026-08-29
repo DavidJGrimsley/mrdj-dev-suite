@@ -32,10 +32,12 @@ type SupabaseResult<T> = {
   count?: number | null;
 };
 
-type SupabaseBuilder<T = unknown> = PromiseLike<SupabaseResult<T>> & Record<string, unknown>;
+type SupabaseBuilder<T = unknown> = PromiseLike<SupabaseResult<T>> & {
+  [key: string]: unknown;
+};
 
 export type SupabaseDatabaseClient = {
-  from(table: string): Record<string, unknown>;
+  from(table: string): object;
   channel?(name: string): {
     on(
       type: string,
@@ -56,15 +58,21 @@ export interface SupabaseDatabaseAdapterOptions {
 }
 
 function selectColumns(select?: string | readonly string[]): string {
-  return Array.isArray(select) ? select.join(', ') : select ?? '*';
+  if (typeof select === 'string') {
+    return select;
+  }
+  if (select) {
+    return [...select].join(', ');
+  }
+  return '*';
 }
 
 function requireBuilderMethod<T extends (...args: never[]) => unknown>(
-  builder: Record<string, unknown>,
+  builder: object,
   method: string,
   table: string,
 ): T {
-  const fn = builder[method];
+  const fn = (builder as Record<string, unknown>)[method];
   if (typeof fn !== 'function') {
     throw new DatabaseUnsupportedError(`Supabase builder does not support ${method} for ${table}.`, {
       table,
@@ -73,15 +81,15 @@ function requireBuilderMethod<T extends (...args: never[]) => unknown>(
   return fn.bind(builder) as T;
 }
 
-function applyFilters<Row extends DatabaseTableRow>(
-  builder: SupabaseBuilder,
+function applyFilters<Row extends DatabaseTableRow, Result>(
+  builder: SupabaseBuilder<Result>,
   filters: readonly DatabaseFilter<Row>[] | undefined,
   table: string,
-): SupabaseBuilder {
+): SupabaseBuilder<Result> {
   let next = builder;
   for (const filter of filters ?? []) {
-    const operator = filter.operator ?? 'eq';
-    const method = requireBuilderMethod<(column: string, value: unknown) => SupabaseBuilder>(
+    const operator = String(filter.operator ?? 'eq');
+    const method = requireBuilderMethod<(column: string, value: unknown) => SupabaseBuilder<Result>>(
       next,
       operator,
       table,
@@ -91,22 +99,22 @@ function applyFilters<Row extends DatabaseTableRow>(
   return next;
 }
 
-function applyQueryOptions<Row extends DatabaseTableRow>(
-  builder: SupabaseBuilder,
+function applyQueryOptions<Row extends DatabaseTableRow, Result>(
+  builder: SupabaseBuilder<Result>,
   input: Pick<DatabaseQueryInput<DatabaseSchema, string>, 'limit' | 'orderBy'> & {
     filters?: readonly DatabaseFilter<Row>[];
   },
   table: string,
-): SupabaseBuilder {
+): SupabaseBuilder<Result> {
   let next = applyFilters(builder, input.filters, table);
   if (input.orderBy) {
     const order = requireBuilderMethod<
-      (column: string, options?: { ascending?: boolean }) => SupabaseBuilder
+      (column: string, options?: { ascending?: boolean }) => SupabaseBuilder<Result>
     >(next, 'order', table);
     next = order(input.orderBy.column, { ascending: input.orderBy.ascending ?? true });
   }
   if (input.limit !== undefined) {
-    const limit = requireBuilderMethod<(count: number) => SupabaseBuilder>(next, 'limit', table);
+    const limit = requireBuilderMethod<(count: number) => SupabaseBuilder<Result>>(next, 'limit', table);
     next = limit(input.limit);
   }
   return next;
@@ -201,9 +209,9 @@ export function createSupabaseDatabaseAdapter<Schema extends DatabaseSchema>(
             table,
           });
         }
-        return rowsFromResult(throwIfError(await single(), table));
+        return rowsFromResult<Schema[Table]>(throwIfError(await single(), table));
       }
-      return rowsFromResult(throwIfError(await builder, table));
+      return rowsFromResult<Schema[Table]>(throwIfError(await builder, table));
     },
 
     async mutate<Table extends DatabaseTableName<Schema>>(
@@ -257,7 +265,7 @@ export function createSupabaseDatabaseAdapter<Schema extends DatabaseSchema>(
       }
 
       const result = await builder;
-      const rows = rowsFromResult(throwIfError(result, table));
+      const rows = rowsFromResult<Schema[Table]>(throwIfError(result, table));
       return {
         rows,
         count: result.count ?? rows.length,

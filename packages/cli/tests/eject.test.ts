@@ -213,7 +213,7 @@ describe('runEjectExpositionCommand', () => {
     expect(home).not.toContain('/onboarding');
   });
 
-  it('keeps settings dependencies and removes root-level exposition files', async () => {
+  it('keeps settings files and removes root-level exposition-only files', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-eject-root-'));
     tempDirs.push(projectPath);
     await mkdir(path.join(projectPath, 'components', 'exposition'), { recursive: true });
@@ -231,7 +231,7 @@ describe('runEjectExpositionCommand', () => {
     await runEjectExpositionCommand({ path: projectPath, keep: 'settings' });
 
     await expect(access(path.join(projectPath, 'features', 'settings', 'settings-screen.tsx'))).resolves.toBeUndefined();
-    await expect(access(path.join(projectPath, 'components', 'swmansion', 'keyboard-form.tsx'))).resolves.toBeUndefined();
+    await expect(access(path.join(projectPath, 'components', 'swmansion', 'keyboard-form.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'components', 'swmansion', 'animated-pressable.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'features', 'exposition', 'stylist-screen.tsx'))).rejects.toThrow();
     await expect(access(path.join(projectPath, 'app', 'exposition', 'stylist.tsx'))).rejects.toThrow();

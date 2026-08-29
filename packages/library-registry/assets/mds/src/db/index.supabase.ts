@@ -3,6 +3,7 @@ import { createSupabaseDatabaseAdapter } from './supabase';
 
 import type { DatabaseAdapter } from './adapter';
 import type { AppDatabase } from '../types/database';
+import type { SupabaseDatabaseClientFactory } from './supabase';
 
 let adapter: DatabaseAdapter<AppDatabase> | null = null;
 
@@ -11,7 +12,9 @@ export function getAdapter(type: 'supabase' = 'supabase'): DatabaseAdapter<AppDa
     throw new Error(`Unsupported database adapter: ${type}`);
   }
 
-  adapter ??= createSupabaseDatabaseAdapter<AppDatabase>(() => getSupabaseClient());
+  adapter ??= createSupabaseDatabaseAdapter<AppDatabase>(
+    () => getSupabaseClient() as unknown as ReturnType<SupabaseDatabaseClientFactory>,
+  );
   return adapter;
 }
 

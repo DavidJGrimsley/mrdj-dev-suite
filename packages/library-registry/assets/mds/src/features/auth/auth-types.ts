@@ -33,6 +33,7 @@ export type AuthActionResult =
 export interface AuthAdapter {
   provider: AuthProviderId;
   state: AuthAdapterState;
+  refreshSession(): Promise<void>;
   signInWithEmailPassword(input: AuthActionInput): Promise<AuthActionResult>;
   signUpWithEmailPassword(input: AuthActionInput): Promise<AuthActionResult>;
   requestPasswordReset(email: string): Promise<AuthActionResult>;
