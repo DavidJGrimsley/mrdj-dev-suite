@@ -3,11 +3,14 @@ import path from 'node:path';
 import {
   checkAppArchitecture,
   checkAnimationPerformance,
+  checkApiSafety,
   checkEnvHygiene,
   checkExpoConfiguration,
   checkGitignoreEnv,
+  checkRuntimeSecurity,
   checkPackageScripts,
   checkProjectDocs,
+  checkRouterSafety,
   checkSeoMetadata,
   checkStylingDependencies,
   checkTodoForContextMarkers,
@@ -78,7 +81,10 @@ export async function runDoctor(
   checks.push(checkStylingDependencies(packageJson));
   checks.push(await checkExpoConfiguration(packageJson, resolvedProjectPath));
   checks.push(await checkEnvHygiene(resolvedProjectPath));
+  checks.push(await checkRuntimeSecurity(resolvedProjectPath));
   checks.push(await checkAppArchitecture(packageJson, resolvedProjectPath));
+  checks.push(await checkRouterSafety(resolvedProjectPath));
+  checks.push(await checkApiSafety(packageJson, resolvedProjectPath));
   checks.push(await checkAnimationPerformance(resolvedProjectPath));
   checks.push(await checkSeoMetadata(resolvedProjectPath));
 
