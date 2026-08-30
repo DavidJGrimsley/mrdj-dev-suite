@@ -274,13 +274,13 @@ export function listTools(): MCPTool[] {
     },
     {
       name: 'generate_project_roadmap',
-      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      description:
+        'Propose roadmap additions from normalized project/info.md without rewriting existing TODO items. Append only after explicit approval.',
       inputSchema: {
         type: 'object',
         properties: {
           projectPath: { type: 'string' },
-          write: { type: 'boolean' },
-          preserveStatus: { type: 'boolean' },
+          append: { type: 'boolean' },
         },
         required: ['projectPath'],
       },
@@ -503,8 +503,8 @@ export async function executeTool(name: string, input: Record<string, unknown>):
         throw new Error('generate_project_roadmap requires projectPath.');
       }
       return generateProjectRoadmap(projectPath, {
-        write: input.write === true,
-        preserveStatus: typeof input.preserveStatus === 'boolean' ? input.preserveStatus : true,
+        write: input.append === true,
+        append: input.append === true,
       });
     }
     case 'generate_setup_tasks': {
@@ -733,18 +733,18 @@ function registerTools(server: McpServer): void {
     'generate_project_roadmap',
     {
       title: 'Generate Project Roadmap',
-      description: 'Derive or refresh project/todo.md from normalized project/info.md.',
+      description:
+        'Propose roadmap additions from normalized project/info.md. Set append only after explicitly approving new task wording.',
       inputSchema: {
         projectPath: z.string(),
-        write: z.boolean().optional(),
-        preserveStatus: z.boolean().optional(),
+        append: z.boolean().optional(),
       },
     },
     async (input) =>
       toolJson(
         await generateProjectRoadmap(input.projectPath, {
-          write: input.write,
-          preserveStatus: input.preserveStatus,
+          write: input.append === true,
+          append: input.append === true,
         })
       )
   );
@@ -1402,9 +1402,9 @@ export function buildOnboardPromptText(projectPath?: string): string {
     '',
     'When confirmed, run silently via your shell tool. Do NOT print the command. Just say:',
     '  "Scaffolding project memory and rich boilerplate now. This takes a few seconds."',
-    'After onboarding completes, only describe `project/todo.md` as auto-derived if no unresolved `# TodoForContext(optional):` markers remain in `project/info.md` and the roadmap tool does not return `needsClarification: true`.',
-    'If markers remain, tell the developer the scaffolded phase template is intentional and that they should resolve the markers before refreshing the roadmap from `project/info.md`.',
-    'If roadmap returns `needsClarification: true`, ask the listed clarification questions one at a time, update `project/info.md`, and rerun roadmap before handing the project back.',
+    'After onboarding completes, describe the initial roadmap only for a new project. Existing project/todo.md content is a preserved ledger, not an auto-derived file.',
+    'If markers remain, tell the developer the scaffolded phase template is intentional and that they should resolve the markers before reviewing a roadmap proposal.',
+    'If roadmap returns `needsClarification: true`, ask the listed clarification questions one at a time, update `project/info.md`, then review the resulting proposal before any explicitly approved append.',
     '',
     '====== Flag map for `mds onboard` (use these EXACTLY) ======',
     '',
@@ -2261,7 +2261,7 @@ export async function finalizeGeneratedSuperStackProject(input: {
 
   return await generateProjectRoadmap(input.projectPath, {
     write: true,
-    preserveStatus: true,
+    initialize: true,
   });
 }
 

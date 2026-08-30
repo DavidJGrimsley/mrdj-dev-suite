@@ -227,6 +227,28 @@ Do not defer tracker reconciliation to a future turn once the merge is confirmed
 - The coordinator's own Blitz tracker may be updated as its live state changes.
 - Never touch `changeset-release/main` or manually version/publish packages. Leave package publishing to release automation.
 
+### Project TODO integrity
+
+`project/todo.md` is the human-owned master roadmap and delivery history. It
+is not a branch tracker, scratchpad, or generated summary.
+
+- Never delete, rewrite, deduplicate, reorder, summarize, or replace an
+  existing TODO item.
+- Mark only the exact completed checkbox after direct verification. When the
+  task's GitHub PR mapping and final-base reachability are proven, add a nested
+  `Completion: [PR #N](...)` link beneath that task.
+- If historical evidence is ambiguous, preserve the existing checked item
+  unchanged. A PR merged only into an intermediate branch is not proof that
+  its task reached the final base.
+- Append a checkbox only when the user supplied or explicitly approved its
+  wording. Do not add branch/worktree status, speculative tasks, or generated
+  filler to the master roadmap.
+- Keep coordinator branch, worktree, dependency, and execution state in
+  `BlitzCoordinationTodo.md`, not by mutating the master roadmap.
+- Reorganize existing TODO items only during an explicitly authorized
+  roadmap-reconciliation session, preserving every task's text, checkbox
+  state, historical meaning, and completion links.
+
 ## Model-tier routing
 
 Use the cheapest capable model and escalate only when the work genuinely needs more reasoning.

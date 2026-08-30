@@ -318,7 +318,6 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
 
   const roadmapStatus = await generateProjectRoadmap(projectPath, {
     write: false,
-    preserveStatus: true,
   });
   if (roadmapStatus.blockedByMarkers) {
     console.log();
@@ -327,13 +326,13 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
       'Unresolved `# TodoForContext(optional):` markers are still present in `project/info.md`, so MDS intentionally left the scaffolded phase template in place.'
     );
     console.log(
-      'Resolve those `project/info.md` markers first, then run `mds roadmap` or let your agent refresh `project/todo.md` from `project/info.md`.'
+      'Resolve those `project/info.md` markers first, then run `mds roadmap` to review a proposal. Use `mds roadmap --append` only after approving any new task wording.'
     );
   } else if (roadmapStatus.needsClarification) {
     console.log();
     console.log(chalk.yellow('Roadmap note'));
     console.log(
-      'The project docs are still too generic for a high-confidence derived roadmap, so let your agent ask clarifying questions and then rerun `mds roadmap`.'
+      'The project docs are still too generic for a high-confidence proposal, so let your agent ask clarifying questions before requesting any approved roadmap additions.'
     );
   }
 }
@@ -1437,7 +1436,7 @@ function printOnboardingNextSteps(installOutcome?: OnboardInstallOutcome): void 
     '5. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
   );
   console.log(
-    '6. After those markers are gone, run `mds roadmap` or let your agent refresh the derived roadmap from `project/info.md`.'
+    '6. After those markers are gone, run `mds roadmap` to review a proposal; use `--append` only for explicitly approved new tasks.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }

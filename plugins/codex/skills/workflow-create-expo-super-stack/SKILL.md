@@ -67,6 +67,8 @@ Do not describe the normal published install path as a fallback, and do not ment
 ## Verification And Output
 
 - Confirm generated app has `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
-- Confirm `project/todo.md` includes the auto-derived roadmap generated from normalized `project/info.md`.
+- Confirm a new project's `project/todo.md` includes its initial phase roadmap;
+  preserve existing TODO items and use `mds roadmap --append` only for
+  approved additions.
 - If those Super Stack artifacts are missing, treat generation as a failure or partial scaffold and say so clearly instead of presenting it as a normal success.
 - Output: generated app path, onboarding status, and the handoff to open a fresh agent session inside the new app folder and run `mds continue`.

@@ -200,7 +200,7 @@ describe('runOnboardCommand', () => {
       'Run `mds doctor --ci`'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.'
+      'After the `project/info.md` markers are resolved, review the `mds roadmap` proposal and approve any task wording before using `mds roadmap --append`.'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
@@ -2671,6 +2671,29 @@ describe('runOnboardCommand', () => {
         process.env.VITEST_WORKER_ID = previousVitestWorker;
       }
     }
+  });
+
+  it('does not replace an existing TODO ledger, even when onboarding is forced', async () => {
+    const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-preserve-todo-'));
+    tempDirs.push(projectPath);
+    await mkdir(path.join(projectPath, 'project'), { recursive: true });
+    const originalTodo = [
+      '# Human roadmap',
+      '',
+      '- [x] Historical delivery.',
+      '  - Completion: [PR #11](https://github.com/DavidJGrimsley/mrdj-dev-suite/pull/11)',
+      '- [ ] Human-approved next task.',
+      '',
+    ].join('\n');
+    await writeFile(path.join(projectPath, 'project', 'todo.md'), originalTodo, 'utf8');
+
+    await scaffoldProjectMemory(projectPath, sampleAnswers('Preserve Todo'), {
+      force: true,
+      richBoilerplate: false,
+      manageUniwind: false,
+    });
+
+    await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toBe(originalTodo);
   });
 });
 

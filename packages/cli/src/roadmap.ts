@@ -55,21 +55,11 @@ export interface RoadmapClarificationQuestion {
   reason: string;
 }
 
-export interface RoadmapStatePhase {
-  derivedTaskKeys: string[];
-}
-
-export interface RoadmapState {
-  version: 1;
-  phases: Record<DerivedRoadmapPhaseId, RoadmapStatePhase>;
-}
-
 export interface ProjectRoadmapResult {
   kind: 'project-roadmap';
   projectPath: string;
   infoPath: string;
   todoPath: string;
-  roadmapStatePath: string;
   blockedByMarkers: boolean;
   markerHits: RoadmapMarkerHit[];
   needsClarification: boolean;
@@ -79,13 +69,21 @@ export interface ProjectRoadmapResult {
   warnings: string[];
   write: boolean;
   wrote: boolean;
+  append: boolean;
+  proposalOnly: boolean;
+  proposedAdditions: string[];
   preservedStatuses: number;
   todoContent: string;
 }
 
 export interface GenerateProjectRoadmapOptions {
   write?: boolean;
-  preserveStatus?: boolean;
+  append?: boolean;
+  /**
+   * Only onboarding may use this for the brand-new TODO it just created.
+   * Existing project memory is always append-only.
+   */
+  initialize?: boolean;
 }
 
 interface MarkerScanOptions {
@@ -117,15 +115,10 @@ interface PhaseSpec {
   heading: string;
 }
 
-interface PhaseRange {
-  phase: PhaseSpec;
-  start: number;
-  end: number;
-}
-
 interface MergeRoadmapResult {
   todoContent: string;
   preservedStatuses: number;
+  proposedAdditions: string[];
 }
 
 interface ConfidenceCheck {
@@ -141,75 +134,6 @@ interface RoadmapProjectContext {
 }
 
 const TODO_FOR_CONTEXT_MARKER = '# TodoForContext(optional):';
-const LEGACY_MARKER_PREFIX = '<!-- MDS_DERIVED_PHASE_';
-const ROADMAP_STATE_FILE = 'roadmap-state.json';
-const LEGACY_SCAFFOLD_TASK_KEYS = new Set([
-  'confirm the phase 0 component strategy in project info md style library expo ui universal components nativetabs and any listed conflicts set decision to confirmed after you review the generated app',
-  'review the ejection inventory with mds eject and confirm retain eject decisions for generated starter and template components set decision to confirmed after you finish',
-  'browse exposition pages to understand included base packages',
-  'review styling in the stylist page',
-  'review project files for accuracy and planning adjustments',
-  'run or defer eject stylist mark this todo done after ejection or deciding to defer if you want to keep the stylist around for tinkering',
-  'run mds eject exposition and keep only the generated sections you want to retain',
-  'run mds eject and keep only the generated sections you want to retain',
-  'complete the ejection cleanup checklist in project ejection cleanup md after the app shell and core flows are stable',
-  'run mds report kind content and replace remaining placeholder or example copy before release',
-  'sign in and set up eas in the terminal',
-  'resolve every todoforcontext optional marker in project info md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed',
-  'confirm visual direction in project style md after using the stylist page',
-  'after the project info md markers are resolved refresh the agent derived roadmap from project info md and review it for accuracy',
-  'refresh the agent derived roadmap from project info md and review it for accuracy before implementation',
-  'keep or prune included package examples after reviewing exposition',
-  'remove exposition pages before production once their lessons are absorbed',
-  'establish the app shell and first implementation ready route in src app',
-  'establish the app shell and first implementation ready route for the mvp',
-  'implement the first concrete product flow from project info md and the roadmap',
-  'implement the initial data layer using local dummy data with expo sqlite',
-  'implement the initial data layer and service boundaries needed for the mvp',
-  'build the remaining core flows from project info md phase by phase',
-  'adapt the working mvp flow for the remaining target platforms after the primary flow is stable',
-  'configure eas for building mobile applications',
-  'configure eas for publishing mobile applications',
-  'complete the remaining product flows needed for the mvp',
-  'run mds doctor ci and address errors',
-  'run mds doctor ci and address errors before release',
-  'follow project release flow md for test to main development',
-  'complete the one time github repo setup from project release flow md so test and main are protected correctly',
-  'add github branch protection so pr checks pass before merging into test or main',
-  'prepare store distribution packaging review notes and release validation for the chosen delivery path',
-]);
-const GENERATED_SCAFFOLD_TASK_PATTERNS = [
-  /^confirm the phase 0 component strategy/,
-  /^review the ejection inventory with mds eject/,
-  /^browse exposition pages to understand included base packages$/,
-  /^review styling in the stylist page$/,
-  /^run or defer eject stylist mark this todo done after ejection or deciding to defer/,
-  /^run mds eject exposition and keep only the generated sections/,
-  /^run mds eject and keep only the generated sections/,
-  /^complete the ejection cleanup checklist/,
-  /^run mds report --kind content and replace remaining placeholder/,
-  /^sign in and set up eas in the terminal$/,
-  /^resolve every todoforcontext optional marker/,
-  /^confirm visual direction in project style md after using the stylist page$/,
-  /^after the project info md markers are resolved refresh/,
-  /^refresh the agent derived roadmap from project info md/,
-  /^keep or prune included package examples after reviewing exposition$/,
-  /^remove exposition pages before production/,
-  /^establish the app shell and first implementation ready route in src app$/,
-  /^establish the app shell and first implementation ready route for the mvp$/,
-  /^implement the first concrete product flow from project info md and the roadmap$/,
-  /^implement the initial data layer using local dummy data with expo sqlite$/,
-  /^implement the initial data layer and service boundaries needed for the mvp$/,
-  /^build the remaining core flows from project info md phase by phase$/,
-  /^adapt the working mvp flow for the remaining target platforms after the primary flow is stable$/,
-  /^configure eas for building mobile applications$/,
-  /^configure eas for publishing mobile applications$/,
-  /^run mds doctor ci and address errors$/,
-  /^follow project release flow md for test to main development$/,
-  /^complete the one time github repo setup from project release flow md/,
-  /^add github branch protection so pr checks pass before merging into test or main$/,
-  /^prepare store distribution packaging review notes and release validation/,
-];
 export const ROADMAP_BLOCKED_MARKER_WARNING =
   'Roadmap generation is blocked until every `# TodoForContext(optional):` marker in `project/` is resolved. Fill the section underneath or delete the marker line first.';
 export const ROADMAP_CLARIFICATION_WARNING =
@@ -394,14 +318,13 @@ export async function generateProjectRoadmap(
   const projectPath = path.resolve(projectPathInput);
   const infoPath = path.join(projectPath, 'project', 'info.md');
   const todoPath = path.join(projectPath, 'project', 'todo.md');
-  const roadmapStatePath = path.join(projectPath, 'project', ROADMAP_STATE_FILE);
   const write = options.write ?? false;
-  const preserveStatus = options.preserveStatus ?? true;
+  const append = options.append ?? false;
+  const todoExists = await pathExists(todoPath);
+  const initialize = options.initialize ?? !todoExists;
 
   const infoRaw = await readFile(infoPath, 'utf8');
-  const existingTodo = (await pathExists(todoPath))
-    ? await readFile(todoPath, 'utf8')
-    : renderTodoSkeleton(extractProjectName(infoRaw));
+  const existingTodo = todoExists ? await readFile(todoPath, 'utf8') : renderTodoSkeleton(extractProjectName(infoRaw));
   const roadmapContext = await inspectRoadmapProjectContext(projectPath);
   const markerHits = await scanProjectTodoForContextMarkers(projectPath, { scope: 'info' });
 
@@ -411,7 +334,6 @@ export async function generateProjectRoadmap(
       projectPath,
       infoPath,
       todoPath,
-      roadmapStatePath,
       blockedByMarkers: true,
       markerHits,
       needsClarification: false,
@@ -421,8 +343,11 @@ export async function generateProjectRoadmap(
       warnings: [ROADMAP_BLOCKED_MARKER_WARNING],
       write,
       wrote: false,
+      append,
+      proposalOnly: false,
+      proposedAdditions: [],
       preservedStatuses: 0,
-      todoContent: ensureTrailingNewline(existingTodo),
+      todoContent: existingTodo,
     };
   }
 
@@ -434,7 +359,6 @@ export async function generateProjectRoadmap(
       projectPath,
       infoPath,
       todoPath,
-      roadmapStatePath,
       blockedByMarkers: false,
       markerHits: [],
       needsClarification: true,
@@ -444,31 +368,29 @@ export async function generateProjectRoadmap(
       warnings: [ROADMAP_CLARIFICATION_WARNING],
       write,
       wrote: false,
+      append,
+      proposalOnly: false,
+      proposedAdditions: [],
       preservedStatuses: 0,
-      todoContent: ensureTrailingNewline(stripLegacyDerivedMarkers(existingTodo)),
+      todoContent: existingTodo,
     };
   }
 
   const warnings: string[] = [];
   const derivedPhases = deriveRoadmapPhases(sections, warnings, roadmapContext);
-  const previousState =
-    (await readRoadmapState(roadmapStatePath)) ?? inferLegacyRoadmapState(existingTodo);
-  const nextState = buildRoadmapState(derivedPhases);
-  const merged = mergeRoadmapIntoTodo(existingTodo, derivedPhases, previousState, preserveStatus);
+  const merged = mergeRoadmapIntoTodo(existingTodo, derivedPhases, initialize || append);
   const nextTodo = merged.todoContent;
   const todoChanged = normalizeLineEndings(nextTodo) !== normalizeLineEndings(existingTodo);
-  const previousStateJson = previousState ? JSON.stringify(previousState) : null;
-  const nextStateJson = JSON.stringify(nextState);
-  const stateChanged = previousStateJson !== nextStateJson;
-  const wrote = write && (todoChanged || stateChanged);
+  const proposalOnly = todoExists && !initialize && !append;
+  if (proposalOnly && merged.proposedAdditions.length > 0) {
+    warnings.push(
+      'Proposal only: existing project/todo.md was preserved. Review the proposed additions and rerun with --append only after approving their wording.'
+    );
+  }
+  const wrote = write && todoChanged;
 
-  if (write) {
-    if (todoChanged) {
-      await writeFile(todoPath, nextTodo, 'utf8');
-    }
-    if (stateChanged) {
-      await writeFile(roadmapStatePath, `${JSON.stringify(nextState, null, 2)}\n`, 'utf8');
-    }
+  if (write && todoChanged) {
+    await writeFile(todoPath, nextTodo, 'utf8');
   }
 
   return {
@@ -476,7 +398,6 @@ export async function generateProjectRoadmap(
     projectPath,
     infoPath,
     todoPath,
-    roadmapStatePath,
     blockedByMarkers: false,
     markerHits: [],
     needsClarification: false,
@@ -486,6 +407,9 @@ export async function generateProjectRoadmap(
     warnings,
     write,
     wrote,
+    append,
+    proposalOnly,
+    proposedAdditions: merged.proposedAdditions,
     preservedStatuses: merged.preservedStatuses,
     todoContent: nextTodo,
   };
@@ -982,216 +906,40 @@ function detectRoadmapClarificationNeeds(sections: InfoSectionMap): {
 function mergeRoadmapIntoTodo(
   todoRaw: string,
   derivedPhases: DerivedRoadmapPhase[],
-  previousState: RoadmapState | null,
-  preserveStatus: boolean
+  mayAppend: boolean
 ): MergeRoadmapResult {
-  const next = ensureTodoHasPhaseHeadings(todoRaw);
-  const lines = normalizeLineEndings(next).split('\n');
-  const phaseRanges = getPhaseRanges(lines);
-  if (phaseRanges.length === 0) {
-    return {
-      todoContent: ensureTrailingNewline(next),
-      preservedStatuses: 0,
-    };
-  }
-
-  const output: string[] = trimTrailingBlankLines(lines.slice(0, phaseRanges[0]?.start ?? 0));
-  let preservedStatuses = 0;
-
-  for (const range of phaseRanges) {
-    const phaseTasks = derivedPhases.find((phase) => phase.id === range.phase.id)?.tasks ?? [];
-    const sectionLines = lines.slice(range.start + 1, range.end);
-    const previousDerivedKeys = new Set(previousState?.phases[range.phase.id]?.derivedTaskKeys ?? []);
-    const statusMap = preserveStatus ? readCheckboxStatus(sectionLines) : new Map<string, boolean>();
-    preservedStatuses += phaseTasks.filter((task) => statusMap.get(normalizeTaskKey(task.text)) === true).length;
-
-    const nextSection = rebuildPhaseSection(sectionLines, phaseTasks, previousDerivedKeys, statusMap);
-    if (output.length > 0) {
-      output.push('');
-    }
-    output.push(range.phase.heading, '');
-    output.push(...nextSection);
-  }
-
-  return {
-    todoContent: ensureTrailingNewline(output.join('\n')),
-    preservedStatuses,
-  };
-}
-
-function rebuildPhaseSection(
-  existingSectionLines: string[],
-  derivedTasks: DerivedRoadmapTask[],
-  previousDerivedKeys: Set<string>,
-  statusMap: Map<string, boolean>
-): string[] {
-  const preservedLines = trimBlankEdges(
-    existingSectionLines.filter((line) => {
-      if (isLegacyMarkerLine(line)) {
-        return false;
-      }
-
-      const checkbox = parseCheckbox(line);
-      if (!checkbox) {
-        return true;
-      }
-
-      if (isGeneratedScaffoldTaskKey(normalizeTaskKey(checkbox.text))) {
-        return false;
-      }
-
-      return !previousDerivedKeys.has(normalizeTaskKey(checkbox.text));
-    })
+  const existingKeys = new Set(
+    normalizeLineEndings(todoRaw)
+      .split('\n')
+      .map((line) => parseCheckbox(line)?.text)
+      .filter((text): text is string => Boolean(text))
+      .map(normalizeTaskKey)
   );
+  const proposedAdditions = derivedPhases
+    .flatMap((phase) => phase.tasks)
+    .map((task) => task.text)
+    .filter((text) => !existingKeys.has(normalizeTaskKey(text)));
+  const preservedStatuses = derivedPhases
+    .flatMap((phase) => phase.tasks)
+    .filter((task) =>
+      normalizeLineEndings(todoRaw)
+        .split('\n')
+        .some((line) => {
+          const checkbox = parseCheckbox(line);
+          return checkbox?.checked === true && normalizeTaskKey(checkbox.text) === normalizeTaskKey(task.text);
+        })
+    ).length;
 
-  const nextDerivedLines = derivedTasks.map((task) => {
-    const checked = statusMap.get(normalizeTaskKey(task.text)) === true;
-    return `- [${checked ? 'x' : ' '}] ${task.text}`;
-  });
-
-  if (preservedLines.length === 0) {
-    return nextDerivedLines;
+  if (!mayAppend || proposedAdditions.length === 0) {
+    return { todoContent: todoRaw, preservedStatuses, proposedAdditions };
   }
 
-  if (nextDerivedLines.length === 0) {
-    return preservedLines;
-  }
-
-  return [...preservedLines, '', ...nextDerivedLines];
-}
-
-function isGeneratedScaffoldTaskKey(key: string): boolean {
-  return LEGACY_SCAFFOLD_TASK_KEYS.has(key) || GENERATED_SCAFFOLD_TASK_PATTERNS.some((pattern) => pattern.test(key));
-}
-
-function buildRoadmapState(phases: DerivedRoadmapPhase[]): RoadmapState {
+  const additions = proposedAdditions.map((text) => `- [ ] ${text}`);
   return {
-    version: 1,
-    phases: {
-      'phase-0': {
-        derivedTaskKeys: phases
-          .find((phase) => phase.id === 'phase-0')
-          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
-      },
-      'phase-1': {
-        derivedTaskKeys: phases
-          .find((phase) => phase.id === 'phase-1')
-          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
-      },
-      'phase-2': {
-        derivedTaskKeys: phases
-          .find((phase) => phase.id === 'phase-2')
-          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
-      },
-      'phase-3': {
-        derivedTaskKeys: phases
-          .find((phase) => phase.id === 'phase-3')
-          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
-      },
-      'phase-4': {
-        derivedTaskKeys: phases
-          .find((phase) => phase.id === 'phase-4')
-          ?.tasks.map((task) => normalizeTaskKey(task.text)) ?? [],
-      },
-    },
+    todoContent: `${todoRaw.trimEnd()}\n\n## Approved roadmap additions\n\n${additions.join('\n')}\n`,
+    preservedStatuses,
+    proposedAdditions,
   };
-}
-
-async function readRoadmapState(filePath: string): Promise<RoadmapState | null> {
-  if (!(await pathExists(filePath))) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(await readFile(filePath, 'utf8')) as RoadmapState;
-    if (parsed?.version !== 1 || typeof parsed.phases !== 'object' || parsed.phases === null) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function inferLegacyRoadmapState(todoRaw: string): RoadmapState | null {
-  if (!todoRaw.includes(LEGACY_MARKER_PREFIX)) {
-    return null;
-  }
-
-  const phases = Object.fromEntries(
-    PHASE_SPECS.map((phase) => [
-      phase.id,
-      {
-        derivedTaskKeys: readLegacyDerivedTaskKeys(todoRaw, phase.id),
-      },
-    ])
-  ) as Record<DerivedRoadmapPhaseId, RoadmapStatePhase>;
-
-  return {
-    version: 1,
-    phases,
-  };
-}
-
-function readLegacyDerivedTaskKeys(todoRaw: string, phaseId: DerivedRoadmapPhaseId): string[] {
-  const marker = `MDS_DERIVED_${phaseId.toUpperCase().replace(/-/g, '_')}`;
-  const pattern = new RegExp(`<!-- ${marker}_START -->([\\s\\S]*?)<!-- ${marker}_END -->`);
-  const match = pattern.exec(todoRaw);
-  if (!match?.[1]) {
-    return [];
-  }
-
-  return match[1]
-    .split(/\r?\n/u)
-    .map((line) => parseCheckbox(line)?.text)
-    .filter((value): value is string => Boolean(value))
-    .map(normalizeTaskKey)
-    .filter(Boolean);
-}
-
-function ensureTodoHasPhaseHeadings(todoRaw: string): string {
-  let next = ensureTrailingNewline(stripLegacyDerivedMarkers(todoRaw));
-  for (const phase of PHASE_SPECS) {
-    if (!next.includes(phase.heading)) {
-      next = `${next.trimEnd()}\n\n${phase.heading}\n`;
-    }
-  }
-  return ensureTrailingNewline(next);
-}
-
-function getPhaseRanges(lines: string[]): PhaseRange[] {
-  const ranges: PhaseRange[] = [];
-  const headingIndexes = PHASE_SPECS.map((phase) => ({
-    phase,
-    index: lines.findIndex((line) => line.trim() === phase.heading),
-  })).filter((item) => item.index >= 0);
-
-  for (let index = 0; index < headingIndexes.length; index += 1) {
-    const current = headingIndexes[index];
-    const next = headingIndexes[index + 1];
-    if (!current) {
-      continue;
-    }
-    ranges.push({
-      phase: current.phase,
-      start: current.index,
-      end: next?.index ?? lines.length,
-    });
-  }
-
-  return ranges;
-}
-
-function readCheckboxStatus(lines: string[]): Map<string, boolean> {
-  const status = new Map<string, boolean>();
-  for (const line of lines) {
-    const checkbox = parseCheckbox(line);
-    if (!checkbox) {
-      continue;
-    }
-    status.set(normalizeTaskKey(checkbox.text), checkbox.checked);
-  }
-  return status;
 }
 
 function parseCheckbox(line: string): { checked: boolean; text: string } | null {
@@ -1203,16 +951,6 @@ function parseCheckbox(line: string): { checked: boolean; text: string } | null 
     checked: match[1].toLowerCase() === 'x',
     text: match[2],
   };
-}
-
-function stripLegacyDerivedMarkers(todoRaw: string): string {
-  return normalizeLineEndings(todoRaw)
-    .replace(/<!-- MDS_DERIVED_PHASE_[^>]+_START -->\n?/g, '')
-    .replace(/<!-- MDS_DERIVED_PHASE_[^>]+_END -->\n?/g, '');
-}
-
-function isLegacyMarkerLine(line: string): boolean {
-  return line.trim().startsWith(LEGACY_MARKER_PREFIX);
 }
 
 function normalizeSectionHeading(value: string): InfoSectionKey | null {
@@ -1540,10 +1278,6 @@ async function inspectRoadmapProjectContext(projectPath: string): Promise<Roadma
   };
 }
 
-function ensureTrailingNewline(value: string): string {
-  return `${normalizeLineEndings(value).trimEnd()}\n`;
-}
-
 function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
@@ -1555,26 +1289,6 @@ function isUnresolvedTodoForContextMarkerLine(line: string): boolean {
     trimmed.startsWith(`- ${TODO_FOR_CONTEXT_MARKER}`) ||
     trimmed.startsWith(`* ${TODO_FOR_CONTEXT_MARKER}`)
   );
-}
-
-function trimBlankEdges(lines: string[]): string[] {
-  let start = 0;
-  let end = lines.length;
-  while (start < end && (lines[start]?.trim() ?? '') === '') {
-    start += 1;
-  }
-  while (end > start && (lines[end - 1]?.trim() ?? '') === '') {
-    end -= 1;
-  }
-  return lines.slice(start, end);
-}
-
-function trimTrailingBlankLines(lines: string[]): string[] {
-  const next = [...lines];
-  while (next.length > 0 && (next[next.length - 1]?.trim() ?? '') === '') {
-    next.pop();
-  }
-  return next;
 }
 
 async function pathExists(filePath: string): Promise<boolean> {

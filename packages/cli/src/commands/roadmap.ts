@@ -11,13 +11,14 @@ import {
 export interface RoadmapArgv {
   path?: string;
   json?: boolean;
+  append?: boolean;
 }
 
 export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
   const result = await generateProjectRoadmap(projectPath, {
-    write: !argv.json,
-    preserveStatus: true,
+    write: argv.append === true && !argv.json,
+    append: argv.append === true,
   });
 
   if (argv.json) {
@@ -57,7 +58,23 @@ export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
     return;
   }
 
-  console.log(result.wrote ? chalk.green(`UPDATED ${result.todoPath}`) : chalk.gray(`UNCHANGED ${result.todoPath}`));
+  if (result.proposalOnly) {
+    console.log(chalk.yellow(`PROPOSAL ${result.todoPath}`));
+    console.log(
+      chalk.yellow(
+        'The existing TODO was not changed. Review the additions, then rerun with --append only after approving their wording.'
+      )
+    );
+    if (result.proposedAdditions.length > 0) {
+      console.log();
+      console.log(chalk.bold('Proposed additions'));
+      for (const task of result.proposedAdditions) {
+        console.log(`- [ ] ${task}`);
+      }
+    }
+  } else {
+    console.log(result.wrote ? chalk.green(`APPENDED ${result.todoPath}`) : chalk.gray(`UNCHANGED ${result.todoPath}`));
+  }
   console.log(chalk.dim(`Preserved statuses: ${result.preservedStatuses}`));
   if (result.warnings.length > 0) {
     console.log();

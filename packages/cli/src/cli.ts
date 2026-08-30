@@ -435,7 +435,7 @@ async function main(): Promise<void> {
     )
     .command(
       'roadmap [path]',
-      'Derive or refresh project/todo.md from normalized project/info.md',
+      'Propose roadmap additions from normalized project/info.md without rewriting existing TODO items',
       (builder) =>
         builder
           .positional('path', {
@@ -444,7 +444,12 @@ async function main(): Promise<void> {
             default: '.',
           })
           .option('json', {
-            describe: 'Print the structured roadmap result as JSON instead of writing project/todo.md',
+            describe: 'Print the structured roadmap proposal as JSON',
+            type: 'boolean',
+            default: false,
+          })
+          .option('append', {
+            describe: 'Append only new, reviewed roadmap checkbox rows; never rebuild or reorder the existing TODO',
             type: 'boolean',
             default: false,
           }),

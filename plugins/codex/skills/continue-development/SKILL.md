@@ -23,7 +23,10 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 ## Preferred structure
 
 - Start each session by summarizing current phase state and next recommended task.
-- Keep task updates minimal and explicit in `project/todo.md`.
+- Preserve every existing TODO line. After direct verification, mark only the
+  exact completed checkbox and add a nested GitHub PR link when its
+  final-base reachability is proven; append new work only with human-approved
+  wording.
 - Keep roadmap changes aligned with product intent in `project/info.md`.
 
 ## Example fix
