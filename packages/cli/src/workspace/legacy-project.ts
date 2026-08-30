@@ -22,6 +22,21 @@ export interface LegacyProjectSource {
   primary: boolean;
 }
 
+export const CONTROL_REPOSITORY_MEMORY_FILENAMES = [
+  'info.md',
+  'todo.md',
+  'style.md',
+  'guidelines.md',
+] as const;
+
+const CONTROL_REPOSITORY_PROJECT_PATHS = new Set(
+  CONTROL_REPOSITORY_MEMORY_FILENAMES.map((file) => `project/${file}`)
+);
+
+function isCanonicalControlProjectPath(value: string): boolean {
+  return CONTROL_REPOSITORY_PROJECT_PATHS.has(value);
+}
+
 function git(repoPath: string, args: string[]): string {
   return execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 }
@@ -29,7 +44,7 @@ function git(repoPath: string, args: string[]): string {
 function trackedProjectFiles(repoPath: string): string[] {
   try {
     return git(repoPath, ['ls-files', '--', 'project'])
-      .split(/\r?\n/).map((value) => value.trim()).filter((value) => value.startsWith('project/'));
+      .split(/\r?\n/).map((value) => value.trim()).filter(isCanonicalControlProjectPath);
   } catch { return []; }
 }
 
@@ -100,7 +115,7 @@ export function planLegacyProjectConsolidation(
 export function applyLegacyProjectConsolidation(plan: LegacyProjectMigrationPlan, controlProjectPath: string): void {
   if (plan.conflicts.length > 0) throw new Error(`Legacy project consolidation has conflicts: ${plan.conflicts.join(', ')}`);
   for (const file of plan.files) {
-    if (file.content === undefined) continue;
+    if (file.content === undefined || !isCanonicalControlProjectPath(file.path)) continue;
     const targetPath = path.join(controlProjectPath, file.path.replace(/^project\//, ''));
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     fs.writeFileSync(targetPath, file.content, 'utf8');

@@ -131,8 +131,8 @@ fills the section or deletes the marker line.
   `project/guidelines.md` when project memory is selected.
 - Normalize existing `project/info.md` and `project/style.md` into canonical
   sections while preserving unknown content under Imported Notes.
-- Add `project/intake-agent.md` when context is thin or imported notes need a
-  follow-up agent conversation.
+- Add a temporary `temp/onboarding/project-memory-review.md` packet when
+  context is thin or imported notes need a follow-up agent conversation.
 - Keep `project/style.md` visual-only; put technical and agent rules in
   `project/guidelines.md`.
 - Treat monorepo-aware scaffolding as a future step after the single-app MVP is

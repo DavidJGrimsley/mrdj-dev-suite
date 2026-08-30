@@ -44,7 +44,6 @@ The suite is designed around short, repeatable workflows. You can use the CLI di
    - Claude Code: `mds agent install --client claude`
 
 2. Create a new app or onboard an existing app:
-
    - New app: scaffold with `npx create-expo-super-stack`.
    - Existing app: run `mds onboard` from the app root after the app exists, or pass
      `--project /path/to/expo-app` when running it from elsewhere.
@@ -84,7 +83,7 @@ The suite is designed around short, repeatable workflows. You can use the CLI di
 
 ### Use
 
-- Codex: ``@Mr. DJ's Dev Suite <command name>``
+- Codex: `@Mr. DJ's Dev Suite <command name>`
 - Claude Code: `/<command name>`
 - VS Code Copilot: simply mention the tool.
 
@@ -175,7 +174,7 @@ mds workspace init /path/to/app-main --apply --yes --stash
 create-expo-super-stack my-app --mds-workspace --expo-router
 ```
 
-For GitHub source repositories, the initializer infers and creates `<repo>-project` as the canonical control repository unless `--project-remote` is provided. It commits and pushes `project/`, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. If the source app has no legacy `project/` memory, init now generates retrospective project memory from README/package/routes/config/Git history and leaves `# TodoForContext(optional):` markers for UD confirmation. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
+For GitHub source repositories, the initializer infers and creates `<repo>-project` as the canonical control repository unless `--project-remote` is provided. It commits and pushes only canonical project memory plus `mds.workspace.json`, creates `temp/` and `generated/`, and writes local ignored workspace links into every worktree. If the source app has no legacy `project/` memory, init generates retrospective project memory from README/package/routes/config/Git history and a temporary `temp/onboarding/retrospective-review.md` packet for UD confirmation. See [the initialization guide](packages/cli/WORKSPACE-INITIALIZATION-GUIDE.md) for recovery and Infie usage.
 
 #### Onboard
 
@@ -223,7 +222,7 @@ Defaults for new MDS projects:
 - Supabase/Drizzle/API routes only when the app actually needs them.
 - Always create `project/info.md`, `project/todo.md`, `project/style.md`, and `project/guidelines.md`.
 - Normalize existing `project/info.md` and `project/style.md` into canonical sections while preserving imported notes.
-- Add `project/intake-agent.md` when a follow-up Codex/Claude conversation should clarify thin or messy context.
+- Add a temporary `temp/onboarding/project-memory-review.md` packet when a follow-up Codex/Claude conversation should clarify thin or messy context.
 - Keep `project/style.md` visual-only; put technical rules in `project/guidelines.md`.
 - Use `--guidelines-template` to copy the bundled MDS `guidelines.md` template, or `--guidelines-template-path <file>` for a custom template.
 - Use temporary `/exposition`, `/exposition/style-guide`, and `/exposition/data` pages to review package choices, style direction, and data flow before pruning them for production.

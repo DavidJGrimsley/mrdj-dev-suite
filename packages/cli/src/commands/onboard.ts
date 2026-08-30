@@ -34,6 +34,7 @@ import {
   applyRetrospectiveProjectOnboarding,
   planRetrospectiveProjectOnboarding,
 } from '../retrospective-onboarding.js';
+import { discoverWorkspace as discoverControlPlaneWorkspace } from '../workspace/discover.js';
 
 import type { PackageCommandRunner, PackageJsonSubset } from '../package-install.js';
 import type { NonExpoAppCategory, WorkspaceManifest } from '../workspace.js';
@@ -244,8 +245,16 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     for (const file of plan.files) {
       console.log(`${file.willWrite ? chalk.green('CREATED') : chalk.gray('KEPT')} ${path.join(plan.projectPath, file.path)}`);
     }
+    console.log(`${plan.reviewPacket.willWrite ? chalk.green('CREATED') : chalk.gray('KEPT')} ${plan.reviewPacket.path}`);
     console.log(chalk.yellow('Review generated project memory with the UD and resolve TodoForContext markers before implementation work.'));
     return;
+  }
+  const controlWorkspace = discoverControlPlaneWorkspace(projectPath);
+  if (controlWorkspace) {
+    throw new Error(
+      `This path belongs to the initialized ${controlWorkspace.manifest.name} workspace. ` +
+        'Use `mds onboard --retrospective --project-only --yes` from a source checkout to update the control-repository project memory.'
+    );
   }
   const existingManifest = await readWorkspaceManifest(projectPath);
   const discovery = existingManifest ? null : await discoverWorkspace(projectPath);

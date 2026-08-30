@@ -6,17 +6,20 @@ import {
   SOURCE_WORKSPACE_LINK_PATH,
   WORKSPACE_MANIFEST_FILENAME,
   WORKSPACE_MANIFEST_VERSION,
-  WORKSPACE_WORKTREE_REGISTRY_FILENAME,
 } from './schema.js';
 import { listGitWorktrees } from './git.js';
 import {
   applyRetrospectiveProjectOnboarding,
   planRetrospectiveProjectOnboarding,
 } from '../retrospective-onboarding.js';
-import { applyLegacyProjectConsolidation, planLegacyProjectConsolidation } from './legacy-project.js';
+import {
+  CONTROL_REPOSITORY_MEMORY_FILENAMES,
+  applyLegacyProjectConsolidation,
+  planLegacyProjectConsolidation,
+} from './legacy-project.js';
 
 import type { GitWorktreeInfo } from './git.js';
-import type { WorkspaceManifest, WorkspaceWorktreeRegistry, WorkspaceWorktreeRegistryEntry } from './schema.js';
+import type { WorkspaceManifest, WorkspaceWorktreeRole } from './schema.js';
 
 export interface WorkspaceInitOptions {
   workspaceName?: string;
@@ -34,7 +37,7 @@ export interface WorkspaceInitWorktree {
   targetPath: string;
   branch?: string;
   head?: string;
-  role: WorkspaceWorktreeRegistryEntry['role'];
+  role: WorkspaceWorktreeRole;
   primary: boolean;
   dirty: boolean;
   unmerged: boolean;
@@ -210,16 +213,6 @@ function runGhOrUndefined(args: string[]): string | undefined {
   }
 }
 
-function toRegistryEntry(worktree: WorkspaceInitWorktree): WorkspaceWorktreeRegistryEntry {
-  return {
-    repositoryId: 'source',
-    path: path.basename(worktree.targetPath),
-    ...(worktree.branch ? { branch: worktree.branch } : {}),
-    ...(worktree.head ? { head: worktree.head } : {}),
-    role: worktree.role,
-  };
-}
-
 function validateExistingWorkspaceRoot(workspaceRoot: string, worktrees: WorkspaceInitWorktree[], errors: string[], warnings: string[], auxiliaryDirectories: string[] = []): void {
   if (!fs.existsSync(workspaceRoot)) return;
 
@@ -332,10 +325,11 @@ export function planWorkspaceInitialization(sourcePath: string, options: Workspa
 
   const legacyProjectPath = path.join(primaryPath, 'project');
   const existingProjectMemory = fs.existsSync(legacyProjectPath)
-    ? fs.readdirSync(legacyProjectPath, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => path.join('project', entry.name)).sort()
+    ? CONTROL_REPOSITORY_MEMORY_FILENAMES.filter((file) => fs.existsSync(path.join(legacyProjectPath, file))).map((file) => path.join('project', file))
     : [];
   const retrospectivePlan = planRetrospectiveProjectOnboarding(primaryPath, {
     projectPath: path.join(workspaceRoot, 'project'),
+    tempPath: path.join(workspaceRoot, 'temp'),
     legacyProjectMemoryFound: existingProjectMemory.length > 0,
   });
   const legacyProjectMigration = planLegacyProjectConsolidation(
@@ -544,15 +538,11 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
   if (consolidateLegacyProject) applyLegacyProjectConsolidation(plan.legacyProjectMigration, plan.projectPath);
   applyRetrospectiveProjectOnboarding(planRetrospectiveProjectOnboarding(legacySource.targetPath, {
     projectPath: plan.projectPath,
+    tempPath: plan.tempPath,
     legacyProjectMemoryFound: plan.existingProjectMemory.length > 0,
   }));
   ensureControlPlaneGuidelines(plan.projectPath);
-  const registry: WorkspaceWorktreeRegistry = {
-    schemaVersion: WORKSPACE_MANIFEST_VERSION, workspaceId: plan.manifest.workspaceId,
-    worktrees: worktrees.map(toRegistryEntry),
-  };
   fs.writeFileSync(path.join(plan.projectPath, WORKSPACE_MANIFEST_FILENAME), `${JSON.stringify(plan.manifest, null, 2)}\n`, 'utf8');
-  fs.writeFileSync(path.join(plan.projectPath, WORKSPACE_WORKTREE_REGISTRY_FILENAME), `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
   const name = runGit(legacySource.targetPath, ['config', 'user.name']) ?? 'MDS Workspace';
   const email = runGit(legacySource.targetPath, ['config', 'user.email']) ?? 'workspace@mds.local';
   runGitOrThrow(plan.projectPath, ['config', 'user.name', name]);
@@ -580,7 +570,11 @@ function createLegacyProjectCleanupPullRequest(plan: WorkspaceInitializationPlan
   if (fs.existsSync(checkout)) throw new Error(`Legacy project cleanup checkout already exists: ${checkout}`);
   runGitOrThrow(primary.targetPath, ['worktree', 'add', '-b', branch, checkout, plan.defaultBranch]);
   try {
-    runGitOrThrow(checkout, ['rm', '-r', '--', 'project']);
+    const canonicalPaths = CONTROL_REPOSITORY_MEMORY_FILENAMES
+      .map((file) => path.posix.join('project', file))
+      .filter((file) => Boolean(runGit(checkout, ['ls-files', '--error-unmatch', '--', file])));
+    if (canonicalPaths.length === 0) return;
+    runGitOrThrow(checkout, ['rm', '--', ...canonicalPaths]);
     runGitOrThrow(checkout, ['commit', '-m', 'chore: consolidate project control plane']);
     runGitOrThrow(checkout, ['push', '-u', 'origin', branch]);
     runGh(['pr', 'create', '--repo', repository, '--base', plan.defaultBranch, '--head', branch, '--title', 'chore: consolidate project control plane', '--body', 'Moves canonical project memory to the workspace control repository.']);
