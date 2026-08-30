@@ -557,6 +557,10 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
 function createLegacyProjectCleanupPullRequest(plan: WorkspaceInitializationPlan, worktrees: WorkspaceInitWorktree[]): void {
   const primary = worktrees.find((worktree) => worktree.primary) ?? worktrees.find((worktree) => worktree.role === 'main');
   if (!primary || primary.branch !== plan.defaultBranch) throw new Error('Legacy project cleanup requires the primary checkout on the default branch.');
+  const canonicalPaths = CONTROL_REPOSITORY_MEMORY_FILENAMES
+    .map((file) => path.posix.join('project', file))
+    .filter((file) => Boolean(runGit(primary.targetPath, ['ls-files', '--error-unmatch', '--', file])));
+  if (canonicalPaths.length === 0) return;
   const remote = plan.manifest.repositories[0]?.remote;
   const repository = parseGitHubRemote(remote)?.fullName;
   if (!repository) throw new Error('Legacy project cleanup PR requires a GitHub source remote.');
@@ -570,10 +574,6 @@ function createLegacyProjectCleanupPullRequest(plan: WorkspaceInitializationPlan
   if (fs.existsSync(checkout)) throw new Error(`Legacy project cleanup checkout already exists: ${checkout}`);
   runGitOrThrow(primary.targetPath, ['worktree', 'add', '-b', branch, checkout, plan.defaultBranch]);
   try {
-    const canonicalPaths = CONTROL_REPOSITORY_MEMORY_FILENAMES
-      .map((file) => path.posix.join('project', file))
-      .filter((file) => Boolean(runGit(checkout, ['ls-files', '--error-unmatch', '--', file])));
-    if (canonicalPaths.length === 0) return;
     runGitOrThrow(checkout, ['rm', '--', ...canonicalPaths]);
     runGitOrThrow(checkout, ['commit', '-m', 'chore: consolidate project control plane']);
     runGitOrThrow(checkout, ['push', '-u', 'origin', branch]);
