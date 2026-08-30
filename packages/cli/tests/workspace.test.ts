@@ -151,6 +151,7 @@ describe("workspace generation", () => {
     );
     tempDirs.push(workspacePath);
     const manifest = createTestManifest();
+    manifest.apps[0]!.packageName = undefined;
 
     await scaffoldWorkspaceRoot(workspacePath, manifest);
 
@@ -169,6 +170,9 @@ describe("workspace generation", () => {
     expect(rootPackage.scripts.dev).toBe("turbo run dev --ui=tui");
     expect(rootPackage.scripts["dev:creator-studio"]).toContain(
       "@creatisphere/creator-studio",
+    );
+    expect(rootPackage.scripts["dev:creator-studio"]).not.toContain(
+      "undefined",
     );
     expect(rootPackage.scripts["dev:creator-studio"]).toContain("turbo run dev");
     expect(rootPackage.scripts["dev:creator-studio"]).toContain("--ui=tui");
@@ -254,6 +258,7 @@ describe("workspace generation", () => {
     );
     tempDirs.push(workspacePath);
     const manifest = createTestManifest();
+    manifest.apps[0]!.packageName = undefined;
     const app = manifest.apps.find((entry) => entry.kind === "expo")!;
     const appPath = path.join(workspacePath, app.path);
     await mkdir(path.join(appPath, ".git"), { recursive: true });
@@ -316,11 +321,13 @@ describe("existing workspace discovery", () => {
       path.join(os.tmpdir(), "mds-discover-workspace-"),
     );
     tempDirs.push(workspacePath);
-    await mkdir(path.join(workspacePath, "apps", "mobile"), {
+    await mkdir(path.join(workspacePath, "apps", "Mobile App"), {
       recursive: true,
     });
-    await mkdir(path.join(workspacePath, "apps", "api"), { recursive: true });
-    await mkdir(path.join(workspacePath, "packages", "ui"), {
+    await mkdir(path.join(workspacePath, "apps", "API Service"), {
+      recursive: true,
+    });
+    await mkdir(path.join(workspacePath, "packages", "UI Theme"), {
       recursive: true,
     });
     await writeFile(
@@ -329,24 +336,24 @@ describe("existing workspace discovery", () => {
       "utf8",
     );
     await writeFile(
-      path.join(workspacePath, "apps", "mobile", "package.json"),
+      path.join(workspacePath, "apps", "Mobile App", "package.json"),
       JSON.stringify({
-        name: "@creative/mobile",
+        name: "@creative/mobile-app",
         dependencies: { expo: "^56.0.0" },
       }),
       "utf8",
     );
     await writeFile(
-      path.join(workspacePath, "apps", "api", "package.json"),
+      path.join(workspacePath, "apps", "API Service", "package.json"),
       JSON.stringify({
-        name: "@creative/api",
+        name: "@creative/api-service",
         dependencies: { fastify: "^5.0.0" },
       }),
       "utf8",
     );
     await writeFile(
-      path.join(workspacePath, "packages", "ui", "package.json"),
-      JSON.stringify({ name: "@creative/ui" }),
+      path.join(workspacePath, "packages", "UI Theme", "package.json"),
+      JSON.stringify({ name: "@creative/ui-theme" }),
       "utf8",
     );
 
@@ -356,20 +363,27 @@ describe("existing workspace discovery", () => {
     expect(discovery?.manifest.apps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          id: "mobile",
+          id: "mobile-app",
           kind: "expo",
-          path: "apps/mobile",
+          path: "apps/mobile-app",
+          packageName: "@creative/mobile-app",
         }),
         expect.objectContaining({
-          id: "api",
+          id: "api-service",
           kind: "non-expo",
-          path: "apps/api",
+          path: "apps/api-service",
+          packageName: "@creative/api-service",
         }),
       ]),
     );
     expect(discovery?.manifest.sharedPackages).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "ui", role: "ui-theme" }),
+        expect.objectContaining({
+          name: "ui-theme",
+          packageName: "@creative/ui-theme",
+          role: "ui-theme",
+          path: "packages/ui-theme",
+        }),
       ]),
     );
   });

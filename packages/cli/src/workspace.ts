@@ -435,8 +435,11 @@ export async function discoverWorkspace(
         : {}),
     };
     const isExpo = typeof dependencies.expo === "string";
-    if (typeof packageJson?.name === "string")
-      discoveredPackageNames.set(entry, packageJson.name);
+    if (typeof packageJson?.name === "string" && packageJson.name.trim())
+      discoveredPackageNames.set(
+        slugifyWorkspaceName(entry),
+        packageJson.name.trim(),
+      );
     const purpose =
       (typeof packageJson?.description === "string" &&
         packageJson.description.trim()) ||
@@ -465,16 +468,17 @@ export async function discoverWorkspace(
     const packageJson = await readJson(
       path.join(workspacePath, "packages", entry, "package.json"),
     );
+    const name = slugifyWorkspaceName(entry);
     const packageName =
-      typeof packageJson?.name === "string"
-        ? packageJson.name
-        : `${scope}/${entry}`;
-    if (manifest.sharedPackages.some((item) => item.name === entry)) continue;
+      typeof packageJson?.name === "string" && packageJson.name.trim()
+        ? packageJson.name.trim()
+        : `${scope}/${name}`;
+    if (manifest.sharedPackages.some((item) => item.name === name)) continue;
     manifest.sharedPackages.push({
-      name: slugifyWorkspaceName(entry),
+      name,
       packageName,
-      path: `packages/${entry}`,
-      role: inferSharedPackageRole(entry),
+      path: `packages/${name}`,
+      role: inferSharedPackageRole(name),
     });
   }
   validateWorkspaceManifest(manifest);
@@ -703,7 +707,7 @@ export async function wireGeneratedExpoApp(
       )
     : [];
   const scripts = isRecord(packageJson.scripts) ? packageJson.scripts : {};
-  packageJson.name = app.packageName;
+  packageJson.name = resolveWorkspaceAppPackageName(manifest, app);
   packageJson.private = true;
   packageJson.scripts = {
     ...scripts,
@@ -820,11 +824,20 @@ function normalizePackageScope(value: string): string {
 }
 
 function inferSharedPackageRole(name: string): SharedWorkspacePackageRole {
-  if (name === "ui" || name === "theme") return "ui-theme";
-  if (name === "hooks" || name === "state") return "hooks-state";
-  if (name === "sdk" || name === "api") return "sdk-client";
-  if (name === "db" || name === "database") return "database-schema";
+  const normalized = slugifyWorkspaceName(name);
+  if (normalized === "ui" || normalized === "theme" || normalized === "ui-theme")
+    return "ui-theme";
+  if (normalized === "hooks" || normalized === "state") return "hooks-state";
+  if (normalized === "sdk" || normalized === "api") return "sdk-client";
+  if (normalized === "db" || normalized === "database") return "database-schema";
   return "config";
+}
+
+function resolveWorkspaceAppPackageName(
+  manifest: WorkspaceManifest,
+  app: WorkspaceApp,
+): string {
+  return app.packageName?.trim() || `${manifest.packageScope}/${app.id}`;
 }
 
 async function scaffoldSharedConfigPackage(
@@ -1083,8 +1096,9 @@ function renderRootPackageJson(manifest: WorkspaceManifest): string {
     doctor: "mds doctor .",
   };
   for (const app of manifest.apps.filter((entry) => entry.kind === "expo")) {
+    const packageName = resolveWorkspaceAppPackageName(manifest, app);
     scripts[`dev:${app.id}`] =
-      `turbo run dev --filter=${app.packageName} --ui=tui`;
+      `turbo run dev --filter=${packageName} --ui=tui`;
   }
   return `${JSON.stringify(
     {
