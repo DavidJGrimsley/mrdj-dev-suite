@@ -192,7 +192,13 @@ export function listGitWorktrees(repoPath: string): GitWorktreeInfo[] {
   const output = git(resolved, ['worktree', 'list', '--porcelain']);
   if (!output) return [];
 
-  return parseGitWorktreeList(output);
+  // Git's porcelain output consistently uses forward slashes on Windows, while
+  // the rest of the workspace API returns native resolved paths. Normalize at
+  // the boundary so callers can safely compare it with configured paths.
+  return parseGitWorktreeList(output).map((worktree) => ({
+    ...worktree,
+    path: path.resolve(worktree.path),
+  }));
 }
 
 export function parseGitWorktreeList(output: string): GitWorktreeInfo[] {

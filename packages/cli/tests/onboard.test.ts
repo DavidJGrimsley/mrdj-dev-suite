@@ -114,10 +114,46 @@ describe('runOnboardCommand', () => {
     await expect(readFile(path.join(projectPath, 'info.md'), 'utf8')).resolves.toContain(
       '# TodoForContext(optional): Confirm who this app is for'
     );
-    await expect(readFile(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).resolves.toContain(
+    await expect(readFile(path.join(workspaceRoot, 'temp', 'onboarding', 'retrospective-review.md'), 'utf8')).resolves.toContain(
       'src/app/index.tsx'
     );
+    await expect(stat(path.join(projectPath, 'onboarding-evidence.md'))).rejects.toThrow();
+    await expect(stat(path.join(projectPath, 'intake-agent.md'))).rejects.toThrow();
     await expect(stat(path.join(appPath, 'src', 'features'))).rejects.toThrow();
+  });
+
+  it('keeps ordinary onboarding from writing checkout-local memory in an initialized workspace', async () => {
+    const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'mds-initialized-workspace-'));
+    tempDirs.push(workspaceRoot);
+    const appPath = path.join(workspaceRoot, 'sample-main');
+    await mkdir(path.join(appPath, '.mds'), { recursive: true });
+    await mkdir(path.join(workspaceRoot, 'project'), { recursive: true });
+    await writeFile(
+      path.join(workspaceRoot, 'project', 'mds.workspace.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        workspaceId: 'sample',
+        name: 'Sample',
+        repositories: [{
+          id: 'source',
+          remote: 'https://github.com/example/sample.git',
+          defaultBranch: 'main',
+          mainFolder: 'sample-main',
+          worktreePrefix: 'sample-',
+        }],
+      }, null, 2),
+      'utf8'
+    );
+    await writeFile(
+      path.join(appPath, '.mds', 'workspace.json'),
+      JSON.stringify({ schemaVersion: 1, workspaceId: 'sample' }, null, 2),
+      'utf8'
+    );
+
+    await expect(runOnboardCommand({ project: appPath, yes: true, noInstall: true })).rejects.toThrow(
+      /initialized Sample workspace/i
+    );
+    await expect(stat(path.join(appPath, 'project'))).rejects.toThrow();
   });
 
   it('creates project memory files in non-interactive mode', async () => {
@@ -230,8 +266,9 @@ describe('runOnboardCommand', () => {
       'project/` folder is the source of truth'
     );
     await expect(
-      readFile(path.join(projectPath, 'project', 'intake-agent.md'), 'utf8')
+      readFile(path.join(projectPath, 'temp', 'onboarding', 'project-memory-review.md'), 'utf8')
     ).resolves.toContain('Ask conversational follow-up questions');
+    await expect(stat(path.join(projectPath, 'project', 'intake-agent.md'))).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'home', 'home-screen.tsx'), 'utf8')
     ).resolves.toContain('Onboarding');
@@ -855,7 +892,7 @@ describe('runOnboardCommand', () => {
     expect(style).toContain('Use loud tournament energy.');
 
     await expect(
-      readFile(path.join(projectPath, 'project', 'intake-agent.md'), 'utf8')
+      readFile(path.join(projectPath, 'temp', 'onboarding', 'project-memory-review.md'), 'utf8')
     ).resolves.toContain('Imported Notes');
   });
 

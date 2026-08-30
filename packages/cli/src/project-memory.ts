@@ -750,11 +750,11 @@ export async function scaffoldProjectMemory(
     });
   }
 
-  if (shouldGenerateIntakeAgentHandoff(answers, existingInfo, existingStyle)) {
+  if (shouldGenerateProjectMemoryReviewPacket(answers, existingInfo, existingStyle)) {
     results.push(
       await writeIfAllowed(
-        path.join(projectDir, 'intake-agent.md'),
-        renderIntakeAgentHandoff(answers),
+        path.join(projectPath, 'temp', 'onboarding', 'project-memory-review.md'),
+        renderProjectMemoryReviewPacket(answers),
         force
       )
     );
@@ -2220,11 +2220,12 @@ function buildSpinUpProdSection(answers: OnboardAnswers): string[] {
   ];
 }
 
-export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
+export function renderProjectMemoryReviewPacket(answers: OnboardAnswers): string {
   return [
-    `# ${answers.appName} Intake Agent Handoff`,
+    `# ${answers.appName} Project Memory Review Packet`,
     '',
-    'Use this file when the terminal intake was intentionally concise, generic, or included pre-existing notes that need a real agent conversation.',
+    'This temporary packet is for a follow-up review when terminal intake was intentionally concise, generic, or included pre-existing notes that need a real agent conversation.',
+    'Do not treat this packet as canonical project memory or commit it instead of the confirmed project files.',
     '',
     '## Agent Prompt',
     '',
@@ -2250,6 +2251,9 @@ export function renderIntakeAgentHandoff(answers: OnboardAnswers): string {
     '',
   ].join('\n');
 }
+
+/** @deprecated Use renderProjectMemoryReviewPacket; review packets are temporary workspace artifacts. */
+export const renderIntakeAgentHandoff = renderProjectMemoryReviewPacket;
 
 async function ensurePackageJson(
   projectPath: string,
@@ -3745,7 +3749,7 @@ async function writeProjectMemoryFile(
   return { filePath, wrote: true };
 }
 
-function shouldGenerateIntakeAgentHandoff(
+function shouldGenerateProjectMemoryReviewPacket(
   answers: OnboardAnswers,
   existingInfo: string | null,
   existingStyle: string | null

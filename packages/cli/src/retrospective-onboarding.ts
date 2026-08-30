@@ -34,11 +34,17 @@ export interface RetrospectiveOnboardingPlan {
     exists: boolean;
     willWrite: boolean;
   }>;
+  reviewPacket: {
+    path: string;
+    exists: boolean;
+    willWrite: boolean;
+  };
   evidence: RetrospectiveOnboardingEvidence;
 }
 
 export interface RetrospectiveOnboardingOptions {
   projectPath?: string;
+  tempPath?: string;
   legacyProjectMemoryFound?: boolean;
 }
 
@@ -47,9 +53,9 @@ const REQUIRED_PROJECT_MEMORY_FILES = [
   'todo.md',
   'style.md',
   'guidelines.md',
-  'intake-agent.md',
-  'onboarding-evidence.md',
 ] as const;
+
+const RETROSPECTIVE_REVIEW_PACKET_RELATIVE_PATH = path.join('onboarding', 'retrospective-review.md');
 
 function runGit(repoPath: string, args: string[]): string[] {
   try {
@@ -299,7 +305,7 @@ function renderInfo(evidence: RetrospectiveOnboardingEvidence): string {
     '',
     '## Research, Notes, and References',
     '',
-    '- Review `project/onboarding-evidence.md` for the repository evidence used to draft this file.',
+    '- Review `temp/onboarding/retrospective-review.md` for the repository evidence used to draft this file.',
     '- # TodoForContext(optional): Add external docs, designs, analytics, product notes, or customer research that Git history cannot reveal.',
     '',
     '# Tech Stack & Retrospective Onboarding',
@@ -324,7 +330,7 @@ function renderTodo(evidence: RetrospectiveOnboardingEvidence): string {
     '',
     '## Phase 0: Confirm Retrospective Project Memory',
     '',
-    '- [ ] Review generated `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/onboarding-evidence.md` for accuracy.',
+    '- [ ] Review generated `project/info.md`, `project/style.md`, `project/guidelines.md`, and `temp/onboarding/retrospective-review.md` for accuracy.',
     '- [ ] Resolve every `# TodoForContext(optional):` marker by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
     '- [ ] Confirm the mission statement, target users, first core flow, product goals, monetization, release intent, and component strategy.',
     '- [ ] After markers are resolved, run `mds roadmap` or let the agent refresh `project/todo.md` from confirmed `project/info.md`.',
@@ -367,7 +373,7 @@ function renderStyle(evidence: RetrospectiveOnboardingEvidence): string {
     '',
     '## Evidence Pointers',
     '',
-    '- Review existing UI routes/components and `project/onboarding-evidence.md` before changing the visual system.',
+    '- Review existing UI routes/components and `temp/onboarding/retrospective-review.md` before changing the visual system.',
     '',
   ].join('\n');
 }
@@ -399,11 +405,40 @@ function renderGuidelines(evidence: RetrospectiveOnboardingEvidence): string {
   ].join('\n');
 }
 
-function renderEvidence(evidence: RetrospectiveOnboardingEvidence): string {
+function renderRetrospectiveReviewPacket(evidence: RetrospectiveOnboardingEvidence): string {
   return [
-    `# ${evidence.appName} Retrospective Onboarding Evidence`,
+    `# ${evidence.appName} Retrospective Review Packet`,
     '',
-    'This file records the repository evidence MDS used to draft project memory. It is evidence, not UD-confirmed product truth.',
+    'This temporary workspace packet combines repository evidence, inferred facts, unresolved human questions, and confirmation/handoff instructions used to draft project memory.',
+    'It is not confirmed product truth and must not be committed to the project control repository.',
+    '',
+    '## Confirmation and Handoff',
+    '',
+    '1. Read this packet plus `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md` in the workspace control repository.',
+    '2. Verify generated claims against the source checkout before treating them as product truth.',
+    '3. Ask the human owner focused questions for every unresolved `# TodoForContext(optional):` marker.',
+    '4. Put confirmed answers in the relevant canonical project-memory file and remove the marker line.',
+    '5. Do not infer mission, audience, goals, monetization, release intent, or component strategy from code alone.',
+    '',
+    '## Unresolved Human Questions',
+    '',
+    '- Mission statement / overview',
+    '- Target users',
+    '- First core user flow',
+    '- Product goals and non-goals',
+    '- Monetization or explicit non-monetization',
+    '- Release/deployment intent',
+    '- Component and styling strategy',
+    '',
+    '## Inferred Facts',
+    '',
+    `- Package manager: ${evidence.packageManager}`,
+    `- Package name: ${evidence.packageName ?? 'not detected'}`,
+    `- Route directory: ${evidence.routeDirectory === 'src' ? 'src/app' : evidence.routeDirectory === 'root' ? 'app' : 'not detected'}`,
+    `- Inferred auth provider: ${evidence.inferredAuthProvider}`,
+    `- Inferred data needs: ${evidence.inferredDataNeeds.length > 0 ? evidence.inferredDataNeeds.join(', ') : 'none detected'}`,
+    '',
+    '## Repository Evidence',
     '',
     '## README',
     '',
@@ -445,41 +480,12 @@ function renderEvidence(evidence: RetrospectiveOnboardingEvidence): string {
   ].join('\n');
 }
 
-function renderIntakeAgent(evidence: RetrospectiveOnboardingEvidence): string {
-  return [
-    `# ${evidence.appName} Retrospective Intake Agent`,
-    '',
-    'Use this handoff to finish project onboarding with the UD.',
-    '',
-    '## Agent Prompt',
-    '',
-    'Read `project/onboarding-evidence.md`, `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md`.',
-    'Verify generated project memory against the existing repository before asking questions.',
-    'Find every unresolved TodoForContext marker and ask the UD focused questions for the ambiguous sections.',
-    'Leave technical facts that are clearly supported by repository evidence; do not invent mission, audience, goals, monetization, or release intent.',
-    'After the UD confirms or removes every marker, run `mds roadmap` and then `mds continue` to choose the next implementation slice.',
-    '',
-    '## High-Priority UD Confirmations',
-    '',
-    '- Mission statement / overview',
-    '- Target users',
-    '- First core user flow',
-    '- Product goals and non-goals',
-    '- Monetization or explicit non-monetization',
-    '- Release/deployment intent',
-    '- Component and styling strategy',
-    '',
-  ].join('\n');
-}
-
 function renderFiles(evidence: RetrospectiveOnboardingEvidence): Record<string, string> {
   return {
     'info.md': renderInfo(evidence),
     'todo.md': renderTodo(evidence),
     'style.md': renderStyle(evidence),
     'guidelines.md': renderGuidelines(evidence),
-    'intake-agent.md': renderIntakeAgent(evidence),
-    'onboarding-evidence.md': renderEvidence(evidence),
   };
 }
 
@@ -493,6 +499,10 @@ export function planRetrospectiveProjectOnboarding(
     throw new Error('Retrospective project onboarding requires an initialized workspace or an explicit control-repo project path.');
   }
   const projectPath = path.resolve(options.projectPath ?? workspace?.projectPath ?? '');
+  const tempPath = path.resolve(
+    options.tempPath ?? (workspace ? path.join(workspace.workspaceRoot, workspace.manifest.temp?.path ?? 'temp') : path.join(path.dirname(projectPath), 'temp'))
+  );
+  const reviewPacketPath = path.join(tempPath, RETROSPECTIVE_REVIEW_PACKET_RELATIVE_PATH);
   const evidence = collectEvidence(resolvedAppPath);
   const files = REQUIRED_PROJECT_MEMORY_FILES.map((file) => {
     const filePath = path.join(projectPath, file);
@@ -515,6 +525,11 @@ export function planRetrospectiveProjectOnboarding(
     evidenceSources,
     legacyProjectMemoryFound: Boolean(options.legacyProjectMemoryFound),
     files,
+    reviewPacket: {
+      path: reviewPacketPath,
+      exists: fs.existsSync(reviewPacketPath),
+      willWrite: !fs.existsSync(reviewPacketPath),
+    },
     evidence,
   };
 }
@@ -525,6 +540,10 @@ export function applyRetrospectiveProjectOnboarding(plan: RetrospectiveOnboardin
   for (const file of plan.files) {
     if (!file.willWrite) continue;
     fs.writeFileSync(path.join(plan.projectPath, file.path), `${contents[file.path] ?? ''}\n`, 'utf8');
+  }
+  if (plan.reviewPacket.willWrite) {
+    fs.mkdirSync(path.dirname(plan.reviewPacket.path), { recursive: true });
+    fs.writeFileSync(plan.reviewPacket.path, `${renderRetrospectiveReviewPacket(plan.evidence)}\n`, 'utf8');
   }
   return plan;
 }

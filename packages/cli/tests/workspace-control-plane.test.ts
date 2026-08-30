@@ -13,11 +13,11 @@ import {
   planWorkspaceRelocation,
   workspaceInitializationRequiresSafeWorkingDirectory,
 } from '../src/workspace/index.js';
-import { planLegacyProjectConsolidation } from '../src/workspace/legacy-project.js';
+import { applyLegacyProjectConsolidation, planLegacyProjectConsolidation } from '../src/workspace/legacy-project.js';
 import { runWorkspaceCommand } from '../src/commands/workspace.js';
 import { discoverWorkspace, resolveWorkspaceProjectMemoryPath } from '../src/workspace/discover.js';
 import { deriveGitFreshness, inspectGitRepository, parseGitWorktreeList } from '../src/workspace/git.js';
-import { parseWorkspaceManifest, parseWorkspaceWorktreeRegistry } from '../src/workspace/schema.js';
+import { parseWorkspaceManifest } from '../src/workspace/schema.js';
 import { getWorkspaceStatus } from '../src/workspace/status.js';
 
 const created: string[] = [];
@@ -322,6 +322,9 @@ describe('workspace control plane', () => {
     fs.writeFileSync(path.join(sourcePath, 'project', 'todo.md'), '# Todo\n\n- [ ] Keep building.\n', 'utf8');
     fs.writeFileSync(path.join(sourcePath, 'project', 'style.md'), '# Style\n\nExisting style.\n', 'utf8');
     fs.writeFileSync(path.join(sourcePath, 'project', 'guidelines.md'), '# Guidelines\n\nExisting guidelines.\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'intake-agent.md'), '# One-time handoff\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'onboarding-evidence.md'), '# One-time evidence\n', 'utf8');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'mds.worktrees.json'), '{"legacy":true}\n', 'utf8');
     fs.mkdirSync(path.join(sourcePath, 'project', 'keys'), { recursive: true });
     fs.writeFileSync(path.join(sourcePath, 'project', 'keys', 'private.txt'), 'do not copy\n', 'utf8');
     execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
@@ -342,8 +345,14 @@ describe('workspace control plane', () => {
     expect(fs.existsSync(path.join(workspaceRoot, 'generated'))).toBe(true);
     expect(fs.existsSync(path.join(workspaceRoot, 'project', 'keys'))).toBe(false);
     expect(applied.worktrees).toHaveLength(2);
-    const registry = parseWorkspaceWorktreeRegistry(JSON.parse(fs.readFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), 'utf8')) as unknown);
-    expect(registry.worktrees).toHaveLength(2);
+    expect(fs.existsSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'))).toBe(false);
+    expect(fs.readdirSync(path.join(workspaceRoot, 'project')).filter((entry) => entry !== '.git').sort()).toEqual([
+      'guidelines.md',
+      'info.md',
+      'mds.workspace.json',
+      'style.md',
+      'todo.md',
+    ]);
     expect(execFileSync('git', ['--git-dir', projectRemote, 'rev-parse', 'refs/heads/main'], { encoding: 'utf8' }).trim()).toMatch(/^[a-f0-9]{40}$/);
     const status = getWorkspaceStatus(workspaceRoot);
     expect(status.found).toBe(true);
@@ -386,9 +395,12 @@ describe('workspace control plane', () => {
     expect(fs.readFileSync(path.join(projectPath, 'info.md'), 'utf8')).toContain('# TodoForContext(optional): Confirm who this app is for');
     expect(fs.readFileSync(path.join(projectPath, 'info.md'), 'utf8')).toContain('src/app/index.tsx');
     expect(fs.readFileSync(path.join(projectPath, 'todo.md'), 'utf8')).toContain('Review generated `project/info.md`');
-    expect(fs.readFileSync(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).toContain('@supabase/supabase-js');
-    expect(fs.readFileSync(path.join(projectPath, 'onboarding-evidence.md'), 'utf8')).toContain('drizzle.config.ts');
-    expect(fs.readFileSync(path.join(projectPath, 'intake-agent.md'), 'utf8')).toContain('High-Priority UD Confirmations');
+    const reviewPacketPath = path.join(workspaceRoot, 'temp', 'onboarding', 'retrospective-review.md');
+    expect(fs.readFileSync(reviewPacketPath, 'utf8')).toContain('@supabase/supabase-js');
+    expect(fs.readFileSync(reviewPacketPath, 'utf8')).toContain('drizzle.config.ts');
+    expect(fs.readFileSync(reviewPacketPath, 'utf8')).toContain('Unresolved Human Questions');
+    expect(fs.existsSync(path.join(projectPath, 'onboarding-evidence.md'))).toBe(false);
+    expect(fs.existsSync(path.join(projectPath, 'intake-agent.md'))).toBe(false);
 
     const status = getWorkspaceStatus(workspaceRoot);
     expect(status.found).toBe(true);
@@ -396,7 +408,7 @@ describe('workspace control plane', () => {
     expect(status.integrityIssues).toContainEqual(expect.stringContaining('Unresolved TodoForContext marker: project/info.md'));
   });
 
-  it('flags active Git worktrees that are missing from the workspace registry', () => {
+  it('derives active Git worktrees from Git without a worktree registry', () => {
     const root = tempDir();
     const sourcePath = path.join(root, 'app');
     const sourceRemote = path.join(root, 'source.git');
@@ -410,13 +422,55 @@ describe('workspace control plane', () => {
     const workspaceRoot = path.join(root, 'sample-i2Workspace');
     const unregisteredPath = path.join(root, 'unregistered');
     execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'add', unregisteredPath, '-b', 'feature/unregistered'], { stdio: 'ignore' });
+    writeJson(path.join(unregisteredPath, '.mds', 'workspace.json'), {
+      schemaVersion: 1,
+      workspaceId: 'sample',
+      projectRepository: projectRemote,
+    });
+    fs.writeFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), '{ this is ignored legacy data }\n', 'utf8');
 
     const status = getWorkspaceStatus(workspaceRoot);
 
     expect(status.found).toBe(true);
     if (!status.found) return;
-    expect(status.integrityIssues).toContainEqual(expect.stringContaining('Active Git worktree is missing from the registry:'));
-    expect(status.integrityIssues).toContainEqual(expect.stringContaining('unregistered'));
+    expect(status.repositories[0]?.worktrees).toContainEqual(expect.objectContaining({
+      path: unregisteredPath,
+      branch: 'feature/unregistered',
+    }));
+    expect(status.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
+
+    const movedPath = path.join(root, 'moved-unregistered');
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'move', unregisteredPath, movedPath], { stdio: 'ignore' });
+    const afterMove = getWorkspaceStatus(workspaceRoot);
+    expect(afterMove.found).toBe(true);
+    if (!afterMove.found) return;
+    expect(afterMove.repositories[0]?.worktrees).toContainEqual(expect.objectContaining({
+      path: movedPath,
+      branch: 'feature/unregistered',
+    }));
+
+    fs.rmSync(path.join(movedPath, '.mds'), { recursive: true, force: true });
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'remove', movedPath], { stdio: 'ignore' });
+    const afterRemoval = getWorkspaceStatus(workspaceRoot);
+    expect(afterRemoval.found).toBe(true);
+    if (!afterRemoval.found) return;
+    expect(afterRemoval.repositories[0]?.worktrees).not.toContainEqual(expect.objectContaining({ path: movedPath }));
+    expect(afterRemoval.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
+
+    const prunablePath = path.join(root, 'prunable');
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'add', prunablePath, '-b', 'feature/prunable'], { stdio: 'ignore' });
+    fs.rmSync(prunablePath, { recursive: true, force: true });
+    const beforePrune = getWorkspaceStatus(workspaceRoot);
+    expect(beforePrune.found).toBe(true);
+    if (!beforePrune.found) return;
+    expect(beforePrune.integrityIssues).toContainEqual(expect.stringContaining('Prunable worktree registration'));
+
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'prune'], { stdio: 'ignore' });
+    const afterPrune = getWorkspaceStatus(workspaceRoot);
+    expect(afterPrune.found).toBe(true);
+    if (!afterPrune.found) return;
+    expect(afterPrune.repositories[0]?.worktrees).not.toContainEqual(expect.objectContaining({ path: prunablePath }));
+    expect(afterPrune.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
   });
 
   it('treats unreadable worktree registrations as repair targets instead of stash targets', () => {
@@ -605,6 +659,9 @@ describe('workspace control plane', () => {
       path.join(sourcePath, 'project', 'todo.md'),
       '# Todo\n\n## First\n- [ ] Base\n\n## Last\n- [ ] Last\n'
     );
+    fs.writeFileSync(path.join(sourcePath, 'project', 'intake-agent.md'), '# One-time handoff\n');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'onboarding-evidence.md'), '# One-time evidence\n');
+    fs.writeFileSync(path.join(sourcePath, 'project', 'mds.worktrees.json'), '{"legacy":true}\n');
     execFileSync('git', ['-C', sourcePath, 'add', '.'], { stdio: 'ignore' });
     execFileSync('git', ['-C', sourcePath, 'commit', '-m', 'add legacy project'], { stdio: 'ignore' });
     const featurePath = path.join(root, 'feature');
@@ -628,6 +685,7 @@ describe('workspace control plane', () => {
     expect(merged.conflicts).toEqual([]);
     expect(merged.files.find((file) => file.path === 'project/todo.md')).toMatchObject({ status: 'merge' });
     expect(merged.files.find((file) => file.path === 'project/todo.md')?.content).toContain('Feature');
+    expect(merged.files.map((file) => file.path)).toEqual(['project/todo.md']);
     fs.writeFileSync(
       path.join(control, 'todo.md'),
       '# Todo\n\n## First\n- [ ] Control\n\n## Last\n- [ ] Different\n'
@@ -637,6 +695,17 @@ describe('workspace control plane', () => {
       { worktreePath: featurePath, primary: false },
     ], control);
     expect(conflicted.conflicts).toContain('project/todo.md');
+
+    const appliedControl = path.join(root, 'applied-control');
+    applyLegacyProjectConsolidation({
+      files: [
+        { path: 'project/todo.md', status: 'copy', sources: [sourcePath], content: '# Canonical\n' },
+        { path: 'project/intake-agent.md', status: 'copy', sources: [sourcePath], content: '# One-time\n' },
+      ],
+      conflicts: [],
+    }, appliedControl);
+    expect(fs.readFileSync(path.join(appliedControl, 'todo.md'), 'utf8')).toBe('# Canonical\n');
+    expect(fs.existsSync(path.join(appliedControl, 'intake-agent.md'))).toBe(false);
   });
 
   it('does not fetch by default and records an explicit fetch request', () => {

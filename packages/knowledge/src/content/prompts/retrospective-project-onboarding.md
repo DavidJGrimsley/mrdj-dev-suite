@@ -8,7 +8,7 @@ Finish onboarding an existing migrated project after `mds workspace init` genera
 
 ## Workflow
 
-1. Read `project/onboarding-evidence.md`, `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md` from the workspace control repository.
+1. Read `temp/onboarding/retrospective-review.md` plus `project/info.md`, `project/style.md`, `project/guidelines.md`, and `project/todo.md` from the workspace control repository.
 2. Verify generated claims against the app checkout before treating them as project truth.
 3. Find every unresolved `# TodoForContext(optional):` marker and ask the UD focused questions, one at a time.
 4. Write confirmed answers into the relevant project memory section and remove the marker line.
@@ -18,5 +18,6 @@ Finish onboarding an existing migrated project after `mds workspace init` genera
 ## Guardrails
 
 - Project memory is authoritative only after UD confirmation.
+- The review packet is temporary local evidence; keep durable, confirmed information only in canonical `project/` memory.
 - Keep this workflow project-only unless the UD explicitly asks for app-source changes.
 - Do not run full `mds onboard` scaffolding from this workflow.
