@@ -18,7 +18,9 @@ export interface RoadmapArgv {
 export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
   const projectPath = path.resolve(argv.path ?? '.');
   const result = await generateProjectRoadmap(projectPath, {
-    write: argv.append === true && !argv.json,
+    // A brand-new project may safely receive its first TODO. Existing TODOs
+    // remain proposal-only unless --append and a target phase are supplied.
+    write: !argv.json,
     append: argv.append === true,
     targetPhase: argv.phase,
   });

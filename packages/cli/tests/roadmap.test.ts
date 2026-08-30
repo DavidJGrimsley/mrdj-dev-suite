@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { runRoadmapCommand } from '../src/commands/roadmap.js';
 import { generateProjectRoadmap, parseInfoSections } from '../src/roadmap.js';
 
 const tempDirs: string[] = [];
@@ -101,6 +102,15 @@ describe('project roadmap generation', () => {
     expect(todo).toContain('## Phase 1 — App Shell And First Flow');
     expect(todo).toContain('Implement the first core user flow: sign up and create a workspace');
     await expect(access(path.join(projectPath, 'project', 'roadmap-state.json'))).rejects.toThrow();
+  });
+
+  it('initializes a missing TODO through the roadmap command', async () => {
+    const projectPath = await createProject('mds-roadmap-command-new-');
+    const todoPath = path.join(projectPath, 'project', 'todo.md');
+
+    await runRoadmapCommand({ path: projectPath });
+
+    await expect(readFile(todoPath, 'utf8')).resolves.toContain('## Phase 0 — Orientation And Planning');
   });
 
   it('preserves the restored legacy master roadmap byte-for-byte on repeated default runs', async () => {

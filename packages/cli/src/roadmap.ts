@@ -942,12 +942,17 @@ function mergeRoadmapIntoTodo(
   mode: 'proposal' | 'initialize' | 'append',
   targetPhase?: number
 ): MergeRoadmapResult {
-  const existingKeys = new Set(
-    normalizeLineEndings(todoRaw)
-      .split('\n')
-      .map((line) => parseCheckbox(line)?.text)
-      .filter((text): text is string => Boolean(text))
-      .map(normalizeTaskKey)
+  const existingCheckboxes = normalizeLineEndings(todoRaw)
+    .split('\n')
+    .flatMap((line) => {
+      const checkbox = parseCheckbox(line);
+      return checkbox ? [checkbox] : [];
+    });
+  const existingKeys = new Set(existingCheckboxes.map((checkbox) => normalizeTaskKey(checkbox.text)));
+  const checkedKeys = new Set(
+    existingCheckboxes
+      .filter((checkbox) => checkbox.checked)
+      .map((checkbox) => normalizeTaskKey(checkbox.text))
   );
   const proposedAdditions = derivedPhases
     .flatMap((phase) => phase.tasks)
@@ -955,14 +960,7 @@ function mergeRoadmapIntoTodo(
     .filter((text) => !existingKeys.has(normalizeTaskKey(text)));
   const preservedStatuses = derivedPhases
     .flatMap((phase) => phase.tasks)
-    .filter((task) =>
-      normalizeLineEndings(todoRaw)
-        .split('\n')
-        .some((line) => {
-          const checkbox = parseCheckbox(line);
-          return checkbox?.checked === true && normalizeTaskKey(checkbox.text) === normalizeTaskKey(task.text);
-        })
-    ).length;
+    .filter((task) => checkedKeys.has(normalizeTaskKey(task.text))).length;
 
   if (mode === 'proposal' || proposedAdditions.length === 0) {
     return {
