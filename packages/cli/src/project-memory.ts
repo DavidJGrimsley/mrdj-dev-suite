@@ -721,10 +721,13 @@ export async function scaffoldProjectMemory(
   const stylePath = path.join(projectDir, 'style.md');
   const existingInfo = await readOptionalText(infoPath);
   const existingStyle = await readOptionalText(stylePath);
+  const todoAlreadyExisted = await pathExists(todoPath);
   const guidelines = await resolveGuidelines(answers, options);
   const results = await Promise.all([
     writeProjectMemoryFile(infoPath, renderInfo(projectPath, answers, existingInfo), force, true),
-    writeIfAllowed(todoPath, renderTodo(answers), force),
+    // TODO is the human-owned roadmap ledger. Even --force must not replace an
+    // existing ledger; a new project is the only initialization case.
+    writeIfAllowed(todoPath, renderTodo(answers), false),
     writeProjectMemoryFile(stylePath, renderStyle(answers, existingStyle), force, true),
     writeIfAllowed(path.join(projectDir, 'guidelines.md'), guidelines, force),
     writeIfAllowed(path.join(projectPath, 'AGENTS.md'), renderAgentInstructions(answers), force),
@@ -732,7 +735,7 @@ export async function scaffoldProjectMemory(
   ]);
   const roadmapResult = await generateProjectRoadmap(projectPath, {
     write: true,
-    preserveStatus: true,
+    initialize: !todoAlreadyExisted,
   });
   const todoResultIndex = results.findIndex((result) => result.filePath === todoPath);
   if (todoResultIndex >= 0) {
@@ -1864,7 +1867,11 @@ export function renderTodo(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} TODO`,
     '',
-    '## Phase 0: Orientation And Planning',
+    '## Bug Fixes & Regressions',
+    '',
+    'Add new defects only as `- [ ] [Bug · Origin: Phase N] <concrete defect>`; do not duplicate them in a phase.',
+    '',
+    '## Phase 0 — Orientation And Planning',
     '',
     `- [ ] ${PHASE0_COMPONENT_STRATEGY_TODO}`,
     `- [ ] ${PHASE0_EJECTION_INVENTORY_TODO}`,
@@ -1878,7 +1885,7 @@ export function renderTodo(answers: OnboardAnswers): string {
       : []),
     '- [ ] Resolve every `# TodoForContext(optional):` marker in `project/info.md` by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.',
     '- [ ] Confirm visual direction in `project/style.md` after using the Stylist page.',
-    '- [ ] After the `project/info.md` markers are resolved, refresh the agent-derived roadmap from `project/info.md` and review it for accuracy.',
+    '- [ ] After the `project/info.md` markers are resolved, review the `mds roadmap` proposal and approve any task wording and target phase before using `mds roadmap --append --phase N`.',
     '- [ ] Keep or prune included package examples after reviewing `/exposition`.',
     '- [ ] Remove exposition pages before production once their lessons are absorbed.',
     ...((answers.authProvider ?? 'none') !== 'none'
@@ -1903,12 +1910,12 @@ export function renderTodo(answers: OnboardAnswers): string {
         ]
       : []),
     '',
-    '## Phase 1: App Shell And First Flow',
+    '## Phase 1 — App Shell And First Flow',
     '',
     `- [ ] Establish the app shell and first implementation-ready route in ${formatAppDirectory(answers.appDirectory)}.`,
     '- [ ] Implement the first concrete product flow from `project/info.md` and the roadmap.',
     '',
-    '## Phase 2: Data Layer',
+    '## Phase 2 — Data Layer',
     '',
     `- [ ] Implement the initial data layer using ${formatDataStart(answers.dataStart)}.`,
     ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
@@ -1925,7 +1932,7 @@ export function renderTodo(answers: OnboardAnswers): string {
         ]
       : []),
     '',
-    '## Phase 3: Complete Product Flows',
+    '## Phase 3 — Complete Product Flows',
     '',
     '- [ ] Build the remaining core flows from `project/info.md` phase by phase.',
     ...(answers.targetPlatforms.length > 1
@@ -1937,7 +1944,7 @@ export function renderTodo(answers: OnboardAnswers): string {
       ? answers.easUses.map((item) => `- [ ] Configure EAS for ${item}.`)
       : []),
     '',
-    '## Phase 4: Polish, Safeguards, And Release',
+    '## Phase 4 — Polish, Safeguards, And Release',
     '',
     `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',

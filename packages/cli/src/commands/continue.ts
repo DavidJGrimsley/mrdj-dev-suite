@@ -511,7 +511,7 @@ function buildGenericTodoPlan(): string[] {
     PLAN_MODE_KICKOFF_STEP,
     'Read project memory for the current phase and confirm the intended outcome.',
     'Implement the earliest unchecked todo item only after the user approves this plan.',
-    'Run focused verification, then update project/todo.md if the task is complete.',
+    'After focused verification and confirmed PR reachability, mark only the exact completed checkbox in project/todo.md and add its nested PR evidence link.',
   ];
 }
 
@@ -525,7 +525,7 @@ function buildMotionTodoPlan(): string[] {
     'Classify the affected motion as one-shot, layout, gesture-driven, list-heavy, loading, or parallax/scroll-linked before editing.',
     'Use `/review-motion` when the task is primarily an audit, inventory, or motion classification request rather than a narrow fix.',
     'Implement the earliest unchecked todo item only after the user approves this plan.',
-    'Run focused verification, then update project/todo.md if the task is complete.',
+    'After focused verification and confirmed PR reachability, mark only the exact completed checkbox in project/todo.md and add its nested PR evidence link.',
   ];
 }
 

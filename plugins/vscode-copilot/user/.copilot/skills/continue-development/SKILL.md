@@ -14,7 +14,9 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 ## Checks
 
 - Confirm project memory files are present and current before task selection.
-- Identify the active phase and incomplete tasks in `project/todo.md`.
+- Identify the relevant phase and incomplete tasks in `project/todo.md`.
+  Phase order expresses product evolution and priority; explicit dependencies
+  and user priority decide whether a later-phase task may start.
 - Confirm blockers/context markers are resolved before feature implementation.
 - If `continue_project` or `mds continue` reports `priority: expo-sdk-upgrade`, load the official Expo skill `upgrading-expo`. Do not call MDS `get_skill` for an upgrade skill, and do not take the next todo until the user declines or the upgrade is done.
 - Confirm any deferral includes a clear reason and destination note.
@@ -27,8 +29,15 @@ Continue phase-by-phase: finish in-progress phase items first, and only defer/mo
 
 ## Preferred structure
 
-- Start each session by summarizing current phase state and next recommended task.
-- Keep task updates minimal and explicit in `project/todo.md`.
+- Start each session by summarizing the relevant phase state, explicit
+  dependencies, and next recommended task.
+- Preserve every existing TODO line. After direct verification, mark only the
+  exact completed checkbox and add a nested GitHub PR link when its
+  final-base reachability is proven; use a reachable commit link for directly
+  verified pre-PR work. Append new work only with human-approved wording to
+  the end of its explicitly selected phase. Record a defect once in the
+  central `## Bug Fixes & Regressions` queue as
+  `[Bug · Origin: Phase N]`, not in both that queue and its origin phase.
 - Keep roadmap changes aligned with product intent in `project/info.md`.
 
 ## Example fix
