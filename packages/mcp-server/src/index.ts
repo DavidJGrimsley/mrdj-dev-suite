@@ -2298,7 +2298,7 @@ async function generateCreateExpoSuperStackWorkspace(
         `create-expo-super-stack did not finish workspace scaffolding for ${projectPath}. Missing: ${missingArtifacts.join(', ')}.`
       );
     }
-    const roadmap = await generateProjectRoadmap(projectPath, { write: false, preserveStatus: true });
+    const roadmap = await generateProjectRoadmap(projectPath, { write: false });
     return {
       status: 'generated',
       projectPath,
