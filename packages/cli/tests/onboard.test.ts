@@ -200,7 +200,7 @@ describe('runOnboardCommand', () => {
       'Run `mds doctor --ci`'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'After the `project/info.md` markers are resolved, review the `mds roadmap` proposal and approve any task wording before using `mds roadmap --append`.'
+      'After the `project/info.md` markers are resolved, review the `mds roadmap` proposal and approve any task wording and target phase before using `mds roadmap --append --phase N`.'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
@@ -601,7 +601,7 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'src', 'components', 'exposition', 'index.ts'), 'utf8')
     ).resolves.toContain('AnimatedPressable');
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'Phase 0: Orientation And Planning'
+      'Phase 0 — Orientation And Planning'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
       "Review styling in the 'Stylist' page"

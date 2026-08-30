@@ -96,7 +96,9 @@ describe('project roadmap generation', () => {
     expect(result.needsClarification).toBe(false);
     expect(result.proposalOnly).toBe(false);
     expect(result.wrote).toBe(true);
-    expect(todo).toContain('## Approved roadmap additions');
+    expect(todo).toContain('## Bug Fixes & Regressions');
+    expect(todo).toContain('## Phase 0 — Orientation And Planning');
+    expect(todo).toContain('## Phase 1 — App Shell And First Flow');
     expect(todo).toContain('Implement the first core user flow: sign up and create a workspace');
     await expect(access(path.join(projectPath, 'project', 'roadmap-state.json'))).rejects.toThrow();
   });
@@ -123,7 +125,7 @@ describe('project roadmap generation', () => {
     expect(await readFile(todoPath, 'utf8')).toBe(expected);
   });
 
-  it('appends only new roadmap rows after explicit approval and stays idempotent', async () => {
+  it('appends only approved new roadmap rows to the explicit target phase and stays idempotent', async () => {
     const projectPath = await createProject('mds-roadmap-append-');
     const todoPath = path.join(projectPath, 'project', 'todo.md');
     const original = [
@@ -133,6 +135,23 @@ describe('project roadmap generation', () => {
       '  - Completion: [PR #11](https://github.com/DavidJGrimsley/mrdj-dev-suite/pull/11)',
       '- [ ] Preserve this human-authored item.',
       '',
+      '## Bug Fixes & Regressions',
+      '',
+      '- [ ] [Bug · Origin: Phase 0] Preserve this central bug queue item.',
+      '',
+      '## Phase 0 — Orientation And Planning',
+      '',
+      '- [x] Preserve this Phase 0 history.',
+      '  - Completion: [commit ea4a62e](https://github.com/DavidJGrimsley/mrdj-dev-suite/commit/ea4a62e402c53e28dc3d2fb2cfdb8e90a4221e9f)',
+      '',
+      '## Phase 1 — App Shell And First Flow',
+      '',
+      '## Phase 2 — Data Layer',
+      '',
+      '## Phase 3 — Complete Product Flows',
+      '',
+      '## Phase 4 — Polish, Safeguards, And Release',
+      '',
     ].join('\n');
     await writeFile(todoPath, original, 'utf8');
 
@@ -141,16 +160,60 @@ describe('project roadmap generation', () => {
     expect(proposal.proposedAdditions.length).toBeGreaterThan(0);
     expect(await readFile(todoPath, 'utf8')).toBe(original);
 
-    const appended = await generateProjectRoadmap(projectPath, { write: true, append: true });
+    const appended = await generateProjectRoadmap(projectPath, {
+      write: true,
+      append: true,
+      targetPhase: 1,
+    });
     const afterAppend = await readFile(todoPath, 'utf8');
     expect(appended.wrote).toBe(true);
-    expect(afterAppend.startsWith(original.trimEnd())).toBe(true);
-    expect(afterAppend).toContain('## Approved roadmap additions');
+    expect(afterAppend).toContain('- [ ] [Bug · Origin: Phase 0] Preserve this central bug queue item.');
+    expect(afterAppend.indexOf('## Phase 1 — App Shell And First Flow')).toBeLessThan(
+      afterAppend.indexOf('Implement the first core user flow: sign up and create a workspace')
+    );
+    expect(afterAppend.indexOf('Implement the first core user flow: sign up and create a workspace')).toBeLessThan(
+      afterAppend.indexOf('## Phase 2 — Data Layer')
+    );
     expect(afterAppend.match(/Implement the first core user flow: sign up and create a workspace/g)).toHaveLength(1);
 
-    const rerun = await generateProjectRoadmap(projectPath, { write: true, append: true });
+    const rerun = await generateProjectRoadmap(projectPath, {
+      write: true,
+      append: true,
+      targetPhase: 1,
+    });
     expect(rerun.wrote).toBe(false);
     expect(await readFile(todoPath, 'utf8')).toBe(afterAppend);
+  });
+
+  it('preserves an existing TODO when append has no explicit target phase', async () => {
+    const projectPath = await createProject('mds-roadmap-missing-phase-');
+    const todoPath = path.join(projectPath, 'project', 'todo.md');
+    const original = [
+      '# Existing Project Roadmap',
+      '',
+      '## Bug Fixes & Regressions',
+      '',
+      '- [ ] [Bug · Origin: Phase 1] Preserve this bug queue item.',
+      '',
+      '## Phase 0 — Orientation And Planning',
+      '',
+      '## Phase 1 — App Shell And First Flow',
+      '',
+      '## Phase 2 — Data Layer',
+      '',
+      '## Phase 3 — Complete Product Flows',
+      '',
+      '## Phase 4 — Polish, Safeguards, And Release',
+      '',
+    ].join('\n');
+    await writeFile(todoPath, original, 'utf8');
+
+    const result = await generateProjectRoadmap(projectPath, { write: true, append: true });
+
+    expect(result.proposalOnly).toBe(true);
+    expect(result.wrote).toBe(false);
+    expect(result.warnings.join('\n')).toContain('--append requires an explicit existing phase number');
+    expect(await readFile(todoPath, 'utf8')).toBe(original);
   });
 
   it('ignores legacy roadmap-state metadata instead of rewriting project memory', async () => {
@@ -177,5 +240,8 @@ describe('project roadmap generation', () => {
     expect(skill).toContain('final-base reachability');
     expect(skill).toContain('intermediate branch');
     expect(skill).toMatch(/If historical evidence is ambiguous, preserve the existing checked item\s+unchanged\./);
+    expect(skill).toContain('commit link instead');
+    expect(skill).toContain('[Bug · Origin: Phase N]');
+    expect(skill).not.toMatch(/\b(?:Wave|Sprint)\b/);
   });
 });

@@ -12,6 +12,7 @@ export interface RoadmapArgv {
   path?: string;
   json?: boolean;
   append?: boolean;
+  phase?: number;
 }
 
 export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
@@ -19,6 +20,7 @@ export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
   const result = await generateProjectRoadmap(projectPath, {
     write: argv.append === true && !argv.json,
     append: argv.append === true,
+    targetPhase: argv.phase,
   });
 
   if (argv.json) {
@@ -62,7 +64,7 @@ export async function runRoadmapCommand(argv: RoadmapArgv): Promise<void> {
     console.log(chalk.yellow(`PROPOSAL ${result.todoPath}`));
     console.log(
       chalk.yellow(
-        'The existing TODO was not changed. Review the additions, then rerun with --append only after approving their wording.'
+        'The existing TODO was not changed. Review the additions, then rerun with --append --phase N only after approving their wording and target phase.'
       )
     );
     if (result.proposedAdditions.length > 0) {

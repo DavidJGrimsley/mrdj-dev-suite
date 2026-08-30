@@ -1,6 +1,6 @@
 ---
 name: mds-coordinator
-description: Coordinate MDS Blitz work across branches, worktrees, agents, tests, and pull requests. Use when sequencing roadmap work, dispatching implementation agents, verifying agent claims, reconciling PR state, or performing post-merge cleanup.
+description: Coordinate MDS and i2 work across branches, worktrees, agents, tests, and pull requests. Use when selecting a dependency-ready roadmap task, dispatching implementation agents, verifying agent claims, reconciling PR state, or performing post-merge cleanup.
 ---
 
 # MDS Coordinator
@@ -55,18 +55,25 @@ not produce the required evidence, report the check as pending instead of
 searching unrelated repositories, branches, tasks, or files. Do not create
 temporary files merely to inspect or edit a tracker.
 
-Never broaden a question about one reported task into Wave discovery, dispatch
-other ready tasks, or tracker reconciliation. Those are separate actions that
-require separate explicit requests.
+Never broaden a question about one reported task into roadmap-wide discovery,
+dispatch of other ready tasks, or coordination-state reconciliation. Those are
+separate actions that require separate explicit requests.
 
 ## Start here
 
-1. Find and read the current `BlitzCoordinationTodo.md` coordinator tracker before making coordination decisions.
-2. Read repository-level `AGENTS.md` and obey its validation requirements.
-3. Treat the tracker as the source of truth for dependency sequencing, but verify mutable Git/GitHub state directly before claiming a branch or PR state.
-4. Keep coordinator work cheap and mechanical. Delegate implementation to a worker model appropriate to the task's tier.
-
-If the coordinator tracker is missing, stop and ask for its location rather than reconstructing roadmap state from memory.
+1. Read repository-level `AGENTS.md` and obey its validation requirements.
+2. Read `project/todo.md`, `project/info.md`, and relevant explicit task
+   dependencies. The phase roadmap is the human-readable plan; it is not live
+   execution state.
+3. Verify mutable Git and GitHub facts directly before claiming branch,
+   worktree, commit, CI, or PR state.
+4. Before Phase 14 i² Core exists, a temporary
+   `BlitzCoordinationTodo.md` may record transitional live coordination only.
+   Do not treat it as product truth or require it to select a task. Archive it
+   when the i² Core runtime owns sessions, assignments, approvals,
+   observations, and process/port leases.
+5. Keep coordinator work cheap and mechanical. Delegate implementation to a
+   worker model appropriate to the task's tier.
 
 ## Role boundary
 
@@ -74,10 +81,12 @@ The coordinator MAY:
 
 - inspect repository, branch, worktree, test, CI, and PR state;
 - identify tasks whose dependencies are satisfied;
-- create or remove worktrees and branches when the tracker permits it;
+- create or remove worktrees and branches when explicit task dependencies and
+  human authorization permit it;
 - write grounded worker prompts with exact files, commands, constraints, and acceptance criteria;
 - run validation commands and interpret their output;
-- update the coordinator tracker as verified state changes;
+- update temporary coordination state before i² Core exists, without copying
+  branch/worktree/session state into the master roadmap;
 - close stale or redundant PRs/branches when evidence proves they contain no unmerged work;
 - report blockers and recommend model escalation.
 
@@ -89,18 +98,24 @@ A task is ready only when all of its declared dependencies are verified complete
 
 When asked what should run next:
 
-1. Read the tracker.
-2. Find unchecked tasks whose dependencies are all checked/verified complete.
+1. Find unchecked phase tasks whose explicitly declared dependencies are
+   verified complete.
+2. Use the phase order as product priority, not a global gate; a later-phase
+   task may start when its own dependencies and the user's priority allow it.
 3. Check whether each ready task already has a branch or worktree.
-4. Prefer already-prepared ready tasks before creating additional speculative work.
-5. Do not start tasks explicitly blocked on a product, security, architecture, credential, or policy decision.
+4. Prefer already-prepared ready tasks before creating additional speculative
+   work.
+5. Do not start tasks explicitly blocked on a product, security, architecture,
+   credential, or policy decision.
 
 ## Creating a worker branch/worktree
 
 When a ready task has no worktree:
 
 1. Refresh remote state.
-2. Create the worktree from the latest `origin/main`, using the branch name recorded in the tracker.
+2. Create the worktree from the latest `origin/main` with a branch name that
+   describes the selected task. Branch names are live Git identifiers, not
+   roadmap sequencing.
 3. Write a worker prompt grounded in the actual repository. Include:
    - the task goal;
    - relevant files/paths discovered from the repo;
@@ -109,7 +124,8 @@ When a ready task has no worktree:
    - expected evidence of completion;
    - instructions not to merge the PR.
 4. Hand the task to an appropriate worker model.
-5. Record the new worktree/branch in the coordinator tracker if the tracker format calls for it.
+5. Record the new worktree/branch only in temporary coordination state before
+   i² Core exists, or in i² Core runtime state once available.
 
 Do not invent file paths merely to make a worker prompt look complete. Inspect first.
 
@@ -126,7 +142,8 @@ git diff origin/main --stat
 
 Then run the actual repository-required tests, typechecks, Doctor checks, or other task-specific validation commands.
 
-For this repository, obey `AGENTS.md`; in particular, `mds doctor --fast` is required before commits and before moving to the next development phase.
+For this repository, obey `AGENTS.md`; in particular, `mds doctor --fast`
+is required before commits and before declaring the selected task ready.
 
 ### CRLF / line-ending noise
 
@@ -214,7 +231,8 @@ After a merge is explicitly authorized and then confirmed:
 2. Delete the local branch.
 3. Delete the matching remote branch.
 4. Fast-forward local `main`.
-5. Immediately update the coordinator tracker checkbox and PR number.
+5. Immediately record the verified result in temporary coordination state or
+   i² Core runtime state, as applicable.
 6. Re-evaluate which dependent tasks have now become ready.
 
 If a Windows worktree removal fails because a directory such as `node_modules` remains locked, diagnose the lock before using forced filesystem cleanup.
@@ -224,7 +242,9 @@ Do not defer tracker reconciliation to a future turn once the merge is confirmed
 ## Roadmap and release boundaries
 
 - Only the dedicated roadmap-reconciliation-style work should edit `project/todo.md` master status. Do not casually change that roadmap while coordinating another branch.
-- The coordinator's own Blitz tracker may be updated as its live state changes.
+- A temporary Blitz tracker may hold transitional live state before Phase 14;
+  it is never a competing product roadmap and must be archived after i² Core
+  provides the corresponding runtime records.
 - Never touch `changeset-release/main` or manually version/publish packages. Leave package publishing to release automation.
 
 ### Project TODO integrity
@@ -237,14 +257,23 @@ is not a branch tracker, scratchpad, or generated summary.
 - Mark only the exact completed checkbox after direct verification. When the
   task's GitHub PR mapping and final-base reachability are proven, add a nested
   `Completion: [PR #N](...)` link beneath that task.
+- For directly verified work that predates PR use, add a nested reachable
+  commit link instead. Never invent a PR link.
 - If historical evidence is ambiguous, preserve the existing checked item
   unchanged. A PR merged only into an intermediate branch is not proof that
   its task reached the final base.
 - Append a checkbox only when the user supplied or explicitly approved its
-  wording. Do not add branch/worktree status, speculative tasks, or generated
-  filler to the master roadmap.
+  wording, at the end of an explicitly selected Phase. Do not add
+  branch/worktree status, speculative tasks, or generated filler to the
+  master roadmap.
+- Record a bug once in the central `## Bug Fixes & Regressions` queue as
+  `[Bug · Origin: Phase N]`; do not duplicate it in the origin phase.
+- Use phases and explicit dependencies for planning. Do not use Sprints,
+  Waves, branch names, worktree names, or a temporary tracker as roadmap
+  sequencing.
 - Keep coordinator branch, worktree, dependency, and execution state in
-  `BlitzCoordinationTodo.md`, not by mutating the master roadmap.
+  temporary coordination material before Phase 14 and i² Core runtime state
+  afterwards, never by mutating the master roadmap.
 - Reorganize existing TODO items only during an explicitly authorized
   roadmap-reconciliation session, preserving every task's text, checkbox
   state, historical meaning, and completion links.
@@ -263,85 +292,16 @@ For this local experiment, `qwen3.5:9b` may perform the Tier-1 coordinator role.
 
 If the coordinator encounters a judgment call that appears beyond Tier 1, it should explain the ambiguity and recommend a temporary reasoning escalation instead of pretending confidence.
 
-## Wave 3 Example: Dispatch Ready Tasks
+## Transitional coordination before i² Core
 
-Use this example to translate the tracker into concrete coordinator actions.
-The tracker remains the source of truth: verify its dependency state and then
-verify mutable branch, worktree, and PR state before acting.
+Before Phase 14, the temporary Blitz tracker may record which already-approved
+task is running, its worktree, validation result, and PR handoff. It does not
+select work: select a task from the phase roadmap and its explicit
+dependencies first, then verify live Git and GitHub state.
 
-### Dependency graph
-
-```text
-Track 1 (sequential): #17 -> #18 -> #20
-Track 2 (parallel):   #19
-Track 3 (sequential): #21 -> (#22, #23 parallel)
-
-All three tracks must merge before proceeding to Wave 4.
-```
-
-### Current ready and blocked tasks
-
-From `<MDS_ROOT>\BlitzCoordinationTodo.md` Wave 3 tasks
-(lines 172-208), these tasks are ready to start now because their recorded
-dependencies are satisfied:
-
-- **#17** (`feat/library-db-contract`) - worktree:
-   `<MDS_ROOT>\MDS-library-db-contract`
-   `AGENT-PROMPT.md` is ready. Dispatch to Tier 4, medium-high: this is a new
-   adapter contract.
-
-- **#19** (`feat/library-settings-auth-surface`) - worktree:
-   `<MDS_ROOT>\MDS-library-settings-auth-surface`
-   `AGENT-PROMPT.md` is ready. Dispatch to Tier 3, medium: this is UI
-   composition over existing adapters.
-
-- **#21** (`feat/monorepo-intake-model`) - worktree:
-   `<MDS_ROOT>\MDS-monorepo-intake-model`
-   `AGENT-PROMPT.md` is ready. Dispatch to Tier 4, medium-high: this is new
-   model design with downstream impact.
-
-Do not dispatch these tasks yet because their dependencies are not merged:
-
-- **#18** waits for the #17 PR.
-- **#20** waits for #17, #18, and #19 to merge.
-- **#22** and **#23** wait for the #21 PR.
-
-### Dispatch flow
-
-When a task appears ready:
-
-1. Verify every declared dependency is complete in `BlitzCoordinationTodo.md`.
-2. Check whether its worktree already exists, for example with
-    `Get-ChildItem <MDS_ROOT>\MDS-*<task-name>*`.
-3. If it exists, check whether work is already active with `git status -sb` in
-    that worktree.
-4. If it does not exist, create it from the branch name recorded in the
-    tracker.
-5. Read that worktree's `AGENT-PROMPT.md` before preparing the handoff.
-6. Dispatch the prompt to a worker at the tracker-recommended model tier.
-7. Update `BlitzCoordinationTodo.md` to mark the task in progress only after
-    the handoff is actually dispatched.
-
-For #17, use this concrete sequence:
-
-- The tracker identifies `feat/library-db-contract` as the branch.
-- The prepared worktree is
-   `<MDS_ROOT>\MDS-library-db-contract`.
-- Read `<MDS_ROOT>\MDS-library-db-contract\AGENT-PROMPT.md`.
-- Dispatch it to a Tier-4 model, such as Claude Sonnet 5, GPT-5.6, or Grok
-   4.5.
-- Mark the tracker entry from `[ ]` to `[in-progress]` only when that worker
-   has received the prompt.
-
-### Tracker reference
-
-For current state, always return to
-`<MDS_ROOT>\BlitzCoordinationTodo.md` lines 161-209:
-
-- Find dependencies in each task description, such as `depends on #X`.
-- Use the tier recommendation written next to the task.
-- Treat the Wave 3 example above as a snapshot, not a substitute for the
-   tracker or live Git/GitHub verification.
+After Phase 14, archive the tracker and use i² Core's session, assignment,
+approval, observation, process, and port-lease records. Git remains
+authoritative for commits, branches, worktrees, and PRs.
 
 ## Coordinator response style
 

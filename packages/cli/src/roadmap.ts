@@ -70,6 +70,7 @@ export interface ProjectRoadmapResult {
   write: boolean;
   wrote: boolean;
   append: boolean;
+  targetPhase?: number;
   proposalOnly: boolean;
   proposedAdditions: string[];
   preservedStatuses: number;
@@ -79,6 +80,11 @@ export interface ProjectRoadmapResult {
 export interface GenerateProjectRoadmapOptions {
   write?: boolean;
   append?: boolean;
+  /**
+   * Required with --append for an existing TODO. New project initialization
+   * places each derived task into its own generated phase automatically.
+   */
+  targetPhase?: number;
   /**
    * Only onboarding may use this for the brand-new TODO it just created.
    * Existing project memory is always append-only.
@@ -111,6 +117,7 @@ type InfoSectionKey =
 
 interface PhaseSpec {
   id: DerivedRoadmapPhaseId;
+  number: number;
   title: string;
   heading: string;
 }
@@ -119,6 +126,7 @@ interface MergeRoadmapResult {
   todoContent: string;
   preservedStatuses: number;
   proposedAdditions: string[];
+  targetPhaseFound: boolean;
 }
 
 interface ConfidenceCheck {
@@ -142,28 +150,33 @@ export const ROADMAP_CLARIFICATION_WARNING =
 const PHASE_SPECS: PhaseSpec[] = [
   {
     id: 'phase-0',
-    title: 'Phase 0: Orientation And Planning',
-    heading: '## Phase 0: Orientation And Planning',
+    number: 0,
+    title: 'Phase 0 — Orientation And Planning',
+    heading: '## Phase 0 — Orientation And Planning',
   },
   {
     id: 'phase-1',
-    title: 'Phase 1: App Shell And First Flow',
-    heading: '## Phase 1: App Shell And First Flow',
+    number: 1,
+    title: 'Phase 1 — App Shell And First Flow',
+    heading: '## Phase 1 — App Shell And First Flow',
   },
   {
     id: 'phase-2',
-    title: 'Phase 2: Data Layer',
-    heading: '## Phase 2: Data Layer',
+    number: 2,
+    title: 'Phase 2 — Data Layer',
+    heading: '## Phase 2 — Data Layer',
   },
   {
     id: 'phase-3',
-    title: 'Phase 3: Complete Product Flows',
-    heading: '## Phase 3: Complete Product Flows',
+    number: 3,
+    title: 'Phase 3 — Complete Product Flows',
+    heading: '## Phase 3 — Complete Product Flows',
   },
   {
     id: 'phase-4',
-    title: 'Phase 4: Polish, Safeguards, And Release',
-    heading: '## Phase 4: Polish, Safeguards, And Release',
+    number: 4,
+    title: 'Phase 4 — Polish, Safeguards, And Release',
+    heading: '## Phase 4 — Polish, Safeguards, And Release',
   },
 ];
 
@@ -320,6 +333,7 @@ export async function generateProjectRoadmap(
   const todoPath = path.join(projectPath, 'project', 'todo.md');
   const write = options.write ?? false;
   const append = options.append ?? false;
+  const targetPhase = options.targetPhase;
   const todoExists = await pathExists(todoPath);
   const initialize = options.initialize ?? !todoExists;
 
@@ -344,6 +358,7 @@ export async function generateProjectRoadmap(
       write,
       wrote: false,
       append,
+      targetPhase,
       proposalOnly: false,
       proposedAdditions: [],
       preservedStatuses: 0,
@@ -369,6 +384,7 @@ export async function generateProjectRoadmap(
       write,
       wrote: false,
       append,
+      targetPhase,
       proposalOnly: false,
       proposedAdditions: [],
       preservedStatuses: 0,
@@ -378,16 +394,32 @@ export async function generateProjectRoadmap(
 
   const warnings: string[] = [];
   const derivedPhases = deriveRoadmapPhases(sections, warnings, roadmapContext);
-  const merged = mergeRoadmapIntoTodo(existingTodo, derivedPhases, initialize || append);
+  const hasValidTargetPhase =
+    Number.isInteger(targetPhase) && PHASE_SPECS.some((phase) => phase.number === targetPhase);
+  const appendRequiresTarget = todoExists && !initialize && append && !hasValidTargetPhase;
+  const mergeMode: 'proposal' | 'initialize' | 'append' = initialize
+    ? 'initialize'
+    : append && !appendRequiresTarget
+      ? 'append'
+      : 'proposal';
+  const merged = mergeRoadmapIntoTodo(existingTodo, derivedPhases, mergeMode, targetPhase);
   const nextTodo = merged.todoContent;
   const todoChanged = normalizeLineEndings(nextTodo) !== normalizeLineEndings(existingTodo);
-  const proposalOnly = todoExists && !initialize && !append;
-  if (proposalOnly && merged.proposedAdditions.length > 0) {
+  const proposalOnly = todoExists && !initialize && mergeMode === 'proposal';
+  if (appendRequiresTarget) {
     warnings.push(
-      'Proposal only: existing project/todo.md was preserved. Review the proposed additions and rerun with --append only after approving their wording.'
+      'Existing project/todo.md was preserved. --append requires an explicit existing phase number, for example --append --phase 2.'
+    );
+  } else if (append && !initialize && !merged.targetPhaseFound) {
+    warnings.push(
+      `Existing project/todo.md was preserved because Phase ${targetPhase} was not found. Add or select an existing Phase heading before appending.`
+    );
+  } else if (proposalOnly && merged.proposedAdditions.length > 0) {
+    warnings.push(
+      'Proposal only: existing project/todo.md was preserved. Review the proposed additions, then rerun with --append --phase N only after approving their wording and target phase.'
     );
   }
-  const wrote = write && todoChanged;
+  const wrote = write && todoChanged && !appendRequiresTarget && merged.targetPhaseFound;
 
   if (write && todoChanged) {
     await writeFile(todoPath, nextTodo, 'utf8');
@@ -408,6 +440,7 @@ export async function generateProjectRoadmap(
     write,
     wrote,
     append,
+    targetPhase,
     proposalOnly,
     proposedAdditions: merged.proposedAdditions,
     preservedStatuses: merged.preservedStatuses,
@@ -906,7 +939,8 @@ function detectRoadmapClarificationNeeds(sections: InfoSectionMap): {
 function mergeRoadmapIntoTodo(
   todoRaw: string,
   derivedPhases: DerivedRoadmapPhase[],
-  mayAppend: boolean
+  mode: 'proposal' | 'initialize' | 'append',
+  targetPhase?: number
 ): MergeRoadmapResult {
   const existingKeys = new Set(
     normalizeLineEndings(todoRaw)
@@ -930,16 +964,86 @@ function mergeRoadmapIntoTodo(
         })
     ).length;
 
-  if (!mayAppend || proposedAdditions.length === 0) {
-    return { todoContent: todoRaw, preservedStatuses, proposedAdditions };
+  if (mode === 'proposal' || proposedAdditions.length === 0) {
+    return {
+      todoContent: todoRaw,
+      preservedStatuses,
+      proposedAdditions,
+      targetPhaseFound: mode !== 'append',
+    };
   }
 
-  const additions = proposedAdditions.map((text) => `- [ ] ${text}`);
-  return {
-    todoContent: `${todoRaw.trimEnd()}\n\n## Approved roadmap additions\n\n${additions.join('\n')}\n`,
-    preservedStatuses,
-    proposedAdditions,
-  };
+  if (mode === 'append') {
+    const phase = PHASE_SPECS.find((candidate) => candidate.number === targetPhase);
+    if (!phase) {
+      return { todoContent: todoRaw, preservedStatuses, proposedAdditions, targetPhaseFound: false };
+    }
+    const additions = derivedPhases
+      .find((candidate) => candidate.id === phase.id)
+      ?.tasks.map((task) => task.text)
+      .filter((text) => !existingKeys.has(normalizeTaskKey(text)))
+      .map((text) => `- [ ] ${text}`) ?? [];
+    const appendResult = appendCheckboxesToPhase(todoRaw, phase.number, additions);
+    return {
+      todoContent: appendResult.todoContent,
+      preservedStatuses,
+      proposedAdditions,
+      targetPhaseFound: appendResult.phaseFound,
+    };
+  }
+
+  let todoContent = todoRaw;
+  let targetPhaseFound = true;
+  for (const phase of PHASE_SPECS) {
+    const additions = derivedPhases
+      .find((candidate) => candidate.id === phase.id)
+      ?.tasks.map((task) => task.text)
+      .filter((text) => !existingKeys.has(normalizeTaskKey(text)))
+      .map((text) => `- [ ] ${text}`) ?? [];
+    const appendResult = appendCheckboxesToPhase(todoContent, phase.number, additions);
+    todoContent = appendResult.todoContent;
+    targetPhaseFound &&= appendResult.phaseFound;
+  }
+  return { todoContent, preservedStatuses, proposedAdditions, targetPhaseFound };
+}
+
+function appendCheckboxesToPhase(
+  todoRaw: string,
+  phaseNumber: number,
+  additions: string[]
+): { todoContent: string; phaseFound: boolean } {
+  if (additions.length === 0) {
+    return { todoContent: todoRaw, phaseFound: hasPhaseHeading(todoRaw, phaseNumber) };
+  }
+
+  const lineEnding = todoRaw.includes('\r\n') ? '\r\n' : '\n';
+  const lines = normalizeLineEndings(todoRaw).split('\n');
+  const phaseIndex = lines.findIndex((line) =>
+    new RegExp(`^##\\s+Phase\\s+${phaseNumber}(?:\\s*[—:-]|\\s*$)`, 'i').test(line)
+  );
+  if (phaseIndex < 0) {
+    return { todoContent: todoRaw, phaseFound: false };
+  }
+
+  const nextPhaseIndex = lines.findIndex(
+    (line, index) => index > phaseIndex && /^##\s+/u.test(line)
+  );
+  let insertionIndex = nextPhaseIndex < 0 ? lines.length : nextPhaseIndex;
+  while (insertionIndex > phaseIndex + 1 && lines[insertionIndex - 1]?.trim() === '') {
+    insertionIndex -= 1;
+  }
+  const phaseHasContent = lines
+    .slice(phaseIndex + 1, insertionIndex)
+    .some((line) => line.trim().length > 0);
+  lines.splice(insertionIndex, 0, ...(phaseHasContent ? additions : ['', ...additions]));
+
+  return { todoContent: lines.join(lineEnding), phaseFound: true };
+}
+
+function hasPhaseHeading(todoRaw: string, phaseNumber: number): boolean {
+  return normalizeLineEndings(todoRaw)
+    .split('\n')
+    .some((line) => new RegExp(`^##\\s+Phase\\s+${phaseNumber}(?:\\s*[—:-]|\\s*$)`, 'i').test(line));
 }
 
 function parseCheckbox(line: string): { checked: boolean; text: string } | null {
@@ -1244,16 +1348,11 @@ function renderTodoSkeleton(appName: string): string {
   return [
     `# ${appName} TODO`,
     '',
-    '## Phase 0: Orientation And Planning',
+    '## Bug Fixes & Regressions',
     '',
-    '## Phase 1: App Shell And First Flow',
+    'Add future defects once here as `- [ ] [Bug · Origin: Phase N] <concrete defect>`.',
     '',
-    '## Phase 2: Data Layer',
-    '',
-    '## Phase 3: Complete Product Flows',
-    '',
-    '## Phase 4: Polish, Safeguards, And Release',
-    '',
+    ...PHASE_SPECS.flatMap((phase) => [phase.heading, '']),
   ].join('\n');
 }
 

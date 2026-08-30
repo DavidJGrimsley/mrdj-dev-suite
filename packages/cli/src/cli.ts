@@ -449,9 +449,13 @@ async function main(): Promise<void> {
             default: false,
           })
           .option('append', {
-            describe: 'Append only new, reviewed roadmap checkbox rows; never rebuild or reorder the existing TODO',
+            describe: 'Append only new, reviewed roadmap checkbox rows to --phase; never rebuild or reorder the existing TODO',
             type: 'boolean',
             default: false,
+          })
+          .option('phase', {
+            describe: 'Existing Phase number required with --append, such as --phase 2',
+            type: 'number',
           }),
       async (argv) => {
         await runRoadmapCommand(argv as RoadmapArgv);

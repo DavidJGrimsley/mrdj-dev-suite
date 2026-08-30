@@ -16,7 +16,8 @@ When the developer says testing is complete, finish the handoff safely by:
 
 1. Preserve `project/todo.md` exactly except for the verified completion of
    the exact task worked in this session; add its nested GitHub PR link only
-   after the mapping and final-base reachability are proven.
+   after the mapping and final-base reachability are proven, or a reachable
+   commit link for directly verified pre-PR work.
 2. Run `mds doctor --ci` before any git mutation.
 3. Review `git status --short` and list changed files.
 4. Confirm any intentionally omitted files with the developer before staging.

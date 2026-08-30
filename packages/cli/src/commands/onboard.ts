@@ -326,7 +326,7 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
       'Unresolved `# TodoForContext(optional):` markers are still present in `project/info.md`, so MDS intentionally left the scaffolded phase template in place.'
     );
     console.log(
-      'Resolve those `project/info.md` markers first, then run `mds roadmap` to review a proposal. Use `mds roadmap --append` only after approving any new task wording.'
+      'Resolve those `project/info.md` markers first, then run `mds roadmap` to review a proposal. Use `mds roadmap --append --phase N` only after approving the new task wording and its target phase.'
     );
   } else if (roadmapStatus.needsClarification) {
     console.log();
@@ -1436,7 +1436,7 @@ function printOnboardingNextSteps(installOutcome?: OnboardInstallOutcome): void 
     '5. Resolve every # TodoForContext(optional): marker in project/info.md by filling the section underneath or deleting the marker line to acknowledge no extra context is needed.'
   );
   console.log(
-    '6. After those markers are gone, run `mds roadmap` to review a proposal; use `--append` only for explicitly approved new tasks.'
+    '6. After those markers are gone, run `mds roadmap` to review a proposal; use `--append --phase N` only for explicitly approved new tasks in that phase.'
   );
   console.log('Then run mds doctor --ci, or use mds clear-expo-start when Metro gets stuck.');
 }
