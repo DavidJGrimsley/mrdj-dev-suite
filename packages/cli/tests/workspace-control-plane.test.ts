@@ -439,13 +439,38 @@ describe('workspace control plane', () => {
     }));
     expect(status.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
 
-    fs.rmSync(path.join(unregisteredPath, '.mds'), { recursive: true, force: true });
-    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'remove', unregisteredPath], { stdio: 'ignore' });
+    const movedPath = path.join(root, 'moved-unregistered');
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'move', unregisteredPath, movedPath], { stdio: 'ignore' });
+    const afterMove = getWorkspaceStatus(workspaceRoot);
+    expect(afterMove.found).toBe(true);
+    if (!afterMove.found) return;
+    expect(afterMove.repositories[0]?.worktrees).toContainEqual(expect.objectContaining({
+      path: movedPath,
+      branch: 'feature/unregistered',
+    }));
+
+    fs.rmSync(path.join(movedPath, '.mds'), { recursive: true, force: true });
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'remove', movedPath], { stdio: 'ignore' });
     const afterRemoval = getWorkspaceStatus(workspaceRoot);
     expect(afterRemoval.found).toBe(true);
     if (!afterRemoval.found) return;
-    expect(afterRemoval.repositories[0]?.worktrees).not.toContainEqual(expect.objectContaining({ path: unregisteredPath }));
+    expect(afterRemoval.repositories[0]?.worktrees).not.toContainEqual(expect.objectContaining({ path: movedPath }));
     expect(afterRemoval.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
+
+    const prunablePath = path.join(root, 'prunable');
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'add', prunablePath, '-b', 'feature/prunable'], { stdio: 'ignore' });
+    fs.rmSync(prunablePath, { recursive: true, force: true });
+    const beforePrune = getWorkspaceStatus(workspaceRoot);
+    expect(beforePrune.found).toBe(true);
+    if (!beforePrune.found) return;
+    expect(beforePrune.integrityIssues).toContainEqual(expect.stringContaining('Prunable worktree registration'));
+
+    execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'prune'], { stdio: 'ignore' });
+    const afterPrune = getWorkspaceStatus(workspaceRoot);
+    expect(afterPrune.found).toBe(true);
+    if (!afterPrune.found) return;
+    expect(afterPrune.repositories[0]?.worktrees).not.toContainEqual(expect.objectContaining({ path: prunablePath }));
+    expect(afterPrune.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
   });
 
   it('treats unreadable worktree registrations as repair targets instead of stash targets', () => {
