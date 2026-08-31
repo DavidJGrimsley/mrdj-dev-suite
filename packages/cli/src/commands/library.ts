@@ -8,6 +8,11 @@ import {
   searchLibraryItems,
 } from '@mr.dj2u/library-registry';
 import { applyLibraryAdd, inspectLibraryProject, planLibraryAdd } from '../library.js';
+import {
+  normalizeWorkspaceRelativePath,
+  readWorkspaceManifest,
+  resolveWorkspacePath,
+} from '../workspace.js';
 
 import type {
   LibraryFilter,
@@ -36,6 +41,7 @@ export interface LibraryShowArgv {
 export interface LibraryAddArgv {
   id?: string;
   path?: string;
+  target?: string;
   dryRun?: boolean;
   yes?: boolean;
   noInstall?: boolean;
@@ -177,7 +183,15 @@ export async function runLibraryAddCommand(argv: LibraryAddArgv): Promise<void> 
   if (!argv.id) {
     throw new Error('mds library add requires an item id.');
   }
-  const projectPath = argv.path ?? '.';
+  const workspacePath = argv.path ?? '.';
+  const target = argv.target ? normalizeWorkspaceRelativePath(argv.target) : undefined;
+  if (target) {
+    const manifest = await readWorkspaceManifest(workspacePath);
+    if (manifest && !manifest.apps.some((app) => app.path === target)) {
+      throw new Error(`Library target is not registered in project/workspace.json: ${target}`);
+    }
+  }
+  const projectPath = target ? resolveWorkspacePath(workspacePath, target) : workspacePath;
   const selectedVariant = await promptLibraryAddVariant(argv);
   if (selectedVariant === PROMPT_CANCELLED) {
     printLibraryAddCancelled(argv.json);

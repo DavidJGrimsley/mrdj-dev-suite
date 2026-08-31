@@ -1,28 +1,35 @@
-import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import {
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
 
-export type ProjectShape = 'single-expo-app' | 'multi-app-workspace';
-export type WorkspacePackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
+export type ProjectShape = "single-expo-app" | "multi-app-workspace";
+export type WorkspacePackageManager = "npm" | "pnpm" | "yarn" | "bun";
 export type WorkspaceStylingSystem =
-  | 'uniwind'
-  | 'nativewind'
-  | 'nativewindui'
-  | 'tamagui'
-  | 'restyle'
-  | 'stylesheet';
-export type WorkspaceAppKind = 'expo' | 'non-expo';
-export type NonExpoAppCategory = 'website' | 'backend' | 'worker' | 'other';
+  | "uniwind"
+  | "nativewind"
+  | "nativewindui"
+  | "tamagui"
+  | "restyle"
+  | "stylesheet";
+export type WorkspaceAppKind = "expo" | "non-expo";
+export type NonExpoAppCategory = "website" | "backend" | "worker" | "other";
 export type SharedWorkspacePackageRole =
-  | 'config'
-  | 'ui-theme'
-  | 'hooks-state'
-  | 'sdk-client'
-  | 'database-schema';
+  | "config"
+  | "ui-theme"
+  | "hooks-state"
+  | "sdk-client"
+  | "database-schema";
 
 export interface WorkspaceApp {
   id: string;
   displayName: string;
-  packageName: string;
+  packageName?: string;
   path: string;
   kind: WorkspaceAppKind;
   purpose: string;
@@ -48,7 +55,7 @@ export interface WorkspaceManifest {
   expoVersion: string;
   stylingSystem: WorkspaceStylingSystem;
   sharedDesignDirection: string;
-  taskRunner: 'turbo';
+  taskRunner: "turbo";
   apps: WorkspaceApp[];
   sharedPackages: SharedWorkspacePackage[];
 }
@@ -86,18 +93,22 @@ export interface WorkspaceWriteResult {
   wrote: boolean;
 }
 
-export const WORKSPACE_MANIFEST_PATH = path.join('project', 'workspace.json');
+export const WORKSPACE_MANIFEST_PATH = path.join("project", "workspace.json");
 export const DEFAULT_EXPO_PORT = 8081;
 
 export function slugifyWorkspaceName(value: string): string {
   const slug = value
     .trim()
     .toLowerCase()
-    .replace(/['’]/gu, '')
-    .replace(/[^a-z0-9]+/gu, '-')
-    .replace(/^-+|-+$/gu, '')
-    .replace(/-{2,}/gu, '-');
-  if (!slug) throw new Error('Workspace and app names must contain at least one letter or number.');
+    .replace(/['’]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .replace(/-{2,}/gu, "-");
+  if (!slug) {
+    throw new Error(
+      "Workspace and app names must contain at least one letter or number.",
+    );
+  }
   return slug;
 }
 
@@ -105,156 +116,256 @@ export function derivePackageScope(workspaceName: string): string {
   return `@${slugifyWorkspaceName(workspaceName)}`;
 }
 
-export function createWorkspaceManifest(input: WorkspaceManifestInput): WorkspaceManifest {
+export function createWorkspaceManifest(
+  input: WorkspaceManifestInput,
+): WorkspaceManifest {
   const name = slugifyWorkspaceName(input.slug ?? input.displayName);
-  const packageScope = normalizePackageScope(input.packageScope ?? derivePackageScope(name));
+  const packageScope = normalizePackageScope(
+    input.packageScope ?? derivePackageScope(name),
+  );
   let nextPort = DEFAULT_EXPO_PORT;
-  const apps = input.apps.map((entry): WorkspaceApp => {
-    const id = slugifyWorkspaceName(entry.slug ?? entry.displayName);
-    const expo = entry.kind === 'expo';
+  const apps = input.apps.map((app): WorkspaceApp => {
+    const id = slugifyWorkspaceName(app.slug ?? app.displayName);
+    const isExpo = app.kind === "expo";
     return {
       id,
-      displayName: entry.displayName.trim(),
+      displayName: app.displayName.trim(),
       packageName: `${packageScope}/${id}`,
       path: `apps/${id}`,
-      kind: entry.kind,
-      purpose: entry.purpose.trim(),
-      ...(expo ? { platforms: entry.platforms ?? ['web', 'ios', 'android'], port: nextPort++ } : {}),
-      ...(!expo && entry.category ? { category: entry.category } : {}),
-      ...(!expo && entry.intendedStack?.trim() ? { intendedStack: entry.intendedStack.trim() } : {}),
+      kind: app.kind,
+      purpose: app.purpose.trim(),
+      ...(isExpo
+        ? {
+            platforms: app.platforms ?? ["web", "ios", "android"],
+            port: nextPort++,
+          }
+        : {}),
+      ...(!isExpo && app.category ? { category: app.category } : {}),
+      ...(!isExpo && app.intendedStack?.trim()
+        ? { intendedStack: app.intendedStack.trim() }
+        : {}),
     };
   });
   const roles = new Set<SharedWorkspacePackageRole>([
-    'config',
-    'ui-theme',
+    "config",
+    "ui-theme",
     ...(input.optionalSharedPackages ?? []),
   ]);
+  const sharedPackages = [...roles].map((role) =>
+    createSharedPackage(role, packageScope),
+  );
   const manifest: WorkspaceManifest = {
     schemaVersion: 1,
     name,
     displayName: input.displayName.trim(),
     packageScope,
-    packageManager: input.packageManager ?? 'pnpm',
-    expoVersion: input.expoVersion?.trim() || '^56.0.0',
-    stylingSystem: input.stylingSystem ?? 'uniwind',
+    packageManager: input.packageManager ?? "pnpm",
+    expoVersion: input.expoVersion?.trim() || "^56.0.0",
+    stylingSystem: input.stylingSystem ?? "uniwind",
     sharedDesignDirection:
       input.sharedDesignDirection?.trim() ||
-      'Use one accessible theme and component foundation across every product surface.',
-    taskRunner: 'turbo',
+      "Use one accessible theme and component foundation across every product surface.",
+    taskRunner: "turbo",
     apps,
-    sharedPackages: [...roles].map((role) => createSharedPackage(role, packageScope)),
+    sharedPackages,
   };
   validateWorkspaceManifest(manifest);
   return manifest;
 }
 
-export function validateWorkspaceManifest(value: unknown): asserts value is WorkspaceManifest {
-  if (!isRecord(value)) throw new Error('Workspace plan must be a JSON object.');
-  if (value.schemaVersion !== 1) throw new Error('Workspace plan schemaVersion must be 1.');
-  if (typeof value.name !== 'string' || slugifyWorkspaceName(value.name) !== value.name) {
-    throw new Error('Workspace name must be a lowercase product slug.');
+export function validateWorkspaceManifest(
+  value: unknown,
+): asserts value is WorkspaceManifest {
+  if (!value || typeof value !== "object") {
+    throw new Error("Workspace plan must be a JSON object.");
   }
-  if (typeof value.displayName !== 'string' || !value.displayName.trim()) {
-    throw new Error('Workspace displayName is required.');
+  const manifest = value as Partial<WorkspaceManifest>;
+  if (manifest.schemaVersion !== 1) {
+    throw new Error("Workspace plan schemaVersion must be 1.");
   }
-  const packageScope = normalizePackageScope(typeof value.packageScope === 'string' ? value.packageScope : '');
-  if (value.packageScope !== packageScope) {
-    throw new Error('Workspace packageScope must be lowercase and normalized.');
+  if (!manifest.name || slugifyWorkspaceName(manifest.name) !== manifest.name) {
+    throw new Error("Workspace name must be a lowercase product slug.");
   }
-  if (!['npm', 'pnpm', 'yarn', 'bun'].includes(String(value.packageManager))) {
-    throw new Error('Workspace packageManager must be npm, pnpm, yarn, or bun.');
+  if (!manifest.displayName?.trim()) {
+    throw new Error("Workspace displayName is required.");
   }
-  if (typeof value.expoVersion !== 'string' || !value.expoVersion.trim()) {
-    throw new Error('Workspace expoVersion is required.');
+  const packageScope = normalizePackageScope(manifest.packageScope ?? "");
+  if (manifest.packageScope !== packageScope) {
+    throw new Error("Workspace packageScope must be lowercase and normalized.");
   }
-  if (!['uniwind', 'nativewind', 'nativewindui', 'tamagui', 'restyle', 'stylesheet'].includes(String(value.stylingSystem))) {
-    throw new Error('Workspace stylingSystem is invalid.');
+  if (!["npm", "pnpm", "yarn", "bun"].includes(manifest.packageManager ?? "")) {
+    throw new Error(
+      "Workspace packageManager must be npm, pnpm, yarn, or bun.",
+    );
   }
-  if (typeof value.sharedDesignDirection !== 'string' || !value.sharedDesignDirection.trim()) {
-    throw new Error('Workspace sharedDesignDirection is required.');
+  if (!manifest.expoVersion?.trim()) {
+    throw new Error("Workspace expoVersion is required.");
   }
-  if (value.taskRunner !== 'turbo') throw new Error('Workspace taskRunner must be turbo.');
-  if (!Array.isArray(value.apps) || value.apps.length < 2) {
-    throw new Error('A CESS workspace requires at least two registered apps.');
+  if (
+    ![
+      "uniwind",
+      "nativewind",
+      "nativewindui",
+      "tamagui",
+      "restyle",
+      "stylesheet",
+    ].includes(manifest.stylingSystem ?? "")
+  ) {
+    throw new Error("Workspace stylingSystem is invalid.");
   }
-  if (!value.apps.some((entry) => isRecord(entry) && entry.kind === 'expo')) {
-    throw new Error('A CESS workspace requires at least one Expo app.');
+  if (!manifest.sharedDesignDirection?.trim()) {
+    throw new Error("Workspace sharedDesignDirection is required.");
+  }
+  if (manifest.taskRunner !== "turbo") {
+    throw new Error("Workspace taskRunner must be turbo.");
+  }
+  if (!Array.isArray(manifest.apps) || manifest.apps.length < 2) {
+    throw new Error("A CESS workspace requires at least two registered apps.");
+  }
+  if (!manifest.apps.some((app) => app.kind === "expo")) {
+    throw new Error("A CESS workspace requires at least one Expo app.");
   }
 
   const ids = new Set<string>();
   const paths = new Set<string>();
   const packageNames = new Set<string>();
   const ports = new Set<number>();
-  for (const raw of value.apps) {
-    if (!isRecord(raw)) throw new Error('Every workspace app must be an object.');
-    const id = typeof raw.id === 'string' ? raw.id : '';
-    if (!id || slugifyWorkspaceName(id) !== id) throw new Error(`Workspace app id must be a lowercase slug: ${id}`);
-    if (ids.has(id)) throw new Error(`Duplicate workspace app id: ${id}`);
-    ids.add(id);
-    const expectedPath = `apps/${id}`;
-    if (raw.path !== expectedPath) throw new Error(`Workspace app path must be ${expectedPath}.`);
-    const normalizedPath = normalizeWorkspaceRelativePath(String(raw.path));
-    if (paths.has(normalizedPath)) throw new Error(`Duplicate workspace app path: ${normalizedPath}`);
-    paths.add(normalizedPath);
-    if (raw.packageName !== `${packageScope}/${id}`) throw new Error(`Workspace app packageName must be ${packageScope}/${id}.`);
-    if (packageNames.has(String(raw.packageName))) throw new Error(`Duplicate workspace package name: ${String(raw.packageName)}`);
-    packageNames.add(String(raw.packageName));
-    if (typeof raw.displayName !== 'string' || !raw.displayName.trim() || typeof raw.purpose !== 'string' || !raw.purpose.trim()) {
-      throw new Error('Every workspace app requires a displayName and purpose.');
+  for (const app of manifest.apps) {
+    if (!app.displayName?.trim() || !app.purpose?.trim()) {
+      throw new Error(
+        "Every workspace app requires a displayName and purpose.",
+      );
     }
-    if (raw.kind !== 'expo' && raw.kind !== 'non-expo') throw new Error(`Invalid workspace app kind for ${id}.`);
-    if (raw.kind === 'expo') {
-      if (!Number.isInteger(raw.port) || Number(raw.port) < 1 || Number(raw.port) > 65535) {
+    const id = slugifyWorkspaceName(app.id);
+    if (id !== app.id) {
+      throw new Error(`Workspace app id must be a lowercase slug: ${app.id}`);
+    }
+    const expectedPath = `apps/${id}`;
+    if (normalizeWorkspaceRelativePath(app.path) !== expectedPath) {
+      throw new Error(`Workspace app ${id} must live at ${expectedPath}.`);
+    }
+    if (ids.has(id) || paths.has(expectedPath)) {
+      throw new Error(`Duplicate workspace app id or path: ${id}`);
+    }
+    ids.add(id);
+    paths.add(expectedPath);
+    if (app.packageName) {
+      if (packageNames.has(app.packageName)) {
+        throw new Error(`Duplicate workspace package name: ${app.packageName}`);
+      }
+      packageNames.add(app.packageName);
+    }
+    if (app.kind !== "expo" && app.kind !== "non-expo") {
+      throw new Error(`Invalid workspace app kind for ${id}.`);
+    }
+    if (app.kind === "expo") {
+      if (
+        !Number.isInteger(app.port) ||
+        (app.port ?? 0) < 1024 ||
+        (app.port ?? 0) > 65535
+      ) {
         throw new Error(`Expo app ${id} requires a valid development port.`);
       }
-      if (ports.has(Number(raw.port))) throw new Error(`Duplicate Expo development port: ${String(raw.port)}`);
-      ports.add(Number(raw.port));
+      if (ports.has(app.port!)) {
+        throw new Error(`Duplicate Expo development port: ${app.port}`);
+      }
+      ports.add(app.port!);
     }
   }
 
-  if (!Array.isArray(value.sharedPackages)) throw new Error('Workspace sharedPackages must be an array.');
-  const sharedNames = new Set<string>();
-  for (const raw of value.sharedPackages) {
-    if (!isRecord(raw)) throw new Error('Every shared package must be an object.');
-    const name = typeof raw.name === 'string' ? raw.name : '';
-    if (!name || slugifyWorkspaceName(name) !== name) throw new Error(`Invalid shared package name: ${name}`);
-    const expectedPath = `packages/${name}`;
-    if (raw.path !== expectedPath) throw new Error(`Shared package path must be ${expectedPath}.`);
-    if (raw.packageName !== `${packageScope}/${name}`) throw new Error(`Shared package packageName must be ${packageScope}/${name}.`);
-    if (sharedNames.has(name) || packageNames.has(String(raw.packageName))) throw new Error(`Duplicate workspace package name: ${String(raw.packageName)}`);
-    sharedNames.add(name);
-    packageNames.add(String(raw.packageName));
+  if (!Array.isArray(manifest.sharedPackages)) {
+    throw new Error("Workspace sharedPackages must be an array.");
   }
-  if (!sharedNames.has('config') || !sharedNames.has('ui')) {
-    throw new Error('Workspace sharedPackages must include config and ui.');
+  const roles = new Set(manifest.sharedPackages.map((entry) => entry.role));
+  if (!roles.has("config") || !roles.has("ui-theme")) {
+    throw new Error(
+      "Workspace sharedPackages must include config and ui-theme.",
+    );
+  }
+  const sharedNames = new Set<string>();
+  const sharedPaths = new Set<string>();
+  const sharedPackageNames = new Set<string>();
+  for (const sharedPackage of manifest.sharedPackages) {
+    const expectedPath = `packages/${sharedPackage.name}`;
+    if (normalizeWorkspaceRelativePath(sharedPackage.path) !== expectedPath) {
+      throw new Error(
+        `Shared package ${sharedPackage.name} must live at ${expectedPath}.`,
+      );
+    }
+    if (
+      sharedPackage.packageName !==
+      `${manifest.packageScope}/${sharedPackage.name}`
+    ) {
+      throw new Error(
+        `Shared package ${sharedPackage.name} must use the workspace package scope.`,
+      );
+    }
+    if (
+      sharedNames.has(sharedPackage.name) ||
+      sharedPaths.has(expectedPath) ||
+      sharedPackageNames.has(sharedPackage.packageName)
+    ) {
+      throw new Error(
+        `Duplicate shared workspace package: ${sharedPackage.name}`,
+      );
+    }
+    sharedNames.add(sharedPackage.name);
+    sharedPaths.add(expectedPath);
+    sharedPackageNames.add(sharedPackage.packageName);
   }
 }
 
 export function normalizeWorkspaceRelativePath(value: string): string {
-  const normalized = value.trim().replace(/\\/gu, '/').replace(/^\.\//u, '').replace(/\/$/u, '');
-  if (!normalized || path.posix.isAbsolute(normalized) || /^[a-z]:/iu.test(normalized)) {
-    throw new Error('Workspace paths must be safe relative paths.');
+  const input = value.trim().replace(/\\/gu, "/");
+  if (
+    !input ||
+    input.includes("\0") ||
+    path.posix.isAbsolute(input) ||
+    path.win32.isAbsolute(input)
+  ) {
+    throw new Error(`Workspace path must be relative: ${value}`);
   }
-  if (normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
-    throw new Error(`Workspace path escapes the workspace root: ${value}`);
+  const normalized = path.posix
+    .normalize(input)
+    .replace(/^\.\//u, "")
+    .replace(/\/$/u, "");
+  if (normalized === ".." || normalized.startsWith("../")) {
+    throw new Error(`Workspace path escapes the workspace: ${value}`);
   }
   return normalized;
 }
 
-export function resolveWorkspacePath(workspacePath: string, relativePath: string): string {
-  const root = path.resolve(workspacePath);
-  const resolved = path.resolve(root, ...normalizeWorkspaceRelativePath(relativePath).split('/'));
-  if (resolved === root || !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error(`Workspace path escapes the workspace root: ${relativePath}`);
+export function resolveWorkspacePath(
+  workspacePath: string,
+  relativePath: string,
+): string {
+  const workspace = path.resolve(workspacePath);
+  const target = path.resolve(
+    workspace,
+    normalizeWorkspaceRelativePath(relativePath),
+  );
+  const relation = path.relative(workspace, target);
+  if (
+    relation === ".." ||
+    relation.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relation)
+  ) {
+    throw new Error(`Workspace path escapes the workspace: ${relativePath}`);
   }
-  return resolved;
+  return target;
 }
 
-export async function readWorkspaceManifest(workspacePath: string): Promise<WorkspaceManifest | null> {
+export async function readWorkspaceManifest(
+  workspacePath: string,
+): Promise<WorkspaceManifest | null> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(path.join(workspacePath, WORKSPACE_MANIFEST_PATH), 'utf8'));
-    validateWorkspaceManifest(parsed);
-    return parsed;
+    const text = await readFile(
+      path.join(workspacePath, WORKSPACE_MANIFEST_PATH),
+      "utf8",
+    );
+    const value: unknown = JSON.parse(text);
+    validateWorkspaceManifest(value);
+    return value;
   } catch (error) {
     if (isMissingFileError(error)) return null;
     throw error;
@@ -264,132 +375,983 @@ export async function readWorkspaceManifest(workspacePath: string): Promise<Work
 export async function writeWorkspaceManifest(
   workspacePath: string,
   manifest: WorkspaceManifest,
-  force = false
+  force = false,
 ): Promise<WorkspaceWriteResult> {
   validateWorkspaceManifest(manifest);
+  const filePath = path.join(workspacePath, WORKSPACE_MANIFEST_PATH);
+  await mkdir(path.dirname(filePath), { recursive: true });
   return writeIfAllowed(
-    path.join(workspacePath, WORKSPACE_MANIFEST_PATH),
+    filePath,
     `${JSON.stringify(manifest, null, 2)}\n`,
-    force
+    force,
   );
 }
 
-export async function discoverWorkspace(workspacePath: string): Promise<WorkspaceDiscovery | null> {
-  const appDirectories = await readDirectories(path.join(workspacePath, 'apps'));
-  if (appDirectories.length < 2) return null;
-  const rootPackage = await readJson(path.join(workspacePath, 'package.json'));
-  const displayName = titleFromSlug(
-    typeof rootPackage?.name === 'string' ? rootPackage.name.replace(/^@[^/]+\//u, '') : path.basename(workspacePath)
+export async function discoverWorkspace(
+  workspacePath: string,
+): Promise<WorkspaceDiscovery | null> {
+  const rootPackage = await readJson(path.join(workspacePath, "package.json"));
+  const appEntries = await readDirectories(path.join(workspacePath, "apps"));
+  if (appEntries.length < 2) {
+    return null;
+  }
+  const packageManager = await detectWorkspacePackageManager(
+    workspacePath,
+    rootPackage,
   );
-  const packageScope = inferPackageScope(rootPackage, workspacePath);
-  const appInputs: WorkspaceAppInput[] = [];
-  for (const directory of appDirectories) {
-    const packageJson = await readJson(path.join(workspacePath, 'apps', directory, 'package.json'));
+  const rootName =
+    typeof rootPackage?.name === "string"
+      ? rootPackage.name
+      : path.basename(workspacePath);
+  const displayName = titleFromSlug(rootName.replace(/^@[^/]+\//u, ""));
+  const packageEntries = await readDirectories(
+    path.join(workspacePath, "packages"),
+  );
+  let scope = derivePackageScope(
+    rootName.replace(/^@/u, "").replace(/\//gu, "-"),
+  );
+  for (const entry of packageEntries) {
+    const packageJson = await readJson(
+      path.join(workspacePath, "packages", entry, "package.json"),
+    );
+    const packageName =
+      typeof packageJson?.name === "string" ? packageJson.name : "";
+    const match = /^(@[^/]+)\//u.exec(packageName);
+    if (match?.[1]) {
+      scope = normalizePackageScope(match[1]);
+      break;
+    }
+  }
+  const apps: WorkspaceAppInput[] = [];
+  const discoveredPackageNames = new Map<string, string>();
+  for (const entry of appEntries) {
+    const packageJson = await readJson(
+      path.join(workspacePath, "apps", entry, "package.json"),
+    );
     const dependencies = {
       ...(isRecord(packageJson?.dependencies) ? packageJson.dependencies : {}),
-      ...(isRecord(packageJson?.devDependencies) ? packageJson.devDependencies : {}),
+      ...(isRecord(packageJson?.devDependencies)
+        ? packageJson.devDependencies
+        : {}),
     };
-    const expo = typeof dependencies.expo === 'string';
-    appInputs.push({
-      displayName: titleFromSlug(directory),
-      slug: directory,
-      kind: expo ? 'expo' : 'non-expo',
-      purpose: `Existing ${expo ? 'Expo application' : 'application'} at apps/${directory}.`,
-      ...(expo ? {} : { category: 'other' as const }),
+    const isExpo = typeof dependencies.expo === "string";
+    if (typeof packageJson?.name === "string" && packageJson.name.trim())
+      discoveredPackageNames.set(
+        slugifyWorkspaceName(entry),
+        packageJson.name.trim(),
+      );
+    const purpose =
+      (typeof packageJson?.description === "string" &&
+        packageJson.description.trim()) ||
+      `${titleFromSlug(entry)} application in the ${displayName} workspace.`;
+    apps.push({
+      displayName: titleFromSlug(entry),
+      slug: entry,
+      kind: isExpo ? "expo" : "non-expo",
+      purpose,
+      ...(isExpo
+        ? { platforms: ["web", "ios", "android"] }
+        : { category: "other" }),
     });
   }
-  if (!appInputs.some((entry) => entry.kind === 'expo')) return null;
-  const packageDirectories = await readDirectories(path.join(workspacePath, 'packages'));
-  const optionalSharedPackages = packageDirectories
-    .map(inferSharedPackageRole)
-    .filter((role): role is SharedWorkspacePackageRole => role !== null && role !== 'config' && role !== 'ui-theme');
   const manifest = createWorkspaceManifest({
     displayName,
-    slug: slugifyWorkspaceName(path.basename(workspacePath)),
-    packageScope,
-    packageManager: await detectWorkspacePackageManager(workspacePath, rootPackage),
-    apps: appInputs,
-    optionalSharedPackages,
+    slug: slugifyWorkspaceName(rootName.replace(/^@[^/]+\//u, "")),
+    packageScope: scope,
+    packageManager,
+    apps,
   });
+  for (const app of manifest.apps) {
+    app.packageName = discoveredPackageNames.get(app.id) ?? app.packageName;
+  }
+  for (const entry of packageEntries) {
+    const packageJson = await readJson(
+      path.join(workspacePath, "packages", entry, "package.json"),
+    );
+    const name = slugifyWorkspaceName(entry);
+    const packageName =
+      typeof packageJson?.name === "string" && packageJson.name.trim()
+        ? packageJson.name.trim()
+        : `${scope}/${name}`;
+    if (manifest.sharedPackages.some((item) => item.name === name)) continue;
+    manifest.sharedPackages.push({
+      name,
+      packageName,
+      path: `packages/${name}`,
+      role: inferSharedPackageRole(name),
+    });
+  }
+  validateWorkspaceManifest(manifest);
   return {
     manifest,
-    hasTurboConfig: await pathExists(path.join(workspacePath, 'turbo.json')),
+    hasTurboConfig: await pathExists(path.join(workspacePath, "turbo.json")),
     hasWorkspaceConfig:
-      (await pathExists(path.join(workspacePath, 'pnpm-workspace.yaml'))) || Array.isArray(rootPackage?.workspaces),
+      (await pathExists(path.join(workspacePath, "pnpm-workspace.yaml"))) ||
+      Array.isArray(rootPackage?.workspaces),
   };
 }
 
-export async function scaffoldWorkspaceMemory(
+export async function scaffoldWorkspaceRoot(
   workspacePath: string,
   manifest: WorkspaceManifest,
-  force = false
+  options: { force?: boolean; existing?: boolean } = {},
 ): Promise<WorkspaceWriteResult[]> {
   validateWorkspaceManifest(manifest);
-  await mkdir(path.join(workspacePath, 'project'), { recursive: true });
-  const results = [
-    await writeWorkspaceManifest(workspacePath, manifest, force),
-    await writeIfAllowed(path.join(workspacePath, 'project', 'info.md'), renderRootInfo(manifest), force),
-    await writeIfAllowed(path.join(workspacePath, 'project', 'style.md'), renderRootStyle(manifest), force),
-    await writeIfAllowed(path.join(workspacePath, 'project', 'guidelines.md'), renderRootGuidelines(manifest), force),
-    await writeIfAllowed(path.join(workspacePath, 'project', 'todo.md'), renderRootTodo(manifest), force),
-    await writeIfAllowed(path.join(workspacePath, 'AGENTS.md'), renderAgents(manifest), force),
-    await writeIfAllowed(path.join(workspacePath, 'CLAUDE.md'), `# ${manifest.displayName}\n\nFollow AGENTS.md and treat project/workspace.json as the app and package registry.\n`, force),
-  ];
-  for (const app of manifest.apps) {
-    const appRoot = resolveWorkspacePath(workspacePath, app.path);
-    if (!(await pathExists(appRoot))) continue;
-    await mkdir(path.join(appRoot, 'project'), { recursive: true });
+  const force = options.force ?? false;
+  const results: WorkspaceWriteResult[] = [];
+  await mkdir(workspacePath, { recursive: true });
+  await mkdir(path.join(workspacePath, "apps"), { recursive: true });
+  await mkdir(path.join(workspacePath, "packages"), { recursive: true });
+  await mkdir(path.join(workspacePath, "project"), { recursive: true });
+
+  results.push(await writeWorkspaceManifest(workspacePath, manifest, force));
+  results.push(
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "info.md"),
+      renderWorkspaceInfo(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "style.md"),
+      renderWorkspaceStyle(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "guidelines.md"),
+      renderWorkspaceGuidelines(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "todo.md"),
+      renderWorkspaceTodo(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "theme.json"),
+      `${JSON.stringify(defaultWorkspaceTheme(), null, 2)}\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "AGENTS.md"),
+      renderWorkspaceAgents(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "CLAUDE.md"),
+      renderWorkspaceClaude(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, ".github", "workflows", "mds-pr-checks.yml"),
+      renderWorkspaceCiWorkflow(manifest),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(workspacePath, "project", "release-flow.md"),
+      renderWorkspaceReleaseFlow(manifest),
+      force,
+    ),
+  );
+
+  if (!options.existing) {
     results.push(
-      await writeIfAllowed(path.join(appRoot, 'project', 'info.md'), renderAppInfo(app), force),
-      await writeIfAllowed(path.join(appRoot, 'project', 'style.md'), renderAppStyle(manifest, app), force),
-      await writeIfAllowed(path.join(appRoot, 'project', 'guidelines.md'), renderAppGuidelines(manifest, app), force),
-      await writeIfAllowed(path.join(appRoot, 'project', 'todo.md'), renderAppTodo(app), force)
+      await writeIfAllowed(
+        path.join(workspacePath, "package.json"),
+        renderRootPackageJson(manifest),
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(workspacePath, "turbo.json"),
+        renderTurboConfig(),
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(workspacePath, "tsconfig.base.json"),
+        renderBaseTsconfig(manifest),
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(workspacePath, ".gitignore"),
+        renderWorkspaceGitignore(),
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(workspacePath, "README.md"),
+        renderWorkspaceReadme(manifest),
+        force,
+      ),
+    );
+    if (manifest.packageManager === "pnpm") {
+      results.push(
+        await writeIfAllowed(
+          path.join(workspacePath, "pnpm-workspace.yaml"),
+          'packages:\n  - "apps/*"\n  - "packages/*"\n\n# Expo workspaces are most predictable with one hoisted native dependency graph.\nnodeLinker: hoisted\n',
+          force,
+        ),
+        await writeIfAllowed(
+          path.join(workspacePath, ".npmrc"),
+          "node-linker=hoisted\n",
+          force,
+        ),
+      );
+    }
+  }
+
+  results.push(
+    ...(await scaffoldSharedConfigPackage(workspacePath, manifest, force)),
+  );
+  results.push(
+    ...(await scaffoldSharedUiPackage(workspacePath, manifest, force)),
+  );
+  for (const sharedPackage of manifest.sharedPackages) {
+    if (sharedPackage.role === "hooks-state") {
+      results.push(
+        ...(await scaffoldHooksPackage(workspacePath, sharedPackage, force)),
+      );
+    }
+    if (sharedPackage.role === "sdk-client") {
+      results.push(
+        ...(await scaffoldSdkPackage(workspacePath, sharedPackage, force)),
+      );
+    }
+    if (sharedPackage.role === "database-schema") {
+      results.push(
+        ...(await scaffoldDatabasePackage(workspacePath, sharedPackage, force)),
+      );
+    }
+  }
+  for (const app of manifest.apps.filter(
+    (entry) => entry.kind === "non-expo",
+  )) {
+    results.push(
+      ...(await scaffoldRegisteredAppMemory(
+        workspacePath,
+        manifest,
+        app,
+        force,
+      )),
     );
   }
   return results;
 }
 
-function createSharedPackage(role: SharedWorkspacePackageRole, scope: string): SharedWorkspacePackage {
-  const name = role === 'ui-theme' ? 'ui' : role === 'hooks-state' ? 'hooks' : role === 'sdk-client' ? 'sdk' : role === 'database-schema' ? 'db' : 'config';
-  return { name, packageName: `${scope}/${name}`, path: `packages/${name}`, role };
+export async function scaffoldWorkspaceMemory(
+  workspacePath: string,
+  manifest: WorkspaceManifest,
+  force = false,
+): Promise<WorkspaceWriteResult[]> {
+  validateWorkspaceManifest(manifest);
+  await mkdir(path.join(workspacePath, "project"), { recursive: true });
+  const results: WorkspaceWriteResult[] = [
+    await writeWorkspaceManifest(workspacePath, manifest, force),
+    await writeIfAllowed(path.join(workspacePath, "project", "info.md"), renderWorkspaceInfo(manifest), force),
+    await writeIfAllowed(path.join(workspacePath, "project", "style.md"), renderWorkspaceStyle(manifest), force),
+    await writeIfAllowed(path.join(workspacePath, "project", "guidelines.md"), renderWorkspaceGuidelines(manifest), force),
+    await writeIfAllowed(path.join(workspacePath, "project", "todo.md"), renderWorkspaceTodo(manifest), force),
+    await writeIfAllowed(path.join(workspacePath, "AGENTS.md"), renderWorkspaceAgents(manifest), force),
+    await writeIfAllowed(path.join(workspacePath, "CLAUDE.md"), renderWorkspaceClaude(manifest), force),
+  ];
+  for (const app of manifest.apps) {
+    const appRoot = resolveWorkspacePath(workspacePath, app.path);
+    if (!(await pathExists(appRoot))) continue;
+    const projectDir = path.join(appRoot, "project");
+    await mkdir(projectDir, { recursive: true });
+    results.push(
+      await writeIfAllowed(
+        path.join(projectDir, "info.md"),
+        `# ${app.displayName}\n\n- Workspace path: ${app.path}\n- Kind: ${app.kind}\n- Purpose: ${app.purpose}\n`,
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(projectDir, "style.md"),
+        `# ${app.displayName} Style Overrides\n\nRead the workspace root style and canonical theme first. Record only intentional app-specific overrides here.\n`,
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(projectDir, "guidelines.md"),
+        `# ${app.displayName} Guidelines\n\nRead root project memory first. Keep app-specific routes, screens, and features inside ${app.path}.\n`,
+        force,
+      ),
+      await writeIfAllowed(
+        path.join(projectDir, "todo.md"),
+        `# ${app.displayName} TODO\n\n- [ ] Replace discovered context with a complete app-specific plan.\n`,
+        force,
+      ),
+    );
+  }
+  return results;
+}
+
+export async function wireGeneratedExpoApp(
+  workspacePath: string,
+  manifest: WorkspaceManifest,
+  app: WorkspaceApp,
+): Promise<WorkspaceWriteResult[]> {
+  if (app.kind !== "expo")
+    throw new Error(`Cannot wire non-Expo app ${app.id} as Expo.`);
+  const appPath = resolveWorkspacePath(workspacePath, app.path);
+  const packagePath = path.join(appPath, "package.json");
+  const packageJson = (await readJson(packagePath)) ?? {};
+  const tsconfigPath = path.join(appPath, "tsconfig.json");
+  const tsconfig = (await readJson(tsconfigPath)) ?? {};
+  const existingCompilerOptions = isRecord(tsconfig.compilerOptions)
+    ? tsconfig.compilerOptions
+    : {};
+  const { baseUrl: _baseUrl, ...compilerOptions } = existingCompilerOptions;
+  const existingPaths = isRecord(compilerOptions.paths)
+    ? compilerOptions.paths
+    : {};
+  const existingIncludes = Array.isArray(tsconfig.include)
+    ? tsconfig.include.filter(
+        (entry): entry is string => typeof entry === "string",
+      )
+    : [];
+  const scripts = isRecord(packageJson.scripts) ? packageJson.scripts : {};
+  packageJson.name = resolveWorkspaceAppPackageName(manifest, app);
+  packageJson.private = true;
+  packageJson.scripts = {
+    ...scripts,
+    dev: `expo start --port ${app.port}`,
+    build:
+      typeof scripts.build === "string"
+        ? scripts.build
+        : "expo export --platform web",
+    typecheck:
+      typeof scripts.typecheck === "string"
+        ? scripts.typecheck
+        : "tsc --noEmit",
+    clean:
+      typeof scripts.clean === "string"
+        ? scripts.clean
+        : "rimraf dist .expo .turbo node_modules/.cache",
+  };
+  const dependencies = isRecord(packageJson.dependencies)
+    ? packageJson.dependencies
+    : {};
+  packageJson.dependencies = {
+    ...dependencies,
+    ...(manifest.expoVersion.startsWith("~56.") ||
+    manifest.expoVersion.startsWith("^56.")
+      ? { "react-native-screens": "~4.26.0" }
+      : {}),
+    [`${manifest.packageScope}/config`]: "workspace:*",
+    [`${manifest.packageScope}/ui`]: "workspace:*",
+  };
+  const results = [
+    await writeFileResult(
+      packagePath,
+      `${JSON.stringify(packageJson, null, 2)}\n`,
+    ),
+    await writeFileResult(
+      path.join(appPath, "metro.config.cjs"),
+      `const { createMonorepoMetroConfig } = require('${manifest.packageScope}/config/metro');\n\nmodule.exports = createMonorepoMetroConfig(__dirname, {\n  cssEntryFile: './global.css',\n});\n`,
+    ),
+    await writeFileResult(
+      tsconfigPath,
+      `${JSON.stringify(
+        {
+          ...tsconfig,
+          extends: "../../tsconfig.base.json",
+          compilerOptions: {
+            ...compilerOptions,
+            paths: { ...existingPaths, "@/*": ["./src/*"] },
+          },
+          include: [
+            ...new Set([
+              ...existingIncludes,
+              "**/*.ts",
+              "**/*.tsx",
+              ".expo/types/**/*.ts",
+              "expo-env.d.ts",
+              "uniwind-types.d.ts",
+            ]),
+          ],
+          exclude: ["node_modules/**"],
+        },
+        null,
+        2,
+      )}\n`,
+    ),
+    await writeFileResult(
+      path.join(appPath, "src", "theme", "workspace-theme.ts"),
+      `export { Container, sharedTheme } from '${manifest.packageScope}/ui';\n`,
+    ),
+  ];
+  await rm(path.join(appPath, "metro.config.js"), { force: true });
+  for (const item of [
+    ".git",
+    "node_modules",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    ".npmrc",
+  ]) {
+    await rm(path.join(appPath, item), { recursive: true, force: true });
+  }
+  return results;
+}
+
+function createSharedPackage(
+  role: SharedWorkspacePackageRole,
+  packageScope: string,
+): SharedWorkspacePackage {
+  const name =
+    role === "ui-theme"
+      ? "ui"
+      : role === "hooks-state"
+        ? "hooks"
+        : role === "sdk-client"
+          ? "sdk"
+          : role === "database-schema"
+            ? "db"
+            : "config";
+  return {
+    name,
+    packageName: `${packageScope}/${name}`,
+    path: `packages/${name}`,
+    role,
+  };
 }
 
 function normalizePackageScope(value: string): string {
   const normalized = value.trim().toLowerCase();
-  if (!/^@[a-z0-9][a-z0-9._-]*$/u.test(normalized)) throw new Error('Workspace packageScope must look like @product.');
+  if (!/^@[a-z0-9][a-z0-9._-]*$/u.test(normalized)) {
+    throw new Error(`Invalid workspace package scope: ${value}`);
+  }
   return normalized;
 }
 
-function inferPackageScope(rootPackage: Record<string, unknown> | null, workspacePath: string): string {
-  const rootName = typeof rootPackage?.name === 'string' ? rootPackage.name : '';
-  const match = /^(@[^/]+)\//u.exec(rootName);
-  return match?.[1] ?? derivePackageScope(path.basename(workspacePath));
+function inferSharedPackageRole(name: string): SharedWorkspacePackageRole {
+  const normalized = slugifyWorkspaceName(name);
+  if (normalized === "ui" || normalized === "theme" || normalized === "ui-theme")
+    return "ui-theme";
+  if (normalized === "hooks" || normalized === "state") return "hooks-state";
+  if (normalized === "sdk" || normalized === "api") return "sdk-client";
+  if (normalized === "db" || normalized === "database") return "database-schema";
+  return "config";
 }
 
-function inferSharedPackageRole(name: string): SharedWorkspacePackageRole | null {
-  if (name === 'config') return 'config';
-  if (name === 'ui' || name === 'theme') return 'ui-theme';
-  if (name === 'hooks' || name === 'state') return 'hooks-state';
-  if (name === 'sdk' || name === 'api') return 'sdk-client';
-  if (name === 'db' || name === 'database') return 'database-schema';
-  return null;
+function resolveWorkspaceAppPackageName(
+  manifest: WorkspaceManifest,
+  app: WorkspaceApp,
+): string {
+  return app.packageName?.trim() || `${manifest.packageScope}/${app.id}`;
+}
+
+async function scaffoldSharedConfigPackage(
+  workspacePath: string,
+  manifest: WorkspaceManifest,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const root = path.join(workspacePath, "packages", "config");
+  await mkdir(path.join(root, "src"), { recursive: true });
+  return [
+    await writeIfAllowed(
+      path.join(root, "package.json"),
+      `${JSON.stringify(
+        {
+          name: `${manifest.packageScope}/config`,
+          version: "0.0.0",
+          private: true,
+          main: "src/index.ts",
+          types: "src/index.ts",
+          exports: {
+            ".": "./src/index.ts",
+            "./metro": "./src/metro.cjs",
+            "./eslint": "./eslint.config.mjs",
+            "./prettier": "./prettier.config.mjs",
+            "./tsconfig": "./tsconfig.base.json",
+          },
+          scripts: { typecheck: "tsc --noEmit", clean: "rimraf dist .turbo" },
+        },
+        null,
+        2,
+      )}\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "index.ts"),
+      `export const workspaceName = '${manifest.name}' as const;\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "metro.cjs"),
+      renderMetroFactory(),
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "eslint.config.mjs"),
+      "export default [\n  { ignores: ['dist/**', '.expo/**', '.turbo/**'] },\n  { rules: { 'no-console': 'warn', 'no-debugger': 'error' } },\n];\n",
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "prettier.config.mjs"),
+      "export default { singleQuote: true, trailingComma: 'es5', printWidth: 100 };\n",
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "tsconfig.base.json"),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            strict: true,
+            esModuleInterop: true,
+            jsx: "react-jsx",
+            moduleResolution: "bundler",
+            module: "ESNext",
+            target: "ES2022",
+            lib: ["ES2022", "DOM"],
+            skipLibCheck: true,
+            forceConsistentCasingInFileNames: true,
+            resolveJsonModule: true,
+            isolatedModules: true,
+            noEmit: true,
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "tsconfig.json"),
+      `${JSON.stringify({ extends: "../../tsconfig.base.json", include: ["src/**/*"] }, null, 2)}\n`,
+      force,
+    ),
+  ];
+}
+
+async function scaffoldSharedUiPackage(
+  workspacePath: string,
+  manifest: WorkspaceManifest,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const root = path.join(workspacePath, "packages", "ui");
+  await mkdir(path.join(root, "src"), { recursive: true });
+  return [
+    await writeIfAllowed(
+      path.join(root, "package.json"),
+      `${JSON.stringify(
+        {
+          name: `${manifest.packageScope}/ui`,
+          version: "0.0.0",
+          private: true,
+          main: "src/index.ts",
+          types: "src/index.ts",
+          exports: { ".": "./src/index.ts", "./theme": "./src/theme.ts" },
+          scripts: { typecheck: "tsc --noEmit", clean: "rimraf dist .turbo" },
+        },
+        null,
+        2,
+      )}\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "theme.ts"),
+      "export const sharedTheme = {\n  colors: { background: '#ffffff', foreground: '#111827', primary: '#2563eb', secondary: '#0f766e' },\n  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },\n  radius: { sm: 4, md: 8 },\n} as const;\n",
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "container.tsx"),
+      "import type { PropsWithChildren } from 'react';\nimport { View, type ViewProps } from 'react-native';\n\nexport function Container({ children, ...props }: PropsWithChildren<ViewProps>) {\n  return <View {...props}>{children}</View>;\n}\n",
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "index.ts"),
+      "export { Container } from './container';\nexport { sharedTheme } from './theme';\n",
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "tsconfig.json"),
+      `${JSON.stringify({ extends: "../../tsconfig.base.json", include: ["src/**/*"] }, null, 2)}\n`,
+      force,
+    ),
+  ];
+}
+
+async function scaffoldHooksPackage(
+  workspacePath: string,
+  sharedPackage: SharedWorkspacePackage,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const root = path.join(workspacePath, sharedPackage.path);
+  return scaffoldTypeScriptPackage(root, sharedPackage, force, {
+    source:
+      "import { useEffect, useState } from 'react';\n\nexport function useMounted(): boolean {\n  const [mounted, setMounted] = useState(false);\n  useEffect(() => {\n    setMounted(true);\n  }, []);\n  return mounted;\n}\n",
+    peerDependencies: { react: ">=18" },
+  });
+}
+
+async function scaffoldSdkPackage(
+  workspacePath: string,
+  sharedPackage: SharedWorkspacePackage,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const root = path.join(workspacePath, sharedPackage.path);
+  return scaffoldTypeScriptPackage(root, sharedPackage, force, {
+    source:
+      "export class ApiError extends Error {\n  constructor(\n    message: string,\n    readonly status: number,\n    readonly body?: unknown\n  ) {\n    super(message);\n    this.name = 'ApiError';\n  }\n}\n\nexport async function apiFetch<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {\n  const response = await fetch(input, init);\n  const body: unknown = await response.json().catch(() => undefined);\n  if (!response.ok) throw new ApiError(`Request failed with status ${response.status}`, response.status, body);\n  return body as T;\n}\n",
+  });
+}
+
+async function scaffoldDatabasePackage(
+  workspacePath: string,
+  sharedPackage: SharedWorkspacePackage,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const root = path.join(workspacePath, sharedPackage.path);
+  return scaffoldTypeScriptPackage(root, sharedPackage, force, {
+    source:
+      "export interface DatabaseRecord {\n  id: string;\n  createdAt: string;\n  updatedAt: string;\n}\n\nexport interface DatabaseRepository<TRecord extends DatabaseRecord> {\n  findById(id: string): Promise<TRecord | null>;\n  save(record: TRecord): Promise<TRecord>;\n}\n",
+  });
+}
+
+async function scaffoldTypeScriptPackage(
+  root: string,
+  sharedPackage: SharedWorkspacePackage,
+  force: boolean,
+  options: { source: string; peerDependencies?: Record<string, string> },
+): Promise<WorkspaceWriteResult[]> {
+  await mkdir(path.join(root, "src"), { recursive: true });
+  return [
+    await writeIfAllowed(
+      path.join(root, "package.json"),
+      `${JSON.stringify(
+        {
+          name: sharedPackage.packageName,
+          version: "0.0.0",
+          private: true,
+          main: "src/index.ts",
+          types: "src/index.ts",
+          exports: { ".": "./src/index.ts" },
+          scripts: { typecheck: "tsc --noEmit", clean: "rimraf dist .turbo" },
+          ...(options.peerDependencies
+            ? { peerDependencies: options.peerDependencies }
+            : {}),
+        },
+        null,
+        2,
+      )}\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "src", "index.ts"),
+      options.source,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(root, "tsconfig.json"),
+      `${JSON.stringify({ extends: "../../tsconfig.base.json", include: ["src/**/*"] }, null, 2)}\n`,
+      force,
+    ),
+  ];
+}
+
+async function scaffoldRegisteredAppMemory(
+  workspacePath: string,
+  manifest: WorkspaceManifest,
+  app: WorkspaceApp,
+  force: boolean,
+): Promise<WorkspaceWriteResult[]> {
+  const projectDir = path.join(
+    resolveWorkspacePath(workspacePath, app.path),
+    "project",
+  );
+  await mkdir(projectDir, { recursive: true });
+  const stack = app.intendedStack ?? "Not selected";
+  return [
+    await writeIfAllowed(
+      path.join(projectDir, "info.md"),
+      `# ${app.displayName} Project Info\n\n## Purpose\n${app.purpose}\n\n## Workspace\n- Workspace: ${manifest.displayName}\n- Path: ${app.path}\n- Kind: non-Expo ${app.category ?? "other"}\n- Intended stack: ${stack}\n- Status: registered; implementation has not been generated\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(projectDir, "style.md"),
+      `# ${app.displayName} Style\n\nInherit the shared visual foundation from the workspace root. Record intentional app-specific differences here.\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(projectDir, "guidelines.md"),
+      `# ${app.displayName} Guidelines\n\nRead the workspace project memory first. Do not invent a framework or application scaffold until the developer confirms the intended stack.\n`,
+      force,
+    ),
+    await writeIfAllowed(
+      path.join(projectDir, "todo.md"),
+      `# ${app.displayName} TODO\n\n- [ ] Confirm the implementation stack for this ${app.category ?? "application"}.\n- [ ] Derive an implementation roadmap from this app's purpose and the workspace architecture.\n`,
+      force,
+    ),
+  ];
+}
+
+function renderRootPackageJson(manifest: WorkspaceManifest): string {
+  const scripts: Record<string, string> = {
+    dev: "turbo run dev --ui=tui",
+    build: "turbo run build --ui=tui",
+    lint: "turbo run lint --ui=tui",
+    test: "turbo run test --ui=tui",
+    typecheck: "turbo run typecheck --ui=tui",
+    clean: "turbo run clean --ui=tui",
+    doctor: "mds doctor .",
+  };
+  for (const app of manifest.apps.filter((entry) => entry.kind === "expo")) {
+    const packageName = resolveWorkspaceAppPackageName(manifest, app);
+    scripts[`dev:${app.id}`] =
+      `turbo run dev --filter=${packageName} --ui=tui`;
+  }
+  return `${JSON.stringify(
+    {
+      name: manifest.name,
+      private: true,
+      packageManager: workspacePackageManagerDescriptor(
+        manifest.packageManager,
+      ),
+      workspaces: ["apps/*", "packages/*"],
+      scripts,
+      devDependencies: {
+        rimraf: "^6.0.1",
+        turbo: "^2.9.0",
+        typescript: "^5.9.0",
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function renderTurboConfig(): string {
+  return `${JSON.stringify(
+    {
+      $schema: "https://turbo.build/schema.json",
+      tasks: {
+        build: { dependsOn: ["^build"], outputs: ["dist/**", ".expo/**"] },
+        dev: { cache: false, persistent: true },
+        lint: { dependsOn: ["^build"] },
+        test: { dependsOn: ["^build"] },
+        typecheck: { dependsOn: ["^build"] },
+        clean: { cache: false },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function renderBaseTsconfig(manifest: WorkspaceManifest): string {
+  const paths: Record<string, string[]> = {};
+  for (const item of manifest.sharedPackages) {
+    paths[item.packageName] = [`./${item.path}/src/index`];
+    paths[`${item.packageName}/*`] = [`./${item.path}/src/*`];
+  }
+  return `${JSON.stringify(
+    {
+      extends: "./packages/config/tsconfig.base.json",
+      compilerOptions: {
+        paths,
+      },
+      exclude: ["node_modules", "dist", ".turbo"],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function renderWorkspaceInfo(manifest: WorkspaceManifest): string {
+  return [
+    `# ${manifest.displayName} Workspace`,
+    "",
+    "## Overview",
+    `${manifest.displayName} is a multi-app product workspace. This file owns ecosystem-wide context; each app owns its product-specific context in its own project directory.`,
+    "",
+    "## Architecture",
+    `- Workspace slug: ${manifest.name}`,
+    `- Package scope: ${manifest.packageScope}`,
+    `- Package manager: ${manifest.packageManager}`,
+    `- Expo version: ${manifest.expoVersion}`,
+    `- Shared styling system: ${manifest.stylingSystem}`,
+    "- Task runner: Turborepo",
+    "- App directory: apps/*",
+    "- Shared package directory: packages/*",
+    "",
+    "## Applications",
+    ...manifest.apps.map(
+      (app) =>
+        `- ${app.displayName} (${app.path}): ${app.kind}${app.port ? `, port ${app.port}` : ""} - ${app.purpose}`,
+    ),
+    "",
+    "## Shared Packages",
+    ...manifest.sharedPackages.map(
+      (item) => `- ${item.packageName} (${item.role}): ${item.path}`,
+    ),
+    "",
+    "## Shared Product Decisions",
+    "# TodoForContext(optional): Describe what the apps share as one product ecosystem, including users, identity, data, branding, and release coordination.",
+    "",
+  ].join("\n");
+}
+
+function renderWorkspaceStyle(manifest: WorkspaceManifest): string {
+  return `# ${manifest.displayName} Shared Style\n\n## Visual Direction\n${manifest.sharedDesignDirection}\n\n## Styling System\n- Base system: ${manifest.stylingSystem}\n- Expo version: ${manifest.expoVersion}\n\n## Canonical Theme\n- Editable theme: project/theme.json\n- Runtime package: ${manifest.packageScope}/ui\n- App-specific project/style.md files may document intentional overrides without copying the shared token set.\n`;
+}
+
+function renderWorkspaceGuidelines(manifest: WorkspaceManifest): string {
+  return `# ${manifest.displayName} Workspace Guidelines\n\n- Read root project memory before working anywhere in the workspace.\n- When working inside an app, also read that app's project/info.md, project/style.md, project/guidelines.md, and project/todo.md.\n- Keep routes, screens, and product features inside apps/*.\n- Put code in packages/* only when at least two apps share the responsibility.\n- Use ${manifest.packageScope}/* workspace dependencies instead of relative imports across app boundaries.\n- Run root commands through Turbo; use an app-specific dev command only when focusing on one app.\n- Do not create symlinks for shared application code.\n`;
+}
+
+function renderWorkspaceTodo(manifest: WorkspaceManifest): string {
+  return [
+    `# ${manifest.displayName} Workspace TODO`,
+    "",
+    "## Phase 0: Workspace Foundation",
+    "- [ ] Review project/workspace.json and confirm every app, path, purpose, and shared package.",
+    "- [ ] Resolve workspace-level TodoForContext markers.",
+    "- [ ] Review every app-specific project memory set.",
+    "- [ ] Run the aggregate workspace Doctor.",
+    "- [ ] Optionally connect Turborepo remote caching with the team account; credentials are not generated by CESS.",
+    "",
+    "## App Roadmaps",
+    ...manifest.apps.map(
+      (app) => `- [ ] Review and execute ${app.path}/project/todo.md.`,
+    ),
+    "",
+    "## Shared Architecture",
+    "- [ ] Confirm which UI, auth/state, SDK, and database responsibilities genuinely belong in packages/*.",
+    "- [ ] Keep app-specific code out of shared packages until a second consumer exists.",
+    "",
+  ].join("\n");
+}
+
+function renderWorkspaceAgents(manifest: WorkspaceManifest): string {
+  return `# ${manifest.displayName} Agent Instructions\n\nBefore changing this workspace, read project/info.md, project/style.md, project/guidelines.md, project/todo.md, and project/workspace.json. When a task belongs to an app, then read the nearest ${"`apps/<app>/project/`"} memory files before editing. Root memory wins for shared architecture; app memory wins for product behavior inside that app.\n`;
+}
+
+function renderWorkspaceClaude(manifest: WorkspaceManifest): string {
+  return `# ${manifest.displayName}\n\nFollow AGENTS.md. Treat project/workspace.json as the machine-readable app and package registry. Run checks from the workspace root unless a focused app command is explicitly requested.\n`;
+}
+
+function renderWorkspaceReadme(manifest: WorkspaceManifest): string {
+  return [
+    `# ${manifest.displayName}`,
+    "",
+    "Multi-app workspace generated by Create Expo Super Stack.",
+    "",
+    "## Apps",
+    ...manifest.apps.map((app) => `- ${app.path} - ${app.purpose}`),
+    "",
+    "## Commands",
+    "",
+    `- ${runCommand(manifest.packageManager, "dev")} - start every generated app through Turbo`,
+    ...manifest.apps
+      .filter((app) => app.kind === "expo")
+      .map(
+        (app) =>
+          `- ${runCommand(manifest.packageManager, `dev:${app.id}`)} - start ${app.displayName}`,
+      ),
+    `- ${runCommand(manifest.packageManager, "typecheck")} - type-check the workspace`,
+    `- ${runCommand(manifest.packageManager, "test")} - run workspace tests`,
+    "",
+    "Turborepo task caching is configured. Connect remote caching separately with your own team credentials when desired.",
+    "",
+  ].join("\n");
+}
+
+function renderWorkspaceCiWorkflow(manifest: WorkspaceManifest): string {
+  const cache = ['npm', 'pnpm', 'yarn'].includes(manifest.packageManager)
+    ? `\n          cache: ${manifest.packageManager}`
+    : '';
+  const install =
+    manifest.packageManager === "pnpm"
+      ? "pnpm install --frozen-lockfile"
+      : manifest.packageManager === "yarn"
+        ? "yarn install --immutable"
+        : manifest.packageManager === "bun"
+          ? "bun install --frozen-lockfile"
+          : "npm ci";
+  const run = (script: string) =>
+    manifest.packageManager === "npm"
+      ? `npm run ${script}`
+      : `${manifest.packageManager} ${script}`;
+  return `name: MDS workspace checks\n\non:\n  pull_request:\n  push:\n    branches: [main, test]\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20${cache}\n      - run: corepack enable\n      - run: ${install}\n      - run: ${run("lint")}\n      - run: ${run("typecheck")}\n      - run: ${run("test")}\n      - run: ${run("build")}\n`;
+}
+
+function renderWorkspaceReleaseFlow(manifest: WorkspaceManifest): string {
+  return `# ${manifest.displayName} Release Flow\n\nRun lint, typecheck, test, and build once from the workspace root. Turbo coordinates package tasks and caching. Connect remote caching separately with your own team credentials; CESS does not create or store those credentials.\n`;
+}
+
+function renderMetroFactory(): string {
+  return "const path = require('path');\nconst { createRequire } = require('module');\n\nfunction createMonorepoMetroConfig(appDir, options = {}) {\n  const appRequire = createRequire(path.join(appDir, 'package.json'));\n  const { getDefaultConfig } = appRequire('expo/metro-config');\n  const config = getDefaultConfig(appDir);\n  config.resolver.alias = { '@': path.resolve(appDir, 'src') };\n  if (options.cssEntryFile) {\n    try {\n      const { withUniwindConfig } = appRequire('uniwind/metro');\n      return withUniwindConfig(config, { cssEntryFile: options.cssEntryFile });\n    } catch {\n      // The selected CESS styling system does not use Uniwind.\n    }\n  }\n  return config;\n}\n\nmodule.exports = { createMonorepoMetroConfig };\n";
+}
+
+function defaultWorkspaceTheme(): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    colors: {
+      light: {
+        background: "#ffffff",
+        foreground: "#111827",
+        primary: "#2563eb",
+        secondary: "#0f766e",
+      },
+      dark: {
+        background: "#111827",
+        foreground: "#f9fafb",
+        primary: "#60a5fa",
+        secondary: "#5eead4",
+      },
+    },
+    spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
+    radius: { sm: 4, md: 8 },
+  };
+}
+
+function renderWorkspaceGitignore(): string {
+  return "node_modules/\n.turbo/\n.expo/\ndist/\n.env\n.env.local\n*.log\n";
+}
+
+function runCommand(manager: WorkspacePackageManager, script: string): string {
+  if (manager === "npm") return `npm run ${script}`;
+  if (manager === "bun") return `bun run ${script}`;
+  return `${manager} ${script}`;
+}
+
+function workspacePackageManagerDescriptor(
+  manager: WorkspacePackageManager,
+): string {
+  return {
+    pnpm: "pnpm@8.14.0",
+    npm: "npm@10.9.0",
+    yarn: "yarn@1.22.22",
+    bun: "bun@1.2.0",
+  }[manager];
 }
 
 async function detectWorkspacePackageManager(
   workspacePath: string,
-  rootPackage: Record<string, unknown> | null
+  packageJson: Record<string, unknown> | null,
 ): Promise<WorkspacePackageManager> {
-  const declared = typeof rootPackage?.packageManager === 'string' ? rootPackage.packageManager.split('@')[0] : undefined;
-  if (declared === 'pnpm' || declared === 'npm' || declared === 'yarn' || declared === 'bun') return declared;
-  if (await pathExists(path.join(workspacePath, 'pnpm-lock.yaml'))) return 'pnpm';
-  if (await pathExists(path.join(workspacePath, 'yarn.lock'))) return 'yarn';
-  if ((await pathExists(path.join(workspacePath, 'bun.lock'))) || (await pathExists(path.join(workspacePath, 'bun.lockb')))) return 'bun';
-  return 'npm';
+  const declared =
+    typeof packageJson?.packageManager === "string"
+      ? packageJson.packageManager
+      : "";
+  for (const manager of ["pnpm", "yarn", "bun", "npm"] as const) {
+    if (declared.startsWith(`${manager}@`)) return manager;
+  }
+  if (await pathExists(path.join(workspacePath, "pnpm-lock.yaml")))
+    return "pnpm";
+  if (await pathExists(path.join(workspacePath, "yarn.lock"))) return "yarn";
+  if (
+    (await pathExists(path.join(workspacePath, "bun.lock"))) ||
+    (await pathExists(path.join(workspacePath, "bun.lockb")))
+  )
+    return "bun";
+  return "npm";
 }
 
 async function readDirectories(directory: string): Promise<string[]> {
   try {
-    return (await readdir(directory, { withFileTypes: true }))
+    const entries = await readdir(directory, { withFileTypes: true });
+    return entries
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
@@ -399,10 +1361,12 @@ async function readDirectories(directory: string): Promise<string[]> {
   }
 }
 
-async function readJson(filePath: string): Promise<Record<string, unknown> | null> {
+async function readJson(
+  filePath: string,
+): Promise<Record<string, unknown> | null> {
   try {
-    const value: unknown = JSON.parse(await readFile(filePath, 'utf8'));
-    return isRecord(value) ? value : null;
+    const parsed: unknown = JSON.parse(await readFile(filePath, "utf8"));
+    return isRecord(parsed) ? parsed : null;
   } catch (error) {
     if (isMissingFileError(error)) return null;
     throw error;
@@ -410,11 +1374,11 @@ async function readJson(filePath: string): Promise<Record<string, unknown> | nul
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function isMissingFileError(error: unknown): boolean {
-  return isRecord(error) && error.code === 'ENOENT';
+  return isRecord(error) && error.code === "ENOENT";
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -426,49 +1390,30 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function writeIfAllowed(filePath: string, content: string, force: boolean): Promise<WorkspaceWriteResult> {
-  if (!force && (await pathExists(filePath))) return { filePath, wrote: false };
+async function writeIfAllowed(
+  filePath: string,
+  content: string,
+  force: boolean,
+): Promise<WorkspaceWriteResult> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, content, 'utf8');
+  if (!force && (await pathExists(filePath))) return { filePath, wrote: false };
+  await writeFile(filePath, content, "utf8");
+  return { filePath, wrote: true };
+}
+
+async function writeFileResult(
+  filePath: string,
+  content: string,
+): Promise<WorkspaceWriteResult> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, content, "utf8");
   return { filePath, wrote: true };
 }
 
 function titleFromSlug(value: string): string {
-  return value.split(/[-_\s]+/u).filter(Boolean).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' ');
-}
-
-function renderRootInfo(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Workspace\n\n## Architecture\n- Package scope: ${manifest.packageScope}\n- Package manager: ${manifest.packageManager}\n- Apps: apps/*\n- Shared code: packages/*\n\n## Applications\n${manifest.apps.map((app) => `- ${app.displayName} (${app.path}): ${app.kind} - ${app.purpose}`).join('\n')}\n`;
-}
-
-function renderRootStyle(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Shared Style\n\n${manifest.sharedDesignDirection}\n\nCanonical design data belongs in project/theme.json and ${manifest.packageScope}/ui when generation is enabled.\n`;
-}
-
-function renderRootGuidelines(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Workspace Guidelines\n\n- Read root project memory first, then the nearest app project memory.\n- Keep app-specific code in apps/*.\n- Put code in packages/* only when at least two apps share it.\n- Use ${manifest.packageScope}/* imports across package boundaries.\n`;
-}
-
-function renderRootTodo(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Workspace TODO\n\n- [ ] Confirm project/workspace.json classifications and responsibilities.\n- [ ] Review each app's project/todo.md.\n- [ ] Run aggregate workspace Doctor.\n`;
-}
-
-function renderAgents(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Agent Instructions\n\nRead root project/info.md, style.md, guidelines.md, todo.md, and workspace.json. Inside an app, then read the nearest app project memory before editing.\n`;
-}
-
-function renderAppInfo(app: WorkspaceApp): string {
-  return `# ${app.displayName}\n\n- Workspace path: ${app.path}\n- Kind: ${app.kind}\n- Purpose: ${app.purpose}\n`;
-}
-
-function renderAppStyle(manifest: WorkspaceManifest, app: WorkspaceApp): string {
-  return `# ${app.displayName} Style Overrides\n\nRead the ${manifest.displayName} root style and canonical theme first. Record only intentional app-specific overrides here.\n`;
-}
-
-function renderAppGuidelines(manifest: WorkspaceManifest, app: WorkspaceApp): string {
-  return `# ${app.displayName} Guidelines\n\n- Follow root workspace guidance first.\n- Keep ${app.displayName} routes, screens, and features inside ${app.path}.\n- Use ${manifest.packageScope}/* only for declared shared packages.\n`;
-}
-
-function renderAppTodo(app: WorkspaceApp): string {
-  return `# ${app.displayName} TODO\n\n- [ ] Replace the discovered purpose with complete app-specific product context.\n- [ ] Plan the first implementation phase for ${app.displayName}.\n`;
+  return value
+    .split(/[-_\s]+/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
