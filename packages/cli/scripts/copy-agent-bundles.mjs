@@ -75,12 +75,16 @@ async function compareDirectories(sourceDir, destinationDir) {
       readFile(sourcePath, 'utf8'),
       readFile(destinationPath, 'utf8'),
     ]);
-    if (sourceContents !== destinationContents) {
+    if (normalizeText(sourceContents) !== normalizeText(destinationContents)) {
       mismatches.push(`different content: ${relativePath}`);
     }
   }
 
   return mismatches;
+}
+
+function normalizeText(contents) {
+  return contents.replace(/\r\n?/g, '\n');
 }
 
 async function listFiles(rootDir) {
