@@ -30,6 +30,7 @@ import type {
 } from './types.js';
 import { findFiles, pathExists, readPackageJson, readOptionalText } from './utils.js';
 import {
+  discoverDoctorWorkspace,
   normalizeWorkspaceRelativePath,
   readWorkspaceManifest,
   resolveWorkspacePath,
@@ -60,17 +61,34 @@ export {
 } from './modes.js';
 export { createReport, formatHumanReport, formatJsonReport } from './reporter.js';
 export { scanFile } from './scan-file.js';
+export {
+  discoverDoctorWorkspace,
+  normalizeWorkspaceRelativePath,
+  readWorkspaceManifest,
+  resolveWorkspacePath,
+} from './workspace-manifest.js';
 
 export async function runDoctor(
   projectPath: string,
   options: DoctorOptions = {}
 ): Promise<DoctorReport> {
-  const resolvedWorkspacePath = path.resolve(projectPath);
+  const resolvedInputPath = path.resolve(projectPath);
   const target = options.target ? normalizeWorkspaceRelativePath(options.target) : undefined;
-  const manifest = await readWorkspaceManifest(resolvedWorkspacePath);
-  if (!target && manifest) {
-    return runWorkspaceDoctor(resolvedWorkspacePath, manifest, options);
+  const workspace = await discoverDoctorWorkspace(resolvedInputPath);
+  const resolvedWorkspacePath = workspace?.workspacePath ?? resolvedInputPath;
+  const workspaceMemoryPath = workspace?.controlPlanePath
+    ? path.dirname(workspace.controlPlanePath)
+    : resolvedWorkspacePath;
+  if (!target && workspace) {
+    return runWorkspaceDoctor(
+      resolvedWorkspacePath,
+      workspace.manifest,
+      options,
+      workspaceMemoryPath,
+      workspace.controlPlanePath
+    );
   }
+  const manifest = workspace?.manifest ?? (await readWorkspaceManifest(resolvedWorkspacePath));
   const registeredApp = target ? manifest?.apps.find((app) => app.path === target) : undefined;
   const registeredPackage = target
     ? manifest?.sharedPackages.find((item) => item.path === target)
@@ -105,7 +123,8 @@ export async function runDoctor(
     resolvedProjectPath,
     options,
     targetMetadata,
-    target ? resolvedWorkspacePath : undefined
+    target ? resolvedWorkspacePath : undefined,
+    target ? workspaceMemoryPath : undefined
   );
 }
 
@@ -120,6 +139,7 @@ async function runProjectDoctor(
     packageName?: string;
     kind?: 'expo' | 'non-expo' | 'shared';
   },
+  workspaceRootPath?: string,
   workspaceMemoryPath?: string,
   scriptStrategy: 'all' | 'expo-only' | 'none' = 'all'
 ): Promise<DoctorReport> {
@@ -153,7 +173,7 @@ async function runProjectDoctor(
   }
   checks.push(await checkProjectDocs(resolvedProjectPath));
   checks.push(await checkTodoForContextMarkers(resolvedProjectPath));
-  checks.push(await checkGitignoreEnv(workspaceMemoryPath ?? resolvedProjectPath));
+  checks.push(await checkGitignoreEnv(workspaceRootPath ?? resolvedProjectPath));
 
   if (!packageJson) {
     checks.push({
@@ -218,14 +238,16 @@ async function runProjectDoctor(
 async function runWorkspaceDoctor(
   workspacePath: string,
   manifest: DoctorWorkspaceManifest,
-  options: DoctorOptions
+  options: DoctorOptions,
+  workspaceMemoryPath = workspacePath,
+  controlPlanePath?: string
 ): Promise<DoctorReport> {
   const mode = normalizeDoctorMode(options.mode);
   const runScripts = options.runScripts !== false;
   const selectionDefaultMode = options.selectionDefaultMode ?? DEFAULT_DOCTOR_MODE;
   const checks: DoctorCheckResult[] = [];
-  checks.push(await checkProjectDocs(workspacePath));
-  checks.push(await checkTodoForContextMarkers(workspacePath));
+  checks.push(await checkProjectDocs(workspaceMemoryPath));
+  checks.push(await checkTodoForContextMarkers(workspaceMemoryPath));
   checks.push(await checkGitignoreEnv(workspacePath));
   checks.push(...(await checkWorkspaceStructure(workspacePath, manifest)));
 
@@ -273,6 +295,7 @@ async function runWorkspaceDoctor(
       options,
       undefined,
       workspacePath,
+      workspaceMemoryPath,
       app.kind === 'expo' ? 'expo-only' : 'none'
     );
     const status =
@@ -299,6 +322,7 @@ async function runWorkspaceDoctor(
       displayName: manifest.displayName,
       packageManager: manifest.packageManager,
       taskRunner: manifest.taskRunner,
+      ...(controlPlanePath ? { controlPlanePath } : {}),
       apps,
       sharedPackages: manifest.sharedPackages,
     },

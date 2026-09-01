@@ -4,6 +4,19 @@ import path from 'node:path';
 import type { DoctorWorkspaceManifest } from './types.js';
 
 export const WORKSPACE_MANIFEST_PATH = path.join('project', 'workspace.json');
+const I2_WORKSPACE_MANIFEST_PATH = path.join('project', 'mds.workspace.json');
+
+export interface DoctorWorkspaceContext {
+  workspacePath: string;
+  manifest: DoctorWorkspaceManifest;
+  /** Absolute project-memory directory supplied by an initialized I² control plane. */
+  controlPlanePath?: string;
+}
+
+interface I2WorkspaceManifest {
+  projectPath: string;
+  repositoryMainFolders: string[];
+}
 
 export function normalizeWorkspaceRelativePath(value: string): string {
   const input = value.trim().replace(/\\/gu, '/');
@@ -148,6 +161,124 @@ export async function readWorkspaceManifest(
     if ((error as { code?: string }).code === 'ENOENT') return null;
     throw error;
   }
+}
+
+/**
+ * Resolve a CESS workspace either from its monorepo checkout or from the root
+ * of an initialized I² workspace that contains that checkout.
+ */
+export async function discoverDoctorWorkspace(
+  startPath: string
+): Promise<DoctorWorkspaceContext | null> {
+  const resolvedStartPath = path.resolve(startPath);
+  const directManifest = await readWorkspaceManifest(resolvedStartPath);
+  if (directManifest) {
+    const controlPlanePath = await findControlPlanePath(resolvedStartPath);
+    return {
+      workspacePath: resolvedStartPath,
+      manifest: directManifest,
+      ...(controlPlanePath ? { controlPlanePath } : {}),
+    };
+  }
+
+  const controlPlane = await readI2WorkspaceManifest(resolvedStartPath);
+  if (!controlPlane) return null;
+
+  const candidates: DoctorWorkspaceContext[] = [];
+  for (const mainFolder of controlPlane.repositoryMainFolders) {
+    const workspacePath = resolveWorkspacePath(resolvedStartPath, mainFolder);
+    const manifest = await readWorkspaceManifest(workspacePath);
+    if (manifest) {
+      candidates.push({
+        workspacePath,
+        manifest,
+        controlPlanePath: resolveWorkspacePath(resolvedStartPath, controlPlane.projectPath),
+      });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  if (candidates.length > 1) {
+    throw new Error(
+      `Multiple CESS monorepos were found in this I² workspace. Run Doctor from one checkout: ${candidates
+        .map((candidate) => candidate.workspacePath)
+        .join(', ')}`
+    );
+  }
+  return candidates[0] ?? null;
+}
+
+async function findControlPlanePath(workspacePath: string): Promise<string | null> {
+  for (const candidateRoot of ancestorPaths(path.dirname(path.resolve(workspacePath)))) {
+    const manifest = await readI2WorkspaceManifest(candidateRoot);
+    if (
+      manifest &&
+      manifest.repositoryMainFolders.some((mainFolder) =>
+        samePath(resolveWorkspacePath(candidateRoot, mainFolder), workspacePath)
+      )
+    ) {
+      return resolveWorkspacePath(candidateRoot, manifest.projectPath);
+    }
+  }
+  return null;
+}
+
+async function readI2WorkspaceManifest(workspaceRoot: string): Promise<I2WorkspaceManifest | null> {
+  let value: unknown;
+  try {
+    value = JSON.parse(
+      await readFile(path.join(workspaceRoot, I2_WORKSPACE_MANIFEST_PATH), 'utf8')
+    );
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return null;
+    throw error;
+  }
+
+  if (!isRecord(value) || value.schemaVersion !== 1) {
+    throw new Error('Invalid I² workspace manifest: schemaVersion must be 1.');
+  }
+  if (!Array.isArray(value.repositories) || value.repositories.length === 0) {
+    throw new Error('Invalid I² workspace manifest: repositories must be a non-empty array.');
+  }
+
+  const repositoryMainFolders = value.repositories.map((repository, index) => {
+    if (!isRecord(repository) || typeof repository.mainFolder !== 'string') {
+      throw new Error(
+        `Invalid I² workspace manifest: repositories[${index}].mainFolder must be a string.`
+      );
+    }
+    return normalizeWorkspaceRelativePath(repository.mainFolder);
+  });
+  const project = isRecord(value.project) ? value.project : undefined;
+  const projectPath = normalizeWorkspaceRelativePath(
+    typeof project?.path === 'string' ? project.path : 'project'
+  );
+
+  return { projectPath, repositoryMainFolders };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function samePath(left: string, right: string): boolean {
+  return path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase();
+}
+
+function ancestorPaths(startPath: string): string[] {
+  const ancestors: string[] = [];
+  let current = path.resolve(startPath);
+  let parent = path.dirname(current);
+  let reachedFilesystemRoot = false;
+  while (!reachedFilesystemRoot) {
+    ancestors.push(current);
+    reachedFilesystemRoot = parent === current;
+    if (!reachedFilesystemRoot) {
+      current = parent;
+      parent = path.dirname(current);
+    }
+  }
+  return ancestors;
 }
 
 function slugify(value: string): string {

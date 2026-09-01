@@ -53,6 +53,8 @@ export interface DoctorWorkspaceMetadata {
   displayName: string;
   packageManager: string;
   taskRunner: string;
+  /** Absolute I² control-plane project-memory directory, when available. */
+  controlPlanePath?: string;
   apps: DoctorWorkspaceAppReport[];
   sharedPackages: DoctorWorkspacePackageReport[];
 }

@@ -146,6 +146,9 @@ export function formatHumanReport(report: DoctorReport): string {
   }
   if (report.workspace) {
     lines.push(`Workspace: ${report.workspace.displayName} (${report.workspace.apps.length} apps)`);
+    if (report.workspace.controlPlanePath) {
+      lines.push(`Control plane: ${report.workspace.controlPlanePath}`);
+    }
   }
   lines.push(`mode: ${selection.description}`);
   lines.push(`default: ${selection.defaultMode}`);

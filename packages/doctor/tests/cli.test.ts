@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rename, rm, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -164,6 +164,116 @@ describe('doctor CLI', () => {
         expect.objectContaining({ id: 'mobile', report: expect.any(Object) }),
         expect.objectContaining({ id: 'site', status: 'registered' }),
       ])
+    );
+  });
+
+  it('discovers a CESS monorepo from an initialized I² workspace and uses control-plane memory', async () => {
+    const sourceWorkspacePath = await createWorkspaceProject();
+    const i2WorkspacePath = await mkdtemp(path.join(os.tmpdir(), 'mds-doctor-i2-'));
+    tempDirs.push(i2WorkspacePath);
+    const checkoutPath = path.join(i2WorkspacePath, 'creative-suite-main');
+    await rename(sourceWorkspacePath, checkoutPath);
+
+    await mkdir(path.join(i2WorkspacePath, 'project'), { recursive: true });
+    for (const [name, contents] of [
+      ['info.md', '# Control-plane info\n'],
+      ['todo.md', '# Control-plane todo\n'],
+      ['guidelines.md', '# Control-plane guidelines\n'],
+      ['style.md', '# Control-plane style\n'],
+    ] as const) {
+      await writeFile(path.join(i2WorkspacePath, 'project', name), contents, 'utf8');
+    }
+    await writeFile(
+      path.join(i2WorkspacePath, 'project', 'mds.workspace.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          workspaceId: 'creative-suite-control',
+          name: 'Creative Suite Control',
+          repositories: [
+            {
+              id: 'source',
+              remote: 'git@github.com:example/creative-suite.git',
+              defaultBranch: 'main',
+              mainFolder: 'creative-suite-main',
+              worktreePrefix: 'creative-suite-',
+            },
+          ],
+          project: { path: 'project' },
+          temp: { path: 'temp' },
+        },
+        null,
+        2
+      )}\n`,
+      'utf8'
+    );
+    await mkdir(path.join(checkoutPath, '.mds'), { recursive: true });
+    await writeFile(
+      path.join(checkoutPath, '.mds', 'workspace.json'),
+      '{"schemaVersion":1,"workspaceId":"creative-suite-control"}\n',
+      'utf8'
+    );
+    await Promise.all(
+      ['info.md', 'todo.md', 'guidelines.md', 'style.md'].map((name) =>
+        rm(path.join(checkoutPath, 'project', name))
+      )
+    );
+
+    const aggregate = await runDoctorCli([
+      i2WorkspacePath,
+      '--ci',
+      '--json',
+      '--no-scripts',
+    ]);
+    const aggregateReport = JSON.parse(aggregate.output) as {
+      projectPath?: string;
+      workspace?: { controlPlanePath?: string };
+      checks?: Array<{ name?: string; status?: string }>;
+    };
+    expect(aggregateReport.projectPath).toBe(path.resolve(checkoutPath));
+    expect(aggregateReport.workspace?.controlPlanePath).toBe(
+      path.resolve(i2WorkspacePath, 'project')
+    );
+    expect(aggregateReport.checks).toContainEqual(
+      expect.objectContaining({ name: 'project docs', status: 'pass' })
+    );
+
+    const checkout = await runDoctorCli([
+      checkoutPath,
+      '--ci',
+      '--json',
+      '--no-scripts',
+    ]);
+    const checkoutReport = JSON.parse(checkout.output) as {
+      workspace?: { controlPlanePath?: string };
+      checks?: Array<{ name?: string; status?: string }>;
+    };
+    expect(checkoutReport.workspace?.controlPlanePath).toBe(
+      path.resolve(i2WorkspacePath, 'project')
+    );
+    expect(checkoutReport.checks).toContainEqual(
+      expect.objectContaining({ name: 'project docs', status: 'pass' })
+    );
+
+    const focused = await runDoctorCli([
+      i2WorkspacePath,
+      '--target',
+      'apps/mobile',
+      '--ci',
+      '--json',
+      '--no-scripts',
+    ]);
+    const focusedReport = JSON.parse(focused.output) as {
+      projectPath?: string;
+      target?: { workspacePath?: string; appId?: string };
+      checks?: Array<{ name?: string; status?: string }>;
+    };
+    expect(focusedReport.projectPath).toBe(path.resolve(checkoutPath, 'apps', 'mobile'));
+    expect(focusedReport.target).toEqual(
+      expect.objectContaining({ workspacePath: path.resolve(checkoutPath), appId: 'mobile' })
+    );
+    expect(focusedReport.checks).toContainEqual(
+      expect.objectContaining({ name: 'workspace project docs', status: 'pass' })
     );
   });
 
