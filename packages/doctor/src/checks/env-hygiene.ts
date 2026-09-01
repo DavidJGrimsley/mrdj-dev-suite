@@ -226,6 +226,9 @@ function findHardcodedCredentialValues(
     }
 
     const assignment = readSensitiveAssignment(line);
+    if (assignment && isAllowedPublicSupabaseAssignment(assignment.identifier, assignment.value)) {
+      continue;
+    }
     if (assignment && !isDynamicOrInterpolatedValue(assignment.value)) {
       const providerDetector = detectKnownCredentialShape(assignment.value);
       const genericDetector =
@@ -283,6 +286,19 @@ function findHardcodedCredentialValues(
   return findings;
 }
 
+function isAllowedPublicSupabaseAssignment(identifier: string, value: string): boolean {
+  if (
+    ![
+      'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+      'EXPO_PUBLIC_SUPABASE_KEY',
+    ].includes(identifier)
+  ) {
+    return false;
+  }
+  return !/^sb_secret_/u.test(value.trim());
+}
+
 function createCredentialFinding(
   projectPath: string,
   filePath: string,
@@ -316,7 +332,10 @@ function readSensitiveAssignment(line: string): { identifier: string; value: str
     /(?:^|[{\s,.;])\s*["']?([A-Za-z0-9_$.-]*(?:apiKey|api_key|secret|token|password|passwd|serviceRole|service_role|privateKey|private_key|clientSecret|client_secret|webhookSecret|webhook_secret|jwtSecret|jwt_secret|databaseUrl|database_url|connectionString|connection_string|authorization)[A-Za-z0-9_$.-]*)["']?\s*[:=]\s*(['"`])([^'"`]+)\2/i
   );
   if (codeMatch?.[1] && codeMatch[3]) {
-    return { identifier: codeMatch[1], value: stripBearerPrefix(codeMatch[3].trim()) };
+    return {
+      identifier: codeMatch[1],
+      value: stripBearerPrefix(codeMatch[3].trim()),
+    };
   }
 
   return null;
@@ -463,7 +482,9 @@ function isExampleEnvFile(basename: string): boolean {
 }
 
 function isLockfile(basename: string): boolean {
-  return basename === 'package-lock.json' || basename === 'pnpm-lock.yaml' || basename === 'yarn.lock';
+  return (
+    basename === 'package-lock.json' || basename === 'pnpm-lock.yaml' || basename === 'yarn.lock'
+  );
 }
 
 function readPublicEnvKeys(contents: string): string[] {

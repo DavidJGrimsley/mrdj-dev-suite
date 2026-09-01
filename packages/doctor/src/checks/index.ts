@@ -30,6 +30,7 @@ export {
   checkNavigationPatterns,
   checkMixedConcerns,
 } from './router-safety.js';
+export { checkSupabaseEnvironment } from './supabase-environment.js';
 export { runEslintCheck } from './eslint.js';
 export { checkExpoConfiguration } from './expo-config.js';
 export { runExpoDoctorCheck } from './expo-doctor.js';
