@@ -35,7 +35,7 @@ import { runRunCommand } from './commands/run.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 import { runWorkspaceCommand } from './commands/workspace.js';
 
-import type { DoctorCheckResult, DoctorMode, DoctorReport } from '@mr.dj2u/doctor';
+import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
 import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
