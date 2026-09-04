@@ -169,7 +169,7 @@ export function buildPluginManifest(options) {
     },
     homepage: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
     repository: 'https://github.com/DavidJGrimsley/mrdj-dev-suite',
-    license: 'MIT',
+    license: 'MPL-2.0',
     keywords: [
       'expo',
       'react-native',
