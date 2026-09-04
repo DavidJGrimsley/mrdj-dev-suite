@@ -149,13 +149,21 @@ node packages/cli/dist/cli.js doctor ./packages/doctor
 ```
 
 ### 4. Commit & Push
+
+#### Developer Certificate of Origin
+
+All contributions must be signed off under the [Developer Certificate of
+Origin 1.1](./DCO). Use `git commit -s` so Git adds your
+`Signed-off-by:` trailer. DCO enforcement is reviewer-managed until an
+automated check is adopted.
+
 ```bash
 # Auto-format with Prettier
 pnpm prettier --write .
 
 # Commit with semantic messages
 git add .
-git commit -m "feat(doctor): add eslint check validator
+git commit -s -m "feat(doctor): add eslint check validator
 
 - Implement ESLint parsing in doctor/src/checks/
 - Add error reporting for lint violations

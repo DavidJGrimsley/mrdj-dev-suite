@@ -50,7 +50,7 @@
     "react-native"
   ],
   "author": "DJ",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "publishConfig": {
     "access": "public"
   }

@@ -21,6 +21,7 @@ plugins/mr-djs-dev-suite/
 # Local Codex client state
 .codex/
 AGENT-PROMPT.md
+!i2/agent-prompt.md
 
 .claude/worktrees/
 

@@ -2,6 +2,7 @@
   "name": "mr-djs-dev-suite",
   "version": "0.1.25",
   "private": true,
+  "license": "MPL-2.0",
   "type": "module",
   "description": "Personal AI dev-suite for Expo developers: doctor, onboarding, automation, and knowledge base",
   "repository": {
