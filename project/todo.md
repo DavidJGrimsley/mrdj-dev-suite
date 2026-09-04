@@ -549,3 +549,15 @@ env:...
 - The landing page: needs an approved content and ownership brief.
 - A Supabase-ready template: needs a safe credential/configuration policy; do not ship shared credentials.
 - The I^2 IDE host/contract decision above, gating both the I^2 sequence and `feat/doctor-gui-contract`.
+
+## Phase 13: MPL-2.0 Open-Source Release
+
+- [ ] Release the current MDS monorepo under MPL-2.0, including root and package licenses, preserved third-party notices, and DCO-based contribution sign-off.
+
+## Phase 20: i2 Licensing and Governance
+
+- [ ] Define the i2 per-repository licensing map and the boundary between open local components and controlled hosted systems.
+- [ ] Adopt an official trademark and branding policy for MDS and i2.
+- [ ] Decide long-term copyright ownership and nonprofit or other stewardship structure.
+- [ ] Define marketplace licensing, attribution, contributor submission, fee, and payout policies.
+- [ ] Define contribution governance, including whether to add a CLA, copyright assignment, and automated DCO enforcement.

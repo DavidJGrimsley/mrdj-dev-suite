@@ -325,3 +325,9 @@ The reference repos used for Phase 1 harvest are no longer required in the works
 - Use `f:\SoftwareDev\create-expo-stack` for upstream-style generator work and `f:\SoftwareDev\dogfood` as the practice app target.
 - Keep `temp/` ignored for cloned reference repos and scratch analysis.
 - Prefer small verified slices over huge generated claims of completion.
+
+## License
+
+MDS source code is licensed under the [Mozilla Public License 2.0](./LICENSE).
+Hosted systems, private user data, credentials, commercial operations, and
+official branding are separately governed and are not granted by this license.

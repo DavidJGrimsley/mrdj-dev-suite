@@ -76,3 +76,11 @@ Fork and explore a focused PR for Uniwind support, Expo Router web platform gene
 - Should `mds doctor --ci` block on warnings in personal repos, or only on errors?
 - Should the ship workflow merge automatically after passing checks, or require a final confirmation?
 - Should onboard preferences be saved globally so future apps remember the developer's defaults?
+
+## Open-source Boundary
+
+Current MDS source is licensed under MPL-2.0. The intended local IDE, runtime,
+SDK, and plugin formats are open. Hosted systems, private data, commercial
+operations, and official branding remain separately controlled and are not
+granted by the source license. Copyright ownership, trademark policy, nonprofit
+structure, and future per-repository i2 licenses remain decisions to make.
