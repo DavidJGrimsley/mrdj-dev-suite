@@ -1,5 +1,11 @@
 # @mr.dj2u/library-registry
 
+## 0.3.1
+
+### Patch Changes
+
+- 2a12eed: Generate confirmed multi-app workspaces with isolated minimal or full CESS Expo app profiles, shared config and UI packages, one root Turbo toolchain, and canonical app-local Supabase credentials.
+
 ## 0.3.0
 
 ### Minor Changes
