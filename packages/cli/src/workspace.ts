@@ -8,6 +8,12 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
+import {
+  normalizeWorkspaceRelativePath as normalizeCanonicalWorkspaceRelativePath,
+  resolveWorkspacePath as resolveCanonicalWorkspacePath,
+  validateWorkspaceManifest as validateCanonicalWorkspaceManifest,
+} from "@mr.dj2u/doctor/workspace-manifest";
+
 export type ProjectShape = "single-expo-app" | "multi-app-workspace";
 export type WorkspacePackageManager = "npm" | "pnpm" | "yarn" | "bun";
 export type WorkspaceStylingSystem =
@@ -176,183 +182,18 @@ export function createWorkspaceManifest(
 export function validateWorkspaceManifest(
   value: unknown,
 ): asserts value is WorkspaceManifest {
-  if (!value || typeof value !== "object") {
-    throw new Error("Workspace plan must be a JSON object.");
-  }
-  const manifest = value as Partial<WorkspaceManifest>;
-  if (manifest.schemaVersion !== 1) {
-    throw new Error("Workspace plan schemaVersion must be 1.");
-  }
-  if (!manifest.name || slugifyWorkspaceName(manifest.name) !== manifest.name) {
-    throw new Error("Workspace name must be a lowercase product slug.");
-  }
-  if (!manifest.displayName?.trim()) {
-    throw new Error("Workspace displayName is required.");
-  }
-  const packageScope = normalizePackageScope(manifest.packageScope ?? "");
-  if (manifest.packageScope !== packageScope) {
-    throw new Error("Workspace packageScope must be lowercase and normalized.");
-  }
-  if (!["npm", "pnpm", "yarn", "bun"].includes(manifest.packageManager ?? "")) {
-    throw new Error(
-      "Workspace packageManager must be npm, pnpm, yarn, or bun.",
-    );
-  }
-  if (!manifest.expoVersion?.trim()) {
-    throw new Error("Workspace expoVersion is required.");
-  }
-  if (
-    ![
-      "uniwind",
-      "nativewind",
-      "nativewindui",
-      "tamagui",
-      "restyle",
-      "stylesheet",
-    ].includes(manifest.stylingSystem ?? "")
-  ) {
-    throw new Error("Workspace stylingSystem is invalid.");
-  }
-  if (!manifest.sharedDesignDirection?.trim()) {
-    throw new Error("Workspace sharedDesignDirection is required.");
-  }
-  if (manifest.taskRunner !== "turbo") {
-    throw new Error("Workspace taskRunner must be turbo.");
-  }
-  if (!Array.isArray(manifest.apps) || manifest.apps.length < 2) {
-    throw new Error("A CESS workspace requires at least two registered apps.");
-  }
-  if (!manifest.apps.some((app) => app.kind === "expo")) {
-    throw new Error("A CESS workspace requires at least one Expo app.");
-  }
-
-  const ids = new Set<string>();
-  const paths = new Set<string>();
-  const packageNames = new Set<string>();
-  const ports = new Set<number>();
-  for (const app of manifest.apps) {
-    if (!app.displayName?.trim() || !app.purpose?.trim()) {
-      throw new Error(
-        "Every workspace app requires a displayName and purpose.",
-      );
-    }
-    const id = slugifyWorkspaceName(app.id);
-    if (id !== app.id) {
-      throw new Error(`Workspace app id must be a lowercase slug: ${app.id}`);
-    }
-    const expectedPath = `apps/${id}`;
-    if (normalizeWorkspaceRelativePath(app.path) !== expectedPath) {
-      throw new Error(`Workspace app ${id} must live at ${expectedPath}.`);
-    }
-    if (ids.has(id) || paths.has(expectedPath)) {
-      throw new Error(`Duplicate workspace app id or path: ${id}`);
-    }
-    ids.add(id);
-    paths.add(expectedPath);
-    if (app.packageName) {
-      if (packageNames.has(app.packageName)) {
-        throw new Error(`Duplicate workspace package name: ${app.packageName}`);
-      }
-      packageNames.add(app.packageName);
-    }
-    if (app.kind !== "expo" && app.kind !== "non-expo") {
-      throw new Error(`Invalid workspace app kind for ${id}.`);
-    }
-    if (app.kind === "expo") {
-      if (
-        !Number.isInteger(app.port) ||
-        (app.port ?? 0) < 1024 ||
-        (app.port ?? 0) > 65535
-      ) {
-        throw new Error(`Expo app ${id} requires a valid development port.`);
-      }
-      if (ports.has(app.port!)) {
-        throw new Error(`Duplicate Expo development port: ${app.port}`);
-      }
-      ports.add(app.port!);
-    }
-  }
-
-  if (!Array.isArray(manifest.sharedPackages)) {
-    throw new Error("Workspace sharedPackages must be an array.");
-  }
-  const roles = new Set(manifest.sharedPackages.map((entry) => entry.role));
-  if (!roles.has("config") || !roles.has("ui-theme")) {
-    throw new Error(
-      "Workspace sharedPackages must include config and ui-theme.",
-    );
-  }
-  const sharedNames = new Set<string>();
-  const sharedPaths = new Set<string>();
-  const sharedPackageNames = new Set<string>();
-  for (const sharedPackage of manifest.sharedPackages) {
-    const expectedPath = `packages/${sharedPackage.name}`;
-    if (normalizeWorkspaceRelativePath(sharedPackage.path) !== expectedPath) {
-      throw new Error(
-        `Shared package ${sharedPackage.name} must live at ${expectedPath}.`,
-      );
-    }
-    if (
-      sharedPackage.packageName !==
-      `${manifest.packageScope}/${sharedPackage.name}`
-    ) {
-      throw new Error(
-        `Shared package ${sharedPackage.name} must use the workspace package scope.`,
-      );
-    }
-    if (
-      sharedNames.has(sharedPackage.name) ||
-      sharedPaths.has(expectedPath) ||
-      sharedPackageNames.has(sharedPackage.packageName)
-    ) {
-      throw new Error(
-        `Duplicate shared workspace package: ${sharedPackage.name}`,
-      );
-    }
-    sharedNames.add(sharedPackage.name);
-    sharedPaths.add(expectedPath);
-    sharedPackageNames.add(sharedPackage.packageName);
-  }
+  validateCanonicalWorkspaceManifest(value);
 }
 
 export function normalizeWorkspaceRelativePath(value: string): string {
-  const input = value.trim().replace(/\\/gu, "/");
-  if (
-    !input ||
-    input.includes("\0") ||
-    path.posix.isAbsolute(input) ||
-    path.win32.isAbsolute(input)
-  ) {
-    throw new Error(`Workspace path must be relative: ${value}`);
-  }
-  const normalized = path.posix
-    .normalize(input)
-    .replace(/^\.\//u, "")
-    .replace(/\/$/u, "");
-  if (normalized === ".." || normalized.startsWith("../")) {
-    throw new Error(`Workspace path escapes the workspace: ${value}`);
-  }
-  return normalized;
+  return normalizeCanonicalWorkspaceRelativePath(value);
 }
 
 export function resolveWorkspacePath(
   workspacePath: string,
   relativePath: string,
 ): string {
-  const workspace = path.resolve(workspacePath);
-  const target = path.resolve(
-    workspace,
-    normalizeWorkspaceRelativePath(relativePath),
-  );
-  const relation = path.relative(workspace, target);
-  if (
-    relation === ".." ||
-    relation.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relation)
-  ) {
-    throw new Error(`Workspace path escapes the workspace: ${relativePath}`);
-  }
-  return target;
+  return resolveCanonicalWorkspacePath(workspacePath, relativePath);
 }
 
 export async function readWorkspaceManifest(
@@ -367,7 +208,9 @@ export async function readWorkspaceManifest(
     validateWorkspaceManifest(value);
     return value;
   } catch (error) {
-    if (isMissingFileError(error)) return null;
+    if ((error as { code?: string }).code === "ENOENT") {
+      return null;
+    }
     throw error;
   }
 }
@@ -1356,7 +1199,7 @@ async function readDirectories(directory: string): Promise<string[]> {
       .map((entry) => entry.name)
       .sort();
   } catch (error) {
-    if (isMissingFileError(error)) return [];
+    if ((error as { code?: string }).code === "ENOENT") return [];
     throw error;
   }
 }
@@ -1368,17 +1211,13 @@ async function readJson(
     const parsed: unknown = JSON.parse(await readFile(filePath, "utf8"));
     return isRecord(parsed) ? parsed : null;
   } catch (error) {
-    if (isMissingFileError(error)) return null;
+    if ((error as { code?: string }).code === "ENOENT") return null;
     throw error;
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isMissingFileError(error: unknown): boolean {
-  return isRecord(error) && error.code === "ENOENT";
 }
 
 async function pathExists(filePath: string): Promise<boolean> {

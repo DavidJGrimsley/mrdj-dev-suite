@@ -13,6 +13,7 @@ export interface DoctorCliArgs {
   help: boolean;
   runScripts: boolean;
   timeoutMs: number;
+  target?: string;
 }
 
 export function parseDoctorCliArgs(argv: string[]): DoctorCliArgs {
@@ -22,6 +23,7 @@ export function parseDoctorCliArgs(argv: string[]): DoctorCliArgs {
   let help = false;
   let runScripts = true;
   let timeoutMs = 120_000;
+  let target: string | undefined;
   let modeFlagCount = 0;
 
   const positionals: string[] = [];
@@ -80,6 +82,15 @@ export function parseDoctorCliArgs(argv: string[]): DoctorCliArgs {
       index += 1;
       continue;
     }
+    if (arg === '--target') {
+      const value = argv[index + 1];
+      if (!value || value.startsWith('-')) {
+        throw new Error('--target requires a relative package path.');
+      }
+      target = value;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`Unknown argument: ${arg}`);
   }
@@ -101,6 +112,7 @@ export function parseDoctorCliArgs(argv: string[]): DoctorCliArgs {
     help,
     runScripts,
     timeoutMs,
+    target,
   };
 }
 
@@ -118,6 +130,7 @@ export async function runDoctorCli(argv: string[]): Promise<DoctorCliRunResult> 
     runScripts: args.runScripts,
     timeoutMs: args.timeoutMs,
     selectionDefaultMode: 'ci',
+    target: args.target,
   });
 
   return {
@@ -128,7 +141,7 @@ export async function runDoctorCli(argv: string[]): Promise<DoctorCliRunResult> 
 
 function formatDoctorCliHelp(): string {
   return [
-    'Usage: mds-doctor [projectPath] [--fast|--ci|--full] [--json] [--no-scripts] [--timeout-ms value]',
+    'Usage: mds-doctor [projectPath] [--target packagePath] [--fast|--ci|--full] [--json] [--no-scripts] [--timeout-ms value]',
     '',
     formatModeHelp('ci'),
   ].join('\n');
