@@ -1,50 +1,33 @@
-# MDS Coordinator Skill Improvement — Session Handoff
+# MDS Coordinator Follow-up — Session Handoff
 
-## Goal
+## Task mapping
 
-Review and improve the repository's MDS coordinator skill so it gives clear,
-portable, evidence-based guidance for roadmap sequencing, worktrees, agents,
-validation, and GitHub pull requests.
+Control repository: `F:\\SoftwareDev\\mrdj-dev-suite-i2Workspace\\project`
+Task mapping: Unmapped — user-requested follow-up to the coordinator skill.
+Base: merged `main` commit `43c7906a2731de597b4a902183c19404ce1362a7`.
 
-## Authoritative files
+## Goal and scope
 
-- Skill under review:
-  `F:\SoftwareDev\mrdj-dev-suite-i2Workspace\mrdj-dev-suite-improve-mds-coordinator-skill\.cline\skills\mds-coordinator\SKILL.md`
-- Skill metadata:
-  `F:\SoftwareDev\mrdj-dev-suite-i2Workspace\mrdj-dev-suite-improve-mds-coordinator-skill\.cline\skills\mds-coordinator\metadata.json`
-- Roadmap/control files are context only. Do not edit the sibling control
-  repository or any product `project/todo.md` while improving this skill.
-
-## Scope and boundaries
-
-- Work only in this worktree.
+- Work only in this worktree: `F:\\SoftwareDev\\mrdj-dev-suite-i2Workspace\\mrdj-dev-suite-mds-coordinator-followup`.
 - Keep `i2/agent-prompt.md` tracked as the historical handoff for this branch.
-- Improve instructions, examples, and metadata only; do not change runtime
-  code, CLI behavior, package versions, licensing, or generated bundles.
+- Review the coordinator skill for remaining portability, clarity, and evidence
+  gaps after the prior improvement branch.
+- Improve skill instructions and metadata only; do not change runtime code,
+  package versions, licensing, or generated bundles.
 - Preserve the safety rules: verify Git/GitHub facts directly, never infer
   completion from worker claims, require explicit merge authorization, and do
   not delete worktrees or files without an exact authorized target.
-- Do not merge, push, publish, or create a pull request.
-
-## Review questions
-
-- Are the classification, scope, and merge-boundary rules unambiguous?
-- Are worktree, branch, PR, and roadmap instructions consistent with current
-  MDS behavior and usable by Cline without hidden Codex-only assumptions?
-- Are destructive actions, dirty/zero-commit worktrees, stale branches, and
-  line-ending noise handled safely?
-- Is the model-tier guidance proportional and understandable?
-- Remove duplicated, contradictory, or obsolete wording without weakening
-  required safeguards.
+- Do not edit the sibling control repository or any product `project/todo.md`.
+- Do not merge this branch or its pull request.
 
 ## Validation and handoff
 
-Run:
+Run `mds doctor --fast`, `git diff --check`, and `git status -sb` from this
+worktree. Report exact sections changed, observed validation, and remaining
+blockers.
 
-    mds doctor --fast
-    git diff --check
-    git status -sb
-    git diff origin/main --stat
+Recommended worker: Tier 3 — GPT-5.6-sol, medium reasoning — this is a bounded
+instruction/metadata review with moderate design judgment.
 
 Report the exact sections changed, the rationale for each material change,
 and the observed validation output. Do not claim completion without that
