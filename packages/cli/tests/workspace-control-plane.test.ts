@@ -408,7 +408,7 @@ describe('workspace control plane', () => {
     expect(status.integrityIssues).toContainEqual(expect.stringContaining('Unresolved TodoForContext marker: project/info.md'));
   });
 
-  it('derives active Git worktrees from Git without a worktree registry', () => {
+  it('derives active Git worktrees without a registry and ignores legacy registry data', () => {
     const root = tempDir();
     const sourcePath = path.join(root, 'app');
     const sourceRemote = path.join(root, 'source.git');
@@ -427,7 +427,8 @@ describe('workspace control plane', () => {
       workspaceId: 'sample',
       projectRepository: projectRemote,
     });
-    fs.writeFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), '{ this is ignored legacy data }\n', 'utf8');
+
+    expect(fs.existsSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'))).toBe(false);
 
     const status = getWorkspaceStatus(workspaceRoot);
 
@@ -438,6 +439,16 @@ describe('workspace control plane', () => {
       branch: 'feature/unregistered',
     }));
     expect(status.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
+
+    fs.writeFileSync(path.join(workspaceRoot, 'project', 'mds.worktrees.json'), '{ this is ignored legacy data }\n', 'utf8');
+    const statusWithLegacyRegistry = getWorkspaceStatus(workspaceRoot);
+    expect(statusWithLegacyRegistry.found).toBe(true);
+    if (!statusWithLegacyRegistry.found) return;
+    expect(statusWithLegacyRegistry.repositories[0]?.worktrees).toContainEqual(expect.objectContaining({
+      path: unregisteredPath,
+      branch: 'feature/unregistered',
+    }));
+    expect(statusWithLegacyRegistry.integrityIssues).not.toContainEqual(expect.stringContaining('registry'));
 
     const movedPath = path.join(root, 'moved-unregistered');
     execFileSync('git', ['-C', path.join(workspaceRoot, 'sample-main'), 'worktree', 'move', unregisteredPath, movedPath], { stdio: 'ignore' });
