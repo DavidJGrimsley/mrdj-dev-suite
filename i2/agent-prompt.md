@@ -1,51 +1,29 @@
-# MDS Coordinator Skill Improvement — Session Handoff
+# Pre-Phase-0 Task Handoff
+
+Control repository: `F:\\SoftwareDev\\mrdj-dev-suite-i2Workspace\\project`
+Roadmap reference: `project/todo.md:117`
+Branch: `feat/icon-release-workflow`
+Base commit: `43c7906a2731de597b4a902183c19404ce1362a7`
 
 ## Goal
 
-Review and improve the repository's MDS coordinator skill so it gives clear,
-portable, evidence-based guidance for roadmap sequencing, worktrees, agents,
-validation, and GitHub pull requests.
+Implement icon-release workflow for a 1024x1024 master icon, platform assets, root copy script, and project-info automation; validate tool integration without uploading secrets.
 
-## Authoritative files
+## Boundaries
 
-- Skill under review:
-  `F:\SoftwareDev\mrdj-dev-suite-i2Workspace\mrdj-dev-suite-improve-mds-coordinator-skill\.cline\skills\mds-coordinator\SKILL.md`
-- Skill metadata:
-  `F:\SoftwareDev\mrdj-dev-suite-i2Workspace\mrdj-dev-suite-improve-mds-coordinator-skill\.cline\skills\mds-coordinator\metadata.json`
-- Roadmap/control files are context only. Do not edit the sibling control
-  repository or any product `project/todo.md` while improving this skill.
+- Work only in this worktree: `F:\\SoftwareDev\\mrdj-dev-suite-i2Workspace\\mrdj-dev-suite-icon-release-workflow`.
+- Do not edit the sibling control repository or mark roadmap items complete.
+- Preserve existing compatibility, licensing, and unrelated behavior.
+- Verify GitHub/CI facts directly; do not treat a worker report as evidence.
+- Do not merge, publish, or create external side effects without user approval.
 
-## Scope and boundaries
+## Validation
 
-- Work only in this worktree.
-- Keep `i2/agent-prompt.md` tracked as the historical handoff for this branch.
-- Improve instructions, examples, and metadata only; do not change runtime
-  code, CLI behavior, package versions, licensing, or generated bundles.
-- Preserve the safety rules: verify Git/GitHub facts directly, never infer
-  completion from worker claims, require explicit merge authorization, and do
-  not delete worktrees or files without an exact authorized target.
-- Do not merge, push, publish, or create a pull request.
+Run `mds doctor --fast`, the task-specific tests, `git diff --check`, and
+`git status -sb`. Report exact evidence and blockers. Do not claim completion
+without a merged PR or reachable commit proving the roadmap task.
 
-## Review questions
+Recommended worker: Tier 2 — GPT-5.6-luna, low-medium reasoning — bounded asset workflow.
 
-- Are the classification, scope, and merge-boundary rules unambiguous?
-- Are worktree, branch, PR, and roadmap instructions consistent with current
-  MDS behavior and usable by Cline without hidden Codex-only assumptions?
-- Are destructive actions, dirty/zero-commit worktrees, stale branches, and
-  line-ending noise handled safely?
-- Is the model-tier guidance proportional and understandable?
-- Remove duplicated, contradictory, or obsolete wording without weakening
-  required safeguards.
+Do not merge this branch or its pull request.
 
-## Validation and handoff
-
-Run:
-
-    mds doctor --fast
-    git diff --check
-    git status -sb
-    git diff origin/main --stat
-
-Report the exact sections changed, the rationale for each material change,
-and the observed validation output. Do not claim completion without that
-evidence. Do not merge the branch.
