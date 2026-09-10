@@ -319,16 +319,15 @@ Map a PR to a roadmap item only through explicit evidence such as the tracked
 assignment. Name similarity is not a mapping. In read-only runs, report an
 exact pending reconciliation without editing.
 
-In an authorized state-changing coordination run, update the control
-repository only after both authoritative merge metadata and reachability from
-the declared final base are verified. Mark only the mapped checkbox and add a
-nested `Completion: [PR #N](...)` link. A PR merged into an intermediate
-dependency branch is not final completion.
+In an authorized state-changing coordination run, update the control repository only after both authoritative merge metadata and final-base reachability are verified. Mark only the mapped checkbox and add a nested
+`Completion: [PR #N](...)` link. For directly verified work that predates PR
+use, add a reachable commit link instead. A PR merged into an intermediate branch is not final completion.
 
 `todo.md` is the human-owned master roadmap, not a branch tracker:
 
-- Never delete, rewrite, deduplicate, reorder, summarize, or replace an item.
-- Preserve ambiguous historical items. Never invent a PR or commit link.
+- Never delete, rewrite, deduplicate, reorder, summarize, or replace an existing TODO item.
+- If historical evidence is ambiguous, preserve the existing checked item
+  unchanged. Never invent a PR or commit link.
 - Append a task only with user-supplied or explicitly approved wording at the
   end of the selected phase.
 - Record a bug once in `## Bug Fixes & Regressions` as
