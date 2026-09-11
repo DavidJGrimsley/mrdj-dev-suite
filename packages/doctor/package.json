@@ -22,6 +22,10 @@
     "./checks": {
       "import": "./dist/checks/index.js",
       "types": "./dist/checks/index.d.ts"
+    },
+    "./workspace-manifest": {
+      "import": "./dist/workspace-manifest.js",
+      "types": "./dist/workspace-manifest.d.ts"
     }
   },
   "main": "./dist/index.js",
