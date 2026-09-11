@@ -7,11 +7,15 @@ Use this checklist when running the PR loop into `test`.
 3. Create meaningful commit message.
 4. Push branch.
 5. Open/update PR to `test`.
-6. Wait ~2 minutes before polling checks/comments.
-7. Collect failed checks + review comments.
-8. Fix issues locally.
-9. Rerun Doctor CI.
-10. Push and poll again.
-11. Repeat up to 5 cycles.
-12. Merge only when checks are green and blockers are cleared.
+6. Wait ~2 minutes before each evidence snapshot; never tight-loop GitHub.
+7. Record the PR URL, base, and current `headRefOid`.
+8. Collect required checks, reviews, top-level comments, and every paginated review thread with `gh api graphql`.
+9. Inspect unresolved Copilot, Codex, human, and other bot feedback without filtering by author.
+10. Classify findings as actionable/blocking, informational, resolved, or outdated, recording a reason for non-blocking classifications.
+11. Fix actionable issues locally and rerun Doctor CI.
+12. Push only after Doctor passes, then poll the new head again.
+13. Count every evidence snapshot and stop after 5 total cycles.
+14. Before readiness, take a fresh snapshot and confirm the head SHA did not change during collection.
+15. Merge only when required checks are green, none are pending or unknown, and all blocking feedback is cleared.
+16. On API/auth/pagination failure, unexpected head movement, or cycle-5 blockers, stop and report concrete remaining actions.
 
