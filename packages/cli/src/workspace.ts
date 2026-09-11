@@ -13,6 +13,7 @@ import {
   resolveWorkspacePath as resolveCanonicalWorkspacePath,
   validateWorkspaceManifest as validateCanonicalWorkspaceManifest,
 } from "@mr.dj2u/doctor/workspace-manifest";
+import { hasReleaseGuidance, renderStoreReleaseGuidance } from "./release-guidance.js";
 
 export type ProjectShape = "single-expo-app" | "multi-app-workspace";
 export type WorkspacePackageManager = "npm" | "pnpm" | "yarn" | "bun";
@@ -1119,7 +1120,11 @@ function renderWorkspaceCiWorkflow(manifest: WorkspaceManifest): string {
 }
 
 function renderWorkspaceReleaseFlow(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Release Flow\n\nRun lint, typecheck, test, and build once from the workspace root. Turbo coordinates package tasks and caching. Connect remote caching separately with your own team credentials; CESS does not create or store those credentials.\n`;
+  const targetPlatforms = manifest.apps.flatMap((app) => app.platforms ?? []);
+  const storeReleaseGuidance = hasReleaseGuidance(targetPlatforms)
+    ? `\n${renderStoreReleaseGuidance(manifest.displayName, targetPlatforms)}\n`
+    : "";
+  return `# ${manifest.displayName} Release Flow\n\nRun lint, typecheck, test, and build once from the workspace root. Turbo coordinates package tasks and caching. Connect remote caching separately with your own team credentials; CESS does not create or store those credentials.${storeReleaseGuidance}`;
 }
 
 function renderMetroFactory(): string {
