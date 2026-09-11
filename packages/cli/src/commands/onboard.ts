@@ -108,6 +108,7 @@ export interface OnboardArgv {
   onboardingCompletionMode?: OnboardAnswers['onboardingCompletionMode'];
   legalUpdateGate?: OnboardAnswers['legalUpdateGate'];
   testToMain?: boolean;
+  releaseCiReady?: boolean;
   projectShape?: 'single-expo-app' | 'multi-app-workspace';
   saveDefaults?: boolean;
   noInstall?: boolean;
@@ -185,6 +186,8 @@ export const EAS_EXPLANATION =
   'EAS is Expo Application Services. You might use it for cloud native builds, app store submission, update channels, or hosting. This question records future intent; it does not set EAS up.';
 export const TEST_TO_MAIN_EXPLANATION =
   'Test-to-main means feature branches merge into a test branch first, using staging data and PR checks. Only validated work is promoted from test to main/production.';
+export const RELEASE_CI_READY_EXPLANATION =
+  'Release CI creates EAS workflows that can spend build minutes and upload to App Store Connect. Confirm only after this Expo project is linked to its GitHub repository in EAS and iOS signing plus App Store Connect credentials are configured in EAS. MDS never reads, stores, or writes those credentials.';
 export const SERVER_OUTPUT_EXPLANATION =
   'Expo Router API routes require Expo web output set to server. Static and SPA exports can still call Supabase, external APIs, serverless functions, or a separate custom backend, but they cannot host Expo Router API routes inside the static export.';
 export const AGENT_DERIVED_CORE_FLOWS =
@@ -640,6 +643,17 @@ export async function collectOnboardPlan(
       seed.testToMainSafeguards,
       TEST_TO_MAIN_EXPLANATION
     ));
+  const releaseCiReady =
+    targetPlatforms.includes('ios') &&
+    easUses.includes('publishing mobile applications') &&
+    testToMainSafeguards
+      ? argv.releaseCiReady ??
+        (await askYesNoWithExplain(
+          'Are GitHub, EAS, iOS signing, and App Store Connect ready for release CI?',
+          false,
+          RELEASE_CI_READY_EXPLANATION
+        ))
+      : false;
   const defaults = deriveDefaults(
     argv.defaults,
     seed.defaults,
@@ -692,6 +706,7 @@ export async function collectOnboardPlan(
       onboardingCompletionMode,
       legalUpdateGate,
       testToMainSafeguards,
+      releaseCiReady,
       defaults,
     },
     guidelinesTemplate,
@@ -878,6 +893,11 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
   const easUses = parseList(argv.easUses, parseList(savedDefaults.easUses, []));
   const dataStart = argv.dataStart ?? savedDefaults.dataStart ?? 'local';
   const testToMainSafeguards = argv.testToMain ?? savedDefaults.testToMainSafeguards ?? true;
+  const releaseCiReady =
+    argv.releaseCiReady === true &&
+    targetPlatforms.includes('ios') &&
+    easUses.includes('publishing mobile applications') &&
+    testToMainSafeguards;
   const webOutput =
     argv.webOutput ??
     savedDefaults.webOutput ??
@@ -964,6 +984,7 @@ function defaultAnswers(argv: OnboardArgv, projectPath = path.resolve(argv.proje
     onboardingCompletionMode,
     legalUpdateGate,
     testToMainSafeguards,
+    releaseCiReady,
     defaults: deriveDefaults(
       argv.defaults ?? savedDefaults.defaults,
       ['project-docs', 'guidelines', 'uniwind', 'doctor'],

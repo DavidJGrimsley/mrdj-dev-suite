@@ -54,6 +54,7 @@ const answers: OnboardAnswers = {
   onboardingCompletionMode: 'auth',
   legalUpdateGate: 'none',
   testToMainSafeguards: true,
+  releaseCiReady: false,
   defaults: [],
 };
 
@@ -166,6 +167,7 @@ describe('legal project-memory values', () => {
       legalDocumentMode: 'public-routes',
       legalUpdateGate: 'none',
       testToMainSafeguards: true,
+      releaseCiReady: false,
       defaults: ['project-docs'],
       easUses: [],
       legalBusinessName: 'Sample Holdings LLC',

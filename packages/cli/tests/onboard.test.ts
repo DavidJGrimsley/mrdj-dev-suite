@@ -2423,6 +2423,23 @@ describe('runOnboardCommand', () => {
     expect(plan.saveDefaults).toBe(false);
     expect(plan.answers.dataStart).toBe('local');
     expect(plan.answers.testToMainSafeguards).toBe(true);
+    expect(plan.answers.releaseCiReady).toBe(false);
+    expect(
+      defaultOnboardPlan({
+        platforms: 'ios',
+        easUses: 'publishing mobile applications',
+        testToMain: true,
+        releaseCiReady: true,
+      }).answers.releaseCiReady
+    ).toBe(true);
+    expect(
+      defaultOnboardPlan({
+        platforms: 'android',
+        easUses: 'publishing mobile applications',
+        testToMain: true,
+        releaseCiReady: true,
+      }).answers.releaseCiReady
+    ).toBe(false);
     expect(defaultOnboardPlan({ saveDefaults: true }).saveDefaults).toBe(true);
   });
 
@@ -2803,6 +2820,7 @@ function sampleAnswers(appName: string): OnboardAnswers {
     onboardingCompletionMode: 'enter-app',
     legalUpdateGate: 'none',
     testToMainSafeguards: true,
+    releaseCiReady: false,
     defaults: ['project-docs', 'guidelines', 'uniwind', 'doctor'],
   };
 }

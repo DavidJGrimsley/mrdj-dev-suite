@@ -62,6 +62,7 @@ function sampleAnswers(appName: string): OnboardAnswers {
     onboardingCompletionMode: 'enter-app',
     legalUpdateGate: 'none',
     testToMainSafeguards: false,
+    releaseCiReady: false,
     defaults: ['project-docs', 'guidelines', 'doctor', 'uniwind'],
     generatorStylingSystem: 'uniwind',
     generatorNavigationLibrary: 'expo-router',

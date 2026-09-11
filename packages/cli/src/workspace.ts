@@ -45,6 +45,14 @@ export interface WorkspaceApp {
   intendedStack?: string;
 }
 
+export interface WorkspaceReleaseCiApp {
+  id: string;
+  displayName: string;
+  path: string;
+  eligible: boolean;
+  releaseCiReady: boolean;
+}
+
 export interface SharedWorkspacePackage {
   name: string;
   packageName: string;
@@ -337,7 +345,11 @@ export async function discoverWorkspace(
 export async function scaffoldWorkspaceRoot(
   workspacePath: string,
   manifest: WorkspaceManifest,
-  options: { force?: boolean; existing?: boolean } = {},
+  options: {
+    force?: boolean;
+    existing?: boolean;
+    releaseCiApps?: WorkspaceReleaseCiApp[];
+  } = {},
 ): Promise<WorkspaceWriteResult[]> {
   validateWorkspaceManifest(manifest);
   const force = options.force ?? false;
@@ -389,9 +401,9 @@ export async function scaffoldWorkspaceRoot(
       renderWorkspaceCiWorkflow(manifest),
       force,
     ),
-    await writeIfAllowed(
-      path.join(workspacePath, "project", "release-flow.md"),
-      renderWorkspaceReleaseFlow(manifest),
+      await writeIfAllowed(
+        path.join(workspacePath, "project", "release-flow.md"),
+        renderWorkspaceReleaseFlow(manifest, options.releaseCiApps),
       force,
     ),
   );
@@ -1118,8 +1130,35 @@ function renderWorkspaceCiWorkflow(manifest: WorkspaceManifest): string {
   return `name: MDS workspace checks\n\non:\n  pull_request:\n  push:\n    branches: [main, test]\n\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20${cache}\n      - run: corepack enable\n      - run: ${install}\n      - run: ${run("lint")}\n      - run: ${run("typecheck")}\n      - run: ${run("test")}\n      - run: ${run("build")}\n`;
 }
 
-function renderWorkspaceReleaseFlow(manifest: WorkspaceManifest): string {
-  return `# ${manifest.displayName} Release Flow\n\nRun lint, typecheck, test, and build once from the workspace root. Turbo coordinates package tasks and caching. Connect remote caching separately with your own team credentials; CESS does not create or store those credentials.\n`;
+function renderWorkspaceReleaseFlow(
+  manifest: WorkspaceManifest,
+  releaseCiApps: WorkspaceReleaseCiApp[] = [],
+): string {
+  const releaseCiLines =
+    releaseCiApps.length === 0
+      ? ['- No Expo app release CI status is available yet.']
+      : releaseCiApps.map((app) => {
+          if (app.eligible) {
+            return `- ${app.displayName} (${app.path}): generated workflows at ${app.path}/.eas/workflows/ for TestFlight from \`test\` and App Store Connect upload from \`main\`.`;
+          }
+          if (app.releaseCiReady) {
+            return `- ${app.displayName} (${app.path}): release readiness was confirmed, but the app is not eligible because it must target iOS, select EAS mobile publishing, and use test-to-main safeguards.`;
+          }
+          return `- ${app.displayName} (${app.path}): release workflows were not generated because release readiness was not confirmed.`;
+        });
+
+  return [
+    `# ${manifest.displayName} Release Flow`,
+    '',
+    'Run lint, typecheck, test, and build once from the workspace root. Turbo coordinates package tasks and caching. Connect remote caching separately with your own team credentials; CESS does not create or store those credentials.',
+    '',
+    '## Per-App EAS Release CI',
+    '',
+    ...releaseCiLines,
+    '',
+    'Each eligible Expo app must be separately linked to this GitHub repository in EAS with the app directory as its project root. EAS and Apple credentials stay in EAS; they are never stored in the workspace.',
+    '',
+  ].join('\n');
 }
 
 function renderMetroFactory(): string {
