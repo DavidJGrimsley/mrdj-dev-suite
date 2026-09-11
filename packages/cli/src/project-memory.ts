@@ -25,6 +25,11 @@ import {
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
+import {
+  hasReleaseGuidance,
+  releaseGuidanceTasks,
+  renderStoreReleaseGuidance,
+} from './release-guidance.js';
 import type { ComponentStrategy, ComponentStrategyDecision } from './component-strategy.js';
 import {
   MDS_REACT_DOCTOR_SCRIPT_NAME,
@@ -1610,16 +1615,23 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
-  if (answers.testToMainSafeguards && !isWorkspaceApp) {
-    await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
-      recursive: true,
-    });
+  if (
+    (answers.testToMainSafeguards || hasReleaseGuidance(answers.targetPlatforms)) &&
+    !isWorkspaceApp
+  ) {
+    if (answers.testToMainSafeguards) {
+      await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
+        recursive: true,
+      });
+      results.push(
+        await writeIfAllowed(
+          path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
+          renderGitHubPrChecksWorkflow(),
+          force
+        )
+      );
+    }
     results.push(
-      await writeIfAllowed(
-        path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
-        renderGitHubPrChecksWorkflow(),
-        force
-      ),
       await writeIfAllowed(
         path.join(workspaceRootPath, 'project', 'release-flow.md'),
         renderReleaseFlow(answers),
@@ -1972,6 +1984,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',
+    ...releaseGuidanceTasks(answers.targetPlatforms).map((task) => `- [ ] ${task}`),
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
@@ -4874,36 +4887,43 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} Release Flow`,
     '',
-    '## Test-To-Main Safeguards',
-    '',
-    '- Build features on short-lived feature branches.',
-    '- Open pull requests into `test` first.',
-    '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
-    '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
-    '- Promote from `test` to `main` only after validation.',
-    '- Protect `main` so direct pushes are blocked and PR checks are required.',
-    '',
-    '## Supabase Environments',
-    '',
-    ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
+    ...(answers.testToMainSafeguards
       ? [
-          '- Use one Supabase project for test/staging and one Supabase project for production.',
-          '- Keep publishable client keys in environment files for the matching branch/environment.',
-          '- Never commit Supabase service-role or secret keys into the Expo app.',
+          '## Test-To-Main Safeguards',
+          '',
+          '- Build features on short-lived feature branches.',
+          '- Open pull requests into `test` first.',
+          '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
+          '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
+          '- Promote from `test` to `main` only after validation.',
+          '- Protect `main` so direct pushes are blocked and PR checks are required.',
+          '',
+          '## Supabase Environments',
+          '',
+          ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
+            ? [
+                '- Use one Supabase project for test/staging and one Supabase project for production.',
+                '- Keep publishable client keys in environment files for the matching branch/environment.',
+                '- Never commit Supabase service-role or secret keys into the Expo app.',
+              ]
+            : [
+                '- Local dummy data is the starting point.',
+                '- When Supabase is introduced, create separate test/staging and production projects before wiring production data.',
+              ]),
+          '',
+          '## GitHub Setup The User Still Needs To Do',
+          '',
+          '- Create `test` and `main` branches.',
+          '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
+          '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
+          '- Require the generated `MDS PR Checks` workflow before merge.',
+          '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+          '',
         ]
-      : [
-          '- Local dummy data is the starting point.',
-          '- When Supabase is introduced, create separate test/staging and production projects before wiring production data.',
-        ]),
-    '',
-    '## GitHub Setup The User Still Needs To Do',
-    '',
-    '- Create `test` and `main` branches.',
-    '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
-    '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
-    '- Require the generated `MDS PR Checks` workflow before merge.',
-    '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
-    '',
+      : []),
+    ...(hasReleaseGuidance(answers.targetPlatforms)
+      ? [renderStoreReleaseGuidance(answers.appName, answers.targetPlatforms), '']
+      : []),
   ].join('\n');
 }
 
