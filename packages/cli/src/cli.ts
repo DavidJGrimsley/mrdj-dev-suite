@@ -17,6 +17,7 @@ import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
+import { runIconsSyncCommand } from './commands/icons.js';
 import {
   runLibraryAddCommand,
   runLibraryListCommand,
@@ -41,6 +42,7 @@ import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
+import type { IconsSyncArgv } from './commands/icons.js';
 import type { LibraryAddArgv, LibraryListArgv, LibraryShowArgv } from './commands/library.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
@@ -569,6 +571,25 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runClearExpoStartCommand(argv as ClearExpoStartArgv);
+      }
+    )
+    .command(
+      'icons sync [path]',
+      'Validate a 1024x1024 master icon and generate Expo icon assets',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Expo project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('json', {
+            describe: 'Print the sync result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runIconsSyncCommand(argv as IconsSyncArgv);
       }
     )
     .command(

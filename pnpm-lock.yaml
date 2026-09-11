@@ -59,6 +59,9 @@ importers:
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
       yargs:
         specifier: ^17.7.2
         version: 17.7.2
@@ -66,6 +69,9 @@ importers:
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.39
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
       '@types/yargs':
         specifier: ^17.0.24
         version: 17.0.35
@@ -2592,6 +2598,12 @@ packages:
   /@types/parse-json@4.0.2:
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
     dev: false
+
+  /@types/pngjs@6.0.5:
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
+    dependencies:
+      '@types/node': 20.19.39
+    dev: true
 
   /@types/tinycolor2@1.4.6:
     resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
@@ -6398,6 +6410,11 @@ packages:
   /pngjs@3.4.0:
     resolution: {integrity: sha512-NCrCHhWmnQklfH4MtJMRjZ2a8c80qXeMlQMv2uVp9ISJMTt562SbGd6n2oq0PaPgKm7Z6pL9E2UlLIhC+SHL3w==}
     engines: {node: '>=4.0.0'}
+    dev: false
+
+  /pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
     dev: false
 
   /postcss@8.4.49:

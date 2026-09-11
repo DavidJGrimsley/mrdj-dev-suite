@@ -1118,6 +1118,16 @@ async function scaffoldRichBoilerplateInner(
       ),
       force
     ),
+    await writeIfAllowed(
+      path.join(projectPath, 'project', 'icon-release.json'),
+      renderIconReleaseConfig(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'scripts', 'copy-icons.mjs'),
+      renderCopyIconsScript(),
+      force
+    ),
     ...(needsNativeWindMetroPatch
       ? [
           await writeIfAllowed(
@@ -2338,6 +2348,7 @@ async function ensurePackageJson(
       packageJson.scripts?.[MDS_REACT_DOCTOR_SCRIPT_NAME] ?? buildReactDoctorPackageScript(),
     'mds:stylist:sync':
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
+    'icons:sync': packageJson.scripts?.['icons:sync'] ?? 'node ./scripts/copy-icons.mjs',
     'stylist:sync:android':
       packageJson.scripts?.['stylist:sync:android'] ?? 'node ./scripts/stylist-sync-android.mjs',
     'mds:eject': packageJson.scripts?.['mds:eject'] ?? `${MDS_NPX_COMMAND} eject .`,
@@ -4883,6 +4894,14 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- Promote from `test` to `main` only after validation.',
     '- Protect `main` so direct pushes are blocked and PR checks are required.',
     '',
+    '## App Icons',
+    '',
+    '- Add an exactly 1024x1024 PNG master icon at `assets/branding/icon-1024.png`.',
+    '- Run `npm run icons:sync` to generate `assets/images/icon.png` and `assets/images/favicon.png` and fill missing static `app.json` icon references.',
+    '- To configure Android adaptive icons, set `adaptiveIcon` in `project/icon-release.json` with separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color.',
+    '- SmartUtilify remains optional for extra ICO, PWA, or legacy native packages; it is not required by the generated Expo workflow.',
+    '- Obtain written permission before embedding SmartUtilify or another third-party generator in an IDE webview.',
+    '',
     '## Supabase Environments',
     '',
     ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
@@ -4903,6 +4922,32 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
     '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+    '',
+  ].join('\n');
+}
+
+function renderIconReleaseConfig(): string {
+  return `${JSON.stringify(
+    {
+      masterIcon: 'assets/branding/icon-1024.png',
+      adaptiveIcon: null,
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function renderCopyIconsScript(): string {
+  return [
+    "import { spawnSync } from 'node:child_process';",
+    '',
+    "const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
+    "const result = spawnSync(command, ['mds', 'icons', 'sync', '.'], { stdio: 'inherit' });",
+    '',
+    'if (result.error) {',
+    '  throw result.error;',
+    '}',
+    'process.exitCode = result.status ?? 1;',
     '',
   ].join('\n');
 }
