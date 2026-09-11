@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
+  buildGitHubSetupGuidancePromptText,
   buildReviewMotionPromptText,
   buildWrapUpPromptText,
   classifyMcpServerRuntimeMode,
@@ -402,6 +403,7 @@ describe('mds MCP helpers', () => {
       expect(toolNames.has('library_plan_add')).toBe(true);
       expect(toolNames.has('library_add')).toBe(true);
       expect(promptNames.has('review_motion')).toBe(true);
+      expect(promptNames.has('github_setup_guidance')).toBe(true);
 
       const librarySearch = await client.callTool({
         name: 'library_search',
@@ -1017,6 +1019,18 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('animation-motion');
     expect(prompt).toContain('animation-performance');
     expect(prompt).toContain('parallax or scroll-linked motion');
+  });
+
+  it('builds GitHub setup guidance with read-only and mutation guardrails', () => {
+    const prompt = buildGitHubSetupGuidancePromptText(
+      'F:/SoftwareDev/example-repo',
+      'test'
+    );
+
+    expect(prompt).toContain('mds github setup');
+    expect(prompt).toContain('--target-branch test');
+    expect(prompt).toContain('Do not create branches, push, open or edit PRs');
+    expect(prompt).toContain('Settings` → `Rules` → `Rulesets');
   });
 
   it('builds a wrap-up prompt with doctor, file-confirmation, and merge guardrails', () => {

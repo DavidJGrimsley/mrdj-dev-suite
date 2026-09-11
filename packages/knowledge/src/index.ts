@@ -104,6 +104,13 @@ const GUIDE_RESOURCES = [
     keywords: ['onboard', 'expo', 'create-expo-app', 'uniwind'],
     sourceRepos: ['expo-super-template', 'create-expo-stack'],
   },
+  {
+    id: 'github-setup',
+    name: 'GitHub Setup Guidance',
+    description: 'Authenticated, read-only GitHub and CI setup discovery with exact CLI and UI procedures.',
+    resourcePath: 'guides/github-setup.md',
+    keywords: ['github', 'ci', 'ruleset', 'pull request', 'actions', 'authentication'],
+  },
 ] as const;
 
 const RULE_RESOURCES = [
