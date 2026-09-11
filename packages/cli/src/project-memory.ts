@@ -679,6 +679,7 @@ function readOwnPackageVersion(): string {
 
 const INFO_HEADINGS = [
   'App Name',
+  'Release Metadata',
   'Overview',
   'Target Users',
   'Problem this app solves',
@@ -697,6 +698,15 @@ const INFO_HEADINGS = [
   'Component Strategy',
   'Ejection Inventory',
 ] as const;
+
+interface ReleaseMetadata {
+  publicAppName: string;
+  supportUrl: string;
+  termsOfServiceUrl: string;
+  privacyPolicyUrl: string;
+}
+
+const PENDING_RELEASE_METADATA_VALUE = 'pending';
 
 const STYLE_HEADINGS = [
   'Visual Direction',
@@ -1724,11 +1734,19 @@ export function renderInfo(
   const firstFlow = hasConcreteCoreFlows
     ? extractFirstNonEmptyLine(answers.coreFlows)
     : '# TodoForContext(optional): Describe the first real end-to-end user flow the MVP should support.';
+  const releaseMetadata = resolveReleaseMetadata(answers, existingInfo);
   return [
     `# ${answers.appName} Project Info`,
     '',
     '## App Name',
     answers.appName,
+    '',
+    '## Release Metadata',
+    '',
+    `- Public App Name: ${releaseMetadata.publicAppName}`,
+    `- Support URL: ${releaseMetadata.supportUrl}`,
+    `- Terms-of-Service URL: ${releaseMetadata.termsOfServiceUrl}`,
+    `- Privacy-Policy URL: ${releaseMetadata.privacyPolicyUrl}`,
     '',
     '## Overview',
     '',
@@ -1972,6 +1990,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',
+    ...renderReleaseMetadataTodos(answers),
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
@@ -1987,6 +2006,73 @@ export function renderTodo(answers: OnboardAnswers): string {
       : []),
     '',
   ].join('\n');
+}
+
+function renderReleaseMetadataTodos(answers: OnboardAnswers): string[] {
+  const targetsIos = answers.targetPlatforms.some((platform) => platform.toLowerCase() === 'ios');
+  const targetsAndroid = answers.targetPlatforms.some(
+    (platform) => platform.toLowerCase() === 'android'
+  );
+  if (!targetsIos && !targetsAndroid) {
+    return [];
+  }
+
+  return [
+    '- [ ] Finalize the public app name and support, terms-of-service, and privacy-policy URLs in `project/info.md` under `Release Metadata`.',
+    '- [ ] Set `expo.name` from the public app name and configure `expo.extra.releaseMetadata.supportUrl`, `expo.extra.releaseMetadata.termsOfServiceUrl`, and `expo.extra.releaseMetadata.privacyPolicyUrl` for runtime use.',
+    ...(targetsIos
+      ? [
+          '- [ ] For iOS, synchronize the App Store Connect title, support URL, and privacy-policy URL from `project/info.md`; when EAS Metadata is used, configure the equivalent `store.config.*` fields and run `eas metadata:lint`; configure terms or a custom EULA in App Store Connect.',
+        ]
+      : []),
+    ...(targetsAndroid
+      ? [
+          '- [ ] For Android, copy the public app name and applicable support, terms, and privacy-policy URLs into the Google Play Console listing and policy fields.',
+        ]
+      : []),
+    '- [ ] Verify `expo.name`, `expo.extra.releaseMetadata`, in-app support and legal links, and every selected store listing match `project/info.md`; confirm each URL is publicly reachable.',
+  ];
+}
+
+function resolveReleaseMetadata(
+  answers: Pick<OnboardAnswers, 'appName'>,
+  existingInfo?: string | null
+): ReleaseMetadata {
+  return {
+    publicAppName:
+      readReleaseMetadataValue(existingInfo, 'Public App Name')?.trim() || answers.appName,
+    supportUrl:
+      readReleaseMetadataValue(existingInfo, 'Support URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+    termsOfServiceUrl:
+      readReleaseMetadataValue(existingInfo, 'Terms-of-Service URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+    privacyPolicyUrl:
+      readReleaseMetadataValue(existingInfo, 'Privacy-Policy URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+  };
+}
+
+function readReleaseMetadataValue(
+  existingInfo: string | null | undefined,
+  label: string
+): string | null {
+  if (!existingInfo) {
+    return null;
+  }
+
+  const releaseMetadataStart = existingInfo.search(/^## Release Metadata\s*$/m);
+  if (releaseMetadataStart < 0) {
+    return null;
+  }
+
+  const releaseMetadataSection = existingInfo
+    .slice(releaseMetadataStart)
+    .split(/\r?\n(?=#{1,6}\s)/, 2)[0];
+  const match = releaseMetadataSection?.match(
+    new RegExp(`^\\s*-\\s*${label}:\\s*(.+?)\\s*$`, 'mi')
+  );
+  return match?.[1] ?? null;
 }
 
 export function renderStyle(answers: OnboardAnswers, existingStyle?: string | null): string {
