@@ -181,6 +181,24 @@ const PROMPT_SPECS: PromptSpec[] = [
     ],
   },
   {
+    id: 'sync-main-into-test',
+    slug: 'sync-main-into-test',
+    title: 'Sync Main Into Test',
+    description:
+      'Create or update the merge-commit PR that synchronizes main back into test after promotion.',
+    resourcePath: 'prompts/sync-main-into-test.md',
+    keywords: ['sync', 'main branch', 'test branch', 'promotion', 'pull request'],
+    surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
+    codexCommandFile: 'sync-main-into-test.md',
+    claudeCommandFile: 'sync-main-into-test.md',
+    mcpPromptName: 'sync_main_into_test',
+    mcpArgs: [
+      { name: 'projectPath', description: 'Target repository path for the sync workflow.' },
+      { name: 'main', description: 'Production branch name (default: main).' },
+      { name: 'test', description: 'Test branch name (default: test).' },
+    ],
+  },
+  {
     id: 'wrap-up',
     slug: 'wrap-up',
     title: 'Wrap Up',

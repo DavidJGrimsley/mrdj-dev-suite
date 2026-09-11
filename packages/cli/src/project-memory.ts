@@ -1621,6 +1621,11 @@ async function scaffoldRichBoilerplateInner(
         force
       ),
       await writeIfAllowed(
+        path.join(workspaceRootPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        renderSyncMainIntoTestWorkflow(),
+        force
+      ),
+      await writeIfAllowed(
         path.join(workspaceRootPath, 'project', 'release-flow.md'),
         renderReleaseFlow(answers),
         force
@@ -4870,6 +4875,45 @@ function renderGitHubPrChecksWorkflow(): string {
   ].join('\n');
 }
 
+function renderSyncMainIntoTestWorkflow(): string {
+  return [
+    'name: MDS Sync Main Into Test',
+    '',
+    'on:',
+    '  pull_request:',
+    '    types: [closed]',
+    '    branches: [main]',
+    '',
+    'permissions:',
+    '  contents: write',
+    '  pull-requests: write',
+    '',
+    'concurrency:',
+    '  group: mds-sync-main-into-test',
+    '  cancel-in-progress: false',
+    '',
+    'jobs:',
+    '  sync:',
+    '    if: >-',
+    "      github.event.pull_request.merged == true &&",
+    "      github.event.pull_request.head.ref == 'test' &&",
+    '      github.event.pull_request.head.repo.full_name == github.repository',
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - uses: actions/checkout@v4',
+    '        with:',
+    '          fetch-depth: 0',
+    '      - uses: actions/setup-node@v4',
+    '        with:',
+    '          node-version: 22',
+    '      - name: Create or update the main-to-test sync pull request',
+    `        run: npx --yes --package @mr.dj2u/cli@${MDS_CLI_VERSION} mds sync-main-into-test . --execute --json`,
+    '        env:',
+    '          GH_TOKEN: ${{ github.token }}',
+    '',
+  ].join('\n');
+}
+
 function renderReleaseFlow(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} Release Flow`,
@@ -4881,6 +4925,9 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
     '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
     '- Promote from `test` to `main` only after validation.',
+    '- After a successful `test` to `main` PR merge, the generated MDS workflow creates or updates one `main` to `test` sync PR.',
+    '- Merge the sync PR with the merge-commit strategy; never squash or rebase it.',
+    '- MDS creates the sync PR automatically but never merges it.',
     '- Protect `main` so direct pushes are blocked and PR checks are required.',
     '',
     '## Supabase Environments',
@@ -4900,6 +4947,7 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '',
     '- Create `test` and `main` branches.',
     '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
+    '- Allow the generated sync workflow to write repository contents and pull requests.',
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
     '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
