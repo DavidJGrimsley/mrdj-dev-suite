@@ -1118,6 +1118,16 @@ async function scaffoldRichBoilerplateInner(
       ),
       force
     ),
+    await writeIfAllowed(
+      path.join(projectPath, 'project', 'icon-release.json'),
+      renderIconReleaseConfig(),
+      force
+    ),
+    await writeIfAllowed(
+      path.join(projectPath, 'scripts', 'copy-icons.mjs'),
+      renderCopyIconsScript(),
+      force
+    ),
     ...(needsNativeWindMetroPatch
       ? [
           await writeIfAllowed(
@@ -2343,6 +2353,7 @@ async function ensurePackageJson(
       packageJson.scripts?.[MDS_REACT_DOCTOR_SCRIPT_NAME] ?? buildReactDoctorPackageScript(),
     'mds:stylist:sync':
       packageJson.scripts?.['mds:stylist:sync'] ?? `${MDS_NPX_COMMAND} stylist sync .`,
+    'icons:sync': packageJson.scripts?.['icons:sync'] ?? 'node ./scripts/copy-icons.mjs',
     'stylist:sync:android':
       packageJson.scripts?.['stylist:sync:android'] ?? 'node ./scripts/stylist-sync-android.mjs',
     'mds:eject': packageJson.scripts?.['mds:eject'] ?? `${MDS_NPX_COMMAND} eject .`,
@@ -4930,6 +4941,16 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- MDS creates the sync PR automatically but never merges it.',
     '- Protect `main` so direct pushes are blocked and PR checks are required.',
     '',
+    '## App Icons',
+    '',
+    '- Add an exactly 1024x1024 PNG master icon at `assets/branding/icon-1024.png`.',
+    '- Run `npm run icons:sync` to generate `assets/images/icon.png` and `assets/images/favicon.png` and fill missing static `app.json` icon references.',
+    '- To import a locally copied SmartUtilify package instead, set `package.directory` to its app-relative folder (for example `smartutilifyIconDownload`). It uses `ios/AppIcon-1024x1024.png` for the Expo icon, `web/favicon-48x48.png` for the Expo favicon, and copies PNG/ICO files from `pwa` and `web` into `package.publicIconDirectories` (default: `public/icons`).',
+    '- Use `outputs.icon` and `outputs.favicon` when an app uses paths other than `assets/images`, such as `assets/icons/icon.png` and `assets/icons/favicon.png`. `package.faviconIcoOutput` defaults to `public/favicon.ico` and may be set to `null` to skip it.',
+    '- In an i² workspace, set these options in the sibling workspace `project/icon-release.json`; standalone apps use `project/icon-release.json` inside the app. Icon source paths stay relative to the app repository. Use separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color for Android adaptive icons.',
+    '- SmartUtilify remains optional for extra ICO, PWA, or legacy native packages; it is not required by the generated Expo workflow.',
+    '- Obtain written permission before embedding SmartUtilify or another third-party generator in an IDE webview.',
+    '',
     '## Supabase Environments',
     '',
     ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
@@ -4951,6 +4972,32 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
     '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+    '',
+  ].join('\n');
+}
+
+function renderIconReleaseConfig(): string {
+  return `${JSON.stringify(
+    {
+      masterIcon: 'assets/branding/icon-1024.png',
+      adaptiveIcon: null,
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function renderCopyIconsScript(): string {
+  return [
+    "import { spawnSync } from 'node:child_process';",
+    '',
+    "const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
+    "const result = spawnSync(command, ['mds', 'icons', 'sync', '.'], { stdio: 'inherit' });",
+    '',
+    'if (result.error) {',
+    '  throw result.error;',
+    '}',
+    'process.exitCode = result.status ?? 1;',
     '',
   ].join('\n');
 }
