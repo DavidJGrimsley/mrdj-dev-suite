@@ -33,6 +33,7 @@ import {
 } from './commands/stylist.js';
 import { runRunCommand } from './commands/run.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
+import { runSyncMainIntoTestCommand } from './commands/sync-main-into-test.js';
 import { runWorkspaceCommand } from './commands/workspace.js';
 import { runGitHubSetupCommand } from './commands/github-setup.js';
 
@@ -51,6 +52,7 @@ import type { RunArgv } from './commands/run.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
+import type { SyncMainIntoTestArgv } from './commands/sync-main-into-test.js';
 import type { WorkspaceArgv } from './commands/workspace.js';
 import type { GitHubSetupArgv } from './commands/github-setup.js';
 
@@ -1024,6 +1026,40 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runShipCommand(argv as ShipArgv);
+      }
+    )
+    .command(
+      'sync-main-into-test [path]',
+      'Create or update a merge-commit pull request that synchronizes main into test',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Target GitHub repository path',
+            type: 'string',
+            default: '.',
+          })
+          .option('main', {
+            describe: 'Production branch promoted from test',
+            type: 'string',
+            default: 'main',
+          })
+          .option('test', {
+            describe: 'Test branch to synchronize after promotion',
+            type: 'string',
+            default: 'test',
+          })
+          .option('execute', {
+            describe: 'Push the sync branch and create or update the pull request',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print the structured result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runSyncMainIntoTestCommand(argv as SyncMainIntoTestArgv);
       }
     )
     .demandCommand()

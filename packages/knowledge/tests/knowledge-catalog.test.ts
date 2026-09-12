@@ -24,6 +24,7 @@ describe('knowledge catalog expansion', () => {
     expect(checklists.some((resource) => resource.id === 'push-merge-loop')).toBe(true);
     expect(examples.some((resource) => resource.id === 'unified-agent-bundle-bootstrap')).toBe(true);
     expect(prompts.some((resource) => resource.id === 'push-merge-loop')).toBe(true);
+    expect(prompts.some((resource) => resource.id === 'sync-main-into-test')).toBe(true);
     expect(prompts.some((resource) => resource.id === 'wrap-up')).toBe(true);
     expect(guides.some((resource) => resource.id === 'github-setup')).toBe(true);
     expect(skills.some((resource) => resource.id === 'animation-motion')).toBe(true);
@@ -46,6 +47,7 @@ describe('knowledge catalog expansion', () => {
     expect(codex.some((spec) => spec.id === 'run-doctor')).toBe(true);
     expect(codex.some((spec) => spec.id === 'review-motion')).toBe(true);
     expect(codex.some((spec) => spec.id === 'push-merge-loop')).toBe(true);
+    expect(codex.some((spec) => spec.id === 'sync-main-into-test')).toBe(true);
     expect(codex.some((spec) => spec.id === 'wrap-up')).toBe(true);
     expect(codex.some((spec) => spec.id === 'github-setup-guidance')).toBe(true);
     expect(claude.some((spec) => spec.id === 'project-research-plan')).toBe(true);
@@ -54,8 +56,18 @@ describe('knowledge catalog expansion', () => {
     expect(claude.some((spec) => spec.id === 'github-setup-guidance')).toBe(true);
     expect(mcp.some((spec) => spec.mcpPromptName === 'review_motion')).toBe(true);
     expect(mcp.some((spec) => spec.mcpPromptName === 'push_merge_loop')).toBe(true);
+    expect(mcp.some((spec) => spec.mcpPromptName === 'sync_main_into_test')).toBe(true);
     expect(mcp.some((spec) => spec.mcpPromptName === 'wrap_up_release')).toBe(true);
     expect(mcp.some((spec) => spec.mcpPromptName === 'github_setup_guidance')).toBe(true);
+  });
+
+  it('reads the main-to-test synchronization prompt guardrails', async () => {
+    const prompt = await readPromptSpec('sync-main-into-test');
+
+    expect(prompt).not.toBeNull();
+    expect(prompt?.content).toContain('mds sync-main-into-test');
+    expect(prompt?.content).toContain('never merges it');
+    expect(prompt?.content).toContain('isolated temporary clone');
   });
 
   it('reads prompt spec content', async () => {
