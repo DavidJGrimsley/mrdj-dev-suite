@@ -1088,6 +1088,31 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    'push_merge_loop',
+    {
+      title: 'Push Merge Loop',
+      description:
+        'Run the Doctor-gated PR loop: push, poll checks and review threads, fix, repoll, and apply merge guardrails.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        branch: z.string().optional(),
+        base: z.string().optional(),
+      },
+    },
+    ({ projectPath, branch, base }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildPushMergeLoopPromptText(projectPath, branch, base),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'wrap_up_release',
     {
       title: 'Wrap Up Release',
@@ -1112,6 +1137,27 @@ function registerPrompts(server: McpServer): void {
       ],
     })
   );
+}
+
+export function buildPushMergeLoopPromptText(
+  projectPath?: string,
+  branch?: string,
+  base?: string
+): string {
+  const target = projectPath ?? 'the current repository';
+  const resolvedBranch = branch ?? 'the current branch';
+  const resolvedBase = base ?? 'test';
+  const canonicalPrompt = readCanonicalPromptMarkdown('push-merge-loop').trim();
+
+  return [
+    `Run the MDS push-merge-loop workflow for ${target}.`,
+    '',
+    'Context for this run:',
+    `- branch: ${resolvedBranch}`,
+    `- base: ${resolvedBase}`,
+    '',
+    canonicalPrompt,
+  ].join('\n');
 }
 
 export function buildRetrospectiveProjectOnboardingPromptText(projectPath?: string): string {

@@ -65,13 +65,23 @@ export async function runShipCommand(argv: ShipArgv): Promise<void> {
 
 function printDryRun(branch: string, base: string, title: string): void {
   console.log(chalk.bold('Planned steps'));
-  console.log('1. Run mds doctor --ci.');
-  console.log('2. Review git status and stage only intentional changes.');
-  console.log(`3. Commit changes for "${title}".`);
-  console.log(`4. Push ${branch}.`);
-  console.log(`5. Open or update a PR into ${base} with gh CLI.`);
-  console.log('6. Poll statusCheckRollup, fix failures, rerun Doctor, and push again.');
-  console.log(`7. Merge into ${base} only after checks pass.`);
+  for (const step of buildShipPlan(branch, base, title)) {
+    console.log(step);
+  }
+}
+
+export function buildShipPlan(branch: string, base: string, title: string): string[] {
+  return [
+    '1. Run mds doctor --ci.',
+    '2. Review git status and stage only intentional changes.',
+    `3. Commit changes for "${title}".`,
+    `4. Push ${branch}.`,
+    `5. Open or update a PR into ${base} with gh CLI.`,
+    '6. Poll required checks, reviews, comments, and paginated review threads, including Copilot and Codex feedback.',
+    '7. Classify actionable/blocking, informational, resolved, and outdated findings; record evidence for the observed head SHA.',
+    '8. Fix blockers, rerun Doctor, push, and repoll for no more than 5 total evidence cycles.',
+    `9. Merge into ${base} only after a fresh same-head snapshot proves checks are green and blocking feedback is cleared.`,
+  ];
 }
 
 async function detectCurrentBranch(): Promise<string | null> {

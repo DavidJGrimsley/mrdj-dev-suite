@@ -55,7 +55,19 @@ describe('knowledge catalog expansion', () => {
 
     expect(prompt).not.toBeNull();
     expect(prompt?.content).toContain('## Loop Rules');
-    expect(prompt?.content).toContain('Repeat polling/fix cycles up to 5 total iterations.');
+    expect(prompt?.content).toContain('no more than 5 total cycles');
+    expect(prompt?.content).toContain('GitHub Copilot and Codex reviews');
+    expect(prompt?.content).toContain('gh api graphql');
+    expect(prompt?.content).toContain('reviewThreads(first: 100, after: $cursor)');
+    expect(prompt?.content).toContain('actionable/blocking');
+    expect(prompt?.content).toContain('informational');
+    expect(prompt?.content).toContain('resolved');
+    expect(prompt?.content).toContain('outdated');
+    expect(prompt?.content).toContain('final fresh snapshot');
+    expect(prompt?.content).toContain('head did not change');
+    expect(prompt?.content).toContain('## Evidence Report');
+    expect(prompt?.content).toContain('resulting state: `repoll`, `ready`, or `blocked`');
+    expect(prompt?.content).toContain('incomplete review-thread pagination');
     expect(legacyPrompt?.id).toBe('push-merge-loop');
   });
 
