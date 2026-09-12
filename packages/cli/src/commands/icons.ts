@@ -4,6 +4,8 @@ import path from 'node:path';
 import chalk from 'chalk';
 import { PNG } from 'pngjs';
 
+import { discoverWorkspace } from '../workspace/discover.js';
+
 export interface IconsSyncArgv {
   path?: string;
   json?: boolean;
@@ -90,7 +92,7 @@ export async function runIconsSyncCommand(argv: IconsSyncArgv): Promise<void> {
 }
 
 export async function syncIconAssets(projectPath: string): Promise<IconReleaseSyncResult> {
-  const configPath = path.join(projectPath, ICON_RELEASE_CONFIG_PATH);
+  const configPath = await resolveIconReleaseConfigPath(projectPath);
   const config = await readIconReleaseConfig(configPath);
   const masterPath = resolveProjectPath(projectPath, config.masterIcon, 'masterIcon');
   const adaptiveForegroundPath = config.adaptiveIcon
@@ -146,7 +148,7 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
     raw = await readFile(configPath, 'utf8');
   } catch {
     throw new Error(
-      `Missing ${ICON_RELEASE_CONFIG_PATH}. Run MDS onboarding or create it with a masterIcon path.`
+      `Missing icon release config: ${configPath}. Run MDS onboarding or create it with a masterIcon path.`
     );
   }
 
@@ -155,18 +157,18 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
     parsed = JSON.parse(raw) as unknown;
   } catch (error) {
     throw new Error(
-      `Invalid ${ICON_RELEASE_CONFIG_PATH}: ${error instanceof Error ? error.message : String(error)}`
+      `Invalid icon release config: ${error instanceof Error ? error.message : String(error)}`
     );
   }
   if (!isRecord(parsed) || !isNonEmptyString(parsed.masterIcon)) {
-    throw new Error(`${ICON_RELEASE_CONFIG_PATH} must include a non-empty masterIcon path.`);
+    throw new Error('Icon release config must include a non-empty masterIcon path.');
   }
 
   const adaptiveIcon = parsed.adaptiveIcon;
   if (adaptiveIcon !== undefined && adaptiveIcon !== null) {
     if (!isRecord(adaptiveIcon) || !isNonEmptyString(adaptiveIcon.foreground)) {
       throw new Error(
-        `${ICON_RELEASE_CONFIG_PATH} adaptiveIcon requires a non-empty foreground path.`
+        'Icon release config adaptiveIcon requires a non-empty foreground path.'
       );
     }
     if (
@@ -174,12 +176,12 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
       !/^#[0-9a-fA-F]{6}$/u.test(adaptiveIcon.backgroundColor)
     ) {
       throw new Error(
-        `${ICON_RELEASE_CONFIG_PATH} adaptiveIcon.backgroundColor must be a #RRGGBB color.`
+        'Icon release config adaptiveIcon.backgroundColor must be a #RRGGBB color.'
       );
     }
     if (adaptiveIcon.monochrome !== undefined && !isNonEmptyString(adaptiveIcon.monochrome)) {
       throw new Error(
-        `${ICON_RELEASE_CONFIG_PATH} adaptiveIcon.monochrome must be a non-empty path when supplied.`
+        'Icon release config adaptiveIcon.monochrome must be a non-empty path when supplied.'
       );
     }
   }
@@ -197,6 +199,33 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
           }
         : null,
   };
+}
+
+async function resolveIconReleaseConfigPath(projectPath: string): Promise<string> {
+  const workspace = discoverWorkspace(projectPath);
+  const workspaceConfigPath = workspace
+    ? path.join(workspace.projectPath, 'icon-release.json')
+    : null;
+
+  if (workspaceConfigPath && (await pathExists(workspaceConfigPath))) {
+    return workspaceConfigPath;
+  }
+
+  const standaloneConfigPath = path.join(projectPath, ICON_RELEASE_CONFIG_PATH);
+  if (await pathExists(standaloneConfigPath)) {
+    return standaloneConfigPath;
+  }
+
+  return workspaceConfigPath ?? standaloneConfigPath;
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function validateIconSource(sourcePath: string, label: string): Promise<PNG> {

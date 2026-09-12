@@ -4898,7 +4898,7 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '',
     '- Add an exactly 1024x1024 PNG master icon at `assets/branding/icon-1024.png`.',
     '- Run `npm run icons:sync` to generate `assets/images/icon.png` and `assets/images/favicon.png` and fill missing static `app.json` icon references.',
-    '- To configure Android adaptive icons, set `adaptiveIcon` in `project/icon-release.json` with separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color.',
+    '- In an i² workspace, set `adaptiveIcon` in the sibling workspace `project/icon-release.json`; standalone apps use `project/icon-release.json` inside the app. Icon source paths stay relative to the app repository. Use separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color.',
     '- SmartUtilify remains optional for extra ICO, PWA, or legacy native packages; it is not required by the generated Expo workflow.',
     '- Obtain written permission before embedding SmartUtilify or another third-party generator in an IDE webview.',
     '',

@@ -54,6 +54,48 @@ async function writeConfig(projectPath: string, adaptiveIcon: unknown = null): P
   );
 }
 
+async function createI2WorkspaceProject(): Promise<{ appPath: string; controlPath: string }> {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'mds-icons-i2-'));
+  tempDirs.push(workspaceRoot);
+  const appPath = path.join(workspaceRoot, 'PokePages-main');
+  const controlPath = path.join(workspaceRoot, 'project');
+  await mkdir(path.join(appPath, 'assets', 'branding'), { recursive: true });
+  await mkdir(controlPath, { recursive: true });
+  await writeSolidPng(
+    path.join(appPath, 'assets', 'branding', 'icon-1024.png'),
+    1024,
+    1024,
+    [29, 78, 216, 255]
+  );
+  await writeFile(
+    path.join(controlPath, 'mds.workspace.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      workspaceId: 'pokepages',
+      name: 'PokePages',
+      repositories: [
+        {
+          id: 'source',
+          remote: 'https://github.com/example/PokePages.git',
+          defaultBranch: 'main',
+          mainFolder: 'PokePages-main',
+          worktreePrefix: 'PokePages-',
+        },
+      ],
+      project: { path: 'project' },
+    })
+  );
+  return { appPath, controlPath };
+}
+
+async function writeWorkspaceConfig(controlPath: string, adaptiveIcon: unknown = null): Promise<void> {
+  await writeFile(
+    path.join(controlPath, 'icon-release.json'),
+    JSON.stringify({ masterIcon: 'assets/branding/icon-1024.png', adaptiveIcon }, null, 2),
+    'utf8'
+  );
+}
+
 describe('syncIconAssets', () => {
   it('creates the baseline Expo icon assets and fills missing static app config fields', async () => {
     const projectPath = await createProject();
@@ -80,6 +122,25 @@ describe('syncIconAssets', () => {
     };
     expect(appJson.expo.icon).toBe('./assets/images/icon.png');
     expect(appJson.expo.web.favicon).toBe('./assets/images/favicon.png');
+  });
+
+  it('uses sibling i² project settings while keeping icon files in the app repository', async () => {
+    const { appPath, controlPath } = await createI2WorkspaceProject();
+    await writeWorkspaceConfig(controlPath);
+    await writeFile(
+      path.join(appPath, 'app.json'),
+      JSON.stringify({ expo: { name: 'PokePages' } })
+    );
+
+    const result = await syncIconAssets(appPath);
+
+    expect(result.configPath).toBe(path.join(controlPath, 'icon-release.json'));
+    await expect(
+      access(path.join(appPath, 'assets', 'images', 'icon.png'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(controlPath, 'assets', 'images', 'icon.png'))
+    ).rejects.toThrow();
   });
 
   it('copies dedicated Android adaptive layers without replacing existing icon references', async () => {
