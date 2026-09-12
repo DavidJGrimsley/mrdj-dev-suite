@@ -1,5 +1,14 @@
 # @mr.dj2u/knowledge
 
+## 0.1.10
+
+### Patch Changes
+
+- 5c7b97f: Detect loader-backed dynamic route metadata and server-rendering gaps, and expand SEO guidance for raw HTML and structured-data verification.
+- 2c1b9ee: Make push-merge-loop poll complete review evidence, classify actionable feedback, enforce bounded retries, and verify the final pull-request head before readiness.
+- 18b3357: Add reusable main-to-test synchronization through a safe CLI command, generated GitHub workflow, and agent/MCP workflow guidance.
+- 2a12eed: Generate confirmed multi-app workspaces with isolated minimal or full CESS Expo app profiles, shared config and UI packages, one root Turbo toolchain, and canonical app-local Supabase credentials.
+
 ## 0.1.9
 
 ### Patch Changes
