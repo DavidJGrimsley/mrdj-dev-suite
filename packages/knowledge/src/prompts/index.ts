@@ -196,6 +196,9 @@ const PROMPT_SPECS: PromptSpec[] = [
       { name: 'projectPath', description: 'Target repository path for the sync workflow.' },
       { name: 'main', description: 'Production branch name (default: main).' },
       { name: 'test', description: 'Test branch name (default: test).' },
+    ],
+  },
+  {
     id: 'github-setup-guidance',
     slug: 'github-setup-guidance',
     title: 'GitHub Setup Guidance',
