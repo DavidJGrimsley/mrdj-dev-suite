@@ -1,5 +1,26 @@
 # @mr.dj2u/mcp-server
 
+## 0.3.0
+
+### Minor Changes
+
+- 2a12eed: Generate confirmed multi-app workspaces with isolated minimal or full CESS Expo app profiles, shared config and UI packages, one root Turbo toolchain, and canonical app-local Supabase credentials.
+
+### Patch Changes
+
+- 2c1b9ee: Make push-merge-loop poll complete review evidence, classify actionable feedback, enforce bounded retries, and verify the final pull-request head before readiness.
+- 18b3357: Add reusable main-to-test synchronization through a safe CLI command, generated GitHub workflow, and agent/MCP workflow guidance.
+- Updated dependencies [5c7b97f]
+- Updated dependencies [e07d58c]
+- Updated dependencies [2c1b9ee]
+- Updated dependencies [18b3357]
+- Updated dependencies [f1a190d]
+- Updated dependencies [2a12eed]
+  - @mr.dj2u/cli@0.4.0
+  - @mr.dj2u/doctor@0.2.0
+  - @mr.dj2u/knowledge@0.1.10
+  - @mr.dj2u/library-registry@0.3.1
+
 ## 0.2.2
 
 ### Patch Changes
