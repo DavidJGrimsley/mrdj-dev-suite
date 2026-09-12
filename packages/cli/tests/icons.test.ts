@@ -96,6 +96,26 @@ async function writeWorkspaceConfig(controlPath: string, adaptiveIcon: unknown =
   );
 }
 
+async function createSmartUtilifyPackage(appPath: string): Promise<string> {
+  const packagePath = path.join(appPath, 'smartutilifyIconDownload');
+  await mkdir(path.join(packagePath, 'ios'), { recursive: true });
+  await mkdir(path.join(packagePath, 'web'), { recursive: true });
+  await mkdir(path.join(packagePath, 'pwa'), { recursive: true });
+  await writeSolidPng(
+    path.join(packagePath, 'ios', 'AppIcon-1024x1024.png'),
+    1024,
+    1024,
+    [10, 100, 200, 255]
+  );
+  await writeSolidPng(path.join(packagePath, 'web', 'favicon-48x48.png'), 48, 48, [1, 2, 3, 255]);
+  await writeSolidPng(path.join(packagePath, 'web', 'favicon-32x32.png'), 32, 32, [4, 5, 6, 255]);
+  await writeSolidPng(path.join(packagePath, 'pwa', 'pwa-192x192.png'), 192, 192, [7, 8, 9, 255]);
+  await writeFile(path.join(packagePath, 'web', 'favicon.ico'), Buffer.from('favicon-ico'));
+  await writeFile(path.join(packagePath, 'web', 'README.txt'), 'Do not publish this.');
+  await writeFile(path.join(packagePath, 'pwa', 'README.txt'), 'Do not publish this.');
+  return packagePath;
+}
+
 describe('syncIconAssets', () => {
   it('creates the baseline Expo icon assets and fills missing static app config fields', async () => {
     const projectPath = await createProject();
@@ -141,6 +161,61 @@ describe('syncIconAssets', () => {
     await expect(
       access(path.join(controlPath, 'assets', 'images', 'icon.png'))
     ).rejects.toThrow();
+  });
+
+  it('imports a SmartUtilify-style package into configured Expo and web locations', async () => {
+    const { appPath, controlPath } = await createI2WorkspaceProject();
+    const packagePath = await createSmartUtilifyPackage(appPath);
+    await writeFile(
+      path.join(controlPath, 'icon-release.json'),
+      JSON.stringify(
+        {
+          package: {
+            directory: 'smartutilifyIconDownload',
+            publicIconDirectories: ['public/icons', 'public/images/icons'],
+            faviconIcoOutput: 'public/favicon.ico',
+          },
+          outputs: {
+            icon: 'assets/icons/icon.png',
+            favicon: 'assets/icons/favicon.png',
+          },
+          adaptiveIcon: null,
+        },
+        null,
+        2
+      )
+    );
+    await writeFile(path.join(appPath, 'app.json'), JSON.stringify({ expo: { name: 'PokePages' } }));
+
+    const result = await syncIconAssets(appPath);
+
+    await expect(
+      access(path.join(appPath, 'assets', 'icons', 'icon.png'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(appPath, 'assets', 'icons', 'favicon.png'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(appPath, 'public', 'icons', 'pwa-192x192.png'))
+    ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(appPath, 'public', 'images', 'icons', 'favicon-32x32.png'))
+    ).resolves.toBeUndefined();
+    await expect(access(path.join(appPath, 'public', 'favicon.ico'))).resolves.toBeUndefined();
+    await expect(access(path.join(appPath, 'public', 'icons', 'README.txt'))).rejects.toThrow();
+    expect(await readFile(path.join(appPath, 'assets', 'icons', 'icon.png'))).toEqual(
+      await readFile(path.join(packagePath, 'ios', 'AppIcon-1024x1024.png'))
+    );
+    expect(await readFile(path.join(appPath, 'assets', 'icons', 'favicon.png'))).toEqual(
+      await readFile(path.join(packagePath, 'web', 'favicon-48x48.png'))
+    );
+    expect(result.outputPaths).toContain(path.join(appPath, 'public', 'favicon.ico'));
+
+    const appJson = JSON.parse(await readFile(path.join(appPath, 'app.json'), 'utf8')) as {
+      expo: { icon: string; web: { favicon: string } };
+    };
+    expect(appJson.expo.icon).toBe('./assets/icons/icon.png');
+    expect(appJson.expo.web.favicon).toBe('./assets/icons/favicon.png');
   });
 
   it('copies dedicated Android adaptive layers without replacing existing icon references', async () => {

@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import chalk from 'chalk';
@@ -19,12 +19,28 @@ export interface IconReleaseSyncResult {
 }
 
 interface IconReleaseConfig {
-  masterIcon: string;
+  masterIcon?: string;
+  package?: {
+    directory: string;
+    publicIconDirectories?: string[];
+    faviconIcoOutput?: string | null;
+  } | null;
+  outputs?: {
+    icon?: string;
+    favicon?: string;
+  };
   adaptiveIcon?: {
     foreground: string;
     monochrome?: string;
     backgroundColor: string;
   } | null;
+}
+
+interface ResolvedIconOutputs {
+  icon: string;
+  favicon: string;
+  adaptiveForeground: string;
+  adaptiveMonochrome: string;
 }
 
 interface PreparedAppConfig {
@@ -42,6 +58,11 @@ const ADAPTIVE_MONOCHROME_OUTPUT_PATH = path.join(
   'images',
   'adaptive-icon-monochrome.png'
 );
+const PACKAGE_MASTER_ICON_PATH = path.join('ios', 'AppIcon-1024x1024.png');
+const PACKAGE_FAVICON_PATH = path.join('web', 'favicon-48x48.png');
+const DEFAULT_PACKAGE_PUBLIC_ICON_DIRECTORIES = [path.join('public', 'icons')];
+const DEFAULT_PACKAGE_FAVICON_ICO_OUTPUT = path.join('public', 'favicon.ico');
+const PACKAGE_ICON_EXTENSIONS = new Set(['.png', '.ico']);
 
 export async function runIconsSyncCommand(argv: IconsSyncArgv): Promise<void> {
   const result = await syncIconAssets(path.resolve(argv.path ?? '.'));
@@ -94,7 +115,14 @@ export async function runIconsSyncCommand(argv: IconsSyncArgv): Promise<void> {
 export async function syncIconAssets(projectPath: string): Promise<IconReleaseSyncResult> {
   const configPath = await resolveIconReleaseConfigPath(projectPath);
   const config = await readIconReleaseConfig(configPath);
-  const masterPath = resolveProjectPath(projectPath, config.masterIcon, 'masterIcon');
+  const packagePath = config.package
+    ? resolveProjectPath(projectPath, config.package.directory, 'package.directory')
+    : null;
+  const masterPath = packagePath
+    ? path.join(packagePath, PACKAGE_MASTER_ICON_PATH)
+    : resolveProjectPath(projectPath, config.masterIcon!, 'masterIcon');
+  const packageFaviconPath = packagePath ? path.join(packagePath, PACKAGE_FAVICON_PATH) : null;
+  const outputs = resolveIconOutputs(projectPath, config);
   const adaptiveForegroundPath = config.adaptiveIcon
     ? resolveProjectPath(projectPath, config.adaptiveIcon.foreground, 'adaptiveIcon.foreground')
     : null;
@@ -102,33 +130,47 @@ export async function syncIconAssets(projectPath: string): Promise<IconReleaseSy
     ? resolveProjectPath(projectPath, config.adaptiveIcon.monochrome, 'adaptiveIcon.monochrome')
     : null;
 
-  const masterIcon = await validateIconSource(masterPath, 'masterIcon');
+  const masterIcon = await validatePng(masterPath, 'masterIcon', 1024, 1024);
+  if (packageFaviconPath) {
+    await validatePng(packageFaviconPath, 'package web favicon', 48, 48);
+  }
   if (adaptiveForegroundPath) {
-    await validateIconSource(adaptiveForegroundPath, 'adaptiveIcon.foreground');
+    await validatePng(adaptiveForegroundPath, 'adaptiveIcon.foreground', 1024, 1024);
   }
   if (adaptiveMonochromePath) {
-    await validateIconSource(adaptiveMonochromePath, 'adaptiveIcon.monochrome');
+    await validatePng(adaptiveMonochromePath, 'adaptiveIcon.monochrome', 1024, 1024);
   }
 
   const favicon = resizePng(masterIcon, 48, 48);
-  const preparedAppConfig = await prepareAppConfig(projectPath, config);
-  const masterOutputPath = path.join(projectPath, MASTER_OUTPUT_PATH);
-  const faviconOutputPath = path.join(projectPath, FAVICON_OUTPUT_PATH);
-  const outputPaths = [masterOutputPath, faviconOutputPath];
+  const preparedAppConfig = await prepareAppConfig(projectPath, config, outputs);
+  const outputPaths = [outputs.icon, outputs.favicon];
 
-  await mkdir(path.dirname(masterOutputPath), { recursive: true });
-  await copyFile(masterPath, masterOutputPath);
-  await writeFile(faviconOutputPath, favicon);
+  await mkdir(path.dirname(outputs.icon), { recursive: true });
+  await mkdir(path.dirname(outputs.favicon), { recursive: true });
+  await copyFile(masterPath, outputs.icon);
+  if (packageFaviconPath) {
+    await copyFile(packageFaviconPath, outputs.favicon);
+  } else {
+    await writeFile(outputs.favicon, favicon);
+  }
 
   if (adaptiveForegroundPath) {
-    const outputPath = path.join(projectPath, ADAPTIVE_FOREGROUND_OUTPUT_PATH);
-    await copyFile(adaptiveForegroundPath, outputPath);
-    outputPaths.push(outputPath);
+    await copyFile(adaptiveForegroundPath, outputs.adaptiveForeground);
+    outputPaths.push(outputs.adaptiveForeground);
   }
   if (adaptiveMonochromePath) {
-    const outputPath = path.join(projectPath, ADAPTIVE_MONOCHROME_OUTPUT_PATH);
-    await copyFile(adaptiveMonochromePath, outputPath);
-    outputPaths.push(outputPath);
+    await copyFile(adaptiveMonochromePath, outputs.adaptiveMonochrome);
+    outputPaths.push(outputs.adaptiveMonochrome);
+  }
+  if (packagePath && config.package) {
+    outputPaths.push(
+      ...(await copyPackageWebIcons(
+        packagePath,
+        projectPath,
+        config.package.publicIconDirectories,
+        config.package.faviconIcoOutput
+      ))
+    );
   }
   if (preparedAppConfig.path && preparedAppConfig.content) {
     await writeFile(preparedAppConfig.path, preparedAppConfig.content, 'utf8');
@@ -160,9 +202,16 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
       `Invalid icon release config: ${error instanceof Error ? error.message : String(error)}`
     );
   }
-  if (!isRecord(parsed) || !isNonEmptyString(parsed.masterIcon)) {
-    throw new Error('Icon release config must include a non-empty masterIcon path.');
+  if (!isRecord(parsed)) {
+    throw new Error('Icon release config must be a JSON object.');
   }
+
+  const masterIcon = isNonEmptyString(parsed.masterIcon) ? parsed.masterIcon : undefined;
+  const packageConfig = parseIconPackageConfig(parsed.package);
+  if (!masterIcon && !packageConfig) {
+    throw new Error('Icon release config must include a masterIcon path or a package directory.');
+  }
+  const outputs = parseIconOutputConfig(parsed.outputs);
 
   const adaptiveIcon = parsed.adaptiveIcon;
   if (adaptiveIcon !== undefined && adaptiveIcon !== null) {
@@ -187,7 +236,9 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
   }
 
   return {
-    masterIcon: parsed.masterIcon,
+    ...(masterIcon ? { masterIcon } : {}),
+    ...(packageConfig ? { package: packageConfig } : {}),
+    ...(outputs ? { outputs } : {}),
     adaptiveIcon:
       adaptiveIcon && isRecord(adaptiveIcon)
         ? {
@@ -198,6 +249,71 @@ async function readIconReleaseConfig(configPath: string): Promise<IconReleaseCon
             backgroundColor: adaptiveIcon.backgroundColor as string,
           }
         : null,
+  };
+}
+
+function parseIconPackageConfig(value: unknown): IconReleaseConfig['package'] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value) || !isNonEmptyString(value.directory)) {
+    throw new Error('Icon release config package requires a non-empty directory path.');
+  }
+  if (
+    value.publicIconDirectories !== undefined &&
+    (!Array.isArray(value.publicIconDirectories) ||
+      value.publicIconDirectories.some((directory) => !isNonEmptyString(directory)))
+  ) {
+    throw new Error('Icon release config package.publicIconDirectories must be an array of paths.');
+  }
+  if (
+    value.faviconIcoOutput !== undefined &&
+    value.faviconIcoOutput !== null &&
+    !isNonEmptyString(value.faviconIcoOutput)
+  ) {
+    throw new Error('Icon release config package.faviconIcoOutput must be a path or null.');
+  }
+  return {
+    directory: value.directory,
+    ...(Array.isArray(value.publicIconDirectories)
+      ? { publicIconDirectories: value.publicIconDirectories as string[] }
+      : {}),
+    ...(isNonEmptyString(value.faviconIcoOutput)
+      ? { faviconIcoOutput: value.faviconIcoOutput }
+      : value.faviconIcoOutput === null
+        ? { faviconIcoOutput: null }
+        : {}),
+  };
+}
+
+function parseIconOutputConfig(value: unknown): IconReleaseConfig['outputs'] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new Error('Icon release config outputs must be an object.');
+  }
+  if (value.icon !== undefined && !isNonEmptyString(value.icon)) {
+    throw new Error('Icon release config outputs.icon must be a non-empty path.');
+  }
+  if (value.favicon !== undefined && !isNonEmptyString(value.favicon)) {
+    throw new Error('Icon release config outputs.favicon must be a non-empty path.');
+  }
+  return {
+    ...(isNonEmptyString(value.icon) ? { icon: value.icon } : {}),
+    ...(isNonEmptyString(value.favicon) ? { favicon: value.favicon } : {}),
+  };
+}
+
+function resolveIconOutputs(projectPath: string, config: IconReleaseConfig): ResolvedIconOutputs {
+  const icon = resolveProjectPath(projectPath, config.outputs?.icon ?? MASTER_OUTPUT_PATH, 'outputs.icon');
+  const favicon = resolveProjectPath(
+    projectPath,
+    config.outputs?.favicon ?? FAVICON_OUTPUT_PATH,
+    'outputs.favicon'
+  );
+  const iconDirectory = path.dirname(icon);
+  return {
+    icon,
+    favicon,
+    adaptiveForeground: path.join(iconDirectory, path.basename(ADAPTIVE_FOREGROUND_OUTPUT_PATH)),
+    adaptiveMonochrome: path.join(iconDirectory, path.basename(ADAPTIVE_MONOCHROME_OUTPUT_PATH)),
   };
 }
 
@@ -228,7 +344,12 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function validateIconSource(sourcePath: string, label: string): Promise<PNG> {
+async function validatePng(
+  sourcePath: string,
+  label: string,
+  expectedWidth: number,
+  expectedHeight: number
+): Promise<PNG> {
   let source: PNG;
   try {
     source = PNG.sync.read(await readFile(sourcePath));
@@ -237,10 +358,80 @@ async function validateIconSource(sourcePath: string, label: string): Promise<PN
     const reason = errorCode === 'ENOENT' ? 'source file does not exist' : 'must be a PNG file';
     throw new Error(`${label} ${reason}: ${sourcePath}`);
   }
-  if (source.width !== 1024 || source.height !== 1024) {
-    throw new Error(`${label} must be exactly 1024x1024 pixels: ${sourcePath}`);
+  if (source.width !== expectedWidth || source.height !== expectedHeight) {
+    throw new Error(
+      `${label} must be exactly ${expectedWidth}x${expectedHeight} pixels: ${sourcePath}`
+    );
   }
   return source;
+}
+
+async function copyPackageWebIcons(
+  packagePath: string,
+  projectPath: string,
+  configuredDirectories: string[] | undefined,
+  configuredFaviconIcoOutput: string | null | undefined
+): Promise<string[]> {
+  const sourceFiles = await collectPackageIconFiles(packagePath);
+  const outputPaths: string[] = [];
+  const publicDirectories = configuredDirectories ?? DEFAULT_PACKAGE_PUBLIC_ICON_DIRECTORIES;
+  for (const directory of publicDirectories) {
+    const destinationDirectory = resolveProjectPath(
+      projectPath,
+      directory,
+      'package.publicIconDirectories'
+    );
+    for (const sourceFile of sourceFiles) {
+      const destinationPath = path.join(destinationDirectory, sourceFile.fileName);
+      await mkdir(path.dirname(destinationPath), { recursive: true });
+      await copyFile(sourceFile.path, destinationPath);
+      outputPaths.push(destinationPath);
+    }
+  }
+
+  const faviconIcoOutput =
+    configuredFaviconIcoOutput === null
+      ? null
+      : resolveProjectPath(
+          projectPath,
+          configuredFaviconIcoOutput ?? DEFAULT_PACKAGE_FAVICON_ICO_OUTPUT,
+          'package.faviconIcoOutput'
+        );
+  if (faviconIcoOutput) {
+    const faviconIcoSource = path.join(packagePath, 'web', 'favicon.ico');
+    try {
+      await mkdir(path.dirname(faviconIcoOutput), { recursive: true });
+      await copyFile(faviconIcoSource, faviconIcoOutput);
+      outputPaths.push(faviconIcoOutput);
+    } catch (error) {
+      const errorCode = isErrnoException(error) ? error.code : undefined;
+      if (errorCode !== 'ENOENT') throw error;
+    }
+  }
+  return [...new Set(outputPaths)];
+}
+
+async function collectPackageIconFiles(
+  packagePath: string
+): Promise<Array<{ path: string; fileName: string }>> {
+  const result: Array<{ path: string; fileName: string }> = [];
+  for (const directoryName of ['pwa', 'web']) {
+    const directoryPath = path.join(packagePath, directoryName);
+    try {
+      const entries = await readdir(directoryPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || !PACKAGE_ICON_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+          continue;
+        }
+        result.push({ path: path.join(directoryPath, entry.name), fileName: entry.name });
+      }
+    } catch (error) {
+      const errorCode = isErrnoException(error) ? error.code : undefined;
+      if (errorCode === 'ENOENT') continue;
+      throw error;
+    }
+  }
+  return result;
 }
 
 function resizePng(source: PNG, width: number, height: number): Buffer {
@@ -259,7 +450,8 @@ function resizePng(source: PNG, width: number, height: number): Buffer {
 
 async function prepareAppConfig(
   projectPath: string,
-  config: IconReleaseConfig
+  config: IconReleaseConfig,
+  outputs: ResolvedIconOutputs
 ): Promise<PreparedAppConfig> {
   const appJsonPath = path.join(projectPath, 'app.json');
   let raw: string;
@@ -284,7 +476,7 @@ async function prepareAppConfig(
   }
 
   const expo = parsed.expo;
-  let changed = setMissingString(expo, 'icon', './assets/images/icon.png');
+  let changed = setMissingString(expo, 'icon', toExpoAssetPath(projectPath, outputs.icon));
   const web = isRecord(expo.web) ? expo.web : expo.web === undefined ? {} : null;
   if (!web) {
     return { path: null, status: 'incompatible', content: null };
@@ -293,7 +485,7 @@ async function prepareAppConfig(
     expo.web = web;
     changed = true;
   }
-  changed = setMissingString(web, 'favicon', './assets/images/favicon.png') || changed;
+  changed = setMissingString(web, 'favicon', toExpoAssetPath(projectPath, outputs.favicon)) || changed;
 
   if (config.adaptiveIcon) {
     const android = isRecord(expo.android) ? expo.android : expo.android === undefined ? {} : null;
@@ -317,7 +509,11 @@ async function prepareAppConfig(
       changed = true;
     }
     changed =
-      setMissingString(adaptiveIcon, 'foregroundImage', './assets/images/adaptive-icon.png') ||
+      setMissingString(
+        adaptiveIcon,
+        'foregroundImage',
+        toExpoAssetPath(projectPath, outputs.adaptiveForeground)
+      ) ||
       changed;
     changed =
       setMissingString(adaptiveIcon, 'backgroundColor', config.adaptiveIcon.backgroundColor) ||
@@ -327,7 +523,7 @@ async function prepareAppConfig(
         setMissingString(
           adaptiveIcon,
           'monochromeImage',
-          './assets/images/adaptive-icon-monochrome.png'
+          toExpoAssetPath(projectPath, outputs.adaptiveMonochrome)
         ) || changed;
     }
   }
@@ -337,6 +533,10 @@ async function prepareAppConfig(
     status: changed ? 'updated' : 'unchanged',
     content: changed ? `${JSON.stringify(parsed, null, 2)}\n` : null,
   };
+}
+
+function toExpoAssetPath(projectPath: string, assetPath: string): string {
+  return `./${path.relative(projectPath, assetPath).split(path.sep).join('/')}`;
 }
 
 async function hasDynamicAppConfig(projectPath: string): Promise<boolean> {
