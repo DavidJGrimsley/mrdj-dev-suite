@@ -1088,6 +1088,30 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    'github_setup_guidance',
+    {
+      title: 'GitHub Setup Guidance',
+      description:
+        'Inspect authenticated GitHub and CI setup and provide a safe, evidence-backed CLI and UI procedure.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        targetBranch: z.string().optional(),
+      },
+    },
+    ({ projectPath, targetBranch }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildGitHubSetupGuidancePromptText(projectPath, targetBranch),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'push_merge_loop',
     {
       title: 'Push Merge Loop',
@@ -1286,6 +1310,30 @@ export function buildReviewMotionPromptText(
     `Review motion for the Expo project at ${target}.`,
     `Use Doctor mode \`${resolvedMode}\` for the project scan unless the developer asks for a deeper pass.`,
     focusLine,
+    '',
+    canonicalPrompt,
+  ].join('\n');
+}
+
+export function buildGitHubSetupGuidancePromptText(
+  projectPath?: string,
+  targetBranch?: string
+): string {
+  const target = projectPath ?? 'the current repository';
+  const branchLine = targetBranch?.trim()
+    ? `- targetBranch: ${targetBranch.trim()}`
+    : '- targetBranch: repository default branch';
+  const canonicalPrompt = readCanonicalPromptMarkdown('github-setup-guidance').trim();
+  return [
+    `Run authenticated GitHub setup guidance for ${target}.`,
+    '',
+    'Context for this run:',
+    `- projectPath: ${target}`,
+    branchLine,
+    '',
+    'Start with the read-only CLI report:',
+    `- Run \`mds github setup ${targetBranch?.trim() ? `--target-branch ${targetBranch.trim()} ` : ''}--json\` from the repository checkout.`,
+    '- Verify all remote claims directly with `gh` or the GitHub UI.',
     '',
     canonicalPrompt,
   ].join('\n');

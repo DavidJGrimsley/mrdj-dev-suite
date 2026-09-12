@@ -181,6 +181,22 @@ const PROMPT_SPECS: PromptSpec[] = [
     ],
   },
   {
+    id: 'github-setup-guidance',
+    slug: 'github-setup-guidance',
+    title: 'GitHub Setup Guidance',
+    description: 'Inspect authenticated GitHub and CI setup and produce a safe CLI/UI procedure.',
+    resourcePath: 'prompts/github-setup-guidance.md',
+    keywords: ['github', 'ci', 'ruleset', 'actions', 'authentication', 'setup'],
+    surfaces: ['codex-command', 'claude-command', 'mcp-prompt'],
+    codexCommandFile: 'github-setup-guidance.md',
+    claudeCommandFile: 'github-setup-guidance.md',
+    mcpPromptName: 'github_setup_guidance',
+    mcpArgs: [
+      { name: 'projectPath', description: 'Target repository path.' },
+      { name: 'targetBranch', description: 'Optional target branch; defaults to the repository default branch.' },
+    ],
+  },
+  {
     id: 'wrap-up',
     slug: 'wrap-up',
     title: 'Wrap Up',

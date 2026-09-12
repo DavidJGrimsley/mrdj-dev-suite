@@ -18,6 +18,7 @@ export const COMMAND_FILES = [
   'create-expo-super-stack.md',
   'continue-development.md',
   'project-research-plan.md',
+  'github-setup-guidance.md',
   'wrap-up.md',
 ];
 
@@ -34,6 +35,8 @@ const WORKFLOW_SKILL_DESCRIPTIONS = {
     "Use when the user asks Mr. DJ's Dev Suite to run the PR iteration loop: doctor, commit, push, poll checks, fix, and merge to test.",
   'wrap-up.md':
     "Use when the user has finished testing and wants Mr. DJ's Dev Suite to run the final wrap-up workflow (Doctor, git inclusion checks, PR loop, CI fix retries, and merge policy guardrails).",
+  'github-setup-guidance.md':
+    "Use when the user asks Mr. DJ's Dev Suite to inspect authenticated GitHub setup, CI workflows, pull requests, or branch rulesets and provide exact safe procedures.",
 };
 
 export async function generateCodexPluginBundleFromKnowledge(options = {}) {

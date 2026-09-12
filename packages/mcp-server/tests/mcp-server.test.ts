@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
+  buildGitHubSetupGuidancePromptText,
   buildPushMergeLoopPromptText,
   buildReviewMotionPromptText,
   buildWrapUpPromptText,
@@ -403,6 +404,7 @@ describe('mds MCP helpers', () => {
       expect(toolNames.has('library_plan_add')).toBe(true);
       expect(toolNames.has('library_add')).toBe(true);
       expect(promptNames.has('review_motion')).toBe(true);
+      expect(promptNames.has('github_setup_guidance')).toBe(true);
       expect(promptNames.has('push_merge_loop')).toBe(true);
 
       const librarySearch = await client.callTool({
@@ -1019,6 +1021,20 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('animation-motion');
     expect(prompt).toContain('animation-performance');
     expect(prompt).toContain('parallax or scroll-linked motion');
+  });
+
+  it('builds GitHub setup guidance with read-only and mutation guardrails', () => {
+    const prompt = buildGitHubSetupGuidancePromptText(
+      'F:/SoftwareDev/example-repo',
+      'test'
+    );
+
+    expect(prompt).toContain('mds github setup');
+    expect(prompt).toContain('--target-branch test');
+    expect(prompt).toContain('Do not create branches, push, open or edit PRs');
+    expect(prompt).toContain('Settings` → `Rules` → `Rulesets');
+    expect(prompt).toContain('structured recommendations');
+    expect(prompt).toContain('Do not treat a dynamic Copilot workflow as project CI readiness');
   });
 
   it('builds a push-merge prompt with review polling and same-head evidence rules', () => {
