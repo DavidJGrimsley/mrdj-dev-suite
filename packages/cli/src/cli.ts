@@ -35,6 +35,7 @@ import { runRunCommand } from './commands/run.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
 import { runSyncMainIntoTestCommand } from './commands/sync-main-into-test.js';
 import { runWorkspaceCommand } from './commands/workspace.js';
+import { runGitHubSetupCommand } from './commands/github-setup.js';
 
 import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
@@ -53,6 +54,7 @@ import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
 import type { SyncMainIntoTestArgv } from './commands/sync-main-into-test.js';
 import type { WorkspaceArgv } from './commands/workspace.js';
+import type { GitHubSetupArgv } from './commands/github-setup.js';
 
 export interface DoctorArgv {
   path?: string;
@@ -973,8 +975,31 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'github setup [path]',
+      'Inspect GitHub authentication, CI, branches, rulesets, and safe setup commands',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Repository path to inspect',
+            type: 'string',
+            default: '.',
+          })
+          .option('target-branch', {
+            describe: 'Branch to inspect and configure (default: repository default branch)',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print the setup report as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runGitHubSetupCommand(argv as GitHubSetupArgv);
+      }
+    )
+    .command(
       ['test-and-iterate [branch]', 'ship [branch]', 'push-merge-loop [branch]'],
-      'Plan the push, PR, CI polling, fix, and merge-to-test workflow',
+      'Plan the push, PR, CI/review polling, fix, and merge-to-test workflow',
       (builder) =>
         builder
           .positional('branch', {

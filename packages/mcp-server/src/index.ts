@@ -1088,6 +1088,55 @@ function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    'github_setup_guidance',
+    {
+      title: 'GitHub Setup Guidance',
+      description:
+        'Inspect authenticated GitHub and CI setup and provide a safe, evidence-backed CLI and UI procedure.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        targetBranch: z.string().optional(),
+      },
+    },
+    ({ projectPath, targetBranch }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildGitHubSetupGuidancePromptText(projectPath, targetBranch),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
+    'push_merge_loop',
+    {
+      title: 'Push Merge Loop',
+      description:
+        'Run the Doctor-gated PR loop: push, poll checks and review threads, fix, repoll, and apply merge guardrails.',
+      argsSchema: {
+        projectPath: z.string().optional(),
+        branch: z.string().optional(),
+        base: z.string().optional(),
+      },
+    },
+    ({ projectPath, branch, base }) => ({
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: buildPushMergeLoopPromptText(projectPath, branch, base),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
     'wrap_up_release',
     {
       title: 'Wrap Up Release',
@@ -1112,6 +1161,27 @@ function registerPrompts(server: McpServer): void {
       ],
     })
   );
+}
+
+export function buildPushMergeLoopPromptText(
+  projectPath?: string,
+  branch?: string,
+  base?: string
+): string {
+  const target = projectPath ?? 'the current repository';
+  const resolvedBranch = branch ?? 'the current branch';
+  const resolvedBase = base ?? 'test';
+  const canonicalPrompt = readCanonicalPromptMarkdown('push-merge-loop').trim();
+
+  return [
+    `Run the MDS push-merge-loop workflow for ${target}.`,
+    '',
+    'Context for this run:',
+    `- branch: ${resolvedBranch}`,
+    `- base: ${resolvedBase}`,
+    '',
+    canonicalPrompt,
+  ].join('\n');
 }
 
 export function buildRetrospectiveProjectOnboardingPromptText(projectPath?: string): string {
@@ -1240,6 +1310,30 @@ export function buildReviewMotionPromptText(
     `Review motion for the Expo project at ${target}.`,
     `Use Doctor mode \`${resolvedMode}\` for the project scan unless the developer asks for a deeper pass.`,
     focusLine,
+    '',
+    canonicalPrompt,
+  ].join('\n');
+}
+
+export function buildGitHubSetupGuidancePromptText(
+  projectPath?: string,
+  targetBranch?: string
+): string {
+  const target = projectPath ?? 'the current repository';
+  const branchLine = targetBranch?.trim()
+    ? `- targetBranch: ${targetBranch.trim()}`
+    : '- targetBranch: repository default branch';
+  const canonicalPrompt = readCanonicalPromptMarkdown('github-setup-guidance').trim();
+  return [
+    `Run authenticated GitHub setup guidance for ${target}.`,
+    '',
+    'Context for this run:',
+    `- projectPath: ${target}`,
+    branchLine,
+    '',
+    'Start with the read-only CLI report:',
+    `- Run \`mds github setup ${targetBranch?.trim() ? `--target-branch ${targetBranch.trim()} ` : ''}--json\` from the repository checkout.`,
+    '- Verify all remote claims directly with `gh` or the GitHub UI.',
     '',
     canonicalPrompt,
   ].join('\n');

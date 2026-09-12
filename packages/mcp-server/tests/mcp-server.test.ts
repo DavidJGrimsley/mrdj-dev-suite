@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildContinueProjectPromptText,
   buildCreateExpoSuperStackPromptText,
+  buildGitHubSetupGuidancePromptText,
+  buildPushMergeLoopPromptText,
   buildReviewMotionPromptText,
   buildWrapUpPromptText,
   classifyMcpServerRuntimeMode,
@@ -402,6 +404,8 @@ describe('mds MCP helpers', () => {
       expect(toolNames.has('library_plan_add')).toBe(true);
       expect(toolNames.has('library_add')).toBe(true);
       expect(promptNames.has('review_motion')).toBe(true);
+      expect(promptNames.has('github_setup_guidance')).toBe(true);
+      expect(promptNames.has('push_merge_loop')).toBe(true);
 
       const librarySearch = await client.callTool({
         name: 'library_search',
@@ -1017,6 +1021,37 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('animation-motion');
     expect(prompt).toContain('animation-performance');
     expect(prompt).toContain('parallax or scroll-linked motion');
+  });
+
+  it('builds GitHub setup guidance with read-only and mutation guardrails', () => {
+    const prompt = buildGitHubSetupGuidancePromptText(
+      'F:/SoftwareDev/example-repo',
+      'test'
+    );
+
+    expect(prompt).toContain('mds github setup');
+    expect(prompt).toContain('--target-branch test');
+    expect(prompt).toContain('Do not create branches, push, open or edit PRs');
+    expect(prompt).toContain('Settings` → `Rules` → `Rulesets');
+    expect(prompt).toContain('structured recommendations');
+    expect(prompt).toContain('Do not treat a dynamic Copilot workflow as project CI readiness');
+  });
+
+  it('builds a push-merge prompt with review polling and same-head evidence rules', () => {
+    const prompt = buildPushMergeLoopPromptText(
+      'F:/ReactNativeApps/Experimental4',
+      'feature/review-polling',
+      'test'
+    );
+
+    expect(prompt).toContain('Run the MDS push-merge-loop workflow');
+    expect(prompt).toContain('feature/review-polling');
+    expect(prompt).toContain('GitHub Copilot and Codex reviews');
+    expect(prompt).toContain('gh api graphql');
+    expect(prompt).toContain('no more than 5 total cycles');
+    expect(prompt).toContain('final fresh snapshot');
+    expect(prompt).toContain('head did not change');
+    expect(prompt).toContain('## Evidence Report');
   });
 
   it('builds a wrap-up prompt with doctor, file-confirmation, and merge guardrails', () => {
