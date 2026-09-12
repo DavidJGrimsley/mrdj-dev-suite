@@ -21,6 +21,7 @@ import {
   shouldSkipGeneratedSubstitute,
   type EjectionInventory,
 } from './ejection-inventory.js';
+import { isReleaseCiEligible, scaffoldReleaseCi } from './release-ci.js';
 
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
@@ -62,6 +63,8 @@ export {
   renderEjectionInventorySection,
   resolveEjectionInventoryForRender,
 } from './ejection-inventory.js';
+
+export { isReleaseCiEligible };
 
 export type {
   ComponentStrategy,
@@ -152,6 +155,7 @@ export interface OnboardAnswers {
   onboardingCompletionMode: OnboardingCompletionMode;
   legalUpdateGate: LegalUpdateGate;
   testToMainSafeguards: boolean;
+  releaseCiReady: boolean;
   defaults: string[];
 }
 
@@ -1643,6 +1647,8 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
+  results.push(...(await scaffoldReleaseCi(projectPath, answers, { force })));
+
   const shouldManageUniwind = options.manageUniwind && stylingSystem === 'uniwind';
   if (shouldManageUniwind) {
     results.push(
@@ -1851,6 +1857,7 @@ export function renderInfo(
     '- Analytics: None',
     `- EAS: ${formatYesNo(answers.generatorEasSetup ?? answers.easUses.length > 0)}`,
     `- EAS Usage: ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
+    `- Release CI readiness: ${formatYesNo(answers.releaseCiReady)}`,
     `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
     `- Initial Deployment plan: ${answers.deploymentTarget}`,
     '',
@@ -4926,6 +4933,12 @@ function renderSyncMainIntoTestWorkflow(): string {
 }
 
 function renderReleaseFlow(answers: OnboardAnswers): string {
+  const releaseCiEligible = isReleaseCiEligible(answers);
+  const releaseCiRequested =
+    answers.targetPlatforms.includes('ios') &&
+    answers.easUses.includes('publishing mobile applications') &&
+    answers.testToMainSafeguards;
+
   return [
     `# ${answers.appName} Release Flow`,
     '',
@@ -4972,6 +4985,24 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
     '- Require the generated `MDS PR Checks` workflow before merge.',
     '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+    '',
+    '## EAS Release CI',
+    '',
+    ...(releaseCiEligible
+      ? [
+          '- `.eas/workflows/mds-testflight.yml` builds iOS on `test` and distributes the result to TestFlight.',
+          '- `.eas/workflows/mds-production.yml` builds iOS on `main` and uploads the result to App Store Connect.',
+          '- Connect this Expo project to its GitHub repository in EAS and configure iOS signing plus App Store Connect credentials in EAS. The workflows do not contain credentials.',
+          '- App Store Review submission remains a deliberate manual step after the uploaded build is validated.',
+        ]
+      : releaseCiRequested
+        ? [
+            '- Release workflows were not generated because GitHub, EAS, iOS signing, and App Store Connect readiness was not confirmed.',
+            '- Complete that setup, then rerun onboarding with release CI readiness confirmed. Do not put credentials in this repository.',
+          ]
+        : [
+            '- EAS iOS publishing with test-to-main safeguards is not configured for this project, so no release workflows were generated.',
+          ]),
     '',
   ].join('\n');
 }

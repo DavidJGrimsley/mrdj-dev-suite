@@ -567,6 +567,7 @@ describe("create-expo-super-stack CLI helpers", () => {
       "--mds-expo-native-tabs",
       "--mds-component-strategy-decision=confirmed",
       "--mds-eas-uses=building mobile applications,publishing mobile applications",
+      "--mds-release-ci-ready",
       "--mds-save-defaults",
     ]);
 
@@ -594,6 +595,7 @@ describe("create-expo-super-stack CLI helpers", () => {
       "building mobile applications",
       "publishing mobile applications",
     ]);
+    expect(parsed.mds.releaseCiReady).toBe(true);
     expect(parsed.mds.saveDefaults).toBe(true);
     // None of these mds-only flags should leak into the create-expo-stack args.
     expect(parsed.createExpoStackArgs).toEqual(["demo-app"]);
@@ -602,6 +604,11 @@ describe("create-expo-super-stack CLI helpers", () => {
   it("supports explicit opt-out for saving onboarding defaults", () => {
     const parsed = parseArgs(["demo-app", "--mds-no-save-defaults"]);
     expect(parsed.mds.saveDefaults).toBe(false);
+  });
+
+  it("supports explicit release CI opt-out", () => {
+    const parsed = parseArgs(["demo-app", "--mds-no-release-ci-ready"]);
+    expect(parsed.mds.releaseCiReady).toBe(false);
   });
 
   it("supports explicit opt-out for the bundled guidelines template", () => {

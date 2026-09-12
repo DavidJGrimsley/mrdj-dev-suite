@@ -230,6 +230,41 @@ describe("workspace generation", () => {
     });
   });
 
+  it('summarizes per-app EAS release CI without creating a root release workflow', async () => {
+    const workspacePath = await mkdtemp(path.join(os.tmpdir(), 'mds-workspace-release-ci-'));
+    tempDirs.push(workspacePath);
+    const manifest = createTestManifest();
+
+    await scaffoldWorkspaceRoot(workspacePath, manifest, {
+      releaseCiApps: [
+        {
+          id: 'creator-studio',
+          displayName: 'Creator Studio',
+          path: 'apps/creator-studio',
+          eligible: true,
+          releaseCiReady: true,
+        },
+        {
+          id: 'public-site',
+          displayName: 'Public Site',
+          path: 'apps/public-site',
+          eligible: false,
+          releaseCiReady: false,
+        },
+      ],
+    });
+
+    const releaseFlow = await readFile(
+      path.join(workspacePath, 'project', 'release-flow.md'),
+      'utf8',
+    );
+    expect(releaseFlow).toContain('apps/creator-studio/.eas/workflows/');
+    expect(releaseFlow).toContain('Public Site (apps/public-site): release workflows were not generated');
+    await expect(
+      readFile(path.join(workspacePath, '.eas', 'workflows', 'mds-production.yml'), 'utf8'),
+    ).rejects.toThrow();
+  });
+
   it("does not configure unsupported setup-node caching for Bun workspaces", async () => {
     const workspacePath = await mkdtemp(path.join(os.tmpdir(), "mds-bun-workspace-"));
     tempDirs.push(workspacePath);
