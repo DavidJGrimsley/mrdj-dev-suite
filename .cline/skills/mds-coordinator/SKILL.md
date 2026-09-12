@@ -62,6 +62,13 @@ Identify the workspace contract before running repository commands.
 4. Treat `<workspace-root>/<project.path>` as the separate control repository
    for durable project memory. Do not run source-repository Git operations
    there or control-repository commits in a source worktree.
+   The control repository's `agent/handoffs/` directory is the canonical
+   durable history of exact worker assignments. It is not live session state:
+   Git remains authoritative for branches, worktrees, commits, and pull
+   requests, while i2 Core owns non-derivable runtime state. Record the
+   absolute worktree path as a historical snapshot, then re-check the live
+   path before using the handoff. Never put secrets or raw private
+   conversations in a handoff.
 5. Verify the selected checkout with Git, then derive live worktrees from it:
 
 ```powershell
@@ -204,20 +211,30 @@ For an authorized ready task with no worktree:
    Git identifiers, not roadmap sequencing.
 3. Propagate required ignored environment files using the opaque procedure
    below.
-4. Write `i2/agent-prompt.md` in the new source worktree before dispatch. It
-   must record:
+4. Create the immutable handoff first in the control repository under
+   `agent/handoffs/<assignment-id>.md` on a dedicated control-repository
+   branch. Use `pr-<number>-<branch-slug>.md` when a PR exists; otherwise use
+   `<branch-slug>-<recorded-head-short-sha>.md`. The handoff must record:
    - control-repository remote/path, roadmap heading, and exact TODO checkbox;
    - dependency and PR evidence plus the base ref and SHA;
    - branch/worktree, goal, relevant files, constraints, and exclusions;
    - exact validation commands and expected completion evidence;
    - recommended worker tier, selected model when known, and rationale;
-   - an instruction not to merge the PR.
+   - the complete task-specific prompt text;
+   - an instruction not to merge the PR;
+   - the observed source of the prompt, including dirty or zero-commit state.
+   Commit the handoff on the control branch before dispatch and link its path
+   or URL in the assignment and PR.
 5. If no exact roadmap item exists, write `Task mapping: Unmapped` and identify
    the user-requested task without inventing a link, ID, or checkbox.
-6. Confirm the prompt is trackable. If `i2/` is broadly ignored, add only the
-   narrow `!i2/agent-prompt.md` exception. Never put secrets in the prompt.
-7. Run repository-required pre-commit validation, stage only the prompt and any
-   required ignore exception, and create a bootstrap commit before dispatch.
+6. Keep the source repository's tracked `i2/agent-prompt.md` as one identical
+   compatibility stub only. It must point agents to the control-repository
+   handoff directory and must never contain branch-specific instructions. Do
+   not add a task-specific prompt file or edit the stub per branch. If the
+   stub is missing, restore the approved fixed content before dispatch.
+7. Run repository-required pre-commit validation. Stage the control handoff
+   and, only when needed, the identical source stub or its narrow ignore
+   exception. Never put secrets in either file.
 8. Dispatch the selected worker and record the worktree/branch in transitional
    coordination state or i² Core, never in the master roadmap.
 
@@ -314,14 +331,18 @@ On a coordination run about task selection, active work, PR status, merging, or
 cleanup, scan relevant open and recently merged PRs once and reconcile them
 against task evidence. Do not perform this scan for unrelated narrow questions.
 
-Map a PR to a roadmap item only through explicit evidence such as the tracked
-`i2/agent-prompt.md`, an exact roadmap reference in the PR, or an i² Core
-assignment. Name similarity is not a mapping. In read-only runs, report an
-exact pending reconciliation without editing.
+Map a PR to a roadmap item only through explicit evidence such as its immutable
+control-repository handoff, an exact roadmap reference in the PR, the fixed
+source compatibility stub plus linked handoff, or an i² Core assignment. Name
+similarity is not a mapping. In read-only runs, report an exact pending
+reconciliation without editing.
 
-In an authorized state-changing coordination run, update the control repository only after both authoritative merge metadata and final-base reachability are verified. Mark only the mapped checkbox and add a nested
-`Completion: [PR #N](...)` link. For directly verified work that predates PR
-use, add a reachable commit link instead. A PR merged into an intermediate branch is not final completion.
+In an authorized state-changing coordination run, update the control repository
+only after both authoritative merge metadata and final-base reachability are verified.
+Mark only the mapped checkbox and add a nested
+`Completion: [PR #N](...)` link. A PR merged into an intermediate branch is not
+final completion, even when it is a dependency branch.
+For directly verified work that predates PR use, add a reachable commit link instead.
 
 `todo.md` is the human-owned master roadmap, not a branch tracker:
 
@@ -377,6 +398,10 @@ Every worker handoff and ready-task recommendation must include
 exposes model IDs, name the cheapest available model that meets the tier;
 otherwise state the tier and required reasoning. A local `qwen3.5:9b` may
 coordinate Tier-1 work, but never lowers a task's tier; escalate beyond Tier 1.
+For this workspace, prefer `gpt-5.6-sol` for coordination and routine
+evidence work, and `gpt-5.6-terra` for implementation requiring medium or
+higher reasoning. Do not select `gpt-6-astra` unless the user explicitly
+changes that preference.
 
 ## Coordinator response style
 

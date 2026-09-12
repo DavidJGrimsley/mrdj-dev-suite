@@ -997,7 +997,7 @@ async function main(): Promise<void> {
     )
     .command(
       ['test-and-iterate [branch]', 'ship [branch]', 'push-merge-loop [branch]'],
-      'Plan the push, PR, CI polling, fix, and merge-to-test workflow',
+      'Plan the push, PR, CI/review polling, fix, and merge-to-test workflow',
       (builder) =>
         builder
           .positional('branch', {
