@@ -127,6 +127,76 @@ describe('GitHub setup guidance', () => {
     expect(report.workflows[0]?.pullRequestTrigger).toBe('configured');
     expect(report.rulesets[0]?.requiredStatusChecks).toEqual(['doctor']);
     expect(report.commands).toContain('gh ruleset check main --repo owner/repo');
+    expect(report.recommendations).toEqual([]);
+  });
+
+  it('recommends CI, checks, rulesets, and PR investigation for dynamic-only repositories', async () => {
+    const report = await collectGitHubSetupReport(
+      '.',
+      'main',
+      createRunner({
+        'auth status --hostname github.com': { code: 0, stdout: '', stderr: '' },
+        'repo view --json nameWithOwner,defaultBranchRef,url,viewerPermission': {
+          code: 0,
+          stdout: JSON.stringify({
+            nameWithOwner: 'owner/repo',
+            defaultBranchRef: { name: 'main' },
+            viewerPermission: 'ADMIN',
+          }),
+          stderr: '',
+        },
+        'api repos/owner/repo/branches?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify([{ name: 'main' }]),
+          stderr: '',
+        },
+        'api repos/owner/repo/commits/main/check-runs?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({ check_runs: [] }),
+          stderr: '',
+        },
+        'api repos/owner/repo/pulls?state=open&base=main&per_page=10': {
+          code: 0,
+          stdout: JSON.stringify([
+            { number: 2, headRefName: 'feature/docs', html_url: 'https://github.com/owner/repo/pull/2' },
+          ]),
+          stderr: '',
+        },
+        'pr checks 2 --repo owner/repo --json name,state,bucket,link': {
+          code: 0,
+          stdout: '[]',
+          stderr: '',
+        },
+        'api repos/owner/repo/actions/workflows?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({
+            workflows: [
+              { name: 'Copilot', path: 'dynamic/copilot-swe-agent/copilot', state: 'active' },
+            ],
+          }),
+          stderr: '',
+        },
+        'api repos/owner/repo/rulesets?per_page=100': {
+          code: 0,
+          stdout: '[]',
+          stderr: '',
+        },
+      })
+    );
+
+    expect(report.blockers).toEqual([]);
+    expect(report.recommendations.map((recommendation) => recommendation.id)).toEqual([
+      'missing-project-ci',
+      'missing-status-checks',
+      'missing-target-ruleset',
+      'pull-request-without-checks-2',
+    ]);
+    expect(report.recommendations[0]?.nextSteps).toContain(
+      'Review available workflows with `gh workflow list --repo owner/repo`.'
+    );
+
+    const parsedJson = JSON.parse(JSON.stringify(report)) as typeof report;
+    expect(parsedJson.recommendations).toEqual(report.recommendations);
   });
 
   it('warns when an existing ruleset does not require status checks', async () => {
@@ -171,6 +241,129 @@ describe('GitHub setup guidance', () => {
     expect(report.rulesets[0]?.requiredStatusChecks).toEqual([]);
     expect(report.warnings.some((warning) => warning.includes('No discovered ruleset requires a status check'))).toBe(
       true
+    );
+    expect(report.recommendations.map((recommendation) => recommendation.id)).toContain(
+      'missing-required-status-checks'
+    );
+  });
+
+  it('recommends a target ruleset when existing rulesets apply elsewhere', async () => {
+    const projectPath = await createWorkflowProject();
+    const report = await collectGitHubSetupReport(
+      projectPath,
+      'main',
+      createRunner({
+        'auth status --hostname github.com': { code: 0, stdout: '', stderr: '' },
+        'repo view --json nameWithOwner,defaultBranchRef,url,viewerPermission': {
+          code: 0,
+          stdout: JSON.stringify({
+            nameWithOwner: 'owner/repo',
+            defaultBranchRef: { name: 'main' },
+            viewerPermission: 'ADMIN',
+          }),
+          stderr: '',
+        },
+        'api repos/owner/repo/branches?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify([{ name: 'main' }]),
+          stderr: '',
+        },
+        'api repos/owner/repo/commits/main/check-runs?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({ check_runs: [{ name: 'doctor' }] }),
+          stderr: '',
+        },
+        'api repos/owner/repo/pulls?state=open&base=main&per_page=10': {
+          code: 0,
+          stdout: '[]',
+          stderr: '',
+        },
+        'api repos/owner/repo/actions/workflows?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({ workflows: [{ name: 'CI', path: '.github/workflows/ci.yml', state: 'active' }] }),
+          stderr: '',
+        },
+        'api repos/owner/repo/rulesets?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify([{ id: 4, name: 'Protect test', target: 'branch', enforcement: 'active' }]),
+          stderr: '',
+        },
+        'api repos/owner/repo/rulesets/4': {
+          code: 0,
+          stdout: JSON.stringify({
+            conditions: { ref_name: { include: ['refs/heads/test'] } },
+            rules: [
+              { type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'doctor' }] } },
+            ],
+          }),
+          stderr: '',
+        },
+      })
+    );
+
+    expect(report.rulesets[0]?.appliesToTargetBranch).toBe(false);
+    expect(report.recommendations.map((recommendation) => recommendation.id)).toContain(
+      'target-ruleset-not-found'
+    );
+  });
+
+  it('recommends fixing workflow branch filters for the selected target', async () => {
+    const projectPath = await createWorkflowProject();
+    const report = await collectGitHubSetupReport(
+      projectPath,
+      'test',
+      createRunner({
+        'auth status --hostname github.com': { code: 0, stdout: '', stderr: '' },
+        'repo view --json nameWithOwner,defaultBranchRef,url,viewerPermission': {
+          code: 0,
+          stdout: JSON.stringify({
+            nameWithOwner: 'owner/repo',
+            defaultBranchRef: { name: 'main' },
+            viewerPermission: 'ADMIN',
+          }),
+          stderr: '',
+        },
+        'api repos/owner/repo/branches?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify([{ name: 'main' }, { name: 'test' }]),
+          stderr: '',
+        },
+        'api repos/owner/repo/commits/test/check-runs?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({ check_runs: [{ name: 'doctor' }] }),
+          stderr: '',
+        },
+        'api repos/owner/repo/pulls?state=open&base=test&per_page=10': {
+          code: 0,
+          stdout: '[]',
+          stderr: '',
+        },
+        'api repos/owner/repo/actions/workflows?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify({ workflows: [{ name: 'CI', path: '.github/workflows/ci.yml', state: 'active' }] }),
+          stderr: '',
+        },
+        'api repos/owner/repo/rulesets?per_page=100': {
+          code: 0,
+          stdout: JSON.stringify([{ id: 5, name: 'Protect test', target: 'branch', enforcement: 'active' }]),
+          stderr: '',
+        },
+        'api repos/owner/repo/rulesets/5': {
+          code: 0,
+          stdout: JSON.stringify({
+            conditions: { ref_name: { include: ['refs/heads/test'] } },
+            rules: [
+              { type: 'required_status_checks', parameters: { required_status_checks: [{ context: 'doctor' }] } },
+            ],
+          }),
+          stderr: '',
+        },
+      })
+    );
+
+    expect(report.targetBranchExists).toBe(true);
+    expect(report.recommendations.map((recommendation) => recommendation.id)).toContain(
+      'target-branch-not-covered'
     );
   });
 
@@ -218,12 +411,21 @@ describe('GitHub setup guidance', () => {
       rulesets: [],
       blockers: ['Run gh auth login.'],
       warnings: ['No workflows detected.'],
+      recommendations: [
+        {
+          id: 'missing-project-ci',
+          message: 'Add pull-request CI.',
+          nextSteps: ['Run `mds doctor --ci`.'],
+        },
+      ],
       commands: ['gh auth status --hostname github.com'],
     });
 
     expect(output).toContain('MDS GitHub setup guidance');
     expect(output).toContain('Blockers');
     expect(output).toContain('Warnings');
+    expect(output).toContain('Recommendations');
+    expect(output).toContain('Run `mds doctor --ci`.');
     expect(output).toContain('gh auth status --hostname github.com');
   });
 });

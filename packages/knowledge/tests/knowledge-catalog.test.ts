@@ -89,7 +89,11 @@ describe('knowledge catalog expansion', () => {
     expect(guide?.content).toContain('gh api repos/<owner>/<repo>/rulesets');
     expect(guide?.content).toContain('Settings` → `Rules` → `Rulesets');
     expect(guide?.content).toContain('Do not paste tokens into shell history');
+    expect(guide?.content).toContain('Read the recommendations');
+    expect(guide?.content).toContain('A dynamic Copilot workflow is automation, not project CI');
     expect(prompt?.content).toContain('Do not create branches, push, open or edit PRs');
+    expect(prompt?.content).toContain('structured recommendations');
+    expect(prompt?.content).toContain('Do not treat a dynamic Copilot workflow as project CI readiness');
   });
 
   it('keeps generated GitHub setup command surfaces in sync', async () => {

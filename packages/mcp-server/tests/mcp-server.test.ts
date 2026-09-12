@@ -1031,6 +1031,8 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('--target-branch test');
     expect(prompt).toContain('Do not create branches, push, open or edit PRs');
     expect(prompt).toContain('Settings` → `Rules` → `Rulesets');
+    expect(prompt).toContain('structured recommendations');
+    expect(prompt).toContain('Do not treat a dynamic Copilot workflow as project CI readiness');
   });
 
   it('builds a wrap-up prompt with doctor, file-confirmation, and merge guardrails', () => {

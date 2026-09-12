@@ -37,6 +37,8 @@ export interface GitHubRulesetSummary {
   enforcement: string;
   rules: string[];
   requiredStatusChecks: string[];
+  targetPatterns: string[];
+  appliesToTargetBranch: boolean | null;
 }
 
 export interface GitHubPullRequestSummary {
@@ -44,6 +46,12 @@ export interface GitHubPullRequestSummary {
   headRefName: string;
   url: string;
   checks: string[];
+}
+
+export interface GitHubSetupRecommendation {
+  id: string;
+  message: string;
+  nextSteps: string[];
 }
 
 export interface GitHubSetupReport {
@@ -63,6 +71,7 @@ export interface GitHubSetupReport {
   rulesets: GitHubRulesetSummary[];
   blockers: string[];
   warnings: string[];
+  recommendations: GitHubSetupRecommendation[];
   commands: string[];
 }
 
@@ -100,6 +109,7 @@ export async function collectGitHubSetupReport(
   const rulesets: GitHubRulesetSummary[] = [];
   const statusChecks: string[] = [];
   const openPullRequests: GitHubPullRequestSummary[] = [];
+  const recommendations: GitHubSetupRecommendation[] = [];
 
   const auth = await runner('gh', ['auth', 'status', '--hostname', 'github.com'], resolvedProjectPath);
   const authenticated = auth.code === 0;
@@ -229,10 +239,56 @@ export async function collectGitHubSetupReport(
         pullRequestBranches: local?.pullRequestBranches ?? [],
       });
     }
-    if (workflows.length === 0) {
+    const projectWorkflows = workflows.filter((workflow) => isProjectWorkflow(workflow));
+    const projectPullRequestWorkflows = projectWorkflows.filter(
+      (workflow) => workflow.pullRequestTrigger === 'configured'
+    );
+    const targetPullRequestWorkflows = projectPullRequestWorkflows.filter((workflow) =>
+      workflowTargetsBranch(workflow, targetBranch)
+    );
+
+    if (projectWorkflows.length === 0) {
       warnings.push(
-        'No GitHub Actions workflows were detected. Add or restore CI before requiring status checks.'
+        'No project GitHub Actions workflows were detected. Add or restore pull-request CI before requiring status checks.'
       );
+      recommendations.push({
+        id: 'missing-project-ci',
+        message: `No project CI workflow under .github/workflows was detected for "${targetBranch}". Copilot automation does not count as project CI.`,
+        nextSteps: [
+          'Run `mds doctor --ci` locally before changing the repository.',
+          `Add or restore a workflow with \`pull_request\` targeting \`${targetBranch}\`.`,
+          `Review available workflows with \`gh workflow list --repo ${repository.nameWithOwner}\`.`,
+        ],
+      });
+    } else if (projectPullRequestWorkflows.length === 0) {
+      recommendations.push({
+        id: 'missing-pull-request-trigger',
+        message: `Project workflows exist, but none is configured to run for pull requests targeting "${targetBranch}".`,
+        nextSteps: [
+          'Update a workflow under `.github/workflows` to include `pull_request`.',
+          `Review available workflows with \`gh workflow list --repo ${repository.nameWithOwner}\`.`,
+        ],
+      });
+    } else if (targetPullRequestWorkflows.length === 0) {
+      recommendations.push({
+        id: 'target-branch-not-covered',
+        message: `Project pull-request workflows are filtered away from target branch "${targetBranch}".`,
+        nextSteps: [
+          `Include "${targetBranch}" in each intended workflow's \`on.pull_request.branches\` filter.`,
+          `Validate target-branch rules with \`gh ruleset check ${targetBranch} --repo ${repository.nameWithOwner}\`.`,
+        ],
+      });
+    }
+
+    if (statusChecks.length === 0) {
+      recommendations.push({
+        id: 'missing-status-checks',
+        message: `No status checks were observed on target branch "${targetBranch}". Do not require a check until a pull-request run reports its exact name.`,
+        nextSteps: [
+          `Inspect pull-request checks with \`gh pr checks <number> --repo ${repository.nameWithOwner} --watch\`.`,
+          'Use the exact reported check names when reviewing a ruleset.',
+        ],
+      });
     }
 
     const rulesetList = await readGitHubJson<unknown[]>(
@@ -249,6 +305,7 @@ export async function collectGitHubSetupReport(
           `repos/${repository.nameWithOwner}/rulesets/${summary.id}`,
           resolvedProjectPath
         );
+        const targetPatterns = readRulesetTargetPatterns(detail);
         const rules = Array.isArray(detail?.rules) ? detail.rules : [];
         const ruleTypes = rules
           .map((rule) => asRecord(rule)?.type)
@@ -270,16 +327,55 @@ export async function collectGitHubSetupReport(
             typeof summary.enforcement === 'string' ? summary.enforcement : 'unknown',
           rules: ruleTypes,
           requiredStatusChecks,
+          targetPatterns,
+          appliesToTargetBranch:
+            detail === null
+              ? null
+              : rulesetAppliesToBranch(targetBranch, targetPatterns, repository.defaultBranch),
         });
       }
     } else {
       warnings.push('Repository rulesets could not be read. Inspect them with `gh ruleset list`.');
     }
 
-    if (rulesets.length > 0 && !rulesets.some((ruleset) => ruleset.requiredStatusChecks.length > 0)) {
+    const applicableRulesets = rulesets.filter((ruleset) => ruleset.appliesToTargetBranch === true);
+    const unknownApplicabilityRulesets = rulesets.filter(
+      (ruleset) => ruleset.appliesToTargetBranch === null
+    );
+    if (rulesets.length === 0) {
+      recommendations.push({
+        id: 'missing-target-ruleset',
+        message: `No branch ruleset was found for target branch "${targetBranch}".`,
+        nextSteps: [
+          `Inspect current rulesets with \`gh ruleset list --repo ${repository.nameWithOwner}\`.`,
+          `In GitHub, open Settings → Rules → Rulesets and create a reviewed branch ruleset for "${targetBranch}" if protection is desired.`,
+        ],
+      });
+    } else if (applicableRulesets.length === 0 && unknownApplicabilityRulesets.length === 0) {
+      recommendations.push({
+        id: 'target-ruleset-not-found',
+        message: `Existing rulesets were found, but none applies to target branch "${targetBranch}".`,
+        nextSteps: [
+          `Inspect applicability with \`gh ruleset check ${targetBranch} --repo ${repository.nameWithOwner}\`.`,
+          `Review Settings → Rules → Rulesets for a branch pattern that includes "${targetBranch}".`,
+        ],
+      });
+    }
+    if (
+      applicableRulesets.length > 0 &&
+      !applicableRulesets.some((ruleset) => ruleset.requiredStatusChecks.length > 0)
+    ) {
       warnings.push(
         `No discovered ruleset requires a status check for "${targetBranch}". Add only checks that actually report for this target.`
       );
+      recommendations.push({
+        id: 'missing-required-status-checks',
+        message: `The applicable ruleset for "${targetBranch}" does not require any status checks.`,
+        nextSteps: [
+          `Review exact check names with \`gh pr checks <number> --repo ${repository.nameWithOwner} --watch\`.`,
+          `After reviewing the names, inspect the ruleset with \`gh ruleset check ${targetBranch} --repo ${repository.nameWithOwner}\`.`,
+        ],
+      });
     }
     if (
       repository.viewerPermission !== 'ADMIN' &&
@@ -289,9 +385,26 @@ export async function collectGitHubSetupReport(
         `GitHub permission is ${repository.viewerPermission}; ruleset changes may require an administrator.`
       );
     }
+
+    for (const pullRequest of openPullRequests) {
+      if (pullRequest.checks.length > 0) continue;
+      recommendations.push({
+        id: `pull-request-without-checks-${pullRequest.number}`,
+        message: `Open PR #${pullRequest.number} has no reported checks for target branch "${targetBranch}".`,
+        nextSteps: [
+          `Inspect PR checks with \`gh pr checks ${pullRequest.number} --repo ${repository.nameWithOwner} --watch\`.`,
+          'Do not treat the PR as CI-ready until its intended checks report successfully.',
+        ],
+      });
+    }
   }
 
-  if (targetBranch && workflows.some((workflow) => workflow.pullRequestTrigger === 'not-detected')) {
+  if (
+    targetBranch &&
+    workflows.some(
+      (workflow) => isProjectWorkflow(workflow) && workflow.pullRequestTrigger === 'not-detected'
+    )
+  ) {
     warnings.push(
       `Review workflow pull-request branch filters for "${targetBranch}"; a filtered workflow will not report a required check.`
     );
@@ -315,6 +428,7 @@ export async function collectGitHubSetupReport(
     rulesets,
     blockers,
     warnings,
+    recommendations,
     commands,
   };
 }
@@ -363,6 +477,13 @@ export function formatGitHubSetupReport(report: GitHubSetupReport): string {
   if (report.warnings.length > 0) {
     lines.push('', chalk.yellow('Warnings'), ...report.warnings.map((item) => `- ${item}`));
   }
+  if (report.recommendations.length > 0) {
+    lines.push('', chalk.yellow('Recommendations'));
+    for (const recommendation of report.recommendations) {
+      lines.push(`- ${recommendation.message}`);
+      lines.push(...recommendation.nextSteps.map((step) => `  Next: ${step}`));
+    }
+  }
   lines.push('', chalk.bold('Read-only command recipe'), ...report.commands.map((command) => `  ${command}`));
   return lines.join('\n');
 }
@@ -402,6 +523,45 @@ function inspectLocalWorkflows(projectPath: string): GitHubWorkflowSummary[] {
         pullRequestBranches,
       } satisfies GitHubWorkflowSummary;
     });
+}
+
+function isProjectWorkflow(workflow: GitHubWorkflowSummary): boolean {
+  return workflow.path.startsWith('.github/workflows/');
+}
+
+function workflowTargetsBranch(workflow: GitHubWorkflowSummary, targetBranch: string | null): boolean {
+  if (!targetBranch || workflow.pullRequestBranches.length === 0) return true;
+  return workflow.pullRequestBranches.includes(targetBranch);
+}
+
+function readRulesetTargetPatterns(detail: Record<string, unknown> | null): string[] {
+  const conditions = asRecord(detail?.conditions);
+  const refName = asRecord(conditions?.ref_name);
+  return Array.isArray(refName?.include)
+    ? refName.include.filter((pattern): pattern is string => typeof pattern === 'string')
+    : [];
+}
+
+function rulesetAppliesToBranch(
+  targetBranch: string | null,
+  patterns: string[],
+  defaultBranch: string
+): boolean {
+  if (!targetBranch || patterns.length === 0) return true;
+  const targetRef = `refs/heads/${targetBranch}`;
+  return patterns.some((pattern) => {
+    if (pattern === '~DEFAULT_BRANCH') return targetBranch === defaultBranch;
+    return matchesGitHubRefPattern(targetRef, pattern);
+  });
+}
+
+function matchesGitHubRefPattern(value: string, pattern: string): boolean {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/gu, '\\$&')
+    .replace(/\*\*/gu, '__DOUBLE_STAR__')
+    .replace(/\*/gu, '[^/]*')
+    .replace(/__DOUBLE_STAR__/gu, '.*');
+  return new RegExp(`^${escaped}$`, 'u').test(value);
 }
 
 function buildSetupCommands(

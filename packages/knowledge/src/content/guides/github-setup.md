@@ -18,6 +18,17 @@ gh ruleset check main
 
 Use `--target-branch test` when the repository has a test branch. If the report says that `test` is missing, stop and confirm the intended promotion model before creating it.
 
+## Read the recommendations
+
+The report distinguishes repository facts from recommendations. A dynamic Copilot workflow is automation, not project CI. A repository with no project `pull_request` workflow, no observed status checks, no ruleset for the target branch, or an open PR with no checks should receive a specific recommendation and an exact read-only inspection command.
+
+Treat these as warnings, not automatic mutations:
+
+- Add or repair a project workflow with `pull_request` for the selected target branch.
+- Run the workflow and use the exact check names it reports before requiring checks in a ruleset.
+- Review `Settings` → `Rules` → `Rulesets` when no ruleset applies to the target branch.
+- Inspect every unchecked PR with `gh pr checks <number> --watch` before treating it as CI-ready.
+
 ## Initial CI pull request
 
 Run Doctor before any local git mutation:
