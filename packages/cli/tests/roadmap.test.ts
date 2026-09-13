@@ -12,7 +12,17 @@ const tempDirs: string[] = [];
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const legacyTodoFixture = path.join(testDirectory, 'fixtures', 'roadmap', 'legacy-master-todo.md');
 const sourceRoot = path.resolve(testDirectory, '../../..');
+const coordinatorSourcePath = path.join(
+  sourceRoot,
+  'packages',
+  'knowledge',
+  'src',
+  'content',
+  'skills',
+  'mds-coordinator.md'
+);
 const coordinatorSkillPath = path.join(sourceRoot, '.cline', 'skills', 'mds-coordinator', 'SKILL.md');
+const coordinatorMetadataPath = path.join(sourceRoot, '.cline', 'skills', 'mds-coordinator', 'metadata.json');
 
 const validInfo = [
   '# Demo Project Info',
@@ -281,15 +291,43 @@ describe('project roadmap generation', () => {
   });
 
   it('states coordinator completion, ambiguity, and intermediate-branch safeguards explicitly', async () => {
-    const skill = await readFile(coordinatorSkillPath, 'utf8');
+    const [canonical, skill, metadataRaw] = await Promise.all([
+      readFile(coordinatorSourcePath, 'utf8'),
+      readFile(coordinatorSkillPath, 'utf8'),
+      readFile(coordinatorMetadataPath, 'utf8'),
+    ]);
+    const metadata = JSON.parse(metadataRaw) as { description: string; version: string };
 
-    expect(skill).toMatch(/Never delete, rewrite, deduplicate, reorder, summarize, or replace an\s+existing TODO item\./);
-    expect(skill).toContain('Completion: [PR #N](...)');
-    expect(skill).toContain('final-base reachability');
-    expect(skill).toContain('intermediate branch');
-    expect(skill).toMatch(/If historical evidence is ambiguous, preserve the existing checked item\s+unchanged\./);
-    expect(skill).toContain('commit link instead');
-    expect(skill).toContain('[Bug · Origin: Phase N]');
-    expect(skill).not.toMatch(/\b(?:Wave|Sprint)\b/);
+    expect(canonical).toMatch(/Never delete, rewrite, deduplicate, reorder, summarize, or replace an\s+existing TODO item\./);
+    expect(canonical).toContain('Completion: [PR #N](...)');
+    expect(canonical).toContain('final-base reachability');
+    expect(canonical).toContain('intermediate branch');
+    expect(canonical).toMatch(/If historical evidence is ambiguous, preserve the existing checked item\s+unchanged\./);
+    expect(canonical).toContain('commit link instead');
+    expect(canonical).toContain('[Bug · Origin: Phase N]');
+    expect(canonical).not.toMatch(/\b(?:Wave|Sprint)\b/);
+    expect(canonical.indexOf('## STOP — i² container gate')).toBeLessThan(
+      canonical.indexOf('## Request boundary')
+    );
+    expect(canonical).toContain('This is an i² workspace container; a root `.git` is');
+    expect(canonical).toContain('`project/agent/handoffs/`');
+    expect(canonical).toMatch(
+      /Do not write to the\r?\n`i2\/agent-prompt\.md` compatibility stub\./
+    );
+    expect(canonical).toContain('Copy bytes without reading, displaying, hashing, parsing, diffing, or logging');
+    expect(canonical).toContain('Never auto-stash, stash-drop, abort, retry recovery loops');
+    expect(canonical).toContain('`qwen3-coder:30b`');
+    expect(canonical).toContain('## Automatic remote-deleted cleanup');
+    expect(canonical).toContain('`git ls-remote --exit-code --heads <remote> <branch>`');
+    expect(canonical).toContain('delete locally without another approval only when every gate below passes');
+    expect(canonical).toMatch(
+      /Never use force removal,\r?\n   `branch -D`, filesystem deletion, or Git-internal deletion\./
+    );
+    expect(canonical).toContain('Never delete a remote branch in this sweep: it is already absent.');
+    expect(skill).toContain(canonical.trim());
+    expect(metadata).toMatchObject({
+      version: '1.2.0',
+      description: 'Coordinate MDS and i² workspace work across roadmap tasks, repositories, worktrees, agents, validation, pull requests, and cleanup.',
+    });
   });
 });

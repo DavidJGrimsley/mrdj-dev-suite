@@ -146,6 +146,14 @@ const RULE_RESOURCES = [
 
 const SKILL_RESOURCES = [
   {
+    id: 'mds-coordinator',
+    name: 'MDS Coordinator',
+    description:
+      'Coordinate MDS and i² workspace work across roadmap tasks, repositories, worktrees, agents, validation, pull requests, and cleanup.',
+    resourcePath: 'skills/mds-coordinator.md',
+    keywords: ['i2', 'i²', 'coordinator', 'worktrees', 'pull requests', 'roadmap', 'git'],
+  },
+  {
     id: 'animation-motion',
     name: 'Animation Motion Skill',
     description:
