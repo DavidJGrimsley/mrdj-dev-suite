@@ -2527,6 +2527,67 @@ describe('runOnboardCommand', () => {
     expect(todo).toContain('- [ ] Sign in and set up EAS in the terminal.');
   });
 
+  it('renders canonical release metadata and preserves edited values during regeneration', () => {
+    const answers = sampleAnswers('Release Metadata App');
+    const initialInfo = renderInfo('ignored', answers);
+
+    expect(initialInfo).toContain('## Release Metadata');
+    expect(initialInfo).toContain('- Public App Name: Release Metadata App');
+    expect(initialInfo).toContain('- Support URL: pending');
+    expect(initialInfo).toContain('- Terms-of-Service URL: pending');
+    expect(initialInfo).toContain('- Privacy-Policy URL: pending');
+    expect(initialInfo).not.toContain('TodoForContext(optional): Add release metadata');
+
+    const existingInfo = initialInfo
+      .replace('- Public App Name: Release Metadata App', '- Public App Name: Release Metadata App Store')
+      .replace('- Support URL: pending', '- Support URL: https://example.com/support')
+      .replace('- Terms-of-Service URL: pending', '- Terms-of-Service URL: https://example.com/terms')
+      .replace('- Privacy-Policy URL: pending', '- Privacy-Policy URL: https://example.com/privacy');
+    const regeneratedInfo = renderInfo('ignored', answers, existingInfo);
+
+    expect(regeneratedInfo).toContain('- Public App Name: Release Metadata App Store');
+    expect(regeneratedInfo).toContain('- Support URL: https://example.com/support');
+    expect(regeneratedInfo).toContain('- Terms-of-Service URL: https://example.com/terms');
+    expect(regeneratedInfo).toContain('- Privacy-Policy URL: https://example.com/privacy');
+  });
+
+  it('generates only the selected mobile release metadata tasks', () => {
+    const iosTodo = renderTodo({ ...sampleAnswers('iOS Release'), targetPlatforms: ['ios'] });
+    const androidTodo = renderTodo({
+      ...sampleAnswers('Android Release'),
+      targetPlatforms: ['android'],
+    });
+    const combinedTodo = renderTodo({
+      ...sampleAnswers('Mobile Release'),
+      targetPlatforms: ['ios', 'android'],
+    });
+    const webTodo = renderTodo({ ...sampleAnswers('Web Release'), targetPlatforms: ['web'] });
+
+    for (const todo of [iosTodo, androidTodo, combinedTodo]) {
+      expect(todo).toContain('Finalize the public app name and support, terms-of-service, and privacy-policy URLs');
+      expect(todo).toContain('expo.extra.releaseMetadata.supportUrl');
+      expect(todo).toContain('expo.extra.releaseMetadata.termsOfServiceUrl');
+      expect(todo).toContain('expo.extra.releaseMetadata.privacyPolicyUrl');
+      expect(todo).toContain('confirm each URL is publicly reachable');
+    }
+
+    expect(iosTodo).toContain('App Store Connect');
+    expect(iosTodo).toContain('store.config.*');
+    expect(iosTodo).toContain('eas metadata:lint');
+    expect(iosTodo).not.toContain('Google Play Console');
+
+    expect(androidTodo).toContain('Google Play Console');
+    expect(androidTodo).not.toContain('App Store Connect');
+
+    expect(combinedTodo).toContain('App Store Connect');
+    expect(combinedTodo).toContain('Google Play Console');
+
+    expect(webTodo).not.toContain('Release Metadata`');
+    expect(webTodo).not.toContain('App Store Connect');
+    expect(webTodo).not.toContain('Google Play Console');
+    expect(webTodo).not.toContain('expo.extra.releaseMetadata');
+  });
+
   it('derives defaults without requiring the old comma-separated interactive prompt', () => {
     expect(deriveDefaults(undefined, ['project-docs', 'uniwind'], 'supabase', true)).toEqual([
       'project-docs',
