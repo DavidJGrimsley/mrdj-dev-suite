@@ -1,9 +1,17 @@
 {
   "name": "mds-coordinator",
   "version": "1.2.0",
-  "description": "Coordinate MDS and i² workspace work across roadmap tasks, repositories, worktrees, agents, validation, pull requests, and cleanup. Use when selecting dependency-ready work, preparing or reconciling worktrees, dispatching workers, verifying completion, or updating task state from PR evidence.",
+  "description": "Coordinate MDS and i² workspace work across roadmap tasks, repositories, worktrees, agents, validation, pull requests, and cleanup.",
   "author": "MDS/i² Coordinator",
-  "tags": ["coordination", "i2", "git", "worktrees", "ci/cd"],
-  "commands": ["mds-coordinator"],
+  "tags": [
+    "coordination",
+    "i2",
+    "git",
+    "worktrees",
+    "ci/cd"
+  ],
+  "commands": [
+    "mds-coordinator"
+  ],
   "enabled": true
 }

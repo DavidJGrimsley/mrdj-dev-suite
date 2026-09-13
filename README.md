@@ -26,6 +26,28 @@ After restarting Codex, type `@Mr. DJ's Dev Suite`, approve the install pop-up, 
 
 After restarting Claude Code, run `/mcp` to confirm `mr-djs-dev-suite`, then use the `mds` agent or MDS slash commands.
 
+#### Cline i² Coordinator (manual, unpublished)
+
+The MDS Coordinator is shared knowledge content, generated into this checkout's
+`.cline/skills/mds-coordinator` folder by the knowledge build. It is not distributed by
+`mds agent install`. On this machine, Cline resolves its global skill from
+`%USERPROFILE%\.agents\skills\mds-coordinator`; install the generated copy there after a
+completed coordinator iteration:
+
+```powershell
+$source = 'F:\SoftwareDev\mrdj-dev-suite-i2Workspace\mrdj-dev-suite-main\.cline\skills\mds-coordinator'
+$destination = "$env:USERPROFILE\.agents\skills\mds-coordinator"
+
+New-Item -ItemType Directory -Force -Path $destination | Out-Null
+Copy-Item -LiteralPath (Join-Path $source 'SKILL.md') -Destination (Join-Path $destination 'SKILL.md') -Force
+Copy-Item -LiteralPath (Join-Path $source 'metadata.json') -Destination (Join-Path $destination 'metadata.json') -Force
+cline skill list -g --agent cline --json
+```
+
+Confirm that the list reports that exact `.agents\skills\mds-coordinator` path, then
+restart Cline. Leave any older `%USERPROFILE%\.cline\skills\mds-coordinator` copy alone
+unless you intentionally choose to remove it; the resolver output is authoritative.
+
 ### Recommended workflow
 
 The suite is designed around short, repeatable workflows. You can use the CLI directly or let the installed agent bundle / prompt layer route you to the right MCP tools, skills, and knowledge.

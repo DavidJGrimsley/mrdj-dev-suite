@@ -1,5 +1,5 @@
 ---
-name: mds-coordinator
+name: "MDS Coordinator"
 description: "Coordinate MDS and i² workspace work across roadmap tasks, repositories, worktrees, agents, validation, pull requests, and cleanup."
 ---
 

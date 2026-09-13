@@ -28,6 +28,12 @@ describe('knowledge catalog expansion', () => {
     expect(prompts.some((resource) => resource.id === 'wrap-up')).toBe(true);
     expect(guides.some((resource) => resource.id === 'github-setup')).toBe(true);
     expect(skills.some((resource) => resource.id === 'animation-motion')).toBe(true);
+    expect(skills).toContainEqual(
+      expect.objectContaining({
+        id: 'mds-coordinator',
+        resourcePath: 'skills/mds-coordinator.md',
+      })
+    );
     expect(
       guides.some(
         (resource) =>

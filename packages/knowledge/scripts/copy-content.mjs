@@ -7,6 +7,7 @@ import {
   buildCommandFiles,
   generateCodexPluginBundleFromKnowledge,
 } from './generate-codex-plugin.mjs';
+import { generateClineCoordinatorSkillFromKnowledge } from './generate-cline-skill.mjs';
 import { generateVscodeCopilotBundleFromKnowledge } from './generate-vscode-copilot.mjs';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -67,6 +68,13 @@ async function copyContent() {
           `MRDJ_SKIP_VSCODE_COPILOT_GENERATION=1.\n${detail}`
       );
     }
+  }
+
+  try {
+    await generateClineCoordinatorSkillFromKnowledge({ packageRoot });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`[copy-content] Failed while generating the Cline coordinator skill.\n${detail}`);
   }
 
   if (!shouldGeneratePluginBundles) return;
