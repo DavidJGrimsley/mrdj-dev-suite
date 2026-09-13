@@ -44,9 +44,17 @@ export function releaseGuidanceTasks(targetPlatforms: readonly string[] | undefi
   }
 
   const labels = platforms.map((platform) => PLATFORM_LABELS[platform]).join(', ');
+  const hasAppleStoreTarget = platforms.includes('ios') || platforms.includes('apple-tv');
+  const hasGooglePlayTarget = platforms.includes('android') || platforms.includes('android-tv');
+  const credentialTargets = [
+    'EAS access',
+    ...(hasAppleStoreTarget ? ['Apple App Store Connect API access'] : []),
+    ...(hasGooglePlayTarget ? ['Google Play service-account access'] : []),
+    'repository secrets as applicable',
+  ];
   const tasks = [
     `[Blocked prerequisite] Enroll in the required developer and store programs and create or confirm app records for: ${labels}.`,
-    '[Blocked prerequisite] Configure safe release credentials for local and CI use: EAS access, Apple App Store Connect API access, Google Play service-account access, and repository secrets as applicable.',
+    `[Blocked prerequisite] Configure safe release credentials for local and CI use: ${credentialTargets.join(', ')}.`,
     '[Blocked prerequisite] Prepare store metadata and compliance inputs: public app name, screenshots, support and privacy URLs, age or content ratings, data-safety answers, export-compliance answers, and review instructions.',
     'Create production builds with the correct platform identifiers, version numbers, signing configuration, and environment values, then verify each artifact on its target device.',
   ];

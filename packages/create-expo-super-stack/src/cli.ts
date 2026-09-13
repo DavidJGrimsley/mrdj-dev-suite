@@ -31,6 +31,7 @@ import {
 } from "@mr.dj2u/cli/onboarding";
 import {
   applySdk56SplashConfig,
+  isReleaseCiEligible,
   resolveGeneratorStylingSystem,
   scaffoldProjectMemory,
 } from "@mr.dj2u/cli/project-memory";
@@ -56,6 +57,7 @@ import type {
   WorkspaceAppInput,
   WorkspaceManifest,
   WorkspacePackageManager,
+  WorkspaceReleaseCiApp,
   WorkspaceStylingSystem,
 } from "@mr.dj2u/cli/workspace";
 
@@ -94,6 +96,7 @@ export interface ParsedArgs {
     rich?: boolean;
     skipExpoFix: boolean;
     testToMain?: boolean;
+    releaseCiReady?: boolean;
     projectParentDir?: string;
     workspace?: boolean;
     workspaceRoot?: string;
@@ -794,6 +797,15 @@ async function executeWorkspacePlan(
     executionPlan.manifest,
     {
       force: rootParsed.mds.force,
+      releaseCiApps: executionPlan.expoApps.map(
+        ({ app, onboardPlan }): WorkspaceReleaseCiApp => ({
+          id: app.id,
+          displayName: app.displayName,
+          path: app.path,
+          eligible: isReleaseCiEligible(onboardPlan.answers),
+          releaseCiReady: onboardPlan.answers.releaseCiReady,
+        }),
+      ),
     },
   );
   for (const result of rootWrites) {
@@ -1557,6 +1569,16 @@ export function parseArgs(args: string[]): ParsedArgs {
       continue;
     }
 
+    if (arg === "--mds-release-ci-ready") {
+      mds.releaseCiReady = true;
+      continue;
+    }
+
+    if (arg === "--mds-no-release-ci-ready") {
+      mds.releaseCiReady = false;
+      continue;
+    }
+
     if (arg.startsWith("--mds-platforms=")) {
       mds.platforms = splitList(arg.slice("--mds-platforms=".length));
       continue;
@@ -1712,6 +1734,8 @@ export function renderHelpText(): string {
     "  --mds-legal-documents=        none | public-routes | onboarding-agreement",
     "  --mds-onboarding-completion=  enter-app | auth | account-setup | custom",
     "  --mds-legal-update-gate=      none | material-required",
+    "  --mds-release-ci-ready        Generate EAS release workflows after confirming GitHub, EAS, and Apple setup",
+    "  --mds-no-release-ci-ready     Do not generate EAS release workflows",
     "  --mds-expo-ui-universal       Use Expo UI Universal components when Expo UI is selected",
     "",
     "Help:",
@@ -3543,6 +3567,7 @@ function buildOnboardArgv(
     defaults: parsed.mds.defaults,
     saveDefaults: parsed.mds.saveDefaults,
     testToMain: parsed.mds.testToMain,
+    releaseCiReady: parsed.mds.releaseCiReady,
     platforms: parsed.mds.platforms,
     firstPlatform: parsed.mds.firstPlatform,
     platformStrategy: parsed.mds.platformStrategy,

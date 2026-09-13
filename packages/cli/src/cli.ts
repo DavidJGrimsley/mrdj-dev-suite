@@ -265,6 +265,11 @@ async function main(): Promise<void> {
             describe: 'Generate test-to-main release safeguards and PR checks',
             type: 'boolean',
           })
+          .option('release-ci-ready', {
+            describe:
+              'Confirm GitHub/EAS/Apple release prerequisites and generate EAS release workflows without storing credentials',
+            type: 'boolean',
+          })
           .option('app-name', {
             describe: 'App display name',
             type: 'string',

@@ -21,6 +21,7 @@ import {
   shouldSkipGeneratedSubstitute,
   type EjectionInventory,
 } from './ejection-inventory.js';
+import { isReleaseCiEligible, scaffoldReleaseCi } from './release-ci.js';
 
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
@@ -67,6 +68,8 @@ export {
   renderEjectionInventorySection,
   resolveEjectionInventoryForRender,
 } from './ejection-inventory.js';
+
+export { isReleaseCiEligible };
 
 export type {
   ComponentStrategy,
@@ -157,6 +160,7 @@ export interface OnboardAnswers {
   onboardingCompletionMode: OnboardingCompletionMode;
   legalUpdateGate: LegalUpdateGate;
   testToMainSafeguards: boolean;
+  releaseCiReady: boolean;
   defaults: string[];
 }
 
@@ -684,6 +688,7 @@ function readOwnPackageVersion(): string {
 
 const INFO_HEADINGS = [
   'App Name',
+  'Release Metadata',
   'Overview',
   'Target Users',
   'Problem this app solves',
@@ -702,6 +707,15 @@ const INFO_HEADINGS = [
   'Component Strategy',
   'Ejection Inventory',
 ] as const;
+
+interface ReleaseMetadata {
+  publicAppName: string;
+  supportUrl: string;
+  termsOfServiceUrl: string;
+  privacyPolicyUrl: string;
+}
+
+const PENDING_RELEASE_METADATA_VALUE = 'pending';
 
 const STYLE_HEADINGS = [
   'Visual Direction',
@@ -1655,6 +1669,8 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
+  results.push(...(await scaffoldReleaseCi(projectPath, answers, { force })));
+
   const shouldManageUniwind = options.manageUniwind && stylingSystem === 'uniwind';
   if (shouldManageUniwind) {
     results.push(
@@ -1751,11 +1767,19 @@ export function renderInfo(
   const firstFlow = hasConcreteCoreFlows
     ? extractFirstNonEmptyLine(answers.coreFlows)
     : '# TodoForContext(optional): Describe the first real end-to-end user flow the MVP should support.';
+  const releaseMetadata = resolveReleaseMetadata(answers, existingInfo);
   return [
     `# ${answers.appName} Project Info`,
     '',
     '## App Name',
     answers.appName,
+    '',
+    '## Release Metadata',
+    '',
+    `- Public App Name: ${releaseMetadata.publicAppName}`,
+    `- Support URL: ${releaseMetadata.supportUrl}`,
+    `- Terms-of-Service URL: ${releaseMetadata.termsOfServiceUrl}`,
+    `- Privacy-Policy URL: ${releaseMetadata.privacyPolicyUrl}`,
     '',
     '## Overview',
     '',
@@ -1863,6 +1887,7 @@ export function renderInfo(
     '- Analytics: None',
     `- EAS: ${formatYesNo(answers.generatorEasSetup ?? answers.easUses.length > 0)}`,
     `- EAS Usage: ${answers.easUses.length > 0 ? answers.easUses.join(', ') : 'not planned yet'}`,
+    `- Release CI readiness: ${formatYesNo(answers.releaseCiReady)}`,
     `- Deployed server: ${formatServerChoice(answers.deployedServer)}`,
     `- Initial Deployment plan: ${answers.deploymentTarget}`,
     '',
@@ -2000,6 +2025,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',
     ...releaseGuidanceTasks(answers.targetPlatforms).map((task) => `- [ ] ${task}`),
+    ...renderReleaseMetadataTodos(answers),
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
@@ -2015,6 +2041,73 @@ export function renderTodo(answers: OnboardAnswers): string {
       : []),
     '',
   ].join('\n');
+}
+
+function renderReleaseMetadataTodos(answers: OnboardAnswers): string[] {
+  const targetsIos = answers.targetPlatforms.some((platform) => platform.toLowerCase() === 'ios');
+  const targetsAndroid = answers.targetPlatforms.some(
+    (platform) => platform.toLowerCase() === 'android'
+  );
+  if (!targetsIos && !targetsAndroid) {
+    return [];
+  }
+
+  return [
+    '- [ ] Finalize the public app name and support, terms-of-service, and privacy-policy URLs in `project/info.md` under `Release Metadata`.',
+    '- [ ] Set `expo.name` from the public app name and configure `expo.extra.releaseMetadata.supportUrl`, `expo.extra.releaseMetadata.termsOfServiceUrl`, and `expo.extra.releaseMetadata.privacyPolicyUrl` for runtime use.',
+    ...(targetsIos
+      ? [
+          '- [ ] For iOS, synchronize the App Store Connect title, support URL, and privacy-policy URL from `project/info.md`; when EAS Metadata is used, configure the equivalent `store.config.*` fields and run `eas metadata:lint`; configure terms or a custom EULA in App Store Connect.',
+        ]
+      : []),
+    ...(targetsAndroid
+      ? [
+          '- [ ] For Android, copy the public app name and applicable support, terms, and privacy-policy URLs into the Google Play Console listing and policy fields.',
+        ]
+      : []),
+    '- [ ] Verify `expo.name`, `expo.extra.releaseMetadata`, in-app support and legal links, and every selected store listing match `project/info.md`; confirm each URL is publicly reachable.',
+  ];
+}
+
+function resolveReleaseMetadata(
+  answers: Pick<OnboardAnswers, 'appName'>,
+  existingInfo?: string | null
+): ReleaseMetadata {
+  return {
+    publicAppName:
+      readReleaseMetadataValue(existingInfo, 'Public App Name')?.trim() || answers.appName,
+    supportUrl:
+      readReleaseMetadataValue(existingInfo, 'Support URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+    termsOfServiceUrl:
+      readReleaseMetadataValue(existingInfo, 'Terms-of-Service URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+    privacyPolicyUrl:
+      readReleaseMetadataValue(existingInfo, 'Privacy-Policy URL')?.trim() ||
+      PENDING_RELEASE_METADATA_VALUE,
+  };
+}
+
+function readReleaseMetadataValue(
+  existingInfo: string | null | undefined,
+  label: string
+): string | null {
+  if (!existingInfo) {
+    return null;
+  }
+
+  const releaseMetadataStart = existingInfo.search(/^## Release Metadata\s*$/m);
+  if (releaseMetadataStart < 0) {
+    return null;
+  }
+
+  const releaseMetadataSection = existingInfo
+    .slice(releaseMetadataStart)
+    .split(/\r?\n(?=#{1,6}\s)/, 2)[0];
+  const match = releaseMetadataSection?.match(
+    new RegExp(`^\\s*-\\s*${label}:\\s*(.+?)\\s*$`, 'mi')
+  );
+  return match?.[1] ?? null;
 }
 
 export function renderStyle(answers: OnboardAnswers, existingStyle?: string | null): string {
@@ -4965,6 +5058,12 @@ function renderSyncMainIntoTestWorkflow(): string {
 }
 
 function renderReleaseFlow(answers: OnboardAnswers): string {
+  const releaseCiEligible = isReleaseCiEligible(answers);
+  const releaseCiRequested =
+    answers.targetPlatforms.includes('ios') &&
+    answers.easUses.includes('publishing mobile applications') &&
+    answers.testToMainSafeguards;
+
   return [
     `# ${answers.appName} Release Flow`,
     '',
@@ -5019,6 +5118,24 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
     ...(hasReleaseGuidance(answers.targetPlatforms)
       ? [renderStoreReleaseGuidance(answers.appName, answers.targetPlatforms), '']
       : []),
+    '## EAS Release CI',
+    '',
+    ...(releaseCiEligible
+      ? [
+          '- `.eas/workflows/mds-testflight.yml` builds iOS on `test` and distributes the result to TestFlight.',
+          '- `.eas/workflows/mds-production.yml` builds iOS on `main` and uploads the result to App Store Connect.',
+          '- Connect this Expo project to its GitHub repository in EAS and configure iOS signing plus App Store Connect credentials in EAS. The workflows do not contain credentials.',
+          '- App Store Review submission remains a deliberate manual step after the uploaded build is validated.',
+        ]
+      : releaseCiRequested
+        ? [
+            '- Release workflows were not generated because GitHub, EAS, iOS signing, and App Store Connect readiness was not confirmed.',
+            '- Complete that setup, then rerun onboarding with release CI readiness confirmed. Do not put credentials in this repository.',
+          ]
+      : [
+            '- EAS iOS publishing with test-to-main safeguards is not configured for this project, so no release workflows were generated.',
+          ]),
+    '',
   ].join('\n');
 }
 
