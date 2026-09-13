@@ -8,13 +8,23 @@ Run:
 pnpm test:matrix
 ```
 
-The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`. On Windows, it looks for real app source repositories under `F:\ReactNativeApps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
+The matrix reads `packages/cli/tests/fixtures/test-apps-matrix.json`. It first creates a fresh non-interactive Create Expo Super Stack (CESS) mobile Expo Router app, then validates each listed real app source. On Windows, it looks for real app source repositories under `F:\ReactNativeApps`, creates disposable validation workspaces under `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`, installs dependencies in those disposable workspaces with non-frozen installs, then runs:
 
+- CESS onboarding and generated-app contract checks
 - `mds doctor --ci`
 - `mds eject exposition`
 - `mds eject stylist`
 
-The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\ReactNativeApps`, the matrix clones its GitHub URL into the disposable run folder instead. On non-Windows machines, configure `MDS_TEST_APPS_ROOT` and `MDS_MATRIX_WORKTREES_ROOT`, or let the matrix fall back to GitHub clones and the OS temp directory. The report is written to `generator-matrix-report.json` at the repo root.
+The Experimemo entry is intentionally pinned to released MVP commit
+`011334f69e577fd146d84f67417031de748566b1`, rather than following `main`.
+The matrix checks the MVP contract after cloning, retrospective project-only
+onboarding, exposition ejection, and Stylist ejection: product identity and
+customer copy, support/terms/privacy links, Expo UI and NativeTabs, icon and
+dark-splash assets, and system appearance wiring. If the local Experimemo clone
+does not contain that commit, the matrix fetches it from GitHub before checking
+it out detached.
+
+The original app repositories are not modified. Local app paths are used as read-only sources, and destructive validation happens only in temporary clones or temporary copies. If a listed app is not present under `F:\ReactNativeApps`, the matrix clones its GitHub URL into the disposable run folder instead. On non-Windows machines, configure `MDS_TEST_APPS_ROOT` and `MDS_MATRIX_WORKTREES_ROOT`, or let the matrix fall back to GitHub clones and the OS temp directory. The report is written to `generator-matrix-report.json` at the repo root, including every lifecycle step plus fixture contract results and requested/resolved revisions.
 
 Folder roles:
 
@@ -32,6 +42,7 @@ Useful environment variables:
 - `MDS_MATRIX_WORKTREES_ROOT=<path>` overrides the disposable validation workspace root, which defaults to `F:\SoftwareDev\MDS\test-apps\.generator-matrix-worktrees`.
 - `MDS_MATRIX_COMMAND_TIMEOUT_MS=<ms>` changes the per-command timeout.
 - `MDS_MATRIX_TEST_TIMEOUT_MS=<ms>` changes the full matrix test timeout.
+- `MRDJ_CREATE_EXPO_STACK_BIN=<path>` or `CREATE_EXPO_STACK_BIN=<path>` overrides the delegated generator used by the CESS smoke test.
 
 The matrix test is intentionally local-only. It is skipped by normal `pnpm test` runs unless it is explicitly targeted by `pnpm test:matrix`, `pnpm test -- generator-matrix`, or `MDS_RUN_GENERATOR_MATRIX=1`.
 
