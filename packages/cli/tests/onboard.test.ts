@@ -705,6 +705,30 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).resolves.toContain('MDS PR Checks');
     await expect(
+      readFile(
+        path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        'utf8'
+      )
+    ).resolves.toContain('MDS Sync Main Into Test');
+    await expect(
+      readFile(
+        path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        'utf8'
+      )
+    ).resolves.toContain("github.event.pull_request.head.ref == 'test'");
+    await expect(
+      readFile(
+        path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        'utf8'
+      )
+    ).resolves.toContain('github.event.pull_request.head.repo.full_name == github.repository');
+    await expect(
+      readFile(
+        path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        'utf8'
+      )
+    ).resolves.toContain('mds sync-main-into-test . --execute --json');
+    await expect(
       readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
     ).resolves.toContain('Test-To-Main Safeguards');
     await expect(
@@ -807,6 +831,7 @@ describe('runOnboardCommand', () => {
     expect(packageJson.scripts['react-doctor']).toBe('npx react-doctor -y --no-telemetry');
     expect(packageJson.scripts['mds:react-doctor']).toBe('npx mds run react-doctor');
     expect(packageJson.scripts['mds:stylist:sync']).toBe('npx mds stylist sync .');
+    expect(packageJson.scripts['icons:sync']).toBe('node ./scripts/copy-icons.mjs');
     expect(packageJson.scripts['mds:eject']).toBe('npx mds eject .');
     expect(packageJson.scripts['mds:eject:exposition']).toBe('npx mds eject exposition .');
     expect(packageJson.scripts['mds:eject:stylist']).toBe('npx mds eject stylist .');
@@ -829,6 +854,12 @@ describe('runOnboardCommand', () => {
     expect(packageJson.devDependencies['@mr.dj2u/cli']).toBe(`^${cliPackageJson.version}`);
     expect(packageJson.devDependencies['react-doctor']).toBe('^0.9.12');
     expect(packageJson.devDependencies.tailwindcss).toBe('^4.2.4');
+    await expect(
+      readFile(path.join(projectPath, 'project', 'icon-release.json'), 'utf8')
+    ).resolves.toContain('assets/branding/icon-1024.png');
+    await expect(
+      readFile(path.join(projectPath, 'scripts', 'copy-icons.mjs'), 'utf8')
+    ).resolves.toContain("['mds', 'icons', 'sync', '.']");
     await expect(
       readFile(path.join(projectPath, 'doctor.config.json'), 'utf8')
     ).resolves.toContain('react.doctor/schema/config.json');
@@ -1454,6 +1485,12 @@ describe('runOnboardCommand', () => {
     ).resolves.toContain('grant select on public.mds_demo_guestbook_comments to anon, authenticated;');
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
+    ).rejects.toThrow();
+    await expect(
+      readFile(
+        path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+        'utf8'
+      )
     ).rejects.toThrow();
   });
 
