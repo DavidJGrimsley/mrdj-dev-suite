@@ -22,4 +22,3 @@ Create or update the reusable merge-commit pull request that synchronizes `main`
 - Keep the developer's current checkout untouched; the command performs merge work in an isolated temporary clone.
 - The sync PR must be merged with GitHub's merge-commit strategy, never squash or rebase.
 - Do not treat this MDS repository's own branch layout as a prerequisite; the command targets other managed repositories.
-

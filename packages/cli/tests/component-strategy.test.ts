@@ -48,6 +48,7 @@ function sampleAnswers(
     onboardingCompletionMode: 'enter-app',
     legalUpdateGate: 'none',
     testToMainSafeguards: false,
+    releaseCiReady: false,
     defaults: ['project-docs', 'guidelines', 'doctor'],
     generatorStylingSystem: 'uniwind',
     ...overrides,

@@ -61,6 +61,7 @@ function sampleAnswers(overrides: Partial<OnboardAnswers> = {}): OnboardAnswers 
     onboardingCompletionMode: 'enter-app',
     legalUpdateGate: 'none',
     testToMainSafeguards: false,
+    releaseCiReady: false,
     defaults: ['project-docs'],
     generatorStylingSystem: 'stylesheet',
     ...overrides,
