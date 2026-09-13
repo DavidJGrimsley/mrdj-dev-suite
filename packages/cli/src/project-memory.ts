@@ -1647,6 +1647,9 @@ async function scaffoldRichBoilerplateInner(
       await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
         recursive: true,
       });
+      await mkdir(path.join(workspaceRootPath, '.github', 'rulesets'), {
+        recursive: true,
+      });
       results.push(
         await writeIfAllowed(
           path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
@@ -1656,6 +1659,11 @@ async function scaffoldRichBoilerplateInner(
         await writeIfAllowed(
           path.join(workspaceRootPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
           renderSyncMainIntoTestWorkflow(),
+          force
+        ),
+        await writeIfAllowed(
+          path.join(workspaceRootPath, '.github', 'rulesets', 'test.json'),
+          renderGitHubTestBranchRuleset(),
           force
         )
       );
@@ -2029,8 +2037,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     ...(answers.testToMainSafeguards
       ? [
           '- [ ] Follow `project/release-flow.md` for test-to-main development.',
-          '- [ ] Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.',
-          '- [ ] Add GitHub branch protection so PR checks pass before merging into `test` or `main`.',
+          '- [ ] Complete the one-time GitHub setup: create `test`, enable auto-merge, apply `.github/rulesets/test.json`, and protect `main` as described in `project/release-flow.md`.',
         ]
       : ['- [ ] Decide on release safeguards before production work begins.']),
     ...(answers.webOutput !== 'none'
@@ -5057,6 +5064,46 @@ function renderSyncMainIntoTestWorkflow(): string {
   ].join('\n');
 }
 
+function renderGitHubTestBranchRuleset(): string {
+  return `${JSON.stringify(
+    {
+      name: 'MDS test branch (automated merge)',
+      target: 'branch',
+      enforcement: 'active',
+      conditions: {
+        ref_name: {
+          include: ['refs/heads/test'],
+          exclude: [],
+        },
+      },
+      rules: [
+        { type: 'deletion' },
+        { type: 'non_fast_forward' },
+        {
+          type: 'pull_request',
+          parameters: {
+            dismiss_stale_reviews_on_push: false,
+            require_code_owner_review: false,
+            require_last_push_approval: false,
+            required_approving_review_count: 0,
+            required_review_thread_resolution: false,
+          },
+        },
+        {
+          type: 'required_status_checks',
+          parameters: {
+            required_status_checks: [{ context: 'verify' }],
+            strict_required_status_checks_policy: true,
+          },
+        },
+      ],
+      bypass_actors: [],
+    },
+    null,
+    2
+  )}\n`;
+}
+
 function renderReleaseFlow(answers: OnboardAnswers): string {
   const releaseCiEligible = isReleaseCiEligible(answers);
   const releaseCiRequested =
@@ -5109,9 +5156,14 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
           '- Create `test` and `main` branches.',
           '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
           '- Allow the generated sync workflow to write repository contents and pull requests.',
-          '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
-          '- Require the generated `MDS PR Checks` workflow before merge.',
+          '- Enable **Allow auto-merge** in **Settings → General → Pull Requests**.',
+          '- Apply `.github/rulesets/test.json`; it targets only `test`, requires the generated `verify` check, requires no human approval, and blocks deletion and force-pushes.',
+          '- Apply it with `gh api --method POST repos/OWNER/REPO/rulesets --input .github/rulesets/test.json`.',
+          '- Verify it with `gh api repos/OWNER/REPO/rulesets --jq \'.[] | select(.name == "MDS test branch (automated merge)")\'`.',
+          '- UI equivalent: in **Settings → Rules → Rulesets**, create an active branch ruleset named `MDS test branch (automated merge)` for `test`, require a pull request and the `verify` status check, set approvals to `0`, leave code-owner and last-push approval off, block deletion and force-pushes, and add no bypass actors.',
+          '- Protect `main` separately and require the generated `MDS PR Checks / verify` check before production merges.',
           '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+          '- Generation creates the preset and documentation but does not create branches or change GitHub settings automatically.',
           '',
         ]
       : []),
