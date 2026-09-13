@@ -10,16 +10,18 @@ approval.
 The preset applies only to `refs/heads/test` and:
 
 - requires a pull request before changes reach `test`;
-- requires the `Packages CI / packages` and `Doctor (smoke) / doctor` checks;
+- requires the `packages` and `doctor` check-run contexts from the `Packages CI`
+  and `Doctor (smoke)` workflows;
 - requires zero approving reviews and does not require code-owner or last-push
   approval;
 - blocks branch deletion and non-fast-forward updates; and
 - defines no bypass actors.
 
-The status-check entries omit `integration_id` so the payload remains
-portable. GitHub treats that field as optional; if the repository requires a
-provider-specific integration, keep the same contexts and add that ID to the
-corresponding entries during import.
+The status-check entries use GitHub Actions job check-run names (`packages` and
+`doctor`) and omit `integration_id` so the payload remains portable. The GitHub
+UI may display these as `Packages CI / packages` and `Doctor (smoke) / doctor`.
+If the repository requires a provider-specific integration, keep the same
+contexts and add that ID to the corresponding entries during import.
 
 ## One-time prerequisites
 
@@ -76,8 +78,8 @@ anything.
    `0`; leave code-owner review, last-push approval, and required conversation
    resolution disabled.
 5. Enable required status checks and add exactly:
-   - `Packages CI / packages`
-   - `Doctor (smoke) / doctor`
+   - `Packages CI / packages` (API context: `packages`)
+   - `Doctor (smoke) / doctor` (API context: `doctor`)
 6. Enable the protections against branch deletion and force-push/non-fast-
    forward updates.
 7. Leave bypass actors empty, review the summary, and save the ruleset.

@@ -69,8 +69,8 @@ describe('test branch ruleset preset', () => {
       'required_status_checks',
     ]);
     expect(statusParameters.required_status_checks).toEqual([
-      { context: 'Packages CI / packages' },
-      { context: 'Doctor (smoke) / doctor' },
+      { context: 'packages' },
+      { context: 'doctor' },
     ]);
     expect(statusParameters.strict_required_status_checks_policy).toBe(true);
     expect(Object.keys(statusParameters).sort()).toEqual([

@@ -29,12 +29,12 @@
       "type": "required_status_checks",
       "parameters": {
         "required_status_checks": [
-          {
-            "context": "Packages CI / packages"
-          },
-          {
-            "context": "Doctor (smoke) / doctor"
-          }
+            {
+              "context": "packages"
+            },
+            {
+              "context": "doctor"
+            }
         ],
         "strict_required_status_checks_policy": true
       }
