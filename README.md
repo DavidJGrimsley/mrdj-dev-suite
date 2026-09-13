@@ -138,9 +138,10 @@ node packages/cli/dist/cli.js doctor /path/to/expo-app --json
 1. Run `mds doctor --ci`.
 2. Review git status and commit intentional changes.
 3. Push the branch and open/update a PR into `test`.
-4. Poll GitHub checks.
-5. Fix failures, push again, and keep polling.
-6. Merge to `test` after checks pass.
+4. Poll required checks, reviews, comments, and paginated review threads, including Copilot and Codex feedback.
+5. Classify actionable, informational, resolved, and outdated findings; fix blockers, rerun Doctor, push, and repoll.
+6. Stop after five evidence cycles and report blockers when checks or review evidence remain incomplete.
+7. Merge to `test` only after a fresh same-head snapshot proves checks are green and blocking feedback is cleared.
 
 Mutating git steps remain manual during the dry-run proving period. `--execute` runs Doctor first and stops if the project is not ready.
 

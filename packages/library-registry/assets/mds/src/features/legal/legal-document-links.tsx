@@ -34,7 +34,7 @@ export function LegalDocumentLinks({
         <Link key={item.href} href={item.href} asChild>
           <Pressable
             accessibilityRole="link"
-            style={[
+            style={StyleSheet.flatten([
               styles.linkCard,
               {
                 backgroundColor: colors.surface,
@@ -42,7 +42,7 @@ export function LegalDocumentLinks({
                 borderRadius: theme.layout.radius,
               },
               orientation === 'horizontal' && styles.horizontalCard,
-            ]}>
+            ])}>
             <Text style={[styles.linkLabel, { color: colors.text }]}>{item.label}</Text>
             {showDescription ? (
               <Text style={[styles.linkDescription, { color: colors.text }]}>

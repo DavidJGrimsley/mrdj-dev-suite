@@ -7,6 +7,25 @@
       "worktrees_root": "F:\\SoftwareDev\\MDS\\test-apps\\.generator-matrix-worktrees"
     }
   },
+  "cess": {
+    "app_name": "cess-experimemo-mvp-smoke",
+    "fixture_contract": "cess-mobile",
+    "args": [
+      "--expo-router",
+      "--no-install",
+      "--npm",
+      "--mds-yes",
+      "--mds-no-save-defaults",
+      "--mds-platforms=ios,android",
+      "--mds-first-platform=ios",
+      "--mds-app-directory=src",
+      "--mds-web-output=none",
+      "--mds-expo-ui",
+      "--mds-expo-ui-universal",
+      "--mds-expo-native-tabs",
+      "--mds-component-strategy-decision=confirmed"
+    ]
+  },
   "apps": [
     {
       "name": "time2pay",
@@ -18,7 +37,9 @@
       "name": "experimemo",
       "github_url": "https://github.com/DavidJGrimsley/Experimemo",
       "local_path": "experimemo",
-      "branches_to_test": ["main"]
+      "revision": "011334f69e577fd146d84f67417031de748566b1",
+      "fixture_contract": "experimemo-mvp",
+      "retrospective_onboarding": true
     },
     {
       "name": "PokePages",
