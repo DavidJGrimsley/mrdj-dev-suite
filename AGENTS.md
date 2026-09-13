@@ -1,5 +1,22 @@
 # Mr. DJ's Dev Suite — Agent Guidelines
 
+## i² workspace artifact locations
+When this checkout is a source worktree in an i² workspace, establish the
+source-worktree root and confirm the sibling `project/mds.workspace.json`
+manifest before creating output. These rules apply only after that verification:
+
+- Keep normal MDS source changes in the selected source worktree.
+- Put non-app task artifacts, such as generated reports, images, and documents,
+  in `../generated/` relative to the source-worktree root.
+- Put apps generated solely to test MDS/i² in
+  `../test-apps/<app-name>/` relative to the source-worktree root.
+- Do not hard-code an absolute path or create/use a different sibling
+  `test-apps` directory. If the workspace contract cannot be verified, stop and
+  ask the user for the output location.
+
+Every coordinator handoff for i² work must name the resolved generated-artifact
+and test-app destinations before an agent creates files.
+
 ## Before every git commit
 Always run `mds doctor --fast` (or via MCP `doctor_scan_project`) on the target project before committing. If the report has errors, fix them before proceeding. Warnings are acceptable to commit with.
 
