@@ -693,7 +693,7 @@ describe('runOnboardCommand', () => {
       'Apply Stylist synced theme tokens to production UI components and screens.'
     );
     await expect(readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')).resolves.toContain(
-      'Complete the one-time GitHub repo setup from `project/release-flow.md` so `test` and `main` are protected correctly.'
+      'Complete the one-time GitHub setup: create `test`, enable auto-merge, apply `.github/rulesets/test.json`, and protect `main` as described in `project/release-flow.md`.'
     );
     await expect(
       readFile(path.join(projectPath, 'project', 'todo.md'), 'utf8')
@@ -704,6 +704,39 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, '.github', 'workflows', 'mds-pr-checks.yml'), 'utf8')
     ).resolves.toContain('MDS PR Checks');
+    const testRuleset = JSON.parse(
+      await readFile(path.join(projectPath, '.github', 'rulesets', 'test.json'), 'utf8')
+    ) as {
+      target: string;
+      enforcement: string;
+      conditions: { ref_name: { include: string[]; exclude: string[] } };
+      rules: Array<{ type: string; parameters?: Record<string, unknown> }>;
+      bypass_actors: unknown[];
+    };
+    expect(testRuleset.target).toBe('branch');
+    expect(testRuleset.enforcement).toBe('active');
+    expect(testRuleset.conditions.ref_name).toEqual({
+      include: ['refs/heads/test'],
+      exclude: [],
+    });
+    expect(testRuleset.bypass_actors).toEqual([]);
+    expect(testRuleset.rules.map((rule) => rule.type)).toEqual([
+      'deletion',
+      'non_fast_forward',
+      'pull_request',
+      'required_status_checks',
+    ]);
+    expect(testRuleset.rules[2]?.parameters).toEqual({
+      dismiss_stale_reviews_on_push: false,
+      require_code_owner_review: false,
+      require_last_push_approval: false,
+      required_approving_review_count: 0,
+      required_review_thread_resolution: false,
+    });
+    expect(testRuleset.rules[3]?.parameters).toEqual({
+      required_status_checks: [{ context: 'verify' }],
+      strict_required_status_checks_policy: true,
+    });
     await expect(
       readFile(
         path.join(projectPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
@@ -740,6 +773,21 @@ describe('runOnboardCommand', () => {
       readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
     ).resolves.toContain(
       'If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain(
+      'gh api --method POST repos/OWNER/REPO/rulesets --input .github/rulesets/test.json'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain(
+      'UI equivalent: in **Settings → Rules → Rulesets**, create an active branch ruleset named `MDS test branch (automated merge)`'
+    );
+    await expect(
+      readFile(path.join(projectPath, 'project', 'release-flow.md'), 'utf8')
+    ).resolves.toContain(
+      'Generation creates the preset and documentation but does not create branches or change GitHub settings automatically.'
     );
     await expect(readFile(path.join(projectPath, 'package.json'), 'utf8')).resolves.toContain(
       'clear-expo-start'
@@ -1459,6 +1507,9 @@ describe('runOnboardCommand', () => {
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Users signed up');
+    await expect(
+      readFile(path.join(projectPath, '.github', 'rulesets', 'test.json'), 'utf8')
+    ).rejects.toThrow();
     await expect(
       readFile(path.join(projectPath, 'src', 'features', 'exposition', 'data-screen.tsx'), 'utf8')
     ).resolves.toContain('Sign the guestbook');
