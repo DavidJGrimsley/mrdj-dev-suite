@@ -28,7 +28,6 @@
     {
       "type": "required_status_checks",
       "parameters": {
-        "do_not_require_linear_history": true,
         "required_status_checks": [
           {
             "context": "Packages CI / packages"

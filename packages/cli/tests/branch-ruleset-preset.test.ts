@@ -73,6 +73,10 @@ describe('test branch ruleset preset', () => {
       { context: 'Doctor (smoke) / doctor' },
     ]);
     expect(statusParameters.strict_required_status_checks_policy).toBe(true);
+    expect(Object.keys(statusParameters).sort()).toEqual([
+      'required_status_checks',
+      'strict_required_status_checks_policy',
+    ]);
     expect(pullRequestRule.parameters).toMatchObject({
       require_code_owner_review: false,
       require_last_push_approval: false,
