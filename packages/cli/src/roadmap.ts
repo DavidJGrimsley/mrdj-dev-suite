@@ -1,6 +1,8 @@
 import { access, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { releaseGuidanceTasks } from './release-guidance.js';
+
 import { PHASE0_COMPONENT_STRATEGY_TODO } from './component-strategy.js';
 import {
   PHASE0_EJECTION_INVENTORY_TODO,
@@ -801,6 +803,9 @@ export function deriveRoadmapPhases(
       `Prepare the release flow for: ${formatTaskList(pickDistinct(releaseItems, 3))}.`,
       'release'
     );
+  }
+  for (const task of releaseGuidanceTasks(targetPlatforms)) {
+    addTask('phase-4', task, 'release');
   }
 
   if (questionItems.length > 0) {

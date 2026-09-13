@@ -36,6 +36,11 @@ import {
 } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
+import {
+  releaseGuidanceTasks,
+  renderStoreReleaseGuidance,
+  selectReleaseGuidancePlatforms,
+} from '../src/release-guidance.js';
 
 const tempDirs: string[] = [];
 const DEFAULT_SUPABASE_ENV_LOCAL = [
@@ -44,6 +49,42 @@ const DEFAULT_SUPABASE_ENV_LOCAL = [
   'EXPO_PUBLIC_SUPABASE_KEY=sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
   '',
 ].join('\n');
+
+describe('cross-platform release guidance', () => {
+  it('generates platform-filtered release guidance and blocked prerequisite tasks', () => {
+    expect(selectReleaseGuidancePlatforms(['web', 'iPhone', 'android'])).toEqual([
+      'ios',
+      'android',
+    ]);
+
+    const guidance = renderStoreReleaseGuidance('Store App', ['web', 'ios', 'android']);
+    expect(guidance).toContain('### iOS and App Store Connect');
+    expect(guidance).toContain('### Android and Google Play');
+    expect(guidance).not.toContain('### Apple TV and tvOS');
+    expect(guidance).toContain('https://developer.apple.com/help/app-store-connect/');
+    expect(guidance).toContain('https://support.google.com/googleplay/android-developer/');
+
+    const tvGuidance = renderStoreReleaseGuidance('TV App', ['apple-tv', 'android-tv']);
+    expect(tvGuidance).toContain('### Apple TV and tvOS');
+    expect(tvGuidance).toContain('### Android TV');
+    expect(tvGuidance).not.toContain('eas build --platform ios');
+    expect(tvGuidance).not.toContain('eas build --platform android');
+
+    const tasks = releaseGuidanceTasks(['ios', 'android']);
+    expect(tasks.filter((task) => task.startsWith('[Blocked prerequisite]'))).toHaveLength(3);
+    expect(tasks).toContain(
+      'Complete iOS App Store Connect setup, internal and external TestFlight testing, and production App Review submission.'
+    );
+    expect(tasks).not.toContain(
+      'Complete tvOS App Store Connect and TestFlight setup, TV-specific asset and device validation, and production App Review submission.'
+    );
+
+    const todo = renderTodo({ ...sampleAnswers('Store App'), targetPlatforms: ['web', 'ios', 'android'] });
+    expect(todo).toContain('[Blocked prerequisite]');
+    expect(todo).toContain('Complete Google Play Console setup');
+    expect(todo).not.toContain('Apple TV');
+  });
+});
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));

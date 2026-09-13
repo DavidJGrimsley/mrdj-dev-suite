@@ -26,6 +26,11 @@ import { isReleaseCiEligible, scaffoldReleaseCi } from './release-ci.js';
 import { getLibraryItem, readLibraryAsset } from '@mr.dj2u/library-registry';
 
 import type { LibraryProjectContext, LibraryStyling } from '@mr.dj2u/library-registry';
+import {
+  hasReleaseGuidance,
+  releaseGuidanceTasks,
+  renderStoreReleaseGuidance,
+} from './release-guidance.js';
 import type { ComponentStrategy, ComponentStrategyDecision } from './component-strategy.js';
 import {
   MDS_REACT_DOCTOR_SCRIPT_NAME,
@@ -1634,21 +1639,28 @@ async function scaffoldRichBoilerplateInner(
     );
   }
 
-  if (answers.testToMainSafeguards && !isWorkspaceApp) {
-    await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
-      recursive: true,
-    });
+  if (
+    (answers.testToMainSafeguards || hasReleaseGuidance(answers.targetPlatforms)) &&
+    !isWorkspaceApp
+  ) {
+    if (answers.testToMainSafeguards) {
+      await mkdir(path.join(workspaceRootPath, '.github', 'workflows'), {
+        recursive: true,
+      });
+      results.push(
+        await writeIfAllowed(
+          path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
+          renderGitHubPrChecksWorkflow(),
+          force
+        ),
+        await writeIfAllowed(
+          path.join(workspaceRootPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
+          renderSyncMainIntoTestWorkflow(),
+          force
+        )
+      );
+    }
     results.push(
-      await writeIfAllowed(
-        path.join(workspaceRootPath, '.github', 'workflows', 'mds-pr-checks.yml'),
-        renderGitHubPrChecksWorkflow(),
-        force
-      ),
-      await writeIfAllowed(
-        path.join(workspaceRootPath, '.github', 'workflows', 'mds-sync-main-into-test.yml'),
-        renderSyncMainIntoTestWorkflow(),
-        force
-      ),
       await writeIfAllowed(
         path.join(workspaceRootPath, 'project', 'release-flow.md'),
         renderReleaseFlow(answers),
@@ -2012,6 +2024,7 @@ export function renderTodo(answers: OnboardAnswers): string {
     '',
     `- [ ] ${PHASE4_DEVELOPER_COPY_TODO}`,
     '- [ ] Run `mds doctor --ci` and address errors.',
+    ...releaseGuidanceTasks(answers.targetPlatforms).map((task) => `- [ ] ${task}`),
     ...renderReleaseMetadataTodos(answers),
     ...(answers.testToMainSafeguards
       ? [
@@ -4979,6 +4992,32 @@ function renderGitHubPrChecksWorkflow(): string {
   ].join('\n');
 }
 
+function renderIconReleaseConfig(): string {
+  return `${JSON.stringify(
+    {
+      masterIcon: 'assets/branding/icon-1024.png',
+      adaptiveIcon: null,
+    },
+    null,
+    2
+  )}\n`;
+}
+
+function renderCopyIconsScript(): string {
+  return [
+    "import { spawnSync } from 'node:child_process';",
+    '',
+    "const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
+    "const result = spawnSync(command, ['mds', 'icons', 'sync', '.'], { stdio: 'inherit' });",
+    '',
+    'if (result.error) {',
+    '  throw result.error;',
+    '}',
+    'process.exitCode = result.status ?? 1;',
+    '',
+  ].join('\n');
+}
+
 function renderSyncMainIntoTestWorkflow(): string {
   return [
     'name: MDS Sync Main Into Test',
@@ -5028,50 +5067,57 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
   return [
     `# ${answers.appName} Release Flow`,
     '',
-    '## Test-To-Main Safeguards',
-    '',
-    '- Build features on short-lived feature branches.',
-    '- Open pull requests into `test` first.',
-    '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
-    '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
-    '- Promote from `test` to `main` only after validation.',
-    '- After a successful `test` to `main` PR merge, the generated MDS workflow creates or updates one `main` to `test` sync PR.',
-    '- Merge the sync PR with the merge-commit strategy; never squash or rebase it.',
-    '- MDS creates the sync PR automatically but never merges it.',
-    '- Protect `main` so direct pushes are blocked and PR checks are required.',
-    '',
-    '## App Icons',
-    '',
-    '- Add an exactly 1024x1024 PNG master icon at `assets/branding/icon-1024.png`.',
-    '- Run `npm run icons:sync` to generate `assets/images/icon.png` and `assets/images/favicon.png` and fill missing static `app.json` icon references.',
-    '- To import a locally copied SmartUtilify package instead, set `package.directory` to its app-relative folder (for example `smartutilifyIconDownload`). It uses `ios/AppIcon-1024x1024.png` for the Expo icon, `web/favicon-48x48.png` for the Expo favicon, and copies PNG/ICO files from `pwa` and `web` into `package.publicIconDirectories` (default: `public/icons`).',
-    '- Use `outputs.icon` and `outputs.favicon` when an app uses paths other than `assets/images`, such as `assets/icons/icon.png` and `assets/icons/favicon.png`. `package.faviconIcoOutput` defaults to `public/favicon.ico` and may be set to `null` to skip it.',
-    '- In an i² workspace, set these options in the sibling workspace `project/icon-release.json`; standalone apps use `project/icon-release.json` inside the app. Icon source paths stay relative to the app repository. Use separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color for Android adaptive icons.',
-    '- SmartUtilify remains optional for extra ICO, PWA, or legacy native packages; it is not required by the generated Expo workflow.',
-    '- Obtain written permission before embedding SmartUtilify or another third-party generator in an IDE webview.',
-    '',
-    '## Supabase Environments',
-    '',
-    ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
+    ...(answers.testToMainSafeguards
       ? [
-          '- Use one Supabase project for test/staging and one Supabase project for production.',
-          '- Keep publishable client keys in environment files for the matching branch/environment.',
-          '- Never commit Supabase service-role or secret keys into the Expo app.',
+          '## Test-To-Main Safeguards',
+          '',
+          '- Build features on short-lived feature branches.',
+          '- Open pull requests into `test` first.',
+          '- Require the `MDS PR Checks` workflow to pass before merging into `test`.',
+          '- Smoke test the app from `test` with staging data and staging Supabase keys when Supabase is used.',
+          '- Promote from `test` to `main` only after validation.',
+          '- After a successful `test` to `main` PR merge, the generated MDS workflow creates or updates one `main` to `test` sync PR.',
+          '- Merge the sync PR with the merge-commit strategy; never squash or rebase it.',
+          '- MDS creates the sync PR automatically but never merges it.',
+          '- Protect `main` so direct pushes are blocked and PR checks are required.',
+          '',
+          '## App Icons',
+          '',
+          '- Add an exactly 1024x1024 PNG master icon at `assets/branding/icon-1024.png`.',
+          '- Run `npm run icons:sync` to generate `assets/images/icon.png` and `assets/images/favicon.png` and fill missing static `app.json` icon references.',
+          '- To import a locally copied SmartUtilify package instead, set `package.directory` to its app-relative folder (for example `smartutilifyIconDownload`). It uses `ios/AppIcon-1024x1024.png` for the Expo icon, `web/favicon-48x48.png` for the Expo favicon, and copies PNG/ICO files from `pwa` and `web` into `package.publicIconDirectories` (default: `public/icons`).',
+          '- Use `outputs.icon` and `outputs.favicon` when an app uses paths other than `assets/images`, such as `assets/icons/icon.png` and `assets/icons/favicon.png`. `package.faviconIcoOutput` defaults to `public/favicon.ico` and may be set to `null` to skip it.',
+          '- In an i² workspace, set these options in the sibling workspace `project/icon-release.json`; standalone apps use `project/icon-release.json` inside the app. Icon source paths stay relative to the app repository. Use separately designed 1024x1024 foreground and optional monochrome PNGs plus a `#RRGGBB` background color for Android adaptive icons.',
+          '- SmartUtilify remains optional for extra ICO, PWA, or legacy native packages; it is not required by the generated Expo workflow.',
+          '- Obtain written permission before embedding SmartUtilify or another third-party generator in an IDE webview.',
+          '',
+          '## Supabase Environments',
+          '',
+          ...(answers.dataStart === 'supabase' || answers.authProvider === 'supabase'
+            ? [
+                '- Use one Supabase project for test/staging and one Supabase project for production.',
+                '- Keep publishable client keys in environment files for the matching branch/environment.',
+                '- Never commit Supabase service-role or secret keys into the Expo app.',
+              ]
+            : [
+                '- Local dummy data is the starting point.',
+                '- When Supabase is introduced, create separate test/staging and production projects before wiring production data.',
+              ]),
+          '',
+          '## GitHub Setup The User Still Needs To Do',
+          '',
+          '- Create `test` and `main` branches.',
+          '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
+          '- Allow the generated sync workflow to write repository contents and pull requests.',
+          '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
+          '- Require the generated `MDS PR Checks` workflow before merge.',
+          '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
+          '',
         ]
-      : [
-          '- Local dummy data is the starting point.',
-          '- When Supabase is introduced, create separate test/staging and production projects before wiring production data.',
-        ]),
-    '',
-    '## GitHub Setup The User Still Needs To Do',
-    '',
-    '- Create `test` and `main` branches.',
-    '- Confirm GitHub Actions is enabled for the repo and that the generated workflow is allowed to run.',
-    '- Allow the generated sync workflow to write repository contents and pull requests.',
-    '- In GitHub branch protection, require pull requests and status checks for `test` and `main`.',
-    '- Require the generated `MDS PR Checks` workflow before merge.',
-    '- If the agent has GitHub access with enough permissions, let it apply these repo settings for you; otherwise do this one-time setup in the GitHub UI.',
-    '',
+      : []),
+    ...(hasReleaseGuidance(answers.targetPlatforms)
+      ? [renderStoreReleaseGuidance(answers.appName, answers.targetPlatforms), '']
+      : []),
     '## EAS Release CI',
     '',
     ...(releaseCiEligible
@@ -5086,35 +5132,9 @@ function renderReleaseFlow(answers: OnboardAnswers): string {
             '- Release workflows were not generated because GitHub, EAS, iOS signing, and App Store Connect readiness was not confirmed.',
             '- Complete that setup, then rerun onboarding with release CI readiness confirmed. Do not put credentials in this repository.',
           ]
-        : [
+      : [
             '- EAS iOS publishing with test-to-main safeguards is not configured for this project, so no release workflows were generated.',
           ]),
-    '',
-  ].join('\n');
-}
-
-function renderIconReleaseConfig(): string {
-  return `${JSON.stringify(
-    {
-      masterIcon: 'assets/branding/icon-1024.png',
-      adaptiveIcon: null,
-    },
-    null,
-    2
-  )}\n`;
-}
-
-function renderCopyIconsScript(): string {
-  return [
-    "import { spawnSync } from 'node:child_process';",
-    '',
-    "const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';",
-    "const result = spawnSync(command, ['mds', 'icons', 'sync', '.'], { stdio: 'inherit' });",
-    '',
-    'if (result.error) {',
-    '  throw result.error;',
-    '}',
-    'process.exitCode = result.status ?? 1;',
     '',
   ].join('\n');
 }

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { runRoadmapCommand } from '../src/commands/roadmap.js';
-import { generateProjectRoadmap, parseInfoSections } from '../src/roadmap.js';
+import { generateProjectRoadmap, parseInfoSections, deriveRoadmapPhases } from '../src/roadmap.js';
 
 const tempDirs: string[] = [];
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -85,6 +85,44 @@ describe('project roadmap generation', () => {
     expect(sections.targetUsers?.content).toContain('Busy parents');
     expect(sections.coreUserFlows?.content).toContain('weekly meal plan');
     expect(sections.releaseStrategy?.content).toContain('TestFlight beta');
+  });
+
+  it('adds release prerequisites only for selected store platforms', () => {
+    const phases = deriveRoadmapPhases(
+      parseInfoSections(
+        [
+          '# Store App Info',
+          '',
+          '## Target Users',
+          '',
+          'People publishing a consumer app.',
+          '',
+          '## Product Goals',
+          '',
+          'Submit the first production release.',
+          '',
+          '## Core User Flows',
+          '',
+          '- Create and publish content',
+          '',
+          '## Platforms',
+          '',
+          '- Target platforms: web, ios, android',
+          '',
+          '## Release Strategy',
+          '',
+          '- App Store and Play Store launch',
+        ].join('\n')
+      ),
+      []
+    );
+
+    const phase4 = phases.find((phase) => phase.id === 'phase-4');
+    const taskText = phase4?.tasks.map((task) => task.text).join('\n') ?? '';
+    expect(taskText).toContain('[Blocked prerequisite]');
+    expect(taskText).toContain('Complete iOS App Store Connect setup');
+    expect(taskText).toContain('Complete Google Play Console setup');
+    expect(taskText).not.toContain('Apple TV');
   });
 
   it('creates an initial phase roadmap for a new project without creating roadmap-state.json', async () => {

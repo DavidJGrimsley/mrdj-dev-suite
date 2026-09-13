@@ -189,6 +189,12 @@ describe("workspace generation", () => {
       ),
     ).resolves.toContain("pnpm install --frozen-lockfile");
     await expect(
+      readFile(path.join(workspacePath, "project", "release-flow.md"), "utf8"),
+    ).resolves.toContain("### iOS and App Store Connect");
+    await expect(
+      readFile(path.join(workspacePath, "project", "release-flow.md"), "utf8"),
+    ).resolves.toContain("### Android and Google Play");
+    await expect(
       readFile(
         path.join(workspacePath, "packages", "config", "src", "metro.cjs"),
         "utf8",

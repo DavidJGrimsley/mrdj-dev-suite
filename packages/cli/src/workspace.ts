@@ -13,6 +13,7 @@ import {
   resolveWorkspacePath as resolveCanonicalWorkspacePath,
   validateWorkspaceManifest as validateCanonicalWorkspaceManifest,
 } from "@mr.dj2u/doctor/workspace-manifest";
+import { hasReleaseGuidance, renderStoreReleaseGuidance } from "./release-guidance.js";
 
 export type ProjectShape = "single-expo-app" | "multi-app-workspace";
 export type WorkspacePackageManager = "npm" | "pnpm" | "yarn" | "bun";
@@ -1134,6 +1135,7 @@ function renderWorkspaceReleaseFlow(
   manifest: WorkspaceManifest,
   releaseCiApps: WorkspaceReleaseCiApp[] = [],
 ): string {
+  const targetPlatforms = manifest.apps.flatMap((app) => app.platforms ?? []);
   const releaseCiLines =
     releaseCiApps.length === 0
       ? ['- No Expo app release CI status is available yet.']
@@ -1158,6 +1160,9 @@ function renderWorkspaceReleaseFlow(
     '',
     'Each eligible Expo app must be separately linked to this GitHub repository in EAS with the app directory as its project root. EAS and Apple credentials stay in EAS; they are never stored in the workspace.',
     '',
+    ...(hasReleaseGuidance(targetPlatforms)
+      ? [renderStoreReleaseGuidance(manifest.displayName, targetPlatforms), '']
+      : []),
   ].join('\n');
 }
 
