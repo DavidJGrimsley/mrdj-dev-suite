@@ -152,6 +152,37 @@ describe('MDS Library CLI services', () => {
     expect(await readFile(customTermsRoute, 'utf8')).toBe(customizedSource);
   });
 
+  it('generates settings links with a flattened Link-asChild Pressable style', async () => {
+    const projectPath = await createExpoProject();
+    const plan = await planLibraryAdd(projectPath, 'mds/legal-documents', {
+      variant: 'settings-links',
+    });
+
+    expect(plan.canApply).toBe(true);
+    expect(plan.files).toContainEqual(
+      expect.objectContaining({
+        destination: 'src/features/legal/legal-document-links.tsx',
+      })
+    );
+
+    await applyLibraryAdd(projectPath, 'mds/legal-documents', {
+      confirmed: true,
+      installDependencies: false,
+      planHash: plan.planHash,
+      variant: 'settings-links',
+    });
+
+    const linksSource = await readFile(
+      path.join(projectPath, 'src', 'features', 'legal', 'legal-document-links.tsx'),
+      'utf8'
+    );
+    expect(linksSource).toContain('<Link key={item.href} href={item.href} asChild>');
+    expect(linksSource).toContain('style={StyleSheet.flatten([');
+    expect(linksSource).not.toMatch(
+      /<Link\b(?=[^>]*\basChild\b)[^>]*>[\s\S]*?<Pressable\b[^>]*style=\{\[/u
+    );
+  });
+
   it('adds the auth library with provider variants and idempotent generated files', async () => {
     const projectPath = await createExpoProject({ mdsRootLayout: true });
     const plan = await planLibraryAdd(projectPath, 'mds/auth', {

@@ -17,6 +17,7 @@ import { runContinueCommand } from './commands/continue.js';
 import { runClearExpoStartCommand, runKillPortCommand } from './commands/dev-tools.js';
 import { runEjectExpositionCommand } from './commands/eject.js';
 import { runExplainCommand } from './commands/explain.js';
+import { runIconsSyncCommand } from './commands/icons.js';
 import {
   runLibraryAddCommand,
   runLibraryListCommand,
@@ -33,7 +34,9 @@ import {
 } from './commands/stylist.js';
 import { runRunCommand } from './commands/run.js';
 import { runShipCommand } from './commands/test-and-iterate.js';
+import { runSyncMainIntoTestCommand } from './commands/sync-main-into-test.js';
 import { runWorkspaceCommand } from './commands/workspace.js';
+import { runGitHubSetupCommand } from './commands/github-setup.js';
 
 import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
@@ -41,6 +44,7 @@ import type { ContinueArgv } from './commands/continue.js';
 import type { ClearExpoStartArgv, KillPortArgv } from './commands/dev-tools.js';
 import type { EjectExpositionArgv } from './commands/eject.js';
 import type { ExplainArgv } from './commands/explain.js';
+import type { IconsSyncArgv } from './commands/icons.js';
 import type { LibraryAddArgv, LibraryListArgv, LibraryShowArgv } from './commands/library.js';
 import type { McpInstallArgv } from './commands/mcp-install.js';
 import type { OnboardArgv } from './commands/onboard.js';
@@ -50,7 +54,9 @@ import type { RunArgv } from './commands/run.js';
 import type { SkillsListArgv, SkillsShowArgv } from './commands/skills.js';
 import type { StylistEjectArgv, StylistSyncArgv } from './commands/stylist.js';
 import type { ShipArgv } from './commands/test-and-iterate.js';
+import type { SyncMainIntoTestArgv } from './commands/sync-main-into-test.js';
 import type { WorkspaceArgv } from './commands/workspace.js';
+import type { GitHubSetupArgv } from './commands/github-setup.js';
 
 export interface DoctorArgv {
   path?: string;
@@ -572,6 +578,25 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'icons sync [path]',
+      'Validate a 1024x1024 master icon and generate Expo icon assets',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Expo project path',
+            type: 'string',
+            default: '.',
+          })
+          .option('json', {
+            describe: 'Print the sync result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runIconsSyncCommand(argv as IconsSyncArgv);
+      }
+    )
+    .command(
       'stylist sync [path]',
       'Sync canonical stylist tokens and style-library-specific outputs',
       (builder) =>
@@ -971,8 +996,31 @@ async function main(): Promise<void> {
       }
     )
     .command(
+      'github setup [path]',
+      'Inspect GitHub authentication, CI, branches, rulesets, and safe setup commands',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Repository path to inspect',
+            type: 'string',
+            default: '.',
+          })
+          .option('target-branch', {
+            describe: 'Branch to inspect and configure (default: repository default branch)',
+            type: 'string',
+          })
+          .option('json', {
+            describe: 'Print the setup report as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runGitHubSetupCommand(argv as GitHubSetupArgv);
+      }
+    )
+    .command(
       ['test-and-iterate [branch]', 'ship [branch]', 'push-merge-loop [branch]'],
-      'Plan the push, PR, CI polling, fix, and merge-to-test workflow',
+      'Plan the push, PR, CI/review polling, fix, and merge-to-test workflow',
       (builder) =>
         builder
           .positional('branch', {
@@ -999,6 +1047,40 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runShipCommand(argv as ShipArgv);
+      }
+    )
+    .command(
+      'sync-main-into-test [path]',
+      'Create or update a merge-commit pull request that synchronizes main into test',
+      (builder) =>
+        builder
+          .positional('path', {
+            describe: 'Target GitHub repository path',
+            type: 'string',
+            default: '.',
+          })
+          .option('main', {
+            describe: 'Production branch promoted from test',
+            type: 'string',
+            default: 'main',
+          })
+          .option('test', {
+            describe: 'Test branch to synchronize after promotion',
+            type: 'string',
+            default: 'test',
+          })
+          .option('execute', {
+            describe: 'Push the sync branch and create or update the pull request',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Print the structured result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        await runSyncMainIntoTestCommand(argv as SyncMainIntoTestArgv);
       }
     )
     .demandCommand()

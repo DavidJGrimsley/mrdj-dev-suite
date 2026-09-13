@@ -22,7 +22,7 @@
     "type-check": "turbo run type-check",
     "typecheck": "pnpm type-check",
     "test": "turbo run test",
-    "test:matrix": "pnpm --filter @mr.dj2u/cli build && node packages/cli/scripts/run-vitest.mjs packages/cli/tests/generator-matrix.test.ts",
+    "test:matrix": "pnpm --filter create-expo-super-stack build && node packages/cli/scripts/run-vitest.mjs packages/cli/tests/generator-matrix.test.ts",
     "ci": "pnpm type-check && pnpm lint && pnpm build && pnpm test",
     "ci:repo": "pnpm run ci && pnpm check:agent-bundles",
     "check:publish-manifests": "node scripts/verify-publish-manifest.mjs",
