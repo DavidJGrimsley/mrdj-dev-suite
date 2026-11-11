@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Rounded+Mplus+1c&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap');
+
+@font-face {
+  font-family: 'Rounded Mplus 1c:Medium';
+  font-style: normal;
+  font-weight: 500;
+  src: url('https://static.figma.com/font/RoundedMplus1c-Medium_1') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk:Bold';
+  font-style: normal;
+  font-weight: 700;
+  src: url('https://static.figma.com/font/SpaceGrotesk_wght__1') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk:Regular';
+  font-style: normal;
+  font-weight: 400;
+  src: url('https://static.figma.com/font/SpaceGrotesk_wght__1') format('woff2');
+}
