@@ -1,0 +1,11 @@
+{
+  "title": "iSquared AGentic IDE design by Mr. DJ",
+  "description": "A dual-screen IDE designed for Expo cross-platform app development featuring modular workspace, project management, chat-based controls, and multi-device emulators.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
