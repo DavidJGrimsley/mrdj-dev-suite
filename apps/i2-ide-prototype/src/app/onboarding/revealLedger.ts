@@ -2,6 +2,8 @@
 // Drives the progressive reveal of the persistent i² Home / Project / Session shell
 // per tutorial-script.md.
 
+import { assetUrl } from "../assetUrl";
+
 export type OnboardingBeat =
   | "B00"
   | "B01"
@@ -56,10 +58,10 @@ export const BEAT_ORDER: readonly OnboardingBeat[] = [
 export type InfieFormId = "mist" | "glyph" | "surge" | "compile";
 
 export const INFIE_FORM_ASSETS: Record<InfieFormId, string> = {
-  mist: "/assets/infie-form-mist.png",
-  glyph: "/assets/infie-form-glyph.png",
-  surge: "/assets/infie-form-surge.png",
-  compile: "/assets/infie-form-compile.png",
+  mist: assetUrl("/assets/infie-form-mist.png"),
+  glyph: assetUrl("/assets/infie-form-glyph.png"),
+  surge: assetUrl("/assets/infie-form-surge.png"),
+  compile: assetUrl("/assets/infie-form-compile.png"),
 };
 
 // Silent 21-beat form cycle per tutorial-script.md:

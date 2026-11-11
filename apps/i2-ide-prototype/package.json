@@ -7,7 +7,10 @@
     "build": "vite build --config vite.figma.config.ts",
     "dev": "vite --host 0.0.0.0 --config vite.figma.config.ts",
     "preview": "vite preview --config vite.figma.config.ts",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "build:hosted": "node scripts/build-hosted.mjs",
+    "build:hosted:archive": "node scripts/build-hosted.mjs --archive",
+    "test": "node --test \"scripts/__tests__/*.test.mjs\""
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { assetUrl } from "../assetUrl";
 import { motion, AnimatePresence, useAnimationControls } from "motion/react";
 import {
   Folder,
@@ -79,7 +80,7 @@ interface ControlsTurnMedia {
 // Mist 0-1s, Infie -> keyboard+mouse 1-4s (hold to 6s), -> gamepad 6-9s (hold to 11s),
 // -> joystick + keypad 11-14s (hold to 16s). It is a plain <video> (no canvas keying)
 // so the browser's own alpha compositing is used.
-const B06_CONTROLS_CHAIN_VIDEO_SRC = "/assets/infie-controls-chain-alpha.webm";
+const B06_CONTROLS_CHAIN_VIDEO_SRC = assetUrl("/assets/infie-controls-chain-alpha.webm");
 
 // Device turns follow the video's own media time, not wall-clock timers: each turn starts
 // when the video reaches `t` seconds (keyboard at the start, gamepad at 6s, joystick at 11s).
@@ -104,17 +105,17 @@ const B06_CONTROLS_MEDIA: Record<number, ControlsTurnMedia> = {
   1: {
     id: "keyboard-mouse",
     label: "Keyboard and mouse",
-    pngSrc: "/assets/infie-controls-keyboard-mouse.png",
+    pngSrc: assetUrl("/assets/infie-controls-keyboard-mouse.png"),
   },
   2: {
     id: "gamepad",
     label: "Gamepad",
-    pngSrc: "/assets/infie-controls-gamepad.png",
+    pngSrc: assetUrl("/assets/infie-controls-gamepad.png"),
   },
   3: {
     id: "joystick-numpad",
     label: "Upright desktop joystick and programmable keypad",
-    pngSrc: "/assets/infie-controls-joystick-numpad.png",
+    pngSrc: assetUrl("/assets/infie-controls-joystick-numpad.png"),
   },
 };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { assetUrl } from "../assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, Sparkles, X, Terminal, Send, Check } from "lucide-react";
 import { PrototypeLimit } from "./PrototypeLimit";
@@ -8,7 +9,7 @@ export interface SupportNewFrameworkModalProps {
   onClose: () => void;
 }
 
-const INFIE_SRC = "/assets/infie-form-mist.png";
+const INFIE_SRC = assetUrl("/assets/infie-form-mist.png");
 
 const POPULAR_SUGGESTIONS = [
   "SvelteKit",

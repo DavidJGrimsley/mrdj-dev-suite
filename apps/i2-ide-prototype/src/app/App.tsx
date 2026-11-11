@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { assetUrl } from "./assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Zap, Settings, GitBranch, ChevronDown, ChevronRight,
@@ -218,7 +219,7 @@ const INIT_GLOBAL_TODOS: GlobalTodoItem[] = [
   { id: "gt-10", text: "Audit Supabase row level security policies", done: true, category: "general" },
 ];
 
-const INFIE_HERO_SRC = "/assets/infie-form-mist.png";
+const INFIE_HERO_SRC = assetUrl("/assets/infie-form-mist.png");
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -2791,7 +2792,7 @@ function StatusBar({ phase, branch }: { phase: SessionPhase; branch: string }) {
   );
 }
 
-const headerAssetPrefix = "/assets";
+const headerAssetPrefix = assetUrl("/assets");
 const imgHeaderIcon = `${headerAssetPrefix}/92566.svg`;
 const imgHeaderGames = `${headerAssetPrefix}/b9baf.svg`;
 const imgHeaderWorkspace = `${headerAssetPrefix}/faa63.svg`;

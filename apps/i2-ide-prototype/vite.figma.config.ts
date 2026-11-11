@@ -11,6 +11,7 @@ import path from 'node:path'
 import siteConfiguration from './.figma/make/site.json'
 import packageAliases from './.figma/make/migrated-package-aliases.json'
 import userConfig from './vite.config'
+import { resolveBasePath } from './scripts/lib/base-path.mjs'
 
 const FIGMA_ASSET_PREFIX = 'figma:asset/'
 
@@ -22,7 +23,7 @@ export default defineConfig(async (env) =>
         replacement,
       })),
     },
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base: resolveBasePath(),
     build: {
       sourcemap: env.mode === 'development' ? 'inline' : false,
       minify: env.mode !== 'development',
