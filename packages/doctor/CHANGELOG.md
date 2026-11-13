@@ -1,5 +1,15 @@
 # @mr.dj2u/doctor
 
+## 0.2.0
+
+### Minor Changes
+
+- f1a190d: Add workspace-aware Doctor reports, focused registered-package checks, and Supabase environment contract validation.
+
+### Patch Changes
+
+- 5c7b97f: Detect loader-backed dynamic route metadata and server-rendering gaps, and expand SEO guidance for raw HTML and structured-data verification.
+
 ## 0.1.8
 
 ### Patch Changes
