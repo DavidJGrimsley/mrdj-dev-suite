@@ -46,6 +46,7 @@ import {
 } from "./onboarding/onboardingTiming";
 import { PrototypeLimit } from "./components/PrototypeLimit";
 import { SupportNewFrameworkModal } from "./components/SupportNewFrameworkModal";
+import { SimulatorPreview } from "./components/SimulatorPreview";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1858,11 +1859,13 @@ const EMU_DIMS: Record<EmuType, Record<EmuOrientation, { w: number; h: number; r
 };
 
 // Renders the device shell at its exact natural dimensions — no centering wrapper, no scroll.
-function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
+function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, controlsTarget }: {
   type: EmuType;
   dim: { w: number; h: number; r: number };
-  connected: boolean; device?: string; isLandscape?: boolean; isDesktop?: boolean;
+  connected: boolean; device?: string; isLandscape?: boolean; isDesktop?: boolean; controlsTarget?: HTMLElement | null;
 }) {
+  const [liveAndroid, setLiveAndroid] = useState(false);
+  const [localControls, setLocalControls] = useState<HTMLDivElement | null>(null);
   const showBrowser = type === "web" || isDesktop;
   const iosChrome = type === "ios" && !isLandscape && !isDesktop;
   const androidNav = type === "android" && !isDesktop;
@@ -1880,8 +1883,10 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
       {/* iOS Dynamic Island */}
       {iosChrome && <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", width: 126, height: 36, background: "#000", borderRadius: 18, zIndex: 10 }} />}
 
+      {type === "android" && !controlsTarget && <div ref={setLocalControls} />}
+
       {/* Top chrome */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1e1e1e", padding: iosChrome ? "52px 12px 8px" : "8px 12px", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+      {!(type === "android" && liveAndroid) && <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1e1e1e", padding: iosChrome ? "52px 12px 8px" : "8px 12px", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {showBrowser ? (
           <>
             <div style={{ display: "flex", gap: 4 }}>{["#ff5f57","#febc2e","#28c840"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: 5, background: c }} />)}</div>
@@ -1902,9 +1907,13 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
         )}
       </div>
 
+      }
+
       {/* App viewport */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f0f", overflow: "hidden" }}>
-        {connected ? (
+        {type === "android" ? (
+          <SimulatorPreview projectId="pet-show-and-tell" platform="android" device={device} controlsTarget={controlsTarget || localControls} onLiveChange={setLiveAndroid} />
+        ) : connected ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center", padding: "0 24px" }}>
             <div style={{ width: 60, height: 60, borderRadius: 16, background: "rgba(171,239,163,0.1)", border: "1px solid rgba(171,239,163,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="26" height="22" viewBox="0 0 37.3892 31.5816" fill="none"><path d={svgPaths.p6491080} fill="#ABEFA3" opacity="0.9" /></svg>
@@ -1927,7 +1936,7 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
       </div>
 
       {/* Android nav bar */}
-      {androidNav && (
+      {androidNav && !liveAndroid && (
         <div style={{ height: 40, background: "#0d0d0d", borderTop: "1px solid #1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", gap: 36, flexShrink: 0 }}>
           <div style={{ width: 16, height: 16, border: "1.5px solid #333", borderRadius: 3 }} />
           <div style={{ width: 16, height: 16, border: "1.5px solid #333", borderRadius: 8 }} />
@@ -2000,6 +2009,8 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
   const isDesktop = breakpoint === "desktop" && type === "web";
   const dim = isDesktop ? { w: 960, h: 560, r: 8 } : EMU_DIMS[type][orientation];
 
+  const [simulatorControls, setSimulatorControls] = useState<HTMLDivElement | null>(null);
+
   // In opened mode: scale = 1, modal sized to device.
   // In fullscreen: scale to fill available body space (no upper cap — device grows).
   const scale = fullscreen && bodySize.w > 0 && bodySize.h > 0
@@ -2064,6 +2075,8 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
             </select>
           )}
 
+          {type === "android" && <div ref={setSimulatorControls} />}
+
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setFullscreen(f => !f)}
               className="text-[#555] hover:text-[#abefa3] transition-colors"
@@ -2085,7 +2098,7 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
             }}>
               <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
                 <DeviceFrame type={type} dim={dim} connected
-                  device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} />
+                  device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} controlsTarget={simulatorControls} />
               </div>
             </div>
           )}
