@@ -33,15 +33,18 @@ export function OnboardingProvider({
   children,
   initialBeat = "COMPLETE",
   maxEnabledBeat = DEFAULT_MAX_ENABLED_BEAT,
+  initialB00GateHeld = false,
 }: {
   children: React.ReactNode;
   initialBeat?: OnboardingBeat;
   maxEnabledBeat?: OnboardingBeat;
+  initialB00GateHeld?: boolean;
 }) {
   const [onboardingRunId, setOnboardingRunId] = useState<number>(0);
   const [currentBeat, setCurrentBeat] = useState<OnboardingBeat>(initialBeat);
   const [turnIndex, setTurnIndex] = useState<number>(0);
   const [b00GateCompleted, setB00GateCompleted] = useState<boolean>(false);
+  const [b00GateHeld, setB00GateHeld] = useState<boolean>(initialB00GateHeld);
   const [isTutorialComplete, setIsTutorialComplete] = useState<boolean>(
     initialBeat === "COMPLETE"
   );
@@ -125,9 +128,9 @@ export function OnboardingProvider({
     [maxEnabledBeat]
   );
 
-  // B00 Gate: Two-second pure black timer
+  // B00 Gate: Two-second pure black timer (waits while the opening sequence is active)
   useEffect(() => {
-    if (currentBeat !== "B00") return;
+    if (currentBeat !== "B00" || b00GateHeld) return;
     setB00GateCompleted(false);
     const timer = window.setTimeout(() => {
       setB00GateCompleted(true);
@@ -140,7 +143,7 @@ export function OnboardingProvider({
       }
     }, 2000);
     return () => window.clearTimeout(timer);
-  }, [currentBeat, onboardingRunId, maxEnabledBeat, revealGroup]);
+  }, [currentBeat, onboardingRunId, b00GateHeld, maxEnabledBeat, revealGroup]);
 
   // Synchronize beat-level reveal groups as beats & turns progress
   useEffect(() => {
@@ -393,6 +396,8 @@ export function OnboardingProvider({
       currentBeat,
       turnIndex,
       b00GateCompleted,
+      b00GateHeld,
+      setB00GateHeld,
       maxEnabledBeat,
       isTutorialActive: !isTutorialComplete,
       isTutorialComplete,
@@ -432,6 +437,8 @@ export function OnboardingProvider({
       currentBeat,
       turnIndex,
       b00GateCompleted,
+      b00GateHeld,
+      setB00GateHeld,
       maxEnabledBeat,
       isTutorialComplete,
       level,
