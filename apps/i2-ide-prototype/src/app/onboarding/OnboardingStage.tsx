@@ -300,8 +300,8 @@ export function OnboardingStage({
 
   const reducedMotion = useReducedMotion();
 
-  // B01 arrival choreography state: "lettering" -> "mark" -> "infie"
-  const [b01Stage, setB01Stage] = useState<"lettering" | "mark" | "infie">("lettering");
+  // B01 arrival choreography state: "lettering" -> "mark" -> "outro" (fade to black before Infie fades into B02)
+  const [b01Stage, setB01Stage] = useState<"lettering" | "mark" | "outro">("lettering");
 
   // B02 identity form state
   const [nameDraft, setNameDraft] = useState("");
@@ -443,19 +443,24 @@ export function OnboardingStage({
     return () => window.clearTimeout(t);
   }, [currentBeat, turnIndex, b06VideoPhase, setTurnIndex]);
 
-  // B01 arrival sequence timer -> B02
+  // B01 arrival sequence timer -> B02 (preserves Infinite Intelligence and i², fading cleanly before real Infie fades in at B02)
   useEffect(() => {
     if (currentBeat !== "B01") return;
     b02CompletedRef.current = false;
-    if (reducedMotion) {
-      setB01Stage("infie");
-      const t = window.setTimeout(() => advanceBeat("B02"), 650);
-      return () => window.clearTimeout(t);
-    }
     setB01Stage("lettering");
-    const t1 = window.setTimeout(() => setB01Stage("mark"), 750);
-    const t2 = window.setTimeout(() => setB01Stage("infie"), 1350);
-    const t3 = window.setTimeout(() => advanceBeat("B02"), 2250);
+    if (reducedMotion) {
+      const t1 = window.setTimeout(() => setB01Stage("mark"), 650);
+      const t2 = window.setTimeout(() => setB01Stage("outro"), 1350);
+      const t3 = window.setTimeout(() => advanceBeat("B02"), 1600);
+      return () => {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+        window.clearTimeout(t3);
+      };
+    }
+    const t1 = window.setTimeout(() => setB01Stage("mark"), 900);
+    const t2 = window.setTimeout(() => setB01Stage("outro"), 2150);
+    const t3 = window.setTimeout(() => advanceBeat("B02"), 2600);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
@@ -463,12 +468,12 @@ export function OnboardingStage({
     };
   }, [currentBeat, reducedMotion, advanceBeat]);
 
-  // B02: Show the hello/name question first, then reveal the floating identity controls
+  // B02: Let Infie fade into her normal position first, then greet, then reveal the identity form
   useEffect(() => {
     if (currentBeat !== "B02") return;
     b02CompletedRef.current = false;
     retireGroup("identity_controls");
-    const delay = reducedMotion ? 120 : 420;
+    const delay = reducedMotion ? 950 : 1950;
     const timer = window.setTimeout(() => {
       revealGroup("identity_controls");
     }, delay);
@@ -782,7 +787,7 @@ export function OnboardingStage({
 
   switch (currentBeat) {
     case "B02":
-      currentLine = "Hi there. I'm Infie. It's nice to meet you. What should I call you?";
+      currentLine = "Hi there. I'm Infie. What should I call you?";
       break;
     case "B03":
       if (turnIndex === 0) {
@@ -1264,11 +1269,11 @@ export function OnboardingStage({
           {b01Stage === "lettering" && (
             <motion.div
               key="lettering"
-              initial={{ opacity: 0, scale: 0.94 }}
+              initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.94 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ duration: 0.45 }}
-              className="flex flex-col items-center gap-3"
+              exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.85 }}
+              transition={{ duration: reducedMotion ? 0.2 : 0.45 }}
+              className="flex flex-col items-center gap-3 px-4 text-center"
             >
               <div
                 className="w-24 h-1 rounded-full"
@@ -1296,10 +1301,10 @@ export function OnboardingStage({
           {b01Stage === "mark" && (
             <motion.div
               key="mark"
-              initial={{ opacity: 0, scale: 1.25 }}
+              initial={{ opacity: 0, scale: reducedMotion ? 1 : 1.25 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.7 }}
-              transition={{ duration: 0.4 }}
+              exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.7 }}
+              transition={{ duration: reducedMotion ? 0.2 : 0.4 }}
               className="flex items-center justify-center"
             >
               <span
@@ -1314,18 +1319,6 @@ export function OnboardingStage({
               >
                 i²
               </span>
-            </motion.div>
-          )}
-
-          {b01Stage === "infie" && (
-            <motion.div
-              key="infie-arrival"
-              initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.78 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: reducedMotion ? 0.35 : 0.6, ease: "easeOut" }}
-              className="flex flex-col items-center"
-            >
-              <InfieHeroArtwork reducedMotion={reducedMotion} size="lg" formId="mist" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -1388,15 +1381,28 @@ export function OnboardingStage({
               className="relative flex items-center justify-center"
               style={{ width: 132, height: 132 }}
             >
-              <InfieHeroArtwork
-                reducedMotion={reducedMotion}
-                pointingToPlay={currentBeat === "B05" && turnIndex === 0}
-                pressNonce={pressNonce}
-                danceNonce={danceNonce}
-                size="lg"
-                formId={currentForm}
-                hiddenForVideo={isB06VideoActive}
-              />
+              <motion.div
+                data-name="InfieArrival"
+                initial={currentBeat === "B02" ? { opacity: 0 } : false}
+                animate={{ opacity: 1 }}
+                transition={{
+                  opacity: {
+                    duration: reducedMotion ? 0.75 : 1.4,
+                    ease: "easeInOut",
+                  },
+                }}
+                className="relative flex items-center justify-center"
+              >
+                <InfieHeroArtwork
+                  reducedMotion={reducedMotion}
+                  pointingToPlay={currentBeat === "B05" && turnIndex === 0}
+                  pressNonce={pressNonce}
+                  danceNonce={danceNonce}
+                  size="lg"
+                  formId={currentForm}
+                  hiddenForVideo={isB06VideoActive}
+                />
+              </motion.div>
               {/* B06 Muted black-background transformation video at Infie's position */}
               <AnimatePresence>
                 {activeControlsMedia && isB06VideoActive && (
@@ -1516,21 +1522,24 @@ export function OnboardingStage({
           {/* 3-Message Rolling Stack (plus optional B09 Stylist static preview to the right) */}
           <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-5 w-full">
           <div className="flex flex-col items-center gap-1.5 w-full max-w-[540px]">
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={currentBeat === "B02"}>
               {displayedMessages.map((msg, idx) => {
                 const isLatest = idx === displayedMessages.length - 1;
+                const isB02Greeting = msg.id === "B02-0";
+                const greetingDelay = isB02Greeting ? (reducedMotion ? 0.35 : 0.75) : 0;
+                const greetingDuration = isB02Greeting ? (reducedMotion ? 0.3 : 0.5) : 0.22;
                 return (
                   <motion.div
                     layout="position"
                     key={msg.id}
                     data-slot={isLatest ? "infie-message" : "infie-message-history"}
                     data-message-id={msg.id}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
                       layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-                      opacity: { duration: 0.22, ease: "easeOut" },
-                      y: { duration: 0.24, ease: "easeOut" },
+                      opacity: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
+                      y: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
                     }}
                     role={isLatest ? "status" : undefined}
                     aria-live={isLatest ? "polite" : undefined}
@@ -1660,9 +1669,9 @@ export function OnboardingStage({
           {/* B02: Name and Email fields in center content flow */}
           {currentBeat === "B02" && isRevealed("identity_controls") && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35 }}
+              transition={{ duration: reducedMotion ? 0.25 : 0.45, ease: "easeOut" }}
               className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-[460px] mt-1"
             >
               <FloatingField
@@ -2060,9 +2069,9 @@ export function OnboardingStage({
           {currentBeat === "B02" && isRevealed("identity_controls") ? (
             <motion.div
               key="b02-actions"
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: reducedMotion ? 0 : 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: reducedMotion ? 0.25 : 0.4, ease: "easeOut" }}
               className="flex flex-wrap items-center justify-center gap-3"
             >
               <FloatingButton type="button" variant="primary" onClick={validateAndSubmitIdentity}>

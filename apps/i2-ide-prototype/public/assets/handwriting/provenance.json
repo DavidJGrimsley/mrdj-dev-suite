@@ -1,0 +1,1108 @@
+{
+  "sources": {
+    "HW1": {
+      "file": "napHillHW1.webp",
+      "sha256": "03a414699b24a4f8e74290352875a956ec664eca99f42d28f0fff8b137d46ae8"
+    },
+    "HW2": {
+      "file": "napHillHW2.webp",
+      "sha256": "c0fdaee352e5761e031e3beed6d5c1b11783184ad2b01c5d1ea2051fbb1de4bf"
+    },
+    "HW3": {
+      "file": "napHillHW3.jpeg",
+      "sha256": "2672daf81d682fc6420ddffdeae7a18f41aa3a247177dba3b2e9d372e98e8467"
+    },
+    "HW4": {
+      "file": "napHillHW4.webp",
+      "sha256": "0edcaf31e1dd6d7f36c95f9cb1fc2f0202dd9209a048706f8c649f56bcefe5c1"
+    },
+    "HW5": {
+      "file": "napHillHW5.jpg",
+      "sha256": "7e8002d8391871627f2870ee0212c4d0c4ecf18710b61178cba06729675be2b8"
+    },
+    "HW6": {
+      "file": "napHillHW6.webp",
+      "sha256": "8e6173bc9d9cf04507a4055ccb2a9f60f46ca32c246cbdf4b0d5b0b019a7ccbb"
+    },
+    "HW7": {
+      "file": "napHillHW7.webp",
+      "sha256": "0c27fc925de19d83d699978f4e150cbf55bcba96d5a8b69cfda3406eaf2157cd"
+    },
+    "HW8": {
+      "file": "napHillHW8.webp",
+      "sha256": "b92686314e3e0b47e2d1e629bff339c67eedd3a2893a22f0d04aa3c902fa0a5f"
+    }
+  },
+  "print": {
+    "family": "Napoleon Hill Print",
+    "unresolved": [
+      "8 (only source instance malformed; see excluded)",
+      "+ (HW7 T+G.R instance malformed when isolated)",
+      "!",
+      "?",
+      "(",
+      ")",
+      "&",
+      "/",
+      "$",
+      "%",
+      "@",
+      "#",
+      "*",
+      "lowercase a-z"
+    ],
+    "excluded": {
+      "8": "only instance (annotation beside N.H.) is malformed/ambiguous (6/8 tangle); dropped from the font rather than shipped malformed. Crop kept for reference."
+    },
+    "glyphs": {
+      "U+0041": {
+        "char": "A",
+        "advance": 788,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BRAXTON",
+        "components": [
+          198
+        ],
+        "bbox_deskewed_px": [
+          458,
+          597,
+          494,
+          635
+        ],
+        "line_top_px": 597.0,
+        "baseline_px": 635.0,
+        "units_per_px": 18.919,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0042": {
+        "char": "B",
+        "advance": 773,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BRAXTON",
+        "components": [
+          195
+        ],
+        "bbox_deskewed_px": [
+          356,
+          596,
+          397,
+          640
+        ],
+        "line_top_px": 596.0,
+        "baseline_px": 640.0,
+        "units_per_px": 16.148,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0043": {
+        "char": "C",
+        "advance": 664,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "MILO C.",
+        "components": [
+          169
+        ],
+        "bbox_deskewed_px": [
+          390,
+          472,
+          426,
+          518
+        ],
+        "line_top_px": 472.0,
+        "baseline_px": 518.0,
+        "units_per_px": 15.471,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0044": {
+        "char": "D",
+        "advance": 887,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "WARD",
+        "components": [
+          112,
+          114
+        ],
+        "bbox_deskewed_px": [
+          607,
+          271,
+          646,
+          308
+        ],
+        "line_top_px": 271.0,
+        "baseline_px": 308.0,
+        "units_per_px": 19.632,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0045": {
+        "char": "E",
+        "advance": 858,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "COLLIER",
+        "components": [
+          307,
+          315
+        ],
+        "bbox_deskewed_px": [
+          536,
+          1012,
+          571,
+          1046
+        ],
+        "line_top_px": 1012.0,
+        "baseline_px": 1046.0,
+        "units_per_px": 21.207,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0046": {
+        "char": "F",
+        "advance": 890,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "FORD",
+        "components": [
+          242,
+          238,
+          251
+        ],
+        "bbox_deskewed_px": [
+          444,
+          812,
+          490,
+          853
+        ],
+        "line_top_px": 812.0,
+        "baseline_px": 853.0,
+        "units_per_px": 17.313,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box",
+        "uncertain": "ballpoint pen-start blobs leave small separate dots beside the stem (5 contours)"
+      },
+      "U+0047": {
+        "char": "G",
+        "advance": 816,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BRIDGED",
+        "components": [
+          56
+        ],
+        "bbox_deskewed_px": [
+          521,
+          93,
+          548,
+          122
+        ],
+        "line_top_px": 93.0,
+        "baseline_px": 122.0,
+        "units_per_px": 24.335,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box",
+        "uncertain": "taken from the smaller heading line; stroke reads heavier once scaled to cap height"
+      },
+      "U+0048": {
+        "char": "H",
+        "advance": 663,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "HENRY",
+        "components": [
+          237
+        ],
+        "bbox_deskewed_px": [
+          192,
+          813,
+          232,
+          865
+        ],
+        "line_top_px": 813.0,
+        "baseline_px": 865.0,
+        "units_per_px": 13.839,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0049": {
+        "char": "I",
+        "advance": 395,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "COLLIER",
+        "components": [
+          306
+        ],
+        "bbox_deskewed_px": [
+          510,
+          1013,
+          523,
+          1045
+        ],
+        "line_top_px": 1013.0,
+        "baseline_px": 1045.0,
+        "units_per_px": 22.313,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+004A": {
+        "char": "J",
+        "advance": 943,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "JONES",
+        "components": [
+          170,
+          165
+        ],
+        "bbox_deskewed_px": [
+          469,
+          465,
+          531,
+          517
+        ],
+        "line_top_px": 465.0,
+        "baseline_px": 517.0,
+        "units_per_px": 13.454,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+004B": {
+        "char": "K",
+        "advance": 809,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BOOK",
+        "components": [
+          121,
+          125
+        ],
+        "bbox_deskewed_px": [
+          513,
+          323,
+          540,
+          351
+        ],
+        "line_top_px": 323.0,
+        "baseline_px": 351.0,
+        "units_per_px": 25.482,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+004C": {
+        "char": "L",
+        "advance": 582,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "LEE",
+        "components": [
+          199
+        ],
+        "bbox_deskewed_px": [
+          188,
+          601,
+          222,
+          650
+        ],
+        "line_top_px": 601.0,
+        "baseline_px": 650.0,
+        "units_per_px": 14.227,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+004D": {
+        "char": "M",
+        "advance": 850,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "MILO",
+        "components": [
+          164,
+          180,
+          166
+        ],
+        "bbox_deskewed_px": [
+          192,
+          461,
+          241,
+          530
+        ],
+        "line_top_px": 472.0,
+        "baseline_px": 518.0,
+        "units_per_px": 15.217,
+        "deskew_deg": -3.2,
+        "height_ref": "line_refs"
+      },
+      "U+004E": {
+        "char": "N",
+        "advance": 865,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "JONES",
+        "components": [
+          174
+        ],
+        "bbox_deskewed_px": [
+          553,
+          476,
+          596,
+          519
+        ],
+        "line_top_px": 476.0,
+        "baseline_px": 519.0,
+        "units_per_px": 18.653,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+004F": {
+        "char": "O",
+        "advance": 737,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "MILO",
+        "components": [
+          176
+        ],
+        "bbox_deskewed_px": [
+          318,
+          480,
+          352,
+          519
+        ],
+        "line_top_px": 480.0,
+        "baseline_px": 519.0,
+        "units_per_px": 18.163,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0050": {
+        "char": "P",
+        "advance": 836,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "CHAS P.",
+        "components": [
+          283
+        ],
+        "bbox_deskewed_px": [
+          349,
+          917,
+          387,
+          954
+        ],
+        "line_top_px": 917.0,
+        "baseline_px": 954.0,
+        "units_per_px": 19.167,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0051": {
+        "char": "Q",
+        "advance": 686,
+        "status": "reconstructed",
+        "from": [
+          "C",
+          "G"
+        ],
+        "note": "User-directed reconstruction from the attached C bowl and G stroke character: closed rounded bowl, flattened base and short down-right tail. G's horizontal bar is omitted. Designed centerlines, not an extracted historical Q. Original HW7 Q retained separately.",
+        "references": [
+          {
+            "letter": "C",
+            "file": "codex-clipboard-987b1c69-a8f6-4838-9a00-791255d133ec.png",
+            "sha256": "66652d6f4f1ac6c165dc51479b97e9499c7c72cf5c47f209428ef1c506d10626"
+          },
+          {
+            "letter": "G",
+            "file": "codex-clipboard-ef97e727-981e-47d1-964f-1f80b0301e35.png",
+            "sha256": "2e573f48aedf18a42f7fb1dfd3e5171c9a960f8f2c1ea45de3e47315e2dc44e3"
+          }
+        ],
+        "original_extraction": {
+          "advance": 879,
+          "status": "extracted",
+          "source": "HW7",
+          "source_file": "napHillHW7.webp",
+          "word": "QUOTA",
+          "components": [
+            175
+          ],
+          "bbox_deskewed_px": [
+            514,
+            894,
+            552,
+            941
+          ],
+          "line_top_px": 906.0,
+          "baseline_px": 940.0,
+          "units_per_px": 20.588,
+          "deskew_deg": -2.8,
+          "height_ref": "line_refs",
+          "uncertain": "felt-marker source (HW7): much heavier than HW8 letters and the tail/bowl can read like G or q"
+        }
+      },
+      "U+0052": {
+        "char": "R",
+        "advance": 882,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "COLLIER",
+        "components": [
+          309
+        ],
+        "bbox_deskewed_px": [
+          580,
+          1014,
+          616,
+          1047
+        ],
+        "line_top_px": 1014.0,
+        "baseline_px": 1047.0,
+        "units_per_px": 21.031,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0053": {
+        "char": "S",
+        "advance": 618,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "JONES",
+        "components": [
+          177
+        ],
+        "bbox_deskewed_px": [
+          654,
+          481,
+          681,
+          519
+        ],
+        "line_top_px": 481.0,
+        "baseline_px": 519.0,
+        "units_per_px": 18.176,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0054": {
+        "char": "T",
+        "advance": 823,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BRAXTON",
+        "components": [
+          191
+        ],
+        "bbox_deskewed_px": [
+          550,
+          593,
+          592,
+          634
+        ],
+        "line_top_px": 593.0,
+        "baseline_px": 634.0,
+        "units_per_px": 16.954,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0055": {
+        "char": "U",
+        "advance": 726,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "ARTHUR",
+        "components": [
+          223
+        ],
+        "bbox_deskewed_px": [
+          380,
+          719,
+          407,
+          750
+        ],
+        "line_top_px": 719.0,
+        "baseline_px": 750.0,
+        "units_per_px": 22.518,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0056": {
+        "char": "V",
+        "advance": 675,
+        "status": "reconstructed",
+        "from": [
+          "W"
+        ],
+        "note": "User-directed V reconstruction: trace the first valley of the newly attached W, trim away the other valley, lightly thin the mask and fit to cap height/width. Preserves the source contour asymmetry and variable weight; not an extracted historical V. Original HW4 V retained.",
+        "references": [
+          {
+            "letter": "W (new)",
+            "file": "codex-clipboard-d18dd2f5-a8cc-4732-8e86-6941531cb069.png",
+            "sha256": "8de99fa9d3aecbe771cbf186aba739e20e1b37f178aa7adde216e49982ea2847"
+          },
+          {
+            "letter": "W (earlier)",
+            "file": "codex-clipboard-b409ab32-a86b-4545-a556-c5f0e33f3711.png",
+            "sha256": "eb13856e9934f73fc245ce5d981b9329976d202ef0d7f5a1920ebce5eaa92856"
+          }
+        ],
+        "original_extraction": {
+          "advance": 737,
+          "status": "extracted",
+          "source": "HW4",
+          "source_file": "napHillHW4.webp",
+          "word": "INITIATIVE",
+          "components": [
+            103
+          ],
+          "bbox_deskewed_px": [
+            316,
+            294,
+            331,
+            311
+          ],
+          "line_top_px": 294.0,
+          "baseline_px": 311.0,
+          "units_per_px": 43.095,
+          "deskew_deg": 0.4,
+          "height_ref": "own_ink_box",
+          "uncertain": "only print V; small pencil letter (~18 px) so the upscaled trace is heavier and blunter"
+        }
+      },
+      "U+0057": {
+        "char": "W",
+        "advance": 1177,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "WARD",
+        "components": [
+          105,
+          109
+        ],
+        "bbox_deskewed_px": [
+          420,
+          257,
+          496,
+          305
+        ],
+        "line_top_px": 257.0,
+        "baseline_px": 305.0,
+        "units_per_px": 14.982,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box",
+        "uncertain": "authentic but very wide (advance ~1177) and lighter-weight than neighbours"
+      },
+      "U+0058": {
+        "char": "X",
+        "advance": 815,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "BRAXTON",
+        "components": [
+          193
+        ],
+        "bbox_deskewed_px": [
+          500,
+          595,
+          540,
+          635
+        ],
+        "line_top_px": 595.0,
+        "baseline_px": 635.0,
+        "units_per_px": 17.61,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0059": {
+        "char": "Y",
+        "advance": 595,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "HENRY",
+        "components": [
+          249
+        ],
+        "bbox_deskewed_px": [
+          377,
+          823,
+          408,
+          867
+        ],
+        "line_top_px": 817.0,
+        "baseline_px": 861.0,
+        "units_per_px": 15.909,
+        "deskew_deg": -3.2,
+        "height_ref": "line_refs"
+      },
+      "U+005A": {
+        "char": "Z",
+        "advance": 886,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "STIENMETZ",
+        "components": [
+          280
+        ],
+        "bbox_deskewed_px": [
+          697,
+          914,
+          730,
+          945
+        ],
+        "line_top_px": 914.0,
+        "baseline_px": 945.0,
+        "units_per_px": 22.852,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0030": {
+        "char": "0",
+        "status": "extracted",
+        "source": "HW7",
+        "source_file": "napHillHW7.webp",
+        "word": "10 CARDS",
+        "components": [
+          28
+        ],
+        "bbox_deskewed_px": [
+          223,
+          108,
+          266,
+          147
+        ],
+        "line_top_px": 108.0,
+        "baseline_px": 147.0,
+        "units_per_px": 17.828,
+        "deskew_deg": -2.8,
+        "height_ref": "own_ink_box",
+        "advance": 884,
+        "from": [
+          "0"
+        ],
+        "note": "Authentic thinner zero selected from HW7 10 CARDS instead of the small heavy zero in 10,000. Original heavy extraction retained; no contour redesign.",
+        "references": [],
+        "original_extraction": {
+          "advance": 726,
+          "status": "extracted",
+          "source": "HW7",
+          "source_file": "napHillHW7.webp",
+          "word": "10,000",
+          "components": [
+            85
+          ],
+          "bbox_deskewed_px": [
+            511,
+            415,
+            534,
+            441
+          ],
+          "line_top_px": 415.0,
+          "baseline_px": 441.0,
+          "units_per_px": 27.309,
+          "deskew_deg": -2.8,
+          "height_ref": "own_ink_box",
+          "uncertain": "felt-marker source (HW7): heavier than HW8 digits"
+        }
+      },
+      "U+0031": {
+        "char": "1",
+        "advance": 499,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "1-CHAS",
+        "components": [
+          101
+        ],
+        "bbox_deskewed_px": [
+          118,
+          244,
+          146,
+          296
+        ],
+        "line_top_px": 244.0,
+        "baseline_px": 296.0,
+        "units_per_px": 13.576,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0032": {
+        "char": "2",
+        "advance": 833,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "2. MILO",
+        "components": [
+          168
+        ],
+        "bbox_deskewed_px": [
+          85,
+          473,
+          129,
+          518
+        ],
+        "line_top_px": 473.0,
+        "baseline_px": 518.0,
+        "units_per_px": 16.202,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0033": {
+        "char": "3",
+        "advance": 579,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "3- LEE",
+        "components": [
+          204
+        ],
+        "bbox_deskewed_px": [
+          89,
+          611,
+          120,
+          659
+        ],
+        "line_top_px": 611.0,
+        "baseline_px": 659.0,
+        "units_per_px": 14.715,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0034": {
+        "char": "4",
+        "advance": 549,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "4- ARTHUR",
+        "components": [
+          221
+        ],
+        "bbox_deskewed_px": [
+          89,
+          712,
+          127,
+          775
+        ],
+        "line_top_px": 712.0,
+        "baseline_px": 775.0,
+        "units_per_px": 11.338,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0035": {
+        "char": "5",
+        "advance": 884,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "5- HENRY",
+        "components": [
+          245,
+          236
+        ],
+        "bbox_deskewed_px": [
+          87,
+          811,
+          134,
+          856
+        ],
+        "line_top_px": 811.0,
+        "baseline_px": 856.0,
+        "units_per_px": 15.731,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0036": {
+        "char": "6",
+        "advance": 477,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "6-CHAS",
+        "components": [
+          268
+        ],
+        "bbox_deskewed_px": [
+          88,
+          909,
+          111,
+          954
+        ],
+        "line_top_px": 909.0,
+        "baseline_px": 954.0,
+        "units_per_px": 15.724,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0037": {
+        "char": "7",
+        "advance": 513,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "7- LLOYD",
+        "components": [
+          299
+        ],
+        "bbox_deskewed_px": [
+          81,
+          1006,
+          105,
+          1048
+        ],
+        "line_top_px": 1006.0,
+        "baseline_px": 1048.0,
+        "units_per_px": 16.666,
+        "deskew_deg": -3.2,
+        "height_ref": "own_ink_box"
+      },
+      "U+0039": {
+        "char": "9",
+        "advance": 544,
+        "status": "extracted",
+        "source": "HW4",
+        "source_file": "napHillHW4.webp",
+        "word": "1941 (date under signature)",
+        "components": [
+          132
+        ],
+        "bbox_deskewed_px": [
+          218,
+          501,
+          245,
+          552
+        ],
+        "line_top_px": 496.0,
+        "baseline_px": 540.0,
+        "units_per_px": 15.909,
+        "deskew_deg": 0.4,
+        "height_ref": "line_refs",
+        "uncertain": "pencil date numeral written beside the signature, not in a print list; slanted"
+      },
+      "U+002E": {
+        "char": ".",
+        "advance": 160,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "MILO C. JONES",
+        "components": [
+          184
+        ],
+        "bbox_deskewed_px": [
+          441,
+          500,
+          447,
+          512
+        ],
+        "line_top_px": 472.0,
+        "baseline_px": 518.0,
+        "units_per_px": 15.217,
+        "deskew_deg": -3.2,
+        "height_ref": "line_refs"
+      },
+      "U+002C": {
+        "char": ",",
+        "advance": 278,
+        "status": "extracted",
+        "source": "HW7",
+        "source_file": "napHillHW7.webp",
+        "word": "10,000",
+        "components": [
+          90
+        ],
+        "bbox_deskewed_px": [
+          491,
+          428,
+          502,
+          443
+        ],
+        "line_top_px": 410.0,
+        "baseline_px": 447.0,
+        "units_per_px": 18.919,
+        "deskew_deg": -2.8,
+        "height_ref": "line_refs"
+      },
+      "U+002D": {
+        "char": "-",
+        "advance": 441,
+        "status": "extracted",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "7- LLOYD",
+        "components": [
+          314
+        ],
+        "bbox_deskewed_px": [
+          110,
+          1025,
+          128,
+          1031
+        ],
+        "line_top_px": 1009.0,
+        "baseline_px": 1042.0,
+        "units_per_px": 21.212,
+        "deskew_deg": -3.2,
+        "height_ref": "line_refs"
+      },
+      "U+0027": {
+        "char": "'",
+        "advance": 233,
+        "status": "extracted",
+        "source": "HW7",
+        "source_file": "napHillHW7.webp",
+        "word": "L'DRY",
+        "components": [
+          40
+        ],
+        "bbox_deskewed_px": [
+          548,
+          202,
+          557,
+          216
+        ],
+        "line_top_px": 211.0,
+        "baseline_px": 248.0,
+        "units_per_px": 18.919,
+        "deskew_deg": -2.8,
+        "height_ref": "line_refs"
+      },
+      "U+2014": {
+        "char": "—",
+        "status": "reconstructed",
+        "source": "HW8",
+        "source_file": "napHillHW8.webp",
+        "word": "1-CHAS (dash)",
+        "components": [
+          107
+        ],
+        "bbox_deskewed_px": [
+          145,
+          266,
+          167,
+          272
+        ],
+        "line_top_px": 252.0,
+        "baseline_px": 294.5,
+        "units_per_px": 16.471,
+        "deskew_deg": -3.2,
+        "height_ref": "line_refs",
+        "advance": 950,
+        "from": [
+          "-"
+        ],
+        "note": "Reconstructed em dash from the thinner authentic HW8 1-CHAS dash, widened horizontally to 870 ink units. Its irregular boundaries and thickness are retained; not an extracted historical em dash. Original HW7 ARZ dash retained.",
+        "references": [],
+        "original_extraction": {
+          "advance": 1002,
+          "status": "extracted",
+          "source": "HW7",
+          "source_file": "napHillHW7.webp",
+          "word": "ARZ—",
+          "components": [
+            106
+          ],
+          "bbox_deskewed_px": [
+            635,
+            509,
+            679,
+            517
+          ],
+          "line_top_px": 501.0,
+          "baseline_px": 534.0,
+          "units_per_px": 21.212,
+          "deskew_deg": -2.8,
+          "height_ref": "line_refs"
+        }
+      },
+      "U+003A": {
+        "char": ":",
+        "advance": 160,
+        "status": "reconstructed",
+        "from": [
+          ".",
+          "."
+        ],
+        "note": "two copies of the extracted HW8 period stacked at x-height and baseline"
+      },
+      "U+003B": {
+        "char": ";",
+        "advance": 278,
+        "status": "reconstructed",
+        "from": [
+          ".",
+          ","
+        ],
+        "note": "extracted HW8 period above extracted HW7 comma"
+      },
+      "U+0022": {
+        "char": "\"",
+        "advance": 431,
+        "status": "reconstructed",
+        "from": [
+          "'",
+          "'"
+        ],
+        "note": "two copies of the extracted HW7 apostrophe"
+      },
+      "U+2019": {
+        "char": "’",
+        "advance": 233,
+        "status": "reconstructed",
+        "from": [
+          "'"
+        ],
+        "note": "right single quote = extracted apostrophe outline"
+      },
+      "U+0020": {
+        "char": " ",
+        "advance": 320,
+        "status": "metric",
+        "note": "inter-word space ~0.46 cap height, chosen by visual estimate of HW8 word gaps (not measured)"
+      }
+    }
+  },
+  "signature": {
+    "source": "napHillHW5.jpg",
+    "mapping": "U+E000",
+    "outline": "VTracer trace of complete autograph",
+    "stroke_reference": "Inferred 4-stroke left-to-right cursive traversal (2119 points) derived along the ink skeleton of napHillHW5.jpg: continuous across Napoleon into the left stem of H, pen lift inside H to the tall spire through i-l-l, pen lift to the detached i dot, and pen lift to the terminal dash. Not recorded historical pen telemetry."
+  },
+  "classification": {
+    "HW4": "upper print block; 9 from signature-adjacent date",
+    "HW7": "print list",
+    "HW8": "primary print list initialled N.H.",
+    "HW5": "isolated autograph",
+    "HW6": "excluded: signed W. Clement Stone, not Napoleon Hill"
+  }
+}

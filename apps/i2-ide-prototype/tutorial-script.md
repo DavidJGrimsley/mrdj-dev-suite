@@ -61,7 +61,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 ### B02 — Hello and identity
 
-**Infie:** “Hi there. I'm Infie. It's nice to meet you. What should I call you?”
+**Infie:** “Hi there. I'm Infie. What should I call you?”
 
 **Reveal after the question:** Name, Email, Submit, and Sign in with GitHub. These are independent floating controls with labels. No heading, card or enclosing form outline. Keep the form close to Infie's message without overlapping her.
 

@@ -41,6 +41,8 @@ export interface OnboardingContextValue {
   currentBeat: OnboardingBeat;
   turnIndex: number;
   b00GateCompleted: boolean;
+  b00GateHeld: boolean;
+  setB00GateHeld: React.Dispatch<React.SetStateAction<boolean>>;
   maxEnabledBeat: OnboardingBeat;
   isTutorialActive: boolean;
   isTutorialComplete: boolean;
