@@ -39,6 +39,20 @@ const CONTENT_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..
 
 const PROMPT_SPECS: PromptSpec[] = [
   {
+    id: 'generate-project',
+    slug: 'generate-project',
+    title: 'Generate New Project with Jenny',
+    description: 'Discover a project with Jenny, review its blueprint and approve a framework-specific generation plan.',
+    resourcePath: 'prompts/generate-project.md',
+    keywords: ['jenny', 'exact', 'expo', 'new project', 'generate'],
+    surfaces: ['mcp-prompt'],
+    mcpPromptName: 'generate_project',
+    mcpArgs: [
+      { name: 'parentDir', description: 'Proposed parent directory; planning does not create it.' },
+      { name: 'frameworkId', description: 'Selected framework; Exact is the new-project default.' },
+    ],
+  },
+  {
     id: 'run-doctor',
     slug: 'run-doctor',
     title: 'Run Doctor',
@@ -102,7 +116,7 @@ const PROMPT_SPECS: PromptSpec[] = [
   {
     id: 'create-expo-super-stack',
     slug: 'create-expo-super-stack',
-    title: 'Create Expo Super Stack',
+    title: 'Generate New Expo Project',
     description:
       'Start a guided app creation flow from a parent directory while keeping the knowledge package as the text source of truth.',
     resourcePath: 'prompts/create-expo-super-stack.md',

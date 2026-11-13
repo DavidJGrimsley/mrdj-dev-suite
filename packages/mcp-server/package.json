@@ -44,6 +44,7 @@
   "dependencies": {
     "@mr.dj2u/cli": "^0.3.0",
     "@mr.dj2u/doctor": "^0.1.8",
+    "@mr.dj2u/framework-registry": "0.1.0",
     "@mr.dj2u/knowledge": "^0.1.9",
     "@mr.dj2u/library-registry": "0.3.0",
     "@modelcontextprotocol/sdk": "^1.25.1",

@@ -2,6 +2,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { canonicalizeJson, computeSha256 } from '@mr.dj2u/framework-registry';
+import { ReservationJournal } from './generator/journal.js';
+import { assertNoSymlinks } from './generator/runner.js';
 import { discoverWorkspace } from './workspace/discover.js';
 
 export interface RetrospectiveOnboardingEvidence {
@@ -62,6 +65,7 @@ function runGit(repoPath: string, args: string[]): string[] {
     const output = execFileSync('git', ['-C', repoPath, ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
     }).trim();
     return output ? output.split(/\r?\n/).filter(Boolean) : [];
   } catch {
@@ -244,7 +248,7 @@ function bulletList(values: string[], fallback: string): string {
 
 function routeSummary(evidence: RetrospectiveOnboardingEvidence): string {
   if (evidence.routes.length === 0) {
-    return '# TodoForContext(optional): Confirm the main screens/routes; no Expo Router route directory was detected.';
+    return '# TodoForContext(optional): Confirm the main screens/routes; no route directory was detected.';
   }
   return bulletList(evidence.routes.slice(0, 30), '- No routes detected.');
 }
@@ -397,7 +401,7 @@ function renderGuidelines(evidence: RetrospectiveOnboardingEvidence): string {
     '',
     '## Existing App Safety',
     '',
-    `- Keep Expo Router routes in ${evidence.routeDirectory === 'src' ? 'src/app' : evidence.routeDirectory === 'root' ? 'app' : 'the existing app route directory'} unless confirmed project memory changes.`,
+    evidence.routeDirectory ? `- Keep detected Expo Router routes in ${evidence.routeDirectory === 'src' ? 'src/app' : 'app'} unless approved project memory changes.` : '- Preserve the existing framework structure; no Expo routing assumptions apply.',
     '- Prefer small, evidence-backed changes over broad rewrites until retrospective memory is confirmed.',
     '- Preserve existing package manager, scripts, deployment assumptions, and data providers unless a task explicitly changes them.',
     '- Run Doctor before committing.',
@@ -534,18 +538,23 @@ export function planRetrospectiveProjectOnboarding(
   };
 }
 
-export function applyRetrospectiveProjectOnboarding(plan: RetrospectiveOnboardingPlan): RetrospectiveOnboardingPlan {
-  fs.mkdirSync(plan.projectPath, { recursive: true });
-  const contents = renderFiles(plan.evidence);
-  for (const file of plan.files) {
-    if (!file.willWrite) continue;
-    fs.writeFileSync(path.join(plan.projectPath, file.path), `${contents[file.path] ?? ''}\n`, 'utf8');
-  }
-  if (plan.reviewPacket.willWrite) {
-    fs.mkdirSync(path.dirname(plan.reviewPacket.path), { recursive: true });
-    fs.writeFileSync(plan.reviewPacket.path, `${renderRetrospectiveReviewPacket(plan.evidence)}\n`, 'utf8');
-  }
+export function retrospectivePlanDigest(plan: RetrospectiveOnboardingPlan): string {
+  return computeSha256(canonicalizeJson(plan));
+}
+export function applyRetrospectiveProjectOnboarding(plan: RetrospectiveOnboardingPlan, approval?: {approvedPlanDigest: string; coordinatorApproved: boolean}): RetrospectiveOnboardingPlan {
+  if (!approval?.coordinatorApproved || approval.approvedPlanDigest !== retrospectivePlanDigest(plan)) throw new Error('Retrospective memory apply requires coordinator approval of this plan digest');
+  assertNoSymlinks(plan.projectPath); assertNoSymlinks(plan.reviewPacket.path);
+  const journal = new ReservationJournal(plan.projectPath,{allowNonEmptyTarget:true}); journal.reserve();
+  try {
+    const contents = renderFiles(plan.evidence);
+    for (const file of plan.files) { if (file.willWrite) journal.writeFile(file.path, `${contents[file.path] ?? ''}\n`); }
+    if (plan.reviewPacket.willWrite) {
+      fs.mkdirSync(path.dirname(plan.reviewPacket.path),{recursive:true});
+      assertNoSymlinks(plan.reviewPacket.path);
+      fs.writeFileSync(plan.reviewPacket.path, `${renderRetrospectiveReviewPacket(plan.evidence)}\n`,{encoding:'utf8',flag:'wx'});
+    }
+    journal.commit();
+  } catch(error) {journal.rollback();throw error;}
   return plan;
 }
-
 export const RETROSPECTIVE_PROJECT_ONBOARDING_FILES = [...REQUIRED_PROJECT_MEMORY_FILES];

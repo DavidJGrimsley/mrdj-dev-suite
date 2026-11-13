@@ -10,6 +10,7 @@ import {
 import { listGitWorktrees } from './git.js';
 import {
   applyRetrospectiveProjectOnboarding,
+  retrospectivePlanDigest,
   planRetrospectiveProjectOnboarding,
 } from '../retrospective-onboarding.js';
 import {
@@ -81,7 +82,7 @@ const WORKSPACE_INIT_JOURNAL_FILENAME = '.mds-workspace-init.json';
 function runGit(repoPath: string, args: string[]): string | undefined {
   try {
     return execFileSync('git', ['-C', repoPath, ...args], {
-      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     }).trim();
   } catch {
     return undefined;
@@ -90,7 +91,7 @@ function runGit(repoPath: string, args: string[]): string | undefined {
 
 function runGitOrThrow(repoPath: string, args: string[]): string {
   return execFileSync('git', ['-C', repoPath, ...args], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   }).trim();
 }
 
@@ -201,6 +202,7 @@ function normalizeRemoteUrl(remote: string | undefined): string | undefined {
 function runGh(args: string[]): string {
   return execFileSync('gh', args, {
     encoding: 'utf8',
+    windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }
@@ -379,7 +381,7 @@ function ensureIgnoredWorkspaceLink(repoPath: string): void {
   }
 }
 
-function writeSourceLink(repoPath: string, workspaceId: string, projectRemote: string): void {
+export function writeSourceLink(repoPath: string, workspaceId: string, projectRemote: string): void {
   ensureIgnoredWorkspaceLink(repoPath);
   const linkPath = path.join(repoPath, SOURCE_WORKSPACE_LINK_PATH);
   fs.mkdirSync(path.dirname(linkPath), { recursive: true });
@@ -478,7 +480,7 @@ function copyLegacyProjectMemory(plan: WorkspaceInitializationPlan, legacyProjec
 
 const CONTROL_PLANE_GUIDELINES_MARKER = '<!-- MDS_CONTROL_PLANE_CONTRACT -->';
 
-function ensureControlPlaneGuidelines(projectPath: string): void {
+export function ensureControlPlaneGuidelines(projectPath: string): void {
   const guidelinesPath = path.join(projectPath, 'guidelines.md');
   const existing = fs.existsSync(guidelinesPath) ? fs.readFileSync(guidelinesPath, 'utf8') : '# Project Guidelines\n';
   if (existing.includes(CONTROL_PLANE_GUIDELINES_MARKER)) return;
@@ -529,18 +531,19 @@ function createProjectControlRepo(plan: WorkspaceInitializationPlan, worktrees: 
     if (!existingRemote) throw new Error(`Existing project control repository has no origin: ${plan.projectPath}`);
     if (existingRemote !== plan.projectRemote) throw new Error(`Existing project control repository remote does not match --project-remote: ${plan.projectPath}`);
   } else {
-    execFileSync('git', ['clone', plan.projectRemote, plan.projectPath], { stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('git', ['clone', plan.projectRemote, plan.projectPath], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   }
   const legacyProjectPath = legacySource ? path.join(legacySource.targetPath, 'project') : undefined;
   if (legacyProjectPath && fs.existsSync(legacyProjectPath)) {
     copyLegacyProjectMemory(plan, legacyProjectPath);
   }
   if (consolidateLegacyProject) applyLegacyProjectConsolidation(plan.legacyProjectMigration, plan.projectPath);
-  applyRetrospectiveProjectOnboarding(planRetrospectiveProjectOnboarding(legacySource.targetPath, {
+  const retrospectivePlan = planRetrospectiveProjectOnboarding(legacySource.targetPath, {
     projectPath: plan.projectPath,
     tempPath: plan.tempPath,
     legacyProjectMemoryFound: plan.existingProjectMemory.length > 0,
-  }));
+  });
+  applyRetrospectiveProjectOnboarding(retrospectivePlan, {approvedPlanDigest:retrospectivePlanDigest(retrospectivePlan),coordinatorApproved:true});
   ensureControlPlaneGuidelines(plan.projectPath);
   fs.writeFileSync(path.join(plan.projectPath, WORKSPACE_MANIFEST_FILENAME), `${JSON.stringify(plan.manifest, null, 2)}\n`, 'utf8');
   const name = runGit(legacySource.targetPath, ['config', 'user.name']) ?? 'MDS Workspace';
