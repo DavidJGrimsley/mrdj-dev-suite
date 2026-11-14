@@ -20,6 +20,8 @@ const MIME_TYPES = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.wasm': 'application/wasm',
@@ -328,6 +330,42 @@ export function createPreviewServersVitePlugin(options = {}) {
           children: `window.__ISQUARED_PREVIEW_URLS__ = Object.assign({}, window.__ISQUARED_PREVIEW_URLS__, ${JSON.stringify(resolvedUrls)});`,
         },
       ]
+    },
+  }
+}
+
+/** Path Pet Show and Tell's web export is built for (its `basePath`). */
+export const PET_PREVIEW_MOUNT = '/iSquared/preview/pet-show-and-tell'
+
+/**
+ * Where the Pet Show and Tell web export lives on this machine: `ISQUARED_PET_PREVIEW_DIR`,
+ * or the `pet-show-and-tell/dist-web/web` folder beside the i2 workspace.
+ */
+export function resolvePetPreviewDir(options = {}) {
+  if (options.dir) return path.resolve(options.dir)
+  if (process.env.ISQUARED_PET_PREVIEW_DIR) return path.resolve(process.env.ISQUARED_PET_PREVIEW_DIR)
+  const prototypeRoot = options.prototypeRoot ?? path.resolve(import.meta.dirname, '../..')
+  const workspaceRoot = options.workspaceRoot ?? path.resolve(prototypeRoot, '../../..')
+  return path.resolve(workspaceRoot, '..', 'pet-show-and-tell', 'dist-web', 'web')
+}
+
+/**
+ * Dev-only Vite plugin: serves the Pet Show and Tell web export from its own folder at
+ * `PET_PREVIEW_MOUNT` on the dev server (same origin, no copying), which is where the hosted
+ * site serves it too. When the export is not on disk nothing is mounted and the preview frame
+ * reports that it is unavailable.
+ */
+export function createPetPreviewVitePlugin(options = {}) {
+  return {
+    name: 'isquared-pet-web-preview',
+    apply: 'serve',
+    configureServer(server) {
+      const dir = resolvePetPreviewDir(options)
+      if (!fs.existsSync(path.join(dir, 'index.html'))) return
+      const handler = createStaticRequestHandler(dir)
+      server.middlewares.use(PET_PREVIEW_MOUNT, (req, res) => {
+        void handler(req, res)
+      })
     },
   }
 }

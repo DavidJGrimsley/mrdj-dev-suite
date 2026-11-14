@@ -240,7 +240,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Reveal:** The `Tutorials, Widgets, Games` part of the header (remove “coming soon” from Games if it's still present).
 
-**Infie:** “Whenever you want to visit more tutorials you can click this in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!”
+**Infie:** “Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!”
 
 **Reveal:** The `Notification/Settings` part of the header.
 
@@ -276,11 +276,11 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B13 — Project Home
 
-**Infie:** “This is Project Home. Click the project name to switch projects, or head back to i² Home. You can switch while work carries on, even across windows. Don't overload your brain. That's what I'm here for.”
+**Infie:** “This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.”
 
 **Reveal:** Existing project title/switcher and Home navigation, introduced together. The new view occupies the normal project content area; the persistent player and level stay mounted.
 
-**Infie:** “I handle long-term planning, version control, branches and worktrees, and what to do next. Your roadmap and Sessions live here.”
+**Infie:** “I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.”
 
 **Reveal:** The demo project's existing roadmap/session groups. Do not add every possible widget.
 
@@ -307,6 +307,12 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 **Infie:** “Each Session has agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.”
 
 **Reveal:** Existing Session identity/switcher and compact agent/model control when named; no model catalogue or extra-agent lecture.
+
+**Infie:** “Me, the session agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.”
+
+**Infie:** “Simulators are built in, too. Agents use them to check their own work, and you can use them to see it for yourself.”
+
+**Stage note:** These two turns add explanation only (Continue per turn). No MCP settings, tool list or simulator is opened during this beat.
 
 **Infie:** “Tasks come in two groups: Agent tasks and Human tasks. You're the human. This one's ready for you to verify.”
 
@@ -336,11 +342,13 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Infie:** “Either way, the corrected actions are what get sent back to improve iSquared, not your codebase.”
 
+**Infie:** “iSquared is also exploring quantum computing: quantum machine learning runs in tandem with the regular analysis of those requests, so we can see where quantum computing really fits into the IDE. It's research for now. Nothing you build depends on it.”
+
 **Infie:** “Session Completion Forms, donors, and paid users are what keep this experience running.”
 
 **Infie:** “It's great to contribute to the Infinite Intelligence which drives this experience which was only possible due to the vast open source and free education materials present today.”
 
-**Gate:** Continue between turns 1–6 (six Continues); Submit appears and enables only after the final explanation turn (turn 7). Implementations must derive the number of turns from the explanation list, not hard-coded constants. Keep the form visible throughout without revealing new fields. Auto-submit-on-merge is mentioned only: no settings walkthrough, no new toggle, and no UI is added in the tutorial. The tutorial demonstrates manual Submit and must not bypass Submit or auto-submit this demo session on its already-completed (demo) merge; auto-submit satisfies required completion forms for future sessions only. Submission is local demo behavior and marks the demo Session complete. Do not add sharing opt-outs, a consent pitch, account-closure threats or broader data promises.
+**Gate:** Continue between every explanation turn but the last (seven Continues for the eight turns above); Submit appears and enables only after the final explanation turn. Implementations must derive the number of turns from the explanation list, not hard-coded constants. Keep the form visible throughout without revealing new fields. Auto-submit-on-merge is mentioned only: no settings walkthrough, no new toggle, and no UI is added in the tutorial. The tutorial demonstrates manual Submit and must not bypass Submit or auto-submit this demo session on its already-completed (demo) merge; auto-submit satisfies required completion forms for future sessions only. Submission is local demo behavior and marks the demo Session complete. Do not add sharing opt-outs, a consent pitch, account-closure threats or broader data promises.
 
 ### B18 — Widgets and Library
 
@@ -358,6 +366,8 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Infie:** “The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away.”
 
+**Infie:** “You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.”
+
 **Infie:** “And if your project didn't start in i², I'll walk you through a one-time onboarding. Then we're ready to go. Let's head Home.”
 
 **Reveal:** Use the already-introduced Home navigation as the next target. No install modal, QR code, download claim, extra settings or importer walkthrough.
@@ -366,9 +376,9 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B20 — Tutorials and level-up
 
-**Infie:** “That's about it to get started. Check out the other tutorials. I recommend 'Generate a new project' and 'Widgets, widgets, widgets.' There are tutorials for every aspect of this experience so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.”
+**Infie:** “That's about it to get started. This prototype has one more tutorial, 'Generate a new project', which you can go through by clicking that button to the right. In the full experience, Learn in the header has tutorials for every aspect of iSquared, like 'Widgets, widgets, widgets', so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.”
 
-**Infie:** “Games unlock at level five, so hop to it. There are computer science and game development tutorials too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?”
+**Infie:** “Games unlock at level five, so hop to it. Learn has computer science and game development lessons too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?”
 
 **Infie:** “The number of open sessions without submitted Completion Reports will be limited based on your level and plan. I hope this gives you everything you could need but please submit feedback directly to me at any time and I'll make sure it goes to the proper channel and give you a ticket to follow-up.”
 
@@ -392,4 +402,5 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 - Music uses a supplied local sample if available. Do not depend on external streaming or add a music login. The player/audio element and level widget persist across tutorial navigation.
 - Questions may pause the current turn through an introduced reply affordance and return to it; keep required gates intact. A small canned prototype response is enough. No unrestricted assistant backend is required.
 - The Tutorials entry opens the existing Tutorials list if available; otherwise it is a visual entry for this pass. New replay behavior is out of scope. Clicking it must never reset the user's identity, level, layout or audio.
+- The quantum line describes exploratory research (see the deferred "Quantum Upgrade" roadmap section and the quantum hardware strategy note); it must stay worded as exploration, never as a shipped or performance feature. The MCP/tools, simulator, and VR/mobile/website lines likewise express product direction.
 - Mobile, game unlocks, rewards, and shared-learning behavior here express the user's product vision. The prototype does not verify release availability or implement data handling. Keep this note out of the user's tutorial dialogue.

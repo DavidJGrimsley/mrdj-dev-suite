@@ -32,6 +32,36 @@ Open `/?beat=B06` to jump to the controls beat, `/?onboarding=1` to run the Napo
   - `public/assets/handwriting/napoleon-hill-signature.strokes.json`, `provenance.json`, `README.md`, `scripts/generate-closing-fonts.py`, `docs/closing-sequence.md`
 - **Known Limitations**: Signature stroke timing and lift order are plausibly inferred from static HW5 photo geometry (`2,119` centerline points across `4` physical ink components), not recorded historical pen telemetry. Preexisting `tsc --noEmit` errors remain in unrelated sections of `App.tsx` and `src/imports/stylist-screen.tsx`. See [docs/closing-sequence.md](docs/closing-sequence.md) for full details and verified check results.
 
+## Widgets: move, expand, delete, flow zone, and real files
+
+The Project Home and Session side panels are dockable widgets (src/app/widgets/WidgetDock.tsx).
+
+- **Move:** drag a widget by its header into the other column (or to a new spot in the same one).
+  Widgets in a column share its height and resize as widgets arrive or leave. Tiles in the
+  header's Widgets gallery can be dragged onto a column; docked widgets have a remove button.
+  Layouts are kept per project/session for the page's lifetime (not persisted).
+- **Delete / restore:** each docked widget has a remove button; deleted widgets go to a restore
+  registry so they can be brought back.
+- **Expand / fullscreen:** double-click a widget header to toggle expanded view, triple-click to
+  toggle fullscreen. Both work from any state (expanded + double-click returns to normal,
+  expanded + triple-click goes fullscreen, fullscreen + double-click drops to expanded). Escape
+  or the backdrop returns to normal. Web Preview keeps its own enlarge modal.
+- **Bottom flow zone:** the panel below the chat takes other widgets, arranged in a flow grid
+  that fills the top row first and stacks smaller widgets. Invisible grab bars to the right,
+  left and bottom of the chat stretch/shrink it; dragging a bar all the way to an edge collapses
+  that panel (even with widgets in it), and a background border remains to grab and bring it back.
+- **Sessions widget:** session cards show Human Tasks and Agent Tasks counts (not the model).
+  When compacted (more sessions, or moved to a side bar) they become a simpler list (session icon,
+  name, status); hovering ~250 ms pops up the full card as an overlay.
+- **Music widget:** a normal dock widget on project/session screens; expanded view picks a song and
+  artist, fullscreen shows music provider options. On the home screen and during tutorial it has
+  special behavior.
+- **Real files:** Explorer, Project Folder and the Session's Plan.md open a read-only viewer
+  (src/app/widgets/workspaceFiles.tsx) with an explorer sidebar, multiple file tabs, and a
+  fullscreen button (also triple-click). Contents are snapshots of git-tracked files written to
+  public/workspace-files/<id>.json by scripts/snapshot-workspace-files.mjs; nothing is invented.
+  Where no source has been snapshotted (Not Hotdog, the demo sessions' worktrees and Plan.md),
+  the viewer says so. Experimemo's Plan.md is rendered from the plan synthesized in the walkthrough.
 ## What differs from the original Figma Make export
 
 - B06 controls: the three per-device MP4s (`infie-transform-*.mp4`) are replaced by one continuous

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack, SkipForward, GripHorizontal, Move, Music2 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, GripHorizontal, Move, Music2, Check, Volume2 } from "lucide-react";
 import { LEEKBEATS_TRACKS, PLAYLIST_NAME } from "./leekBeatsPlaylist";
+import { chatScale } from "../widgets/chatScale";
 
 // ─── Persistent lower-left Home music widget (LeekBeats) ────────────────────
 // - One <audio> element for the life of the shell: time, volume, track and
@@ -32,6 +33,19 @@ export interface LeekBeatsWidgetProps {
   placement?: "floating" | "panel";
   /** DOM slot provided by Project Home / Session (right column bottom). */
   panelSlot?: HTMLElement | null;
+  /**
+   * Expanded / fullscreen music widget: a slot to render the library into. "library" is the
+   * song and artist picker; "providers" adds the music-provider options beside it.
+   */
+  librarySlot?: HTMLElement | null;
+  libraryMode?: "library" | "providers";
+  /** Called when the user picks a provider to connect (simulated in the prototype). */
+  onProviderConnect?: (provider: string) => void;
+  /**
+   * Whether dragging the player out of its panel makes it float (the onboarding tutorial's
+   * "try moving the music player"). Outside the tutorial the dock moves it like any widget.
+   */
+  allowPanelFloat?: boolean;
   /** Fires whenever audio starts playing or changes to a new track. */
   onMusicPlay?: () => void;
   /** Fires synchronously in the click handler, same tick as audio.play(). */
@@ -62,6 +76,10 @@ export function LeekBeatsWidget({
   docked: controlledDocked,
   placement = "floating",
   panelSlot = null,
+  librarySlot = null,
+  libraryMode = "library",
+  onProviderConnect,
+  allowPanelFloat = true,
   onMusicPlay,
   onPressStart,
   onPlayAttempt,
@@ -71,6 +89,7 @@ export function LeekBeatsWidget({
   const resumeAfterSwitchRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackIndex, setTrackIndex] = useState(0);
+  const [artistFilter, setArtistFilter] = useState<string | null>(null);
   const [pulse, setPulse] = useState(0);
   const [position, setPosition] = useState(DEFAULT_POSITION);
   const [internalDocked, setInternalDocked] = useState<boolean>(() => !animateIntro || fullPlayerRevealed);
@@ -90,9 +109,10 @@ export function LeekBeatsWidget({
 
   // Which presentation to render. "hidden" covers the brief Project/Session
   // route cross-fade before the next screen's slot mounts (no lower-left flash).
+  const floats = userMoved && (placement !== "panel" || allowPanelFloat);
   const mode: "floating" | "panel" | "hidden" = !anyRevealed
     ? "hidden"
-    : userMoved
+    : floats
     ? "floating"
     : placement === "panel"
     ? panelSlot
@@ -193,6 +213,20 @@ export function LeekBeatsWidget({
     );
   }, [onPlayAttempt, onPressStart]);
 
+  // Library: pick a specific song. Same-tick play() keeps it gesture-valid.
+  const playTrack = useCallback(
+    (index: number) => {
+      const audio = audioRef.current;
+      if (index === trackIndex) {
+        if (audio?.paused) audio.play().catch(() => setIsPlaying(false));
+        return;
+      }
+      resumeAfterSwitchRef.current = true;
+      setTrackIndex(index);
+    },
+    [trackIndex]
+  );
+
   const switchTrack = useCallback(
     (delta: 1 | -1) => {
       const audio = audioRef.current;
@@ -269,7 +303,7 @@ export function LeekBeatsWidget({
   // plenty of clear space to the left of the message view with zero overlap.
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const spotlightLeft = Math.max(20, Math.round(vw / 2 - 270 - 340));
+  const spotlightLeft = Math.max(20, Math.round(vw / 2 - 270 * chatScale() - 340));
   const spotlightBottom = Math.max(160, Math.round(vh - 380));
   const isDockedNow = docked || userMoved;
   const targetLeft = isDockedNow ? position.left : spotlightLeft;
@@ -411,15 +445,14 @@ export function LeekBeatsWidget({
   const renderFrame = (gripRef?: React.Ref<HTMLButtonElement>) => (
     <div
       data-name="LeekBeatsFrame"
-      className="w-full rounded-[6px] overflow-clip transition-shadow"
+      className={`w-full rounded-[6px] overflow-clip transition-shadow ${calloutGlow ? "infie-glow" : ""}`}
       style={{
         border: calloutGlow ? "1px solid #2dd4bf" : "1px solid rgba(255, 255, 255, 0.05)",
-        boxShadow: calloutGlow
-          ? "0 0 18px rgba(45, 212, 191, 0.45)"
-          : "0px 4px 6px -1px rgba(0, 0, 0, 0.1)",
+        boxShadow: calloutGlow ? undefined : "0px 4px 6px -1px rgba(0, 0, 0, 0.1)",
       }}
     >
       <div
+        data-widget-header
         className="flex items-center gap-2 px-3 py-[7px] bg-[#1d1b20]"
         style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}
       >
@@ -439,8 +472,107 @@ export function LeekBeatsWidget({
     </div>
   );
 
+  // Expanded widget: a small library. Artists on the left, their songs on the right; fullscreen
+  // adds the provider options. Only tracks that really ship with the prototype are listed.
+  const artists = Array.from(new Set(LEEKBEATS_TRACKS.map((t) => t.artist)));
+  const shownTracks = LEEKBEATS_TRACKS.map((t, index) => ({ t, index })).filter(
+    ({ t }) => !artistFilter || t.artist === artistFilter
+  );
+  const PROVIDERS = [
+    { name: "Apple Music", tint: "#fa586a" },
+    { name: "Spotify", tint: "#1ed760" },
+    { name: "YouTube Music", tint: "#ff4e45" },
+    { name: "SoundCloud", tint: "#ff7a1a" },
+    { name: "Tidal", tint: "#9ad7ff" },
+    { name: "Local files", tint: "#c5c5c5" },
+  ];
+  const sideRow = (active: boolean) =>
+    `w-full text-left px-3 py-[6px] rounded-[6px] font-['Rounded_Mplus_1c',sans-serif] text-[12px] truncate transition-colors ${
+      active ? "bg-[#abefa3]/12 text-[#abefa3]" : "text-[#c5c5c5] hover:bg-white/5"
+    }`;
+  const library = (
+    <div data-name="LeekBeatsLibrary" data-library-mode={libraryMode} className="flex flex-col flex-1 w-full min-h-0 bg-[#1a1a1a] select-none">
+      <div data-widget-header className="flex items-center gap-2 px-4 py-[9px] bg-[#1d1b20] shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+        <Music2 size={13} className="text-[#abefa3] shrink-0" aria-hidden="true" />
+        <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#aaa]">
+          Music{libraryMode === "providers" ? " · Library & providers" : " · Library"}
+        </span>
+      </div>
+      <div className="flex flex-1 min-h-0">
+        <div className="w-[170px] shrink-0 flex flex-col gap-0.5 p-2 overflow-y-auto" style={{ borderRight: "1px solid rgba(255,255,255,0.05)" }}>
+          <p className="px-3 pt-1 pb-1.5 font-['Rounded_Mplus_1c',sans-serif] text-[9.5px] uppercase tracking-wider text-[#666]">Artists</p>
+          <button type="button" className={sideRow(artistFilter === null)} onClick={() => setArtistFilter(null)}>All artists</button>
+          {artists.map((a) => (
+            <button key={a} type="button" data-artist={a} className={sideRow(artistFilter === a)} onClick={() => setArtistFilter(a)}>{a}</button>
+          ))}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col overflow-y-auto">
+          <div className="grid grid-cols-[28px_1fr_1fr] gap-2 px-4 py-1.5 font-['Rounded_Mplus_1c',sans-serif] text-[9.5px] uppercase tracking-wider text-[#666]" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <span />
+            <span>Song</span>
+            <span>Artist</span>
+          </div>
+          {shownTracks.map(({ t, index }) => {
+            const current = index === trackIndex;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                data-track={t.id}
+                aria-current={current ? "true" : undefined}
+                onClick={() => playTrack(index)}
+                className={`grid grid-cols-[28px_1fr_1fr] gap-2 items-center px-4 py-2 text-left transition-colors ${current ? "bg-[#abefa3]/8" : "hover:bg-white/5"}`}
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+              >
+                <span className="flex items-center justify-center text-[#abefa3]">
+                  {current ? (isPlaying ? <Volume2 size={13} /> : <Pause size={12} />) : <Play size={11} className="text-[#555]" />}
+                </span>
+                <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[12.5px] truncate ${current ? "text-[#abefa3]" : "text-white"}`}>{t.title}</span>
+                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-[#999] truncate">{t.artist}</span>
+              </button>
+            );
+          })}
+          <p className="px-4 py-3 font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-[#666]">
+            {libraryMode === "providers"
+              ? "Connect a provider to bring in your own library."
+              : "Triple-click the header for fullscreen to connect a music provider."}
+          </p>
+        </div>
+        {libraryMode === "providers" && (
+          <div data-name="LeekBeatsProviders" className="w-[300px] shrink-0 flex flex-col gap-2 p-3 overflow-y-auto" style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
+            <p className="px-1 font-['Rounded_Mplus_1c',sans-serif] text-[9.5px] uppercase tracking-wider text-[#666]">Music providers</p>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-[8px] bg-[#abefa3]/8" style={{ border: "1px solid rgba(171,239,163,0.3)" }}>
+              <span className="size-2 rounded-full bg-[#abefa3] shrink-0" />
+              <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white truncate">{PLAYLIST_NAME} (built in)</span>
+              <span className="inline-flex items-center gap-1 font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#abefa3]"><Check size={11} /> Playing from</span>
+            </div>
+            {PROVIDERS.map((p) => (
+              <div key={p.name} className="flex items-center gap-2 px-3 py-2 rounded-[8px] bg-white/[0.03]" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+                <span className="size-2 rounded-full shrink-0" style={{ background: p.tint }} />
+                <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-[#ddd] truncate">{p.name}</span>
+                <button
+                  type="button"
+                  data-provider={p.name}
+                  onClick={() => onProviderConnect?.(p.name)}
+                  className="px-2.5 py-1 rounded-[6px] font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-white hover:bg-white/10 transition-colors"
+                  style={{ border: "1px solid rgba(255,255,255,0.18)" }}
+                >
+                  Connect
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex items-center px-4 py-3 bg-[#252323] shrink-0" style={{ gap: gapPx, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        {transport}
+      </div>
+    </div>
+  );
+
   return (
     <>
+      {librarySlot && anyRevealed && createPortal(library, librarySlot)}
       {/* The single persistent audio instance — always mounted, even before reveal. */}
       <audio
         ref={audioRef}

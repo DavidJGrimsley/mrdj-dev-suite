@@ -21,8 +21,12 @@ import {
   B12_BRIDGE_LINE,
   B14_AGENT_QUESTION,
   B17_SESSION_CLOSED_LINE,
+  B15_LINES,
+  B15_TASKS_TURN,
   B17_TO_UI_SEGUE,
   B18_TO_SURFACES_SEGUE,
+  B19_HOME_TURN,
+  B19_LINES,
   B19_TURN2_LINE,
   INFIE_FORM_ASSETS,
   InfieFormId,
@@ -34,6 +38,8 @@ import {
   FloatingButton,
 } from "./FloatingPrimitives";
 import { useInfieDance } from "./infieDanceAnimation";
+import { StylistPreview } from "./StylistPreview";
+import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
 import {
   B03_NOOB_TIMER_MS,
   B06_VIDEO_START_WATCHDOG_MS,
@@ -629,8 +635,11 @@ export function OnboardingStage({
       }
     } else if (currentBeat === "B13") {
       if (turnIndex === 0) {
+        // Infie speaks first; then the side and bottom panels slide in toward the chat
+        // (~0.7s); Continue is offered only once they have landed.
         revealGroup("project_navigation");
-        at(450, () => revealGroup("continue_button"));
+        at(900, () => revealGroup("project_roadmap_sessions"));
+        at(1900, () => revealGroup("continue_button"));
       } else {
         revealGroup(["project_navigation", "project_roadmap_sessions"]);
         at(450, () => revealGroup("continue_button"));
@@ -645,7 +654,7 @@ export function OnboardingStage({
         at(450, () => revealGroup("continue_button"));
       }
     } else if (currentBeat === "B15") {
-      if (turnIndex === 0) {
+      if (turnIndex < B15_TASKS_TURN) {
         revealGroup("session_agent_controls");
         at(450, () => revealGroup("continue_button"));
       } else {
@@ -687,7 +696,7 @@ export function OnboardingStage({
       }
     } else if (currentBeat === "B19") {
       retireGroup("library_entry_and_example");
-      if (turnIndex === 0) {
+      if (turnIndex < B19_HOME_TURN) {
         at(450, () => revealGroup("continue_button"));
       }
     } else if (currentBeat === "B20") {
@@ -941,7 +950,7 @@ export function OnboardingStage({
     case "B11":
       if (turnIndex === 0) {
         currentLine =
-          "Whenever you want to visit more tutorials you can click this in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!";
+          "Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentMessageId = "B11-1";
@@ -989,11 +998,11 @@ export function OnboardingStage({
     case "B13":
       if (turnIndex === 0) {
         currentLine =
-          "This is Project Home. Click the project name to switch projects, or head back to i² Home. You can switch while work carries on, even across windows. Don't overload your brain. That's what I'm here for.";
+          "This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.";
         onContinue = () => setTurnIndex(1);
       } else {
         currentLine =
-          "I handle long-term planning, version control, branches and worktrees, and what to do next. Your roadmap and Sessions live here.";
+          "I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.";
         onContinue = () => advanceBeat("B14");
       }
       break;
@@ -1013,15 +1022,12 @@ export function OnboardingStage({
       }
       break;
     case "B15":
-      if (turnIndex === 0) {
-        currentLine =
-          "Each Session has agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.";
-        onContinue = () => setTurnIndex(1);
-      } else {
-        currentLine =
-          "Tasks come in two groups: Agent tasks and Human tasks. You're the human. This one's ready for you to verify.";
-        onContinue = undefined;
-      }
+      // Continue through the agent turns; the final turn waits for the Human task check.
+      currentLine = B15_LINES[Math.min(Math.max(turnIndex, 0), B15_TASKS_TURN)];
+      onContinue =
+        turnIndex < B15_TASKS_TURN
+          ? () => setTurnIndex((t) => Math.min(t + 1, B15_TASKS_TURN))
+          : undefined;
       break;
     case "B16":
       currentLine =
@@ -1064,10 +1070,9 @@ export function OnboardingStage({
       }
       break;
     case "B19":
-      if (turnIndex === 0) {
-        currentLine =
-          "The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away.";
-        onContinue = () => setTurnIndex(1);
+      if (turnIndex < B19_HOME_TURN) {
+        currentLine = B19_LINES[Math.max(turnIndex, 0)];
+        onContinue = () => setTurnIndex((t) => Math.min(t + 1, B19_HOME_TURN));
       } else {
         currentLine = B19_TURN2_LINE;
         onContinue = undefined;
@@ -1076,11 +1081,11 @@ export function OnboardingStage({
     case "B20":
       if (turnIndex === 0) {
         currentLine =
-          "That's about it to get started. Check out the other tutorials. I recommend 'Generate a new project' and 'Widgets, widgets, widgets.' There are tutorials for every aspect of this experience so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.";
+          "That's about it to get started. This prototype has one more tutorial, 'Generate a new project', which you can go through by clicking that button to the right. In the full experience, Learn in the header has tutorials for every aspect of iSquared, like 'Widgets, widgets, widgets', so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "Games unlock at level five, so hop to it. There are computer science and game development tutorials too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?";
+          "Games unlock at level five, so hop to it. Learn has computer science and game development lessons too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?";
         onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
@@ -1245,11 +1250,14 @@ export function OnboardingStage({
     setTurnIndex(1);
   };
 
+  // Infie's side of the tutorial is scripted: a free-form message stops at the prototype limit.
+  const limit = usePrototypeLimit();
   const handleDockedChatSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     const text = interestDraft.trim();
     if (!text) return;
     setInterestDraft("");
+    limit(TUTORIAL_CHAT_LIMIT);
   };
 
   const visibleFileCount =
@@ -1363,7 +1371,7 @@ export function OnboardingStage({
           paddingBottom: `calc(${PREDOCK_BOTTOM_OFFSET} + 128px)`,
         }}
       >
-        <div className="flex flex-col items-center gap-2 max-w-4xl w-full pointer-events-auto">
+        <div className="i2-chat-scale flex flex-col items-center gap-2 max-w-4xl w-full pointer-events-auto">
           {/* Infie Stage Row: Live Infie (or B06 transformation video) + B06 floating device PNGs */}
           <div
             className="relative flex items-center justify-center w-full min-h-[132px]"
@@ -1566,104 +1574,9 @@ export function OnboardingStage({
             </AnimatePresence>
           </div>
 
-          {/* B09 Turn 2 (style.md): Static preview of The Stylist to the right of the messages */}
+          {/* B09 Turn 2 (style.md): a self-running preview of The Stylist to the right of the messages */}
           {currentBeat === "B09" && turnIndex === 2 && isRevealed("stylist_preview") && (
-              <motion.div
-                key="b09-stylist-preview"
-                data-name="StylistStaticPreview"
-                initial={{ opacity: 0, x: reducedMotion ? 0 : 14 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.32 }}
-                className="flex flex-col gap-2.5 px-4 py-3 rounded-[12px] w-full max-w-[290px] shrink-0"
-                style={{
-                  background: "transparent",
-                  border: "1px solid rgba(171, 239, 163, 0.38)",
-                  backdropFilter: "blur(6px)",
-                }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Palette size={14} className="text-[#abefa3]" />
-                    <span
-                      style={{
-                        fontFamily: "'Space Grotesk', sans-serif",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "#abefa3",
-                      }}
-                    >
-                      The Stylist · Preview
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 10,
-                      color: "rgba(255,255,255,0.45)",
-                    }}
-                  >
-                    style.md
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {[
-                    { label: "primary", color: "#abefa3" },
-                    { label: "accent", color: "#2dd4bf" },
-                    { label: "surface", color: "#252323" },
-                    { label: "text", color: "#e0e0e0" },
-                  ].map((sw) => (
-                    <div
-                      key={sw.label}
-                      className="flex items-center gap-1 px-2 py-1 rounded-[6px]"
-                      style={{
-                        background: "transparent",
-                        border: "1px solid rgba(255,255,255,0.16)",
-                      }}
-                    >
-                      <span
-                        className="size-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: sw.color }}
-                      />
-                      <span
-                        style={{
-                          fontFamily: "'Rounded Mplus 1c', sans-serif",
-                          fontSize: 10,
-                          color: "rgba(255,255,255,0.75)",
-                        }}
-                      >
-                        {sw.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  className="px-3 py-2 rounded-[8px] flex flex-col gap-1"
-                  style={{
-                    background: "transparent",
-                    border: "1px solid rgba(45, 212, 191, 0.25)",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      color: "#ffffff",
-                    }}
-                  >
-                    Pet Show and Tell
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "'Rounded Mplus 1c', sans-serif",
-                      fontSize: 11,
-                      color: "rgba(255,255,255,0.65)",
-                    }}
-                  >
-                    Rounded Mplus 1c · #abefa3 / #2dd4bf
-                  </span>
-                </div>
-              </motion.div>
+            <StylistPreview reducedMotion={reducedMotion} />
           )}
           </div>
 
@@ -2060,7 +1973,7 @@ export function OnboardingStage({
           Before the input exists (B02–B04) an invisible spacer keeps them in the same spot. */}
       <div
         data-name="PredockBottomZone"
-        className="fixed inset-x-0 z-40 pointer-events-none flex flex-col items-center gap-3 px-4"
+        className="i2-chat-scale fixed inset-x-0 z-40 pointer-events-none flex flex-col items-center gap-3 px-4"
         style={{ bottom: PREDOCK_BOTTOM_OFFSET }}
       >
         <div

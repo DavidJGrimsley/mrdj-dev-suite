@@ -4,7 +4,9 @@ import {
   BEAT_ORDER,
   RevealGroupId,
   PERSISTENT_RELEASE_GROUPS,
+  B15_TASKS_TURN,
   B17_EXPLANATIONS,
+  B19_HOME_TURN,
   B14_AGENT_REPLY_DEFAULT,
   getInfieFormForBeat,
   getInfieFormAssetForBeat,
@@ -226,7 +228,7 @@ export function OnboardingProvider({
       }
     } else if (currentBeat === "B15") {
       retireGroup("demo_session_and_question");
-      if (turnIndex === 0) {
+      if (turnIndex < B15_TASKS_TURN) {
         revealGroup(["session_agent_controls", "continue_button"]);
       } else {
         retireGroup("continue_button");
@@ -259,7 +261,7 @@ export function OnboardingProvider({
       }
     } else if (currentBeat === "B19") {
       retireGroup("library_entry_and_example");
-      if (turnIndex === 0) {
+      if (turnIndex < B19_HOME_TURN) {
         revealGroup("continue_button");
       } else {
         retireGroup("continue_button");

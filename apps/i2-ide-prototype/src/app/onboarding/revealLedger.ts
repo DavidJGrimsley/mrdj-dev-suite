@@ -108,9 +108,34 @@ export const B17_EXPLANATIONS: readonly string[] = [
   "If you're on the free plan, session completion forms are required and users on the paid plans are still welcome to contribute.",
   "You can also turn on auto-submit on merge in Settings for future sessions. An auto-submitted form still counts as your completion form.",
   "Either way, the corrected actions are what get sent back to improve iSquared, not your codebase.",
+  "iSquared is also exploring quantum computing: quantum machine learning runs in tandem with the regular analysis of those requests, so we can see where quantum computing really fits into the IDE. It's research for now. Nothing you build depends on it.",
   "Session Completion Forms, donors, and paid users are what keep this experience running.",
   "It's great to contribute to the Infinite Intelligence which drives this experience which was only possible due to the vast open source and free education materials present today.",
 ] as const;
+
+/**
+ * B15 Agents and tasks. Every turn but the last is gated by Continue; the last is gated by
+ * checking the demo Human task. Turn logic derives from this list's length.
+ */
+export const B15_LINES: readonly string[] = [
+  "Each Session has agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.",
+  "Me, the session agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.",
+  "Simulators are built in, too. Agents use them to check their own work, and you can use them to see it for yourself.",
+  "Tasks come in two groups: Agent tasks and Human tasks. You're the human. This one's ready for you to verify.",
+] as const;
+/** Index of the B15 turn that reveals the task groups and waits for the Human task check. */
+export const B15_TASKS_TURN = B15_LINES.length - 1;
+
+/**
+ * B19 Away from the desk. Every turn but the last is gated by Continue; the last
+ * (`B19_TURN2_LINE`) is gated by returning Home.
+ */
+export const B19_LINES: readonly string[] = [
+  "The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away.",
+  "You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.",
+] as const;
+/** Index of the B19 turn that asks the user to head Home. */
+export const B19_HOME_TURN = B19_LINES.length;
 
 /** B12 Turn 0 bridge line: shown as the conversation slides left to its Home chat position. */
 export const B12_BRIDGE_LINE = "Let me scoot over and make some room.";
