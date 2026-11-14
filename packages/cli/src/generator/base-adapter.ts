@@ -92,7 +92,7 @@ export abstract class BaseAdapter implements FrameworkAdapter {
     if (['web', 'ios', 'android', 'macos', 'linux', 'windows'].some(suffix => request.appName.endsWith(`-${suffix}`))) {
       throw new Error(`App name "${request.appName}" ends with a reserved host suffix`);
     }
-    const options = request.options ?? {};
+    const options = request.projectInfo ? { ...request.options, projectInfo: request.projectInfo } : (request.options ?? {});
     const target = path.resolve(request.targetDirectory);
     const enclosing = topology.mode === 'workspace-member' ? discoverWorkspace(path.dirname(target)) : undefined;
     const memoryLocation = topology.workspace?.projectPath ?? enclosing?.projectPath ?? path.join(target, 'project');

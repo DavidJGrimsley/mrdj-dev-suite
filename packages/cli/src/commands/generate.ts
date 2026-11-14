@@ -75,7 +75,7 @@ export async function runGeneratePlanCommand(argv: GeneratePlanArgv): Promise<vo
       mkdirSync(outDir, { recursive: true });
     }
     writeFileSync(outPath, JSON.stringify(plan, null, 2) + '\n', {encoding:'utf8',flag:'wx'});
-    console.log(chalk.green(`\nGeneration plan written to: ${argv.out}`));
+    if (!argv.json) console.log(chalk.green(`\nGeneration plan written to: ${argv.out}`));
   }
 
   if (argv.json) {
@@ -159,14 +159,14 @@ export async function runGenerateRunCommand(argv: GenerateRunArgv): Promise<void
     throw new ApprovalRequiredError(plan.planDigest, { planFile: planPath });
   }
 
-  console.log(chalk.dim(`Executing generation for ${plan.appName} (${plan.frameworkId})…`));
+  if (!argv.json) console.log(chalk.dim(`Executing generation for ${plan.appName} (${plan.frameworkId})…`));
 
   const result = await registry.generate(plan, {
     approvedPlanDigest: argv.approvedDigest,
     dryRun: argv.dryRun,
-    progressReporter: (event) => {
+    ...(argv.json ? {} : { progressReporter: (event) => {
       console.log(`  [${event.type}] ${event.message}`);
-    },
+    } }),
   });
 
   if (argv.json) {

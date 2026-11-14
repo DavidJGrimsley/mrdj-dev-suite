@@ -10,7 +10,7 @@ import { checkExpoPrerequisites } from './prerequisites.js';
 import { directoryDigest, fileDigest, identifyExecutable } from './runner.js';
 const TEMPLATE: FrameworkTemplate = {id:'super-stack',frameworkId:'expo-react-native',name:'Expo starter',description:'Existing Expo generation options, resolved through the compatibility adapter.',keywords:['expo'],verifiedHosts:[],pinnedRevision:{repository:'https://github.com/DavidJGrimsley/mrdj-dev-suite.git',commit:'create-expo-super-stack@0.2.0'},upstreamSource:'packages/create-expo-super-stack',category:'starter'};
 const EXPO_PLATFORMS: readonly PlatformTarget[] = ['web', 'ios', 'android'];
-const OPTION_KEYS = ['projectIdentity','cessExecutable','createExpoStackExecutable','answers','openDecisions','sourceInfo','skipExpoProjectChecks'];
+const OPTION_KEYS = ['projectIdentity','cessExecutable','createExpoStackExecutable','answers','openDecisions','sourceInfo','skipExpoProjectChecks','projectInfo'];
 /** create-expo-stack fork CESS delegates to; pinned explicitly so CESS never falls back to PATH lookups or local builds. */
 const CREATE_EXPO_STACK = { name: '@mr.dj2u/create-expo-stack', version: '2.21.3-mrdj.2' } as const;
 
@@ -35,7 +35,7 @@ export class ExpoReactNativeAdapter extends BaseAdapter {
     if (answers !== undefined && (!answers || typeof answers !== 'object' || Array.isArray(answers))) throw new Error('Expo answers must be an object');
     const supplied = (answers ?? {}) as Partial<CessIntakeAnswers>;
     // A supplied display name wins; otherwise CESS derives one from the app name exactly as the legacy CLI does.
-    const displayAppName = supplied.displayAppName ?? request.projectInfo?.displayName;
+    const displayAppName = supplied.displayAppName ?? request.projectInfo?.displayName ?? (options.projectInfo as { displayName?: string } | undefined)?.displayName;
     return {...supplied,targetPlatforms:request.platforms as CessIntakeAnswers['targetPlatforms'],...(displayAppName ? {displayAppName} : {}),confirmed:true,saveDefaults:false};
   }
   private execution(request: GenerationRequest, topology: GenerationTopology): ExecutionIdentity {

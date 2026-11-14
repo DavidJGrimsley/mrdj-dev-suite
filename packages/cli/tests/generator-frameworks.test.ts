@@ -121,6 +121,7 @@ describe('Framework-Agnostic Generator & Exact Adapter', () => {
         frameworkId: 'exact',
         appName: 'sample-exact',
         targetDirectory: target,
+        projectInfo: { displayName: 'Household Budget' },
         options: STANDALONE,
         templateId: 'blank',
       });
@@ -132,7 +133,10 @@ describe('Framework-Agnostic Generator & Exact Adapter', () => {
       expect(plan.pinnedRevision.commit).toBe('9398d982e02a6ba08e4c78d0db27624c3153c1c6');
       expect(plan.planDigest).toMatch(/^[a-f0-9]{64}$/);
       expect(plan.planDigest).toBe(computePlanDigest(plan));
-    });
+      expect(plan.execution?.args).toContain('Household Budget');
+      expect(plan.options?.projectInfo).toEqual({ displayName: 'Household Budget' });
+      expect((await adapter.validatePlan(plan)).valid).toBe(true);
+    }, 60000);
 
     it('rejects app names ending with reserved host suffixes', async () => {
       await expect(

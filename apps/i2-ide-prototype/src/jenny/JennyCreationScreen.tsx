@@ -179,7 +179,9 @@ export function JennyCreationScreen({
 
       if (!live) return;
 
-      if (draft) { setBlueprint(draft.blueprint); setMessages(draft.messages); onFrameworkChange?.(draft.blueprint.frameworkId); }
+      if (draft) { latest.current = { blueprint: draft.blueprint, messages: draft.messages }; setBlueprint(draft.blueprint); setMessages(draft.messages); onFrameworkChange?.(draft.blueprint.frameworkId); }
+
+      allowSave.current = true;
 
     }).catch(e => { if (live) setError(String(e)); }).finally(() => { if (live) { hydrated.current = allowSave.current; setLoaded(true); } });
 

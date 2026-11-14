@@ -104,6 +104,11 @@ describe('new-workspace generation (default identity)', () => {
     // Without a supplied display name CESS derives one; the app slug is never forced into the display name.
     const derived = await new MockedExpo().planGeneration({ frameworkId: 'expo-react-native', appName: 'demo', targetDirectory: root });
     expect(derived.execution!.args).toContain('--mds-app-name=Demo');
+    const metadataAdapter = new MockedExpo();
+    const metadataPlan = await metadataAdapter.planGeneration({ frameworkId: 'expo-react-native', appName: 'demo', targetDirectory: root, projectInfo: { displayName: 'Household Budget' } });
+    expect(metadataPlan.execution!.args).toContain('--mds-app-name=Household Budget');
+    expect(metadataPlan.options?.projectInfo).toEqual({ displayName: 'Household Budget' });
+    expect((await metadataAdapter.validatePlan(metadataPlan)).valid).toBe(true);
     await expect(new MockedExpo().planGeneration({ frameworkId: 'expo-react-native', appName: 'demo', targetDirectory: root, platforms: ['web'], options: { answers } })).rejects.toThrow(/conflicts with the requested platforms/);
   });
 

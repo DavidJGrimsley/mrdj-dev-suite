@@ -66,7 +66,7 @@ export class ExactAdapter extends BaseAdapter {
     if (fileDigest(executable) !== fileDigest(identifyExecutable('bun'))) throw new Error('Approved Bun differs from normal PATH Bun. Install the compatible Bun on normal PATH and restart your terminal/editor before planning.');
     let script = path.join(checkout.directory,'scripts','exact.mjs');
     const name = request.appName, bundle = request.bundleId ?? `com.example.${name.replace(/-/g,'')}`;
-    const displayName = (options.answers as { displayAppName?: string } | undefined)?.displayAppName ?? request.projectInfo?.displayName ?? name;
+    const displayName = (options.answers as { displayAppName?: string } | undefined)?.displayAppName ?? request.projectInfo?.displayName ?? (options.projectInfo as { displayName?: string } | undefined)?.displayName ?? name;
     let args = [script,'new',topology.generationTarget,'--name',displayName,'--bundle-id',bundle];
     const checkouts = [checkout];
     if (request.templateId !== 'blank') {

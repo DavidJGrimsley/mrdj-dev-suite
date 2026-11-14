@@ -15,7 +15,7 @@ export function buildExactProjectMemory(plan: GenerationPlan): Record<string, st
   const platforms = plan.targetPlatforms.join(', ') || 'web';
   const revision = plan.pinnedRevision.commit.slice(0, 10);
   const options = plan.options ?? {};
-  const projectInfo = options.projectInfo as { displayName?: string } | undefined;
+  const projectInfo = options.projectInfo as { displayName?: string; description?: string } | undefined;
 
   // Check for original info content or source file path
   let originalContent: string | undefined = typeof options.originalInfoContent === 'string' ? options.originalInfoContent : undefined;
@@ -28,37 +28,19 @@ export function buildExactProjectMemory(plan: GenerationPlan): Record<string, st
     }
   }
 
-  // Parse product requirements if available
+  // Only record requirements supplied by the caller; unresolved choices remain visible.
   const answers = (options.answers ?? options.productRequirements ?? {}) as Record<string, unknown>;
-  const overview = typeof answers.overview === 'string' ? answers.overview : 'Deliver a top class simple app that aids in experimentation without slowing work down.';
-  const audience = typeof answers.audience === 'string' ? answers.audience : 'Scientists and people learning how to conduct experiments';
-  const problemStatement = typeof answers.problemStatement === 'string' ? answers.problemStatement : "There's no good way to track experiment data on the go.";
-  const productGoals = typeof answers.productGoals === 'string' ? answers.productGoals : 'Provide a way for other scientists and I to track and manage our experiments effectively.';
-  const nonGoals = typeof answers.nonGoals === 'string' ? answers.nonGoals : 'Ways to actually conduct experiments, analyze data, or collaborate with other scientists.';
-  const firstUserFlow = typeof answers.firstUserFlow === 'string' ? answers.firstUserFlow : 'Create an experiment';
-  const coreFlows = typeof answers.coreFlows === 'string' ? answers.coreFlows : [
-    'Create an experiment',
-    'Track multiple experiments, each with its own hypothesis, procedure, data collection, and results.',
-    'View and edit existing experiments',
-    'Add pictures and notes to experiments',
-    'Organize experiments into folders or categories',
-    'Search and filter experiments',
-  ].join('\n');
-  const screens = typeof answers.screens === 'string' ? answers.screens : [
-    'New (create new experiment)',
-    'Track (list of past experiments)',
-    'App info modal',
-  ].join('\n');
   const displayName = typeof answers.displayAppName === 'string' ? answers.displayAppName : (typeof projectInfo?.displayName === 'string' ? projectInfo.displayName : appName);
-
-  const hasExperimemoRequirements = originalContent?.includes('Experimemo') || overview.toLowerCase().includes('experiment');
-
-  let infoMd: string;
-  if (hasExperimemoRequirements) {
-    infoMd = `# ${displayName}
+  const field = (key: string): string => {
+    const value = answers[key] ?? (key === 'overview' ? projectInfo?.description : undefined);
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (Array.isArray(value) && value.length) return value.map(String).join(', ');
+    return '# TodoForContext(optional): Discuss and confirm.';
+  };
+  const infoMd = `# ${displayName}
 
 ## Product Overview
-${overview}
+${field('overview')}
 
 - **Application Name**: ${displayName} (id: \`${appName}\`)
 - **Framework**: Exact (upstream commit \`${revision}\`)
@@ -67,60 +49,31 @@ ${overview}
 - **Target Platforms**: ${platforms}
 
 ## Target Users
-${audience}
+${field('audience')}
 
 ## Problem Solved
-${problemStatement}
+${field('problemStatement')}
 
 ## Product Goals
-${productGoals}
+${field('productGoals')}
 
 ## Non-Goals
-${nonGoals}
+${field('nonGoals')}
 
 ## First User Flow
-${firstUserFlow}
+${field('firstUserFlow')}
 
 ## Core Flows & Features
-${coreFlows.split(/\r?\n/).filter(Boolean).map(line => line.startsWith('-') ? line : `- ${line}`).join('\n')}
+${field('coreFlows')}
 
 ## Screens
-${screens.split(/\r?\n/).filter(Boolean).map(line => line.startsWith('-') ? line : `- ${line}`).join('\n')}
-
-## Technical Architecture & Seam
-- **View Layer**: Declarative Contract specification (\`app.contract\`)
-- **Business & Data Logic**: TypeScript data provider (\`app.ts\`)
-- **Persistence**: Exact local persistence / SQLite WASM
-- **Testing & Verification**: Contract agent journeys (\`app.test.contract\`)
-- **Development Toolchain**: Bun (>=1.4.2) and Rust (1.97.0); \`bun exact.mjs web\`
-
-## Recorded Tech Stack & Platform Decisions
-1. **Expo and NativeWind Discarded**: The original intake file in \`project/info.original.md\` specified Expo Router, NativeWindUI, EAS, and Expo SQLite. Per project directives, all Expo-specific and NativeWind instructions were ignored as generator commands. The app is implemented natively using Exact.
-2. **Platform Strategy**: Original target platforms were \`ios, android\` with MVP \`ios\`. Exact natively supports web, macOS, iOS, Linux, and Windows. Web and iOS simulator serve as initial verification targets; Android support is experimental in Exact and deferred.
-3. **Navigation & Modals**: Contract routes handle top-level screens (\`Track\`, \`New\`) and modal presentation handles \`App info modal\`.
-
-${sourceInfo && typeof sourceInfo.path === 'string' ? `## Source Provenance\n- Source document: \`${sourceInfo.path}\`${typeof sourceInfo.sha256 === 'string' ? ` (sha256 \`${sourceInfo.sha256}\`)` : ''}\n- Preserved verbatim in: \`project/info.original.md\`\n` : ''}
-`;
-  } else {
-    infoMd = `# ${appName}
-
-## Product Overview
-- **Project Name**: ${appName}
-- **Framework**: Exact (revision \`${revision}\`)
-- **Template Starter**: ${templateId}
-- **Application ID / Bundle**: \`${bundleId}\`
-- **Target Platforms**: ${platforms}
-
-## Vision & Elevator Pitch
-A high-performance cross-platform application developed with Exact, featuring a declarative Contract interface and TypeScript/Rust data logic.
+${field('screens')}
 
 ## Technical Architecture
 - **UI Specification**: Contract (\`app.contract\`)
-- **Data Logic Seam**: TypeScript (\`app.ts\`) or Rust
-- **Automated Verification**: Contract agent test scripts (\`app.test.contract\`)
+- **Data Logic Seam**: TypeScript (\`app.ts\`)
 - **Build & Development Runner**: \`bun exact.mjs\`
 `;
-  }
 
   const styleMd = `# ${displayName} — Visual & Style Direction
 
@@ -162,14 +115,12 @@ Exact adheres to the **"Write the web, ship the platform"** principle:
 - [ ] Confirm initial test and startup reports; run \`bun exact.mjs test web\` and \`bun exact.mjs web\` successfully
 - [ ] Verify Contract compilation via \`bun exact.mjs contract build\`
 
-## Phase 2: Core Experiment Feature Implementation
-- [ ] Define Experiment data schema in \`app.ts\`
-- [ ] Implement Experiment List view in \`app.contract\`
-- [ ] Implement Create Experiment form and validation in \`app.contract\`
-- [ ] Add functional unit and Contract agent tests in \`app.test.contract\`
+## Phase 2: Product Implementation
+- [ ] Review the confirmed product requirements and plan implementation tasks
+- [ ] Implement the approved features and add relevant tests
 
 ## Phase 3: Platform Hardening & Release
-- [ ] Validate responsive layout on target devices (web and iOS simulator)
+- [ ] Validate responsive layout on the confirmed target platforms
 - [ ] Verify light and dark mode appearance
 - [ ] Complete pre-release validation
 `;
