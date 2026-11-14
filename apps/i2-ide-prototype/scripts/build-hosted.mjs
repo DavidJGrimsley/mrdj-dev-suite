@@ -11,6 +11,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_HOSTED_BASE_PATH, normalizeBasePath } from './lib/base-path.mjs'
 import { verifyHostedOutput } from './lib/verify-hosted-output.mjs'
+import { outputFileHashes, validateHostedOutputLocation } from './lib/hosted-output-safety.mjs'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -38,17 +39,13 @@ const basePath = normalizeBasePath(args.base)
 const outRoot = path.resolve(appRoot, args.out)
 const webDir = path.join(outRoot, 'web')
 
-if (path.relative(appRoot, outRoot).startsWith('..') || outRoot === appRoot) {
-  throw new Error(`--out must be a subdirectory of ${appRoot}`)
-}
-
-fs.rmSync(outRoot, { recursive: true, force: true })
-
 const viteBin = path.join(
   path.dirname(createRequire(import.meta.url).resolve('vite/package.json')),
   'bin',
   'vite.js',
 )
+const previousManifest = validateHostedOutputLocation(appRoot, outRoot, args.archive)
+fs.mkdirSync(outRoot, { recursive: true })
 console.log(`[build-hosted] base ${basePath} -> ${path.relative(appRoot, webDir)}`)
 const build = spawnSync(
   process.execPath,
@@ -73,6 +70,8 @@ const manifest = {
   fileCount: files.length,
   totalBytes,
   indexHtmlSha256: crypto.createHash('sha256').update(fs.readFileSync(path.join(webDir, 'index.html'))).digest('hex'),
+  fileHashes: outputFileHashes(webDir),
+  ...(previousManifest?.archiveSha256 ? { archiveSha256: previousManifest.archiveSha256 } : {}),
 }
 fs.writeFileSync(path.join(outRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
@@ -81,6 +80,8 @@ if (args.archive) {
   const archive = path.join(outRoot, 'isquared-web.tgz')
   const tar = spawnSync('tar', ['-czf', 'isquared-web.tgz', 'web', 'manifest.json'], { cwd: outRoot, stdio: 'inherit' })
   if (tar.status !== 0) throw new Error('tar failed; copy dist-hosted/web manually instead')
+  manifest.archiveSha256 = crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex')
+  fs.writeFileSync(path.join(outRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   console.log(`[build-hosted] archive ${path.relative(appRoot, archive)}`)
 }
 

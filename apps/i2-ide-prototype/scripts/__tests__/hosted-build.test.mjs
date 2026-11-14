@@ -5,6 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { normalizeBasePath, resolveBasePath } from '../lib/base-path.mjs'
 import { verifyHostedOutput } from '../lib/verify-hosted-output.mjs'
+import { outputFileHashes, validateHostedOutputLocation } from '../lib/hosted-output-safety.mjs'
 
 function makeBuild(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'isq-hosted-'))
@@ -34,6 +35,36 @@ test('resolveBasePath prefers ISQUARED_BASE_PATH and defaults to "/" for local d
   assert.equal(resolveBasePath({}), '/')
   assert.equal(resolveBasePath({ FIGMA_PUBLIC_URL: '/figma' }), '/figma/')
   assert.equal(resolveBasePath({ ISQUARED_BASE_PATH: 'iSquared', FIGMA_PUBLIC_URL: '/figma' }), '/iSquared/')
+})
+
+test('hosted output protection preserves unrelated files and rejects changed builds', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'isq-output-safety-'))
+  try {
+    const out = path.join(root, 'public')
+    const web = path.join(out, 'web')
+    fs.mkdirSync(web, { recursive: true })
+    fs.writeFileSync(path.join(out, 'important.txt'), 'preserve me')
+    fs.writeFileSync(path.join(web, 'index.html'), 'existing source')
+    assert.throws(() => validateHostedOutputLocation(root, out, false), /without a matching hosted build manifest/)
+    assert.equal(fs.readFileSync(path.join(out, 'important.txt'), 'utf8'), 'preserve me')
+    assert.equal(fs.readFileSync(path.join(web, 'index.html'), 'utf8'), 'existing source')
+    const fileHashes = outputFileHashes(web)
+    fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ fileCount: 1, indexHtmlSha256: fileHashes['index.html'] }))
+    assert.throws(() => validateHostedOutputLocation(root, out, false), /no file inventory/)
+    fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ fileCount: 1, indexHtmlSha256: fileHashes['index.html'], fileHashes }))
+    assert.doesNotThrow(() => validateHostedOutputLocation(root, out, false))
+    fs.mkdirSync(path.join(web, 'untracked-empty'))
+    assert.throws(() => validateHostedOutputLocation(root, out, false), /untracked empty directory/)
+    fs.rmdirSync(path.join(web, 'untracked-empty'))
+    fs.writeFileSync(path.join(out, 'isquared-web.tgz'), 'unrelated archive')
+    assert.throws(() => validateHostedOutputLocation(root, out, true), /archive not recorded/)
+    assert.equal(fs.readFileSync(path.join(out, 'isquared-web.tgz'), 'utf8'), 'unrelated archive')
+    fs.writeFileSync(path.join(web, 'index.html'), 'user edits')
+    assert.throws(() => validateHostedOutputLocation(root, out, false), /changed since/)
+    assert.throws(() => validateHostedOutputLocation(root, path.resolve(root, '..'), false), /subdirectory/)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('verifyHostedOutput accepts a clean subpath build', () => {
