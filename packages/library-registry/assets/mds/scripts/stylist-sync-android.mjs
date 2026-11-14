@@ -20,14 +20,14 @@ try {
     process.exit(1);
   }
   const require = createRequire(import.meta.url);
+  const loaded = require(modulePath);
   const inputFile = process.env.MDS_STYLIST_INPUT_FILE
     ? path.resolve(projectRoot, process.env.MDS_STYLIST_INPUT_FILE)
-    : path.join(projectRoot, 'project', 'theme.json');
+    : null;
   const styleLibrary = process.env.MDS_STYLIST_STYLE_LIBRARY || 'auto';
   const writePolicy =
     process.env.MDS_STYLIST_WRITE_POLICY === 'overwrite' ? 'overwrite' : 'managed';
-  const theme = JSON.parse(await readFile(inputFile, 'utf8'));
-  const loaded = require(modulePath);
+  const theme = inputFile ? JSON.parse(await readFile(inputFile, 'utf8')) : await loaded.loadStylistTheme(projectRoot);
   const result = await loaded.syncStylistTheme(projectRoot, theme, {
     styleLibrary,
     writePolicy,

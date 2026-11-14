@@ -666,7 +666,7 @@ describe('runOnboardCommand', () => {
     ).resolves.not.toContain('await import(');
     await expect(
       readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
-    ).resolves.toContain("path.join(projectRoot, 'project', 'theme.json')");
+    ).resolves.toContain('loaded.loadStylistTheme(projectRoot)');
     await expect(
       readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
     ).resolves.toContain('createRequire');
