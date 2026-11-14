@@ -79,6 +79,29 @@ const CONTENT_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'co
 
 const GUIDE_RESOURCES = [
   {
+    id: 'jenny-project-creation',
+    name: 'Jenny Project Creation',
+    description: 'Provider-neutral discovery, project blueprint, approval, project-memory and Infie handoff rules.',
+    resourcePath: 'guides/jenny-project-creation.md',
+    keywords: ['jenny', 'generation', 'blueprint', 'requirements', 'exact', 'framework'],
+  },
+  {
+    id: 'framework-exact',
+    name: 'Exact Project Guide',
+    description: 'Revision-aware Exact toolchain, official templates, limitations and verification guidance.',
+    resourcePath: 'guides/framework-exact.md',
+    keywords: ['exact', 'contract', 'rust', 'bun', 'templates'],
+    sourceRepos: ['expo/exact', 'expo/exact-templates'],
+  },
+  {
+    id: 'framework-expo-react-native',
+    name: 'Expo React Native Project Guide',
+    description: 'Existing Expo generator options and framework-specific onboarding resources.',
+    resourcePath: 'guides/framework-expo-react-native.md',
+    keywords: ['expo', 'react native', 'router', 'onboarding', 'eas'],
+    sourceRepos: ['mr-djs-dev-suite'],
+  },
+  {
     id: 'animation-performance',
     name: 'Animation Performance Guide',
     description: 'Practical React Native animation performance guidance from Expo/App & Flow benchmarks.',

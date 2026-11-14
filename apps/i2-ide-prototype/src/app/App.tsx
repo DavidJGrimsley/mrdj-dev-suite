@@ -46,6 +46,39 @@ import {
 } from "./onboarding/onboardingTiming";
 import { PrototypeLimit } from "./components/PrototypeLimit";
 import { SupportNewFrameworkModal } from "./components/SupportNewFrameworkModal";
+import { JennyCreationScreen } from "../jenny/index.ts";
+import {
+  TutorialProvider,
+  TutorialOverlay,
+  useTutorial,
+  ExactWebPreviewFrame,
+  PreviewViewportControls,
+  ProviderIcon,
+  PROVIDER_ACCENT,
+  PROVIDER_TOPIC,
+  SESSION_TAB_LABEL,
+  SESSION_TAB_ACCESSIBLE_LABEL,
+  PLAN_COMPOSER_GHOST,
+  PROVIDERS,
+  PROVIDER_LABEL,
+  SESSION_BRANCH,
+  SESSION_GOAL,
+  SESSION_NAME,
+  SESSION_TAB_ORDER,
+  areAllAgentTasksDone,
+  countCompletedTasks,
+  countProviderMessages,
+  getPrimaryAction,
+  getProgressivePlan,
+  getSessionActions,
+  getSessionComposerPlaceholder,
+  type FlowMessage,
+  type PrimaryActionKey,
+  type ProviderId,
+  type SessionFlowState,
+  type SessionTabId,
+  type TaskStatus,
+} from "../tutorial/index.ts";
 import { SimulatorPreview } from "./components/SimulatorPreview";
 
 const ClosingOverlay = lazy(() => import("./closing/ClosingOverlay").then(module => ({ default: module.ClosingOverlay })));
@@ -1984,9 +2017,22 @@ function ScaledDevice({ type, orientation = "portrait", connected, device, isDes
 const TOOLBAR_H = 42;
 const MODAL_PAD = 16; // breathing room around device in opened mode
 
-function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
+function EmulatorModal({
+  id,
+  onClose,
+  activeProjectId,
+  previewVersion,
+}: {
+  id: WidgetId;
+  onClose: () => void;
+  activeProjectId?: string | null;
+  previewVersion?: "v1" | "v2";
+}) {
   const type: EmuType = id === "emuWeb" ? "web" : id === "emuAndroid" ? "android" : "ios";
   const label = id === "emuWeb" ? "Web Preview" : id === "emuAndroid" ? "Android" : "iOS";
+  const tutorial = useTutorial();
+  // Experimemo's web preview is the real iframe; its device/orientation state is shared with the inline widget.
+  const isExperimemoWeb = activeProjectId === EXPERIMEMO_PROJECT_ID && type === "web";
   const [breakpoint, setBreakpoint] = useState<"mobile" | "desktop">("mobile");
   const [orientation, setOrientation] = useState<EmuOrientation>("portrait");
   const [device, setDevice] = useState(type === "android" ? ANDROID_DEVICES[0] : type === "ios" ? IOS_DEVICES[0] : "");
@@ -2023,10 +2069,12 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
     : 1;
 
   // Opened modal size: hugs the device with a little breathing room
-  const openedStyle = {
-    width:  dim.w + MODAL_PAD * 2,
-    height: dim.h + TOOLBAR_H + MODAL_PAD * 2,
-  };
+  const openedStyle = isExperimemoWeb
+    ? { width: 1040, height: 800 }
+    : {
+        width:  dim.w + MODAL_PAD * 2,
+        height: dim.h + TOOLBAR_H + MODAL_PAD * 2,
+      };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2039,14 +2087,24 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
         className={`bg-[#1a1a1a] border border-white/8 shadow-2xl flex flex-col overflow-hidden ${
           fullscreen ? "fixed inset-0 rounded-none" : "rounded-[12px]"
         }`}
-        style={fullscreen ? {} : openedStyle}
+        style={fullscreen ? {} : { ...openedStyle, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100vh - 16px)" }}
       >
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 bg-[#1d1b20] border-b border-white/5 shrink-0" style={{ height: TOOLBAR_H }}>
           <span className="font-['Rounded_Mplus_1c',sans-serif] text-[13px] text-white">{label}</span>
 
+          {/* Experimemo web: shared Desktop/Mobile + Portrait/Landscape controls */}
+          {isExperimemoWeb && (
+            <PreviewViewportControls
+              device={tutorial.previewDevice}
+              orientation={tutorial.previewOrientation}
+              onDeviceChange={tutorial.setPreviewDevice}
+              onOrientationChange={tutorial.setPreviewOrientation}
+            />
+          )}
+
           {/* Web: breakpoint toggle */}
-          {type === "web" && (
+          {type === "web" && !isExperimemoWeb && (
             <div className="flex items-center gap-0.5 bg-black/30 rounded-[5px] p-0.5">
               {(["mobile", "desktop"] as const).map(bp => (
                 <button key={bp} onClick={() => setBreakpoint(bp)}
@@ -2058,7 +2116,7 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
           )}
 
           {/* Orientation toggle — all types */}
-          {!isDesktop && (
+          {!isDesktop && !isExperimemoWeb && (
             <div className="flex items-center gap-0.5 bg-black/30 rounded-[5px] p-0.5">
               {(["portrait", "landscape"] as EmuOrientation[]).map(o => (
                 <button key={o} onClick={() => setOrientation(o)}
@@ -2085,24 +2143,34 @@ function EmulatorModal({ id, onClose }: { id: WidgetId; onClose: () => void }) {
               title={fullscreen ? "Exit fullscreen" : "Fullscreen"}>
               {fullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
-            <button onClick={onClose} className="text-[#555] hover:text-[#c5c5c5] transition-colors"><X size={14} /></button>
+            <button onClick={onClose} aria-label="Close emulator" className="text-[#555] hover:text-[#c5c5c5] transition-colors"><X size={14} /></button>
           </div>
         </div>
 
         {/* Device body */}
-        <div ref={bodyRef} className="flex-1 flex items-center justify-center bg-[#111] overflow-hidden">
-          {/* Opened: render at natural size (scale=1). Fullscreen: render at computed scale. */}
-          {(!fullscreen || bodySize.w > 0) && (
-            <div style={{
-              width: Math.round(dim.w * scale),
-              height: Math.round(dim.h * scale),
-              flexShrink: 0, position: "relative", overflow: "hidden",
-            }}>
-              <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
-                <DeviceFrame type={type} dim={dim} connected
-                  device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} controlsTarget={simulatorControls} />
+        <div ref={bodyRef} className="flex-1 flex items-center justify-center bg-[#111] overflow-hidden p-2">
+          {isExperimemoWeb ? (
+            <ExactWebPreviewFrame
+              version={previewVersion ?? "v1"}
+              device={tutorial.previewDevice}
+              orientation={tutorial.previewOrientation}
+              mode="fill"
+              className="p-2"
+            />
+          ) : (
+            /* Opened: render at natural size (scale=1). Fullscreen: render at computed scale. */
+            (!fullscreen || bodySize.w > 0) && (
+              <div style={{
+                width: Math.round(dim.w * scale),
+                height: Math.round(dim.h * scale),
+                flexShrink: 0, position: "relative", overflow: "hidden",
+              }}>
+                <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
+                  <DeviceFrame type={type} dim={dim} connected
+                    device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} controlsTarget={simulatorControls} />
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
       </motion.div>
@@ -2140,7 +2208,7 @@ function WidgetModal({ id, label, fullscreen: initialFullscreen, onClose, ctx }:
               ? <button onClick={() => setFullscreen(false)} className="text-[#555] hover:text-[#abefa3] transition-colors" title="Exit fullscreen"><Minimize2 size={14} /></button>
               : <button onClick={() => setFullscreen(true)} className="text-[#555] hover:text-[#abefa3] transition-colors" title="Fullscreen"><Maximize2 size={14} /></button>
             }
-            <button onClick={onClose} className="text-[#555] hover:text-[#c5c5c5] transition-colors"><X size={14} /></button>
+            <button onClick={onClose} aria-label="Close emulator" className="text-[#555] hover:text-[#c5c5c5] transition-colors"><X size={14} /></button>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
@@ -3164,7 +3232,7 @@ function Header({
       docked={breadcrumbsDocked}
       side="left"
     >
-      <div className="content-stretch flex gap-[16px] h-[29px] items-center relative shrink-0" data-node-id="200:4" data-name="HeaderBreadcrumbs">
+      <div className="content-stretch flex flex-wrap sm:flex-nowrap gap-2 sm:gap-[16px] min-h-[29px] items-center relative shrink-0 max-w-full" data-node-id="200:4" data-name="HeaderBreadcrumbs">
         {/* i2 pill */}
         <div className="content-stretch flex items-center relative shrink-0" data-node-id="200:5" data-name="Container">
           <button
@@ -3315,7 +3383,8 @@ function Header({
               </span>
             )}
             <p
-              className={`[word-break:break-word] font-['Space_Grotesk:Bold',sans-serif] font-bold leading-[27px] relative shrink-0 text-[18px] tracking-[-0.54px] whitespace-nowrap transition-colors ${
+              title={sessionLabel || "Session"}
+              className={`font-['Space_Grotesk:Bold',sans-serif] font-bold leading-[27px] relative shrink-0 text-[16px] sm:text-[18px] tracking-[-0.54px] truncate max-w-[110px] sm:max-w-[210px] transition-colors ${
                 activeLevel === "session"
                   ? "text-[#061413]"
                   : sessionLabel && sessionLabel !== "Session"
@@ -3378,6 +3447,11 @@ function Header({
                       {projectLabel || "Project"} · Sessions
                     </span>
                   </div>
+                  {(allSessions || []).length === 0 && (
+                    <p data-testid="session-dropdown-empty" className="px-3 py-2 text-[12px] font-['Space_Grotesk',sans-serif] text-white/40">
+                      No sessions yet
+                    </p>
+                  )}
                   {((allSessions || []).filter((s) => {
                     if (currentProjectId && s.projectId === currentProjectId) return true;
                     if (projectLabel && projectLabel.toLowerCase().includes("pet") && s.projectId === "pet") return true;
@@ -3560,7 +3634,7 @@ function Header({
           showHeaderControls
             ? "border-[rgba(255,255,255,0.06)] border-b-[0.667px] border-solid "
             : ""
-        }content-stretch flex h-[59px] items-center justify-between px-[24px] relative w-full shrink-0 z-20`
+        }content-stretch flex flex-wrap lg:flex-nowrap min-h-[59px] lg:h-[59px] gap-2 items-center justify-between px-3 sm:px-[24px] py-2 lg:py-0 relative w-full shrink-0 z-20`
       }
       data-node-id="200:3"
       data-name="Header"
@@ -3990,6 +4064,38 @@ const SESSION_FLOW: Record<SessionStatus, FlowStep> = {
 // ─── Prototype data ────────────────────────────────────────────────────────
 
 interface ProtoProject { id: string; name: string; desc: string; framework: string; sessions: number; ago: string; active?: boolean; wired: boolean; }
+
+// Tutorial-owned Experimemo records. They exist only after Jenny completes (project) and after
+// Start Session (session); they are never part of the static prototype lists below.
+export const EXPERIMEMO_PROJECT_ID = "experimemo";
+export const EXPERIMEMO_SESSION_ID = "experimemo-session";
+
+export function buildExperimemoProject(sessionCount: number): ProtoProject {
+  return {
+    id: EXPERIMEMO_PROJECT_ID,
+    name: "Experimemo",
+    desc: "Field notebook for simple experiments",
+    framework: "Exact",
+    sessions: sessionCount,
+    ago: "Now",
+    active: true,
+    wired: true,
+  };
+}
+
+export const EXPERIMEMO_SESSION: ProtoSession = {
+  id: EXPERIMEMO_SESSION_ID,
+  projectId: EXPERIMEMO_PROJECT_ID,
+  name: SESSION_NAME,
+  branch: SESSION_BRANCH,
+  model: "OpenAI · Claude · Gemini",
+  agents: 3,
+  tasksTotal: 3,
+  tasksDone: 0,
+  initial: "CODING",
+  wired: true,
+  desc: SESSION_GOAL,
+};
 
 const PROTOTYPE_PROJECTS: ProtoProject[] = [
   { id: "pet",       name: "Pet Show and Tell", desc: "Pet photo sharing social app",     framework: "Expo",      sessions: 2, ago: "Now",   active: true,  wired: true  },
@@ -4526,6 +4632,500 @@ function OP4MyWidgetsGrid({ onOpenWidget }: { onOpenWidget?: (id: WidgetId, labe
   );
 }
 
+// ─── Experimemo walkthrough building blocks ────────────────────────────────
+
+const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  pending: "pending",
+  in_progress: "in progress",
+  needs_fix: "needs fix",
+  completed: "completed",
+};
+
+// The session/project-home composer: a real input with a real Send button. `glow` marks the
+// scripted step where Infie wants the viewer to press Send. `readOnly` locks fixed tutorial answers.
+function InfieComposer({
+  value,
+  onChange,
+  onSend,
+  placeholder,
+  glow = false,
+  disabled = false,
+  readOnly = false,
+  ariaLabel = "Message Infie",
+  className = "",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  placeholder: string;
+  glow?: boolean;
+  disabled?: boolean;
+  readOnly?: boolean;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const canSend = !disabled && value.trim().length > 0;
+  const glowOn = glow && canSend;
+  return (
+    <div className={`bg-[#252323] border border-[rgba(45,212,191,0.14)] rounded-[8px] flex gap-2 items-end px-3 py-2 ${className}`}>
+      <input
+        data-testid="composer-input"
+        value={value}
+        onChange={e => { if (!readOnly) onChange(e.target.value); }}
+        onKeyDown={e => { if (e.key === "Enter" && canSend) onSend(); }}
+        disabled={disabled}
+        readOnly={readOnly}
+        aria-readonly={readOnly || undefined}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className={`flex-1 min-w-0 bg-transparent text-[12px] text-white placeholder-[#555] focus:outline-none disabled:opacity-60 ${readOnly ? "cursor-default select-none text-[#2dd4bf] font-medium" : ""}`}
+        style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+      />
+      {readOnly && value.trim().length > 0 && (
+        <span
+          data-testid="composer-fixed-badge"
+          className="px-1.5 py-0.5 rounded bg-[rgba(45,212,191,0.1)] border border-[rgba(45,212,191,0.28)] text-[9px] font-mono uppercase tracking-wide text-[#2dd4bf] shrink-0"
+        >
+          Fixed reply
+        </span>
+      )}
+      <button
+        type="button"
+        data-testid="composer-send"
+        data-glow={glowOn ? "true" : "false"}
+        disabled={!canSend}
+        onClick={onSend}
+        aria-label="Send"
+        className={`rounded-[6px] flex items-center justify-center shrink-0 size-7 transition-colors disabled:opacity-40 ${glowOn ? "animate-pulse motion-reduce:animate-none" : "bg-[rgba(255,255,255,0.05)] hover:bg-white/10"}`}
+        style={glowOn ? { ...glassStyle("teal"), cursor: "pointer" } : undefined}
+      >
+        <Send size={13} color={glowOn ? "#2dd4bf" : "#444"} />
+      </button>
+    </div>
+  );
+}
+
+// The capsule-style Infie action (What's Next, Start Session, Continue, Fix Problems...).
+function InfieFlowPill({
+  label,
+  preset,
+  icon: Icon,
+  glow = true,
+  onClick,
+  testId,
+}: {
+  label: string;
+  preset: ActionPreset;
+  icon?: IconCmp;
+  glow?: boolean;
+  onClick: () => void;
+  testId: string;
+}) {
+  const c = PRESET_RGB[preset];
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      data-glow={glow ? "true" : "false"}
+      onClick={onClick}
+      className="relative rounded-[999px] shrink-0 hover:brightness-110 transition-all"
+      style={{ filter: `drop-shadow(0px 0px ${glow ? 10 : 6}px rgba(${c},${glow ? 0.55 : 0.35}))` }}
+    >
+      <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[999px]" style={{ background: `rgba(${c},0.12)` }} />
+      <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[999px]" style={{ border: `1px solid rgba(${c},0.6)` }} />
+      <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
+        {Icon ? <span style={{ color: `rgb(${c})` }}><Icon size={14} /></span> : <span className="font-medium text-[14px]" style={{ color: `rgb(${c})` }}>✦</span>}
+        <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">{label}</span>
+      </div>
+      <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[inherit]" style={{ boxShadow: `inset 0px 0px 25px 0px rgba(${c},0.25)` }} />
+    </button>
+  );
+}
+
+function ProviderAvatar({ provider }: { provider: ProviderId }) {
+  return (
+    <div
+      className="size-[22px] rounded-full bg-[#18181f] border flex items-center justify-center shrink-0"
+      style={{ borderColor: `${PROVIDER_ACCENT[provider]}66` }}
+      aria-label={PROVIDER_LABEL[provider]}
+    >
+      <ProviderIcon provider={provider} size={13} />
+    </div>
+  );
+}
+
+// One scripted message (Infie, viewer or a provider) in the Experimemo project/session chats.
+function FlowMessageBubble({
+  msg,
+  infieAvatar,
+  onJump,
+}: {
+  msg: FlowMessage;
+  infieAvatar: React.ReactNode;
+  onJump?: (tab: SessionTabId) => void;
+}) {
+  const isUser = msg.role === "user";
+  const isProvider = msg.role !== "infie" && msg.role !== "user";
+  const avatar = isUser ? null : isProvider ? <ProviderAvatar provider={msg.role as ProviderId} /> : infieAvatar;
+  const tone =
+    msg.kind === "problem"
+      ? "bg-[rgba(251,191,36,0.07)] border-[rgba(251,191,36,0.35)]"
+      : msg.kind === "report"
+      ? "bg-[#151822] border-[rgba(45,212,191,0.25)]"
+      : msg.kind === "handoff"
+      ? "bg-[rgba(45,212,191,0.06)] border-[rgba(45,212,191,0.28)]"
+      : "";
+  return (
+    <div
+      data-testid="flow-message"
+      data-role={msg.role}
+      data-kind={msg.kind ?? "plain"}
+      className={`flex gap-[10px] items-start w-full ${isUser ? "justify-end" : "justify-start"}`}
+    >
+      {avatar}
+      <div className={`max-w-[88%] flex flex-col gap-1 ${isUser ? "items-end" : "items-start"}`}>
+        {!isUser && (
+          <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#71717a] px-0.5">
+            <span className="font-semibold text-[#94a3b8]">{msg.sender}</span>
+            {msg.badge && (
+              <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] font-mono uppercase tracking-wide text-[#a1a1aa]">
+                {msg.badge}
+              </span>
+            )}
+          </div>
+        )}
+        <div
+          className={`break-words text-[12px] leading-[19.5px] font-['Rounded_Mplus_1c',sans-serif] ${
+            isUser
+              ? "bg-[#2dd4bf] text-[#06201d] px-[14px] py-[10px] rounded-[12px]"
+              : `px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] border text-[#d4d4d8] ${tone || "bg-[rgba(45,212,191,0.05)] border-[rgba(45,212,191,0.16)]"}`
+          }`}
+        >
+          <p>{msg.text}</p>
+          {msg.details && msg.details.length > 0 && (
+            <ul className="mt-1.5 font-mono text-[10px] text-[#7dd3fc] space-y-0.5">
+              {msg.details.map((d, i) => <li key={i}>{d}</li>)}
+            </ul>
+          )}
+          {msg.kind === "handoff" && msg.target && onJump && (
+            <button
+              type="button"
+              data-testid={`handoff-jump-${msg.target}`}
+              onClick={() => onJump(msg.target!)}
+              className="mt-2 px-2 py-0.5 rounded bg-[rgba(45,212,191,0.16)] border border-[rgba(45,212,191,0.35)] text-[#2dd4bf] text-[10px] font-semibold hover:brightness-110 flex items-center gap-1 cursor-pointer"
+            >
+              <span>Open {PROVIDER_TOPIC[msg.target]}</span>
+              <ArrowRight size={10} />
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Inline web preview for Experimemo: same real iframe and shared viewport state as the enlarged modal.
+function ExperimemoPreviewWidget({ onEnlarge, glow = false }: { onEnlarge: () => void; glow?: boolean }) {
+  const tutorial = useTutorial();
+  return (
+    <div
+      data-testid="inline-web-preview"
+      data-web-preview-glow={glow ? "true" : "false"}
+      className={`flex flex-col rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
+        glow
+          ? "border border-[#2dd4bf] shadow-[0_0_20px_rgba(45,212,191,0.45)]"
+          : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-[8px] px-[12px] py-[7px] w-full shrink-0 border-b border-[rgba(255,255,255,0.05)] bg-[#1d1b20]">
+        <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Web Preview</span>
+        <button
+          type="button"
+          data-testid="inline-web-preview-enlarge"
+          onClick={onEnlarge}
+          aria-label="Enlarge web preview"
+          title="Enlarge"
+          className="text-[#555] hover:text-[#abefa3] transition-colors"
+        >
+          <Maximize2 size={11} />
+        </button>
+      </div>
+      <div className="bg-[#252323] p-2 flex flex-col gap-2">
+        <PreviewViewportControls
+          device={tutorial.previewDevice}
+          orientation={tutorial.previewOrientation}
+          onDeviceChange={tutorial.setPreviewDevice}
+          onOrientationChange={tutorial.setPreviewOrientation}
+        />
+        <ExactWebPreviewFrame
+          version={tutorial.previewVersion}
+          device={tutorial.previewDevice}
+          orientation={tutorial.previewOrientation}
+          mode="inline"
+          maxHeight={440}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Restored Human Testing panel for Experimemo's project home: empty until a session creates its rows.
+function ExperimemoHumanTesting({ session }: { session: SessionFlowState | null }) {
+  const rows = session?.humanTests ?? [];
+  const done = rows.filter(r => r.done).length;
+  return (
+    <div data-name="HumanTestingPanel" className="border border-[rgba(255,255,255,0.05)] flex flex-col overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
+      <OP4SectionHeader label={`Human Testing ${done}/${rows.length}`} color="dark" icon={<OP4DotIcon />} />
+      <div className="bg-[#252323] flex flex-col w-full">
+        {session && rows.length > 0 && (
+          <>
+            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+              <OP4CodesandboxIcon size={16} />
+              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777] truncate">{SESSION_NAME}</p>
+            </div>
+            {rows.map(r => <OP4CheckRow key={r.id} done={r.done} text={r.text} />)}
+          </>
+        )}
+        <OP4AddItemRow />
+      </div>
+    </div>
+  );
+}
+
+// Progressive PPP Plan widget rendered in the Project Home lower slot during ping-pong planning and plan-ready.
+function ExperimemoPlanWidget({ planCursor, planNotes }: { planCursor: number; planNotes: string[] }) {
+  const plan = getProgressivePlan(planCursor, planNotes);
+  const progressSteps = Math.min(planCursor, 6);
+  return (
+    <div
+      data-testid="plan-widget"
+      data-plan-cursor={planCursor}
+      className="border border-[rgba(45,212,191,0.22)] flex flex-col h-[320px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full"
+    >
+      <OP4SectionHeader label="Plan" color="green" icon={<OP4DotIcon />} />
+      <div className="bg-[#18171c] border-b border-[rgba(255,255,255,0.05)] flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 shrink-0">
+        <span className="font-mono text-[10px] text-[#2dd4bf]">
+          Ping-pong synthesis · step {progressSteps}/6
+        </span>
+        <span className="font-mono text-[10px] text-[#94a3b8]">
+          Scripted demo · no live model calls
+        </span>
+      </div>
+      <div className="bg-[#252323] flex-1 min-h-0 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="bg-[#0b131d] border border-[rgba(255,255,255,0.06)] rounded-[8px] p-2.5 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#2dd4bf] font-semibold">
+              {plan.schemaTitle}
+            </span>
+          </div>
+          {plan.schemaFields.length > 0 ? (
+            <ul className="font-mono text-[10px] text-[#d4d4d8] space-y-0.5">
+              {plan.schemaFields.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[11px] text-[#71717a]">Waiting for OpenAI schema proposal…</p>
+          )}
+          <p className="font-mono text-[10px] text-[#7dd3fc] mt-0.5">{plan.storageDetail}</p>
+        </div>
+
+        <div className="bg-[#0b131d] border border-[rgba(255,255,255,0.06)] rounded-[8px] p-2.5 flex flex-col gap-1.5">
+          <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#abefa3] font-semibold">
+            Screens &amp; dependencies
+          </span>
+          {plan.screens.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {plan.screens.map((s) => (
+                <span key={s} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] text-[#e4e4e7]">
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[#71717a]">Waiting for Claude screen flow…</p>
+          )}
+          {plan.dependencies.length > 0 && (
+            <ul className="text-[10.5px] text-[#cbd5e1] space-y-0.5 mt-0.5">
+              {plan.dependencies.map((d, i) => (
+                <li key={i}>{d}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {plan.cameraDetail && (
+          <div className="bg-[#0b131d] border border-[rgba(255,255,255,0.06)] rounded-[8px] p-2.5 flex flex-col gap-1">
+            <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#fbbf24] font-semibold">
+              Camera &amp; web testing
+            </span>
+            <p className="text-[11px] text-[#d4d4d8] leading-snug">{plan.cameraDetail}</p>
+            {plan.processDetail && (
+              <p className="font-mono text-[10px] text-[#94a3b8] mt-1">{plan.processDetail}</p>
+            )}
+          </div>
+        )}
+
+        {plan.models && (
+          <div className="bg-[#0b131d] border border-[rgba(45,212,191,0.22)] rounded-[8px] p-2.5 flex flex-col gap-1">
+            <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#c084fc] font-semibold">
+              Model assignments
+            </span>
+            <p className="text-[11px] text-[#f3f4f6]">
+              <strong className="text-[#c084fc]">Architecture &amp; review:</strong> {plan.models.architectureReview}
+            </p>
+            <ul className="text-[10.5px] text-[#cbd5e1] space-y-0.5">
+              {plan.models.gruntWork.map((m, i) => (
+                <li key={i}>{m}</li>
+              ))}
+            </ul>
+            <p className="text-[10px] text-[#94a3b8] mt-0.5">{plan.models.policyNote}</p>
+          </div>
+        )}
+
+        {plan.notes.length > 0 && (
+          <div className="sm:col-span-2 bg-[rgba(45,212,191,0.06)] border border-[rgba(45,212,191,0.22)] rounded-[8px] p-2.5 flex flex-col gap-1">
+            <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#2dd4bf] font-semibold">
+              Your plan notes
+            </span>
+            <ul className="text-[11px] text-[#e2e8f0] space-y-0.5">
+              {plan.notes.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Inline i²-styled PR Review widget shown in the split workspace during Review Changes & Wrap up.
+function ExperimemoPRReviewWidget({ session }: { session: SessionFlowState }) {
+  const phase = session.wrapUpPhase;
+  const cursor = session.wrapUpCursor;
+  const doctorOk = phase === "green" || phase === "merged" || (phase === "polling" && cursor >= 1);
+  const ciState =
+    phase === "green" || phase === "merged"
+      ? "passing"
+      : phase === "polling" && cursor >= 2
+      ? "fixing lint warning…"
+      : phase === "polling"
+      ? "polling…"
+      : "queued for Wrap up";
+  const commentsState =
+    phase === "green" || phase === "merged"
+      ? "all comments addressed"
+      : phase === "polling" && cursor >= 3
+      ? "applying fix…"
+      : phase === "polling"
+      ? "checking threads…"
+      : "awaiting Wrap up";
+  const statusLabel =
+    phase === "merged"
+      ? "Merge simulated"
+      : phase === "green"
+      ? "Checks green"
+      : phase === "polling"
+      ? "Polling checks…"
+      : "Ready for Wrap up";
+  const statusTone =
+    phase === "merged"
+      ? "text-[#c084fc] border-[rgba(192,132,252,0.4)] bg-[rgba(192,132,252,0.12)]"
+      : phase === "green"
+      ? "text-[#abefa3] border-[rgba(171,239,163,0.4)] bg-[rgba(171,239,163,0.12)]"
+      : phase === "polling"
+      ? "text-[#2dd4bf] border-[rgba(45,212,191,0.4)] bg-[rgba(45,212,191,0.12)]"
+      : "text-[#60a5fa] border-[rgba(96,165,250,0.4)] bg-[rgba(96,165,250,0.12)]";
+
+  return (
+    <div
+      data-testid="pr-review-widget"
+      data-wrapup-phase={phase}
+      className="flex-1 min-w-0 md:w-1/2 min-h-[220px] flex flex-col rounded-[6px] overflow-hidden border border-[rgba(96,165,250,0.28)] bg-[#141318] shadow-[0px_4px_12px_rgba(0,0,0,0.25)]"
+    >
+      <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between gap-2 px-3 py-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <GitPullRequest size={14} className="text-[#60a5fa] shrink-0" />
+          <div className="min-w-0">
+            <p className="font-['Inter',sans-serif] font-semibold text-[12px] text-white truncate">
+              Pull Request Review
+            </p>
+            <p className="font-mono text-[10px] text-[#94a3b8] truncate">
+              {SESSION_BRANCH} → main
+            </p>
+          </div>
+        </div>
+        <span
+          data-testid="pr-review-status-pill"
+          className={`px-2 py-0.5 rounded-[5px] border font-mono text-[10px] uppercase tracking-wide shrink-0 ${statusTone}`}
+        >
+          {statusLabel}
+        </span>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 flex flex-col gap-3">
+        <div className="bg-[#1b1a22] border border-[rgba(255,255,255,0.06)] rounded-[8px] p-3 flex flex-col gap-1.5">
+          <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#2dd4bf] font-semibold">
+            Story summary
+          </span>
+          <p className="text-[12px] text-[#e4e4e7] leading-relaxed">{SESSION_GOAL}</p>
+          <ul className="text-[11px] text-[#a1a1aa] space-y-1 list-disc pl-4">
+            <li>Schema &amp; offline storage wired to <span className="font-mono text-[#7dd3fc]">app:/data/experiments.json</span>.</li>
+            <li>New, Track, Experiment Editor, and App Info views connected end to end.</li>
+            <li>Camera capture updated with <span className="font-mono text-[#7dd3fc]">app.ts</span> grant <span className="font-mono text-[#7dd3fc]">device.camera purpose.camera</span> and <span className="font-mono text-[#7dd3fc]">strings/en.json</span> <span className="font-mono text-[#7dd3fc]">purpose.camera</span>.</li>
+          </ul>
+          <p className="font-mono text-[10px] text-[#71717a] mt-0.5">
+            Simulated PR view · no remote repository or network requests triggered
+          </p>
+        </div>
+
+        <div className="bg-[#1b1a22] border border-[rgba(255,255,255,0.06)] rounded-[8px] p-3 flex flex-col gap-2">
+          <span className="font-['Inter',sans-serif] text-[10px] uppercase tracking-wider text-[#94a3b8] font-semibold">
+            Simulated checks
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+            <div className="bg-[#121118] border border-white/5 rounded-[6px] p-2">
+              <p className="font-mono text-[10px] text-[#71717a] uppercase">Doctor</p>
+              <p className={`font-semibold mt-0.5 ${doctorOk ? "text-[#abefa3]" : "text-[#e4e4e7]"}`}>
+                {doctorOk ? "Zero errors" : "Pending check"}
+              </p>
+            </div>
+            <div className="bg-[#121118] border border-white/5 rounded-[6px] p-2">
+              <p className="font-mono text-[10px] text-[#71717a] uppercase">CI suite</p>
+              <p className={`font-semibold mt-0.5 ${ciState === "passing" ? "text-[#abefa3]" : "text-[#fbbf24]"}`}>
+                {ciState}
+              </p>
+            </div>
+            <div className="bg-[#121118] border border-white/5 rounded-[6px] p-2">
+              <p className="font-mono text-[10px] text-[#71717a] uppercase">Review comments</p>
+              <p className={`font-semibold mt-0.5 ${commentsState === "all comments addressed" ? "text-[#abefa3]" : "text-[#60a5fa]"}`}>
+                {commentsState}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-[#1b1a22] border border-[rgba(255,255,255,0.06)] rounded-[8px] overflow-hidden">
+          <div className="bg-[rgba(37,35,35,0.6)] border-b border-[rgba(255,255,255,0.05)] flex items-center justify-between px-3 py-2">
+            <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] uppercase tracking-[0.275px] text-[#cbd5e1]">
+              Session diffs
+            </span>
+            <span className="font-mono text-[10px] text-[#94a3b8]">
+              {session.diffs.length} {session.diffs.length === 1 ? "file" : "files"}
+            </span>
+          </div>
+          <div className="divide-y divide-[rgba(255,255,255,0.05)]">
+            {session.diffs.map((d, idx) => (
+              <OS1DiffRow key={idx} status={d.status} name={d.name} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Project Home ──────────────────────────────────────────────────────────
 
 function ProjectHomeScreen({
@@ -4554,7 +5154,7 @@ function ProjectHomeScreen({
   musicSlotRef,
 }: {
   project: ProtoProject;
-  onOpenSession: (s: ProtoSession) => void;
+  onOpenSession: (s: ProtoSession, opts?: { justStarted?: boolean }) => void;
   onScopeNotice: (msg: string) => void;
   onHome: () => void;
   onPlayground: () => void;
@@ -4583,6 +5183,7 @@ function ProjectHomeScreen({
   );
   const fixReaction = sessions.find(s => s.id === "fix-reaction-bug");
   const addComments = sessions.find(s => s.id === "add-comments") ?? sessions[0];
+  const tutorial = useTutorial();
   const openSession = (s: ProtoSession | undefined) => {
     if (!s) return;
     s.wired ? onOpenSession(s) : onScopeNotice("This session is not wired into this prototype yet.");
@@ -4603,10 +5204,12 @@ function ProjectHomeScreen({
   const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
   // Keep the newest tutorial line in view (scroll only the message list, never ancestors).
   const projectChatListRef = useRef<HTMLDivElement>(null);
+  const isExperimemoHome = project.id === EXPERIMEMO_PROJECT_ID;
+  const experimemoFlow = tutorial.flow;
   useEffect(() => {
     const el = projectChatListRef.current;
-    if (isTutorialActive && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [isTutorialActive, dockedChat.history]);
+    if ((isTutorialActive || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [isTutorialActive, dockedChat.history, isExperimemoHome, experimemoFlow.homeMessages.length]);
 
   return (
     <div className="size-full flex flex-col relative overflow-hidden" style={{ background: "#0a0814" }}>
@@ -4638,13 +5241,35 @@ function ProjectHomeScreen({
         levelPillDocked={levelPillDocked}
         breadcrumbsDocked={breadcrumbsDocked}
         disabled={disabled}
+        tab={project.id === "experimemo" ? "Workspace" : undefined}
+        onTabChange={
+          project.id === "experimemo"
+            ? (t) => {
+                if (t === "Emulators") onOpenWidget?.("emuWeb", "Web Preview");
+              }
+            : undefined
+        }
         onOpenSession={() => {
-          const firstWired = sessions.find(s => s.wired);
+          const firstWired = project.id === EXPERIMEMO_PROJECT_ID
+            ? (tutorial.sessionStarted ? EXPERIMEMO_SESSION : undefined)
+            : sessions.find(s => s.wired);
           if (firstWired) openSession(firstWired);
         }}
         onScopeNotice={onScopeNotice}
         rightSlot={
-          showStartAppSlot ? (
+          project.id === "experimemo" ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="project-home-web-preview-button"
+                onClick={() => onOpenWidget?.("emuWeb", "Web Preview")}
+                className="bg-[#2dd4bf] text-[#061413] flex gap-[6px] h-[28px] items-center px-[10px] rounded-[5px] font-bold text-[11px] hover:brightness-110 cursor-pointer shadow-sm transition-all"
+              >
+                <Globe size={12} />
+                <span>Web Preview</span>
+              </button>
+            </div>
+          ) : showStartAppSlot ? (
             <div className="flex items-center">
               <div className="bg-[rgba(171,239,163,0.15)] border-[rgba(171,239,163,0.3)] border-b border-l border-t border-solid flex gap-[6px] h-[28px] items-center pl-[10px] pr-[8px] rounded-bl-[5px] rounded-tl-[5px]">
                 <svg className="size-[11px]" fill="rgba(171,239,163,0.8)" viewBox="0 0 11 11"><path d={svgPathsOP4.p20d46b80} /></svg>
@@ -4667,7 +5292,7 @@ function ProjectHomeScreen({
       <div className="flex-1 flex gap-[8px] items-stretch p-[10px] overflow-hidden min-h-0 relative z-10">
 
         {/* ── LEFT COLUMN ── */}
-        {showRoadmapSessions && <div className="w-[236px] shrink-0 flex flex-col gap-[24px] overflow-y-auto">
+        {showRoadmapSessions && <div className="hidden md:flex w-[236px] shrink-0 flex-col gap-[24px] overflow-y-auto">
 
           {/* Project Folder */}
           <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[146.5px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
@@ -4682,11 +5307,15 @@ function ProjectHomeScreen({
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity (not part of the Experimemo project home) */}
+          {project.id !== EXPERIMEMO_PROJECT_ID && (
           <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[118px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
             <OP4SectionHeader label="Recent Activity" color="green" icon={<OP4DotIcon />} />
             <div className="bg-[#252323] flex flex-col w-full">
-              {["add comments", "fix-reaction-bug"].map(name => (
+              {(project.id === "experimemo"
+                ? ["screens-and-function", "initial-workspace"]
+                : ["add comments", "fix-reaction-bug"]
+              ).map(name => (
                 <div key={name} className="flex gap-[8px] items-center px-[12px] py-[6px] w-full">
                   <OP4CodesandboxIcon size={16} />
                   <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[16px]">{name}</p>
@@ -4695,53 +5324,107 @@ function ProjectHomeScreen({
               <OP4AddItemRow />
             </div>
           </div>
+          )}
 
           {/* Agent Tasks */}
           <div className="border border-[rgba(255,255,255,0.05)] flex flex-1 flex-col min-h-px overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
             <OP4SectionHeader label="Agent Tasks" color="dark" icon={<OP4DotIcon />} />
-            {/* INFIE */}
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <div className="relative shrink-0 size-[22px]">
-                <svg className="absolute block inset-0 size-full" fill="none" viewBox="0 0 22 22">
-                  <mask fill="white" id="op4-at-mask"><path d={svgPathsOP4.p3d935080} /></mask>
-                  <path d={svgPathsOP4.p3d935080} fill="#2DD4BF" fillOpacity="0.094" />
-                  <path d={svgPathsOP4.pd00cf00} fill="#2DD4BF" fillOpacity="0.25" mask="url(#op4-at-mask)" />
-                  <path d={svgPathsOP4.p141f87c0} stroke="#2DD4BF" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.875" />
-                </svg>
-              </div>
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Infie</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col w-full">
-              <OP4CheckRow done={true} text="Create add comments session" />
-              <OP4CheckRow done={true} text="Create Fix Reaction Bugs session" />
-              <OP4CheckRow done={false} text="Open PR for Project folder" />
-              <OP4AddItemRow />
-            </div>
-            {/* ADD COMMENTS */}
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <OP4CodesandboxIcon size={16} />
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col w-full">
-              <OP4CheckRow done={true} text="Implement PhotoPicker component" />
-              <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
-              <OP4CheckRow done={false} text="Compress images before upload" />
-              <OP4AddItemRow />
-            </div>
-            {/* FIX REACTION BUGS */}
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <OP4CodesandboxIcon size={16} />
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">fix reaction bugs</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col w-full">
-              <OP4CheckRow done={true} text="Implement PhotoPicker component" />
-              <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
-              <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
-              <OP4CheckRow done={false} text="Add friend list query to Supabase" />
-              <OP4CheckRow done={false} text="Handle photo library permissions" />
-              <OP4AddItemRow />
-            </div>
+            {project.id === "experimemo" ? (
+              <>
+                {/* INFIE */}
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <div className="relative shrink-0 size-[22px]">
+                    <svg className="absolute block inset-0 size-full" fill="none" viewBox="0 0 22 22">
+                      <mask fill="white" id="op4-at-mask-exp"><path d={svgPathsOP4.p3d935080} /></mask>
+                      <path d={svgPathsOP4.p3d935080} fill="#2DD4BF" fillOpacity="0.094" />
+                      <path d={svgPathsOP4.pd00cf00} fill="#2DD4BF" fillOpacity="0.25" mask="url(#op4-at-mask-exp)" />
+                      <path d={svgPathsOP4.p141f87c0} stroke="#2DD4BF" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.875" />
+                    </svg>
+                  </div>
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Infie</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full">
+                  <OP4CheckRow done={true} text="Generate Experimemo workspace" />
+                  <OP4AddItemRow />
+                </div>
+                {tutorial.session && (
+                  <>
+                    <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                      <OP4CodesandboxIcon size={16} />
+                      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777] truncate">{SESSION_NAME}</p>
+                    </div>
+                    <div className="bg-[#252323] flex flex-col w-full">
+                      {tutorial.session.tasks.map(t => (
+                        <OP4CheckRow key={t.id} done={t.status === "completed"} text={t.label} />
+                      ))}
+                      <OP4AddItemRow />
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {/* INFIE */}
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <div className="relative shrink-0 size-[22px]">
+                    <svg className="absolute block inset-0 size-full" fill="none" viewBox="0 0 22 22">
+                      <mask fill="white" id="op4-at-mask"><path d={svgPathsOP4.p3d935080} /></mask>
+                      <path d={svgPathsOP4.p3d935080} fill="#2DD4BF" fillOpacity="0.094" />
+                      <path d={svgPathsOP4.pd00cf00} fill="#2DD4BF" fillOpacity="0.25" mask="url(#op4-at-mask)" />
+                      <path d={svgPathsOP4.p141f87c0} stroke="#2DD4BF" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.875" />
+                    </svg>
+                  </div>
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Infie</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full">
+                  <OP4CheckRow done={true} text="Create add comments session" />
+                  <OP4CheckRow done={true} text="Create Fix Reaction Bugs session" />
+                  <OP4CheckRow done={false} text="Open PR for Project folder" />
+                  <OP4AddItemRow />
+                </div>
+                {/* ADD COMMENTS */}
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <OP4CodesandboxIcon size={16} />
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full">
+                  <OP4CheckRow done={true} text="Implement PhotoPicker component" />
+                  <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
+                  <OP4CheckRow done={false} text="Compress images before upload" />
+                  <OP4AddItemRow />
+                </div>
+                {/* FIX REACTION BUGS */}
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <OP4CodesandboxIcon size={16} />
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">fix reaction bugs</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full">
+                  <OP4CheckRow done={true} text="Implement PhotoPicker component" />
+                  <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
+                  <OP4CheckRow done={true} text="Wire up usePhotoShare hook" />
+                  <OP4CheckRow done={false} text="Add friend list query to Supabase" />
+                  <OP4CheckRow done={false} text="Handle photo library permissions" />
+                  <OP4AddItemRow />
+                </div>
+              </>
+            )}
           </div>
+          {/* Explorer — bottom-left for Experimemo */}
+          {project.id === EXPERIMEMO_PROJECT_ID && (
+            <div data-testid="project-explorer" className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[210px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
+              <OP4SectionHeader label="Explorer" color="dark" icon={<OP4DotIcon />} />
+              <div className="bg-[#252323] flex flex-1 flex-col overflow-clip p-[4px]">
+                <div className="flex gap-[6px] items-center px-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">experimemo-i2Workspace</p></div>
+                <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">main</p></div>
+                {tutorial.session && (
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">{EXPERIMEMO_SESSION.branch}</p></div>
+                )}
+                <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">project</p></div>
+                <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">generated</p></div>
+                <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">test-apps</p></div>
+              </div>
+            </div>
+          )}
         </div>}
 
         {/* ── CENTER COLUMN ── */}
@@ -4761,7 +5444,11 @@ function ProjectHomeScreen({
               </div>
             </div>
             <div ref={projectChatListRef} className="flex-1 overflow-y-auto p-[16px] flex flex-col gap-[16px]">
-              {isTutorialActive ? (
+              {isExperimemoHome ? (
+                experimemoFlow.homeMessages.map(m => (
+                  <FlowMessageBubble key={m.id} msg={m} infieAvatar={<OP4InfieAvatar />} />
+                ))
+              ) : isTutorialActive ? (
                 <>
                   {dockedChat.history.map((m, idx) => {
                     const isLatest = idx === dockedChat.history.length - 1;
@@ -4867,232 +5554,368 @@ function ProjectHomeScreen({
                   isTutorialActive ? "min-h-[54px]" : ""
                 }`}
               >
-                {showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
-                {/* Teal: Wrap up */}
-                <div
-                  className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                  data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                  aria-disabled={isTutorialActive || undefined}
-                >
-                  <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="flex gap-[8px] items-start pl-[12px] pr-[16px] py-[10px] relative">
-                    <p className="font-medium text-[#2dd4bf] text-[14px] leading-normal">✦</p>
-                    <div className="flex flex-col gap-[2px] overflow-hidden">
-                      <div className="flex gap-[4px] items-center">
-                        <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px] whitespace-nowrap">Wrap up</p>
-                        <OP4SessionIcon />
-                        <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.6)] text-[11px] whitespace-nowrap">fix-reaction-bug</p>
+                {project.id === "experimemo" ? (
+                  <>
+                    {experimemoFlow.stage === "starter" && (
+                      <InfieFlowPill
+                        testId="whats-next-button"
+                        label="What's Next"
+                        preset="teal"
+                        onClick={() => tutorial.dispatchFlow({ type: "WHATS_NEXT" })}
+                      />
+                    )}
+                    {experimemoFlow.stage === "plan-ready" && (
+                      <InfieFlowPill
+                        testId="start-session-button"
+                        label={SESSION_FLOW.READY.label}
+                        preset={SESSION_FLOW.READY.preset}
+                        icon={SESSION_FLOW.READY.icon}
+                        onClick={() => {
+                          tutorial.dispatchFlow({ type: "START_SESSION" });
+                          onOpenSession(EXPERIMEMO_SESSION, { justStarted: true });
+                        }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
+                    {/* Teal: Wrap up */}
+                    <div
+                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                      aria-disabled={isTutorialActive || undefined}
+                    >
+                      <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="flex gap-[8px] items-start pl-[12px] pr-[16px] py-[10px] relative">
+                        <p className="font-medium text-[#2dd4bf] text-[14px] leading-normal">✦</p>
+                        <div className="flex flex-col gap-[2px] overflow-hidden">
+                          <div className="flex gap-[4px] items-center">
+                            <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px] whitespace-nowrap">Wrap up</p>
+                            <OP4SessionIcon />
+                            <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.6)] text-[11px] whitespace-nowrap">fix-reaction-bug</p>
+                          </div>
+                          <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.7)] text-[11px] whitespace-nowrap">All tasks are complete</p>
+                        </div>
                       </div>
-                      <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.7)] text-[11px] whitespace-nowrap">All tasks are complete</p>
+                      <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
                     </div>
-                  </div>
-                  <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
-                </div>
-                {/* Amber: Test changes */}
-                <div
-                  className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                  data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                  aria-disabled={isTutorialActive || undefined}
-                >
-                  <div className="absolute bg-[rgba(45,37,15,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="absolute border border-[rgba(251,191,36,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="flex gap-[8px] items-start pl-[12px] pr-[16px] py-[10px] relative">
-                    <p className="font-['Inter',sans-serif] font-medium text-[#fbbf24] text-[14px] leading-normal">⚠</p>
-                    <div className="flex flex-col gap-[2px] overflow-hidden">
-                      <div className="flex gap-[4px] items-center">
-                        <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px] whitespace-nowrap">Test changes in</p>
-                        <OP4SessionIcon />
-                        <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.6)] text-[11px] whitespace-nowrap">Add comments</p>
+                    {/* Amber: Test changes */}
+                    <div
+                      className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                      aria-disabled={isTutorialActive || undefined}
+                    >
+                      <div className="absolute bg-[rgba(45,37,15,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="absolute border border-[rgba(251,191,36,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="flex gap-[8px] items-start pl-[12px] pr-[16px] py-[10px] relative">
+                        <p className="font-['Inter',sans-serif] font-medium text-[#fbbf24] text-[14px] leading-normal">⚠</p>
+                        <div className="flex flex-col gap-[2px] overflow-hidden">
+                          <div className="flex gap-[4px] items-center">
+                            <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px] whitespace-nowrap">Test changes in</p>
+                            <OP4SessionIcon />
+                            <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.6)] text-[11px] whitespace-nowrap">Add comments</p>
+                          </div>
+                          <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.7)] text-[11px] whitespace-nowrap">Attempt to add comment and react to it.</p>
+                        </div>
                       </div>
-                      <p className="font-['Inter',sans-serif] text-[rgba(255,255,255,0.7)] text-[11px] whitespace-nowrap">Attempt to add comment and react to it.</p>
+                      <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(251,191,36,0.25)]" />
                     </div>
-                  </div>
-                  <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(251,191,36,0.25)]" />
-                </div>
-                {/* Compact teal */}
-                <div
-                  className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                  data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                  aria-disabled={isTutorialActive || undefined}
-                >
-                  <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                  <div className="flex gap-[8px] items-center pl-[12px] pr-[16px] py-[7px] relative whitespace-nowrap">
-                    <p className="font-medium text-[#2dd4bf] text-[14px]">✦</p>
-                    <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px]">Recommendation</p>
-                  </div>
-                  <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
-                </div>
+                    {/* Compact teal */}
+                    <div
+                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                      aria-disabled={isTutorialActive || undefined}
+                    >
+                      <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                      <div className="flex gap-[8px] items-center pl-[12px] pr-[16px] py-[7px] relative whitespace-nowrap">
+                        <p className="font-medium text-[#2dd4bf] text-[14px]">✦</p>
+                        <p className="font-['Inter',sans-serif] font-semibold text-white text-[13px]">Recommendation</p>
+                      </div>
+                      <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             {/* Input */}
             <div className="border-t border-[rgba(255,255,255,0.05)] flex flex-col items-start py-[12px] w-full shrink-0">
+              {isExperimemoHome ? (
+                <InfieComposer
+                  className="w-full"
+                  value={experimemoFlow.homeDraft}
+                  onChange={v => tutorial.dispatchFlow({ type: "SET_HOME_DRAFT", value: v })}
+                  onSend={() => tutorial.dispatchFlow({ type: "SEND_HOME", text: experimemoFlow.homeDraft })}
+                  placeholder={
+                    experimemoFlow.stage === "plan-ready"
+                      ? PLAN_COMPOSER_GHOST
+                      : "Ask Infie to coordinate, scan, or switch agents… (⌘↵)"
+                  }
+                  glow={experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question"}
+                  readOnly={experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question"}
+                  disabled={
+                    experimemoFlow.stage === "scanning" ||
+                    experimemoFlow.stage === "planning" ||
+                    experimemoFlow.stage === "session" ||
+                    experimemoFlow.stage === "cleaned-up"
+                  }
+                />
+              ) : (
               <div className="bg-[#252323] border border-[rgba(45,212,191,0.14)] flex gap-[8px] items-end px-[12px] py-[8px] rounded-[8px] w-full">
-                <p className="flex-1 font-['Rounded_Mplus_1c',sans-serif] text-[#444] text-[12px] leading-[19.5px]">Ask Infie to coordinate, scan, or switch agents… (⌘↵)</p>
-                <div className="bg-[rgba(255,255,255,0.05)] flex items-center justify-center rounded-[6px] size-[28px] shrink-0">
-                  <svg className="size-[13px]" fill="none" viewBox="0 0 13 13">
-                    <path d={svgPathsOP4.p2ca29780} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                    <path d={svgPathsOP4.p3f86e380} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                  </svg>
+                  <p className="flex-1 font-['Rounded_Mplus_1c',sans-serif] text-[#444] text-[12px] leading-[19.5px]">Ask Infie to coordinate, scan, or switch agents… (⌘↵)</p>
+                  <div className="bg-[rgba(255,255,255,0.05)] flex items-center justify-center rounded-[6px] size-[28px] shrink-0">
+                    <svg className="size-[13px]" fill="none" viewBox="0 0 13 13">
+                      <path d={svgPathsOP4.p2ca29780} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                      <path d={svgPathsOP4.p3f86e380} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                    </svg>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Sessions panel */}
-          {showRoadmapSessions && <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[320px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
-            <OP4SectionHeader label="Sessions" color="green" icon={<OP4DotIcon />} />
-            <div className="bg-[#252323] flex flex-1 gap-[6px] items-center justify-center min-h-px p-[10px]">
-              {/* Fix Reaction Bug */}
-              <button onClick={() => openSession(fixReaction)} className="bg-[#0b131d] flex flex-col gap-[20px] items-start p-[20px] relative rounded-[12px] flex-1 min-w-0 h-full text-left hover:brightness-110 transition-all">
-                <div className="absolute border border-[rgba(255,255,255,0.1)] inset-0 pointer-events-none rounded-[12px]" />
-                <div className="flex items-center gap-[4px] w-full">
-                  <OP4BigCodesandboxIcon />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[20px] truncate">Fix Reaction Bug</p>
-                    <p className="font-['Cousine',monospace] text-[#9ca3af] text-[12px] truncate">{"⊣"} chore/fix-reaction-bug</p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-[8px] w-full">
-                  <div className="flex gap-[8px]">
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Status</p>
-                      <div className="bg-[rgba(45,212,191,0.08)] flex items-center px-[10px] py-[4px] relative rounded-[6px]">
-                        <div className="absolute border border-[rgba(45,212,191,0.2)] inset-0 pointer-events-none rounded-[6px]" />
-                        <p className="font-['Inter',sans-serif] font-bold text-[#2dd4bf] text-[11px] uppercase">Coding</p>
+          {/* Sessions / Plan panel */}
+          {showRoadmapSessions && (
+            isExperimemoHome && (experimemoFlow.stage === "planning" || experimemoFlow.stage === "plan-ready") ? (
+              <ExperimemoPlanWidget
+                planCursor={experimemoFlow.planCursor}
+                planNotes={experimemoFlow.planNotes}
+              />
+            ) : (
+              <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[320px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
+                <OP4SectionHeader label="Sessions" color="green" icon={<OP4DotIcon />} />
+                <div className="bg-[#252323] flex flex-1 gap-[6px] items-center justify-center min-h-px p-[10px]">
+                  {project.id === "experimemo" ? (
+                    tutorial.session ? (
+                      <div
+                        data-name="ExperimemoSessionCard"
+                        data-testid="experimemo-session-card"
+                        onClick={() => openSession(EXPERIMEMO_SESSION)}
+                        className="bg-[#0b131d] flex flex-col gap-[20px] items-start p-[20px] relative rounded-[12px] flex-1 min-w-0 h-full cursor-pointer hover:brightness-105 transition-all"
+                      >
+                        <div className="absolute border border-[rgba(45,212,191,0.3)] inset-0 pointer-events-none rounded-[12px]" />
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-[4px] flex-1 min-w-0">
+                            <OP4BigCodesandboxIcon />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[18px] truncate">
+                                {EXPERIMEMO_SESSION.name}
+                              </p>
+                              <p className="font-['Cousine',monospace] text-[#9ca3af] text-[12px] truncate">
+                                {"⊣"} {EXPERIMEMO_SESSION.branch}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid="open-experimemo-session-button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSession(EXPERIMEMO_SESSION);
+                            }}
+                            className="bg-[#2dd4bf] flex gap-[6px] items-center px-[14px] py-[8px] rounded-[8px] text-[#061413] font-semibold text-[12px] hover:brightness-110 shrink-0 ml-2"
+                          >
+                            <Play size={13} fill="#061413" />
+                            <span>Open session</span>
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-[8px] w-full">
+                          <div className="flex gap-[8px]">
+                            <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                              <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Status</p>
+                              <div data-testid="project-session-status"><StatusChip status={tutorial.session.status} /></div>
+                            </div>
+                            <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                              <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Model</p>
+                              <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px] truncate w-full">{EXPERIMEMO_SESSION.model}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-[8px]">
+                            <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                              <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Progress</p>
+                              <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">
+                                {countCompletedTasks(tutorial.session)} / {tutorial.session.tasks.length} tasks
+                              </p>
+                            </div>
+                            <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                              <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Agents</p>
+                              <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">{PROVIDERS.length}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p data-testid="project-sessions-empty" className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-[#71717a] text-center">
+                        {experimemoFlow.archivedSessionCount > 0
+                          ? `No active sessions · ${experimemoFlow.archivedSessionCount} completed session archived`
+                          : "No sessions yet."}
+                      </p>
+                    )
+                  ) : (
+                <>
+                  {/* Fix Reaction Bug */}
+                  <button onClick={() => openSession(fixReaction)} className="bg-[#0b131d] flex flex-col gap-[20px] items-start p-[20px] relative rounded-[12px] flex-1 min-w-0 h-full text-left hover:brightness-110 transition-all">
+                    <div className="absolute border border-[rgba(255,255,255,0.1)] inset-0 pointer-events-none rounded-[12px]" />
+                    <div className="flex items-center gap-[4px] w-full">
+                      <OP4BigCodesandboxIcon />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[20px] truncate">Fix Reaction Bug</p>
+                        <p className="font-['Cousine',monospace] text-[#9ca3af] text-[12px] truncate">{"⊣"} chore/fix-reaction-bug</p>
                       </div>
                     </div>
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Model</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px] truncate w-full">GPT-5.6 Terra</p>
+                    <div className="flex flex-col gap-[8px] w-full">
+                      <div className="flex gap-[8px]">
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Status</p>
+                          <div className="bg-[rgba(45,212,191,0.08)] flex items-center px-[10px] py-[4px] relative rounded-[6px]">
+                            <div className="absolute border border-[rgba(45,212,191,0.2)] inset-0 pointer-events-none rounded-[6px]" />
+                            <p className="font-['Inter',sans-serif] font-bold text-[#2dd4bf] text-[11px] uppercase">Coding</p>
+                          </div>
+                        </div>
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Model</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px] truncate w-full">GPT-5.6 Terra</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-[8px]">
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Progress</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">4 / 8 tasks</p>
+                        </div>
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Agents</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">2</p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-[8px]">
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Progress</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">4 / 8 tasks</p>
-                    </div>
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Agents</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">2</p>
-                    </div>
-                  </div>
-                </div>
-              </button>
-              {/* Add Comments */}
-              <div
-                data-name="DemoSessionCard"
-                onClick={() => openSession(addComments)}
-                className={`bg-[#0b131d] flex flex-col gap-[20px] items-start p-[20px] relative rounded-[12px] flex-1 min-w-0 h-full cursor-pointer transition-all ${
-                  highlightDemoSessionCard
-                    ? "shadow-[0_0_24px_rgba(45,212,191,0.5)]"
-                    : ""
-                }`}
-              >
-                <div
-                  className={`absolute inset-0 pointer-events-none rounded-[12px] border ${
-                    highlightDemoSessionCard
-                      ? "border-[#2dd4bf]"
-                      : "border-[rgba(255,255,255,0.1)]"
-                  }`}
-                />
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-[4px] flex-1 min-w-0">
-                    <OP4BigCodesandboxIcon />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[20px] truncate">{addComments?.name || "Add Comments"}</p>
-                      <p className="font-['Cousine',monospace] text-[#9ca3af] text-[12px] truncate">{"⊣"} {addComments?.branch || "feat/add-comments"}</p>
-                    </div>
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); openSession(addComments); }} className="bg-[rgba(245,158,11,0.08)] flex gap-[8px] items-center px-[14px] py-[10px] relative rounded-[8px] shrink-0 hover:brightness-110 transition-all ml-2">
-                    <div className="absolute border border-[rgba(245,158,11,0.2)] inset-0 pointer-events-none rounded-[8px]" />
-                    <Play size={13} className="text-[#f59e0b] fill-[#f59e0b]" />
-                    <p className="font-['Inter',sans-serif] font-medium text-[#f59e0b] text-[12px] whitespace-nowrap">Test now</p>
                   </button>
-                </div>
-                <div className="flex flex-col gap-[8px] w-full">
-                  <div className="flex gap-[8px]">
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Status</p>
-                      <div className="bg-[rgba(245,158,11,0.08)] flex items-center px-[10px] py-[4px] relative rounded-[6px]">
-                        <div className="absolute border border-[rgba(245,158,11,0.2)] inset-0 pointer-events-none rounded-[6px]" />
-                        <p className="font-['Inter',sans-serif] font-bold text-[#f59e0b] text-[11px] uppercase whitespace-nowrap">Waiting on test</p>
+                  {/* Add Comments */}
+                  <div
+                    data-name="DemoSessionCard"
+                    onClick={() => openSession(addComments)}
+                    className={`bg-[#0b131d] flex flex-col gap-[20px] items-start p-[20px] relative rounded-[12px] flex-1 min-w-0 h-full cursor-pointer transition-all ${
+                      highlightDemoSessionCard
+                        ? "shadow-[0_0_24px_rgba(45,212,191,0.5)]"
+                        : ""
+                    }`}
+                  >
+                    <div
+                      className={`absolute inset-0 pointer-events-none rounded-[12px] border ${
+                        highlightDemoSessionCard
+                          ? "border-[#2dd4bf]"
+                          : "border-[rgba(255,255,255,0.1)]"
+                      }`}
+                    />
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-[4px] flex-1 min-w-0">
+                        <OP4BigCodesandboxIcon />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[20px] truncate">{addComments?.name || "Add Comments"}</p>
+                          <p className="font-['Cousine',monospace] text-[#9ca3af] text-[12px] truncate">{"⊣"} {addComments?.branch || "feat/add-comments"}</p>
+                        </div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); openSession(addComments); }} className="bg-[rgba(245,158,11,0.08)] flex gap-[8px] items-center px-[14px] py-[10px] relative rounded-[8px] shrink-0 hover:brightness-110 transition-all ml-2">
+                        <div className="absolute border border-[rgba(245,158,11,0.2)] inset-0 pointer-events-none rounded-[8px]" />
+                        <Play size={13} className="text-[#f59e0b] fill-[#f59e0b]" />
+                        <p className="font-['Inter',sans-serif] font-medium text-[#f59e0b] text-[12px] whitespace-nowrap">Test now</p>
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-[8px] w-full">
+                      <div className="flex gap-[8px]">
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Status</p>
+                          <div className="bg-[rgba(245,158,11,0.08)] flex items-center px-[10px] py-[4px] relative rounded-[6px]">
+                            <div className="absolute border border-[rgba(245,158,11,0.2)] inset-0 pointer-events-none rounded-[6px]" />
+                            <p className="font-['Inter',sans-serif] font-bold text-[#f59e0b] text-[11px] uppercase whitespace-nowrap">Waiting on test</p>
+                          </div>
+                        </div>
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Model</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px] truncate w-full">Claude Sonnet</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-[8px]">
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Progress</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">6 / 9 tasks</p>
+                        </div>
+                        <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
+                          <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Agents</p>
+                          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">3</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Model</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px] truncate w-full">Claude Sonnet</p>
-                    </div>
                   </div>
-                  <div className="flex gap-[8px]">
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Progress</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">6 / 9 tasks</p>
-                    </div>
-                    <div className="bg-[#0b0a15] flex flex-1 flex-col gap-[6px] p-[12px] rounded-[8px]">
-                      <p className="font-['Inter',sans-serif] font-semibold text-[#9ca3af] text-[10px] uppercase">Agents</p>
-                      <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[14px]">3</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
-          </div>}
+          </div>
+          ))}
         </div>
 
         {/* ── RIGHT COLUMN — panels appear when introduced; the bordered music widget
              always lives at its bottom so it never covers content ── */}
-        <div className="w-[272px] shrink-0 flex flex-col gap-[8px] overflow-y-auto min-h-0">
+        <div className={`hidden lg:flex ${project.id === EXPERIMEMO_PROJECT_ID ? "w-[336px]" : "w-[272px]"} shrink-0 flex-col gap-[8px] overflow-y-auto min-h-0`}>
           {showWidgetsPanel && <>
 
-          {/* Human Testing 1/4 */}
-          <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[277px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
-            <OP4SectionHeader label="Human Testing 1/4" color="dark" icon={<OP4DotIcon />} />
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <OP4CodesandboxIcon size={16} />
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col w-full shrink-0">
-              <OP4CheckRow done={true} text="Send button disabled with no photo selected" />
-              <OP4CheckRow done={false} text="Photo picker opens on iOS and Android" />
-            </div>
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <OP4CodesandboxIcon size={16} />
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col w-full shrink-0">
-              <OP4CheckRow done={true} text="Send button disabled with no photo selected" />
-            </div>
-            <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
-              <OP4CodesandboxIcon size={16} />
-              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
-            </div>
-            <div className="bg-[#252323] flex flex-col flex-1 w-full">
-              <OP4CheckRow done={false} text="Attempt to add comment and react to it" />
-              <OP4AddItemRow />
-            </div>
-          </div>
+          {project.id === "experimemo" ? (
+            <>
+              <ExperimemoHumanTesting session={tutorial.session} />
+              <ExperimemoPreviewWidget onEnlarge={() => onOpenWidget?.("emuWeb", "Web Preview")} />
+            </>
+          ) : (
+            <>
+              {/* Human Testing 1/4 */}
+              <div className="border border-[rgba(255,255,255,0.05)] flex flex-col h-[277px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
+                <OP4SectionHeader label="Human Testing 1/4" color="dark" icon={<OP4DotIcon />} />
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <OP4CodesandboxIcon size={16} />
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full shrink-0">
+                  <OP4CheckRow done={true} text="Send button disabled with no photo selected" />
+                  <OP4CheckRow done={false} text="Photo picker opens on iOS and Android" />
+                </div>
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <OP4CodesandboxIcon size={16} />
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col w-full shrink-0">
+                  <OP4CheckRow done={true} text="Send button disabled with no photo selected" />
+                </div>
+                <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] border-t flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
+                  <OP4CodesandboxIcon size={16} />
+                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">add comments</p>
+                </div>
+                <div className="bg-[#252323] flex flex-col flex-1 w-full">
+                  <OP4CheckRow done={false} text="Attempt to add comment and react to it" />
+                  <OP4AddItemRow />
+                </div>
+              </div>
 
-          {/* Explorer — 333px tall, but may shrink on short screens so the music widget below stays in view */}
-          <div className="border border-[rgba(255,255,255,0.05)] flex flex-col basis-[333px] grow-0 shrink min-h-[140px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
-            <OP4SectionHeader label="Explorer" color="dark" icon={<OP4DotIcon />} />
-            <div className="bg-[#252323] flex flex-1 flex-col overflow-clip p-[4px]">
-              <div className="flex gap-[6px] items-center px-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">pet-show-and-tell-i2Workspace</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">main</p></div>
-              <div className="flex gap-[6px] items-center pl-[32px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">src</p></div>
-              <div className="flex gap-[6px] items-center pl-[40px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">app</p></div>
-              <div className="flex gap-[6px] items-center pl-[48px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">(tabs)</p></div>
-              <div className="flex gap-[6px] items-center pl-[50px] pr-[8px] py-[3px] rounded-[6px] w-full"><div className="size-[12px] shrink-0" /><OP4TsxFileIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">_layout.tsx</p></div>
-              <div className="flex gap-[6px] items-center pl-[36px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">components</p></div>
-              <div className="flex gap-[6px] items-center pl-[36px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">hooks</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">feature/add-comments</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">chore/fix-reaction-bug</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">project</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">temp</p></div>
-              <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">generated</p></div>
-            </div>
-          </div>
+              {/* Explorer — 333px tall, but may shrink on short screens so the music widget below stays in view */}
+              <div className="border border-[rgba(255,255,255,0.05)] flex flex-col basis-[333px] grow-0 shrink min-h-[140px] overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
+                <OP4SectionHeader label="Explorer" color="dark" icon={<OP4DotIcon />} />
+                <div className="bg-[#252323] flex flex-1 flex-col overflow-clip p-[4px]">
+                  <div className="flex gap-[6px] items-center px-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">pet-show-and-tell-i2Workspace</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">main</p></div>
+                  <div className="flex gap-[6px] items-center pl-[32px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">src</p></div>
+                  <div className="flex gap-[6px] items-center pl-[40px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronDown /><OP4FolderIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">app</p></div>
+                  <div className="flex gap-[6px] items-center pl-[48px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">(tabs)</p></div>
+                  <div className="flex gap-[6px] items-center pl-[50px] pr-[8px] py-[3px] rounded-[6px] w-full"><div className="size-[12px] shrink-0" /><OP4TsxFileIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">_layout.tsx</p></div>
+                  <div className="flex gap-[6px] items-center pl-[36px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">components</p></div>
+                  <div className="flex gap-[6px] items-center pl-[36px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">hooks</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">feature/add-comments</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px] truncate">chore/fix-reaction-bug</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">project</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">temp</p></div>
+                  <div className="flex gap-[6px] items-center pl-[22px] pr-[8px] py-[3px] rounded-[6px] w-full"><OP4ChevronRight /><OP4FolderOpenIcon /><p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">generated</p></div>
+                </div>
+              </div>
+            </>
+          )}
           </>}
           <div ref={musicSlotRef} data-name="MusicWidgetSlot" className="mt-auto shrink-0 w-full" />
         </div>
@@ -5326,11 +6149,33 @@ function OS1TsxLargeIcon() {
 }
 
 // Panel wrapper faithful to the OS1 design
-function OSPanel({ greenHeader, title, children }: { greenHeader?: boolean; title: string; children: React.ReactNode }) {
+function OSPanel({
+  greenHeader,
+  title,
+  children,
+  glow = false,
+  testId,
+  dataGlowAttr,
+}: {
+  greenHeader?: boolean;
+  title: string;
+  children: React.ReactNode;
+  glow?: boolean;
+  testId?: string;
+  dataGlowAttr?: boolean;
+}) {
   const hdrBg = greenHeader ? "bg-[rgba(171,239,163,0.08)]" : "bg-[#1d1b20]";
   const titleColor = greenHeader ? "text-[#abefa3]" : "text-[#777]";
   return (
-    <div className="border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-clip shrink-0 w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]">
+    <div
+      data-testid={testId}
+      data-task-widget-glow={dataGlowAttr !== undefined ? (dataGlowAttr ? "true" : "false") : undefined}
+      className={`rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
+        glow
+          ? "border border-[#2dd4bf] shadow-[0_0_20px_rgba(45,212,191,0.45)] animate-pulse motion-reduce:animate-none"
+          : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
+      }`}
+    >
       <div className={`${hdrBg} border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px] shrink-0 w-full`}>
         <OS1DarkDotIcon />
         <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase ${titleColor}`}>{title}</span>
@@ -5343,14 +6188,14 @@ function OSPanel({ greenHeader, title, children }: { greenHeader?: boolean; titl
 }
 
 // Diff row for the diffs panel
-function OS1DiffRow({ status: s, name, add, del: d }: { status: "M" | "A"; name: string; add: string; del?: string }) {
+function OS1DiffRow({ status: s, name, add, del: d }: { status: "M" | "A"; name: string; add?: string; del?: string }) {
   const statusColor = s === "M" ? "#ff8904" : "#abefa3";
   return (
     <div className="border-b border-[rgba(255,255,255,0.04)] flex gap-2 items-center px-3 py-[6px] w-full">
       <span className="w-3 shrink-0 font-['Consolas',monospace] text-[9px]" style={{ color: statusColor }}>{s}</span>
       <OS1TsxDiffIcon />
       <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] truncate">{name}</span>
-      <span className="font-['Consolas',monospace] text-[9px] text-[#abefa3] shrink-0">{add}</span>
+      {add && <span className="font-['Consolas',monospace] text-[9px] text-[#abefa3] shrink-0">{add}</span>}
       {d && <span className="font-['Consolas',monospace] text-[9px] text-[#ff6467] shrink-0">{d}</span>}
     </div>
   );
@@ -5369,6 +6214,7 @@ function SessionScreen({
   onHumanTaskVerified,
   onWidgets,
   onNotifications,
+  onOpenWidget,
   switchableProjects,
   onSwitchProject,
   allSessions,
@@ -5386,6 +6232,7 @@ function SessionScreen({
   onHumanTaskVerified?: () => void;
   onWidgets?: () => void;
   onNotifications?: () => void;
+  onOpenWidget?: (id: WidgetId, label: string) => void;
   switchableProjects?: ProtoProject[];
   onSwitchProject?: (p: ProtoProject) => void;
   allSessions?: ProtoSession[];
@@ -5395,6 +6242,13 @@ function SessionScreen({
   /** Bottom-of-right-column slot where the bordered music widget renders. */
   musicSlotRef?: (el: HTMLDivElement | null) => void;
 }) {
+  const isExperimemo = project.id === EXPERIMEMO_PROJECT_ID;
+  const tutorial = useTutorial();
+  const xs: SessionFlowState | null = isExperimemo ? tutorial.session : null;
+  const activeAgentTab = tutorial.activeSessionTab;
+  const agentTabOrder = SESSION_TAB_ORDER;
+  const agentTabRefs = useRef<Partial<Record<SessionTabId, HTMLButtonElement | null>>>({});
+
   const {
     isTutorialActive,
     currentBeat,
@@ -5408,6 +6262,7 @@ function SessionScreen({
   const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
   // B17: the form stays up through the seven explanation turns; Submit retires it.
   const showCompletionForm =
+    !isExperimemo &&
     isTutorialActive &&
     currentBeat === "B17" &&
     turnIndex < B17_EXPLANATIONS.length &&
@@ -5416,8 +6271,10 @@ function SessionScreen({
   const sessionChatListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = sessionChatListRef.current;
-    if (isTutorialActive && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [isTutorialActive, dockedChat.history, showCompletionForm]);
+    if ((isTutorialActive || isExperimemo) && el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [isTutorialActive, isExperimemo, dockedChat.history, showCompletionForm, activeAgentTab, xs]);
   const [status, setStatus] = useState<SessionStatus>(session.initial);
   const [messages, setMessages] = useState<Message[]>([
     { id: "s0", role: "assistant", content: "Session initialised. Scanning `expo-photo-share/project/Todo.md`… found 3 open tasks, 2 completed." },
@@ -5427,12 +6284,18 @@ function SessionScreen({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [tests, setTests] = useState<CheckItem[]>(
-    (SESSION_HUMAN_TESTS[session.id] ?? SESSION_HUMAN_TESTS["add-comments"]).map((t, i) => ({ id: `${session.id}-t${i}`, text: t, done: i === 0 }))
+    isExperimemo
+      ? []
+      : (SESSION_HUMAN_TESTS[session.id] ?? SESSION_HUMAN_TESTS["add-comments"]).map((t, i) => ({ id: `${session.id}-t${i}`, text: t, done: i === 0 }))
   );
   const [commitOpen, setCommitOpen] = useState(true);
   const [branchOpen, setBranchOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    if (!isExperimemo) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isExperimemo]);
 
   const pushInfie = (content: string) => setMessages(ms => [...ms, { id: uid(), role: "assistant", content }]);
 
@@ -5444,6 +6307,7 @@ function SessionScreen({
   const flow = SESSION_FLOW[status];
 
   const handleSend = () => {
+    if (isExperimemo) return;
     const text = input.trim();
     if (!text) return;
     setMessages(ms => [...ms, { id: uid(), role: "user", content: text }]);
@@ -5468,51 +6332,160 @@ function SessionScreen({
     pushInfie("What action would you like me to take? You can describe a specific task or pick from the session plan.");
   };
 
-  // Commit diffs data
-  const commitDiffs: Array<{ status: "M" | "A"; name: string; add: string; del?: string }> = [
+  const getExperimemoMessagesForTab = (tabId: SessionTabId): FlowMessage[] => {
+    if (!xs) return [];
+    return tabId === "infie" ? xs.infie : xs.tabs[tabId];
+  };
+
+  const handleAgentTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, currentIdx: number) => {
+    let nextIdx: number | null = null;
+    if (e.key === "ArrowRight") nextIdx = (currentIdx + 1) % agentTabOrder.length;
+    else if (e.key === "ArrowLeft") nextIdx = (currentIdx - 1 + agentTabOrder.length) % agentTabOrder.length;
+    else if (e.key === "Home") nextIdx = 0;
+    else if (e.key === "End") nextIdx = agentTabOrder.length - 1;
+    if (nextIdx !== null) {
+      e.preventDefault();
+      const targetTab = agentTabOrder[nextIdx];
+      tutorial.setActiveSessionTab(targetTab);
+      agentTabRefs.current[targetTab]?.focus();
+    }
+  };
+
+  // Current Diffs data. Experimemo rows come only from reported work (no counts are invented).
+  type DiffRowData = { status: "M" | "A"; name: string; add?: string; del?: string };
+  const petDiffs: DiffRowData[] = [
     { status: "M", name: "camera.tsx", add: "+84", del: "-12" },
     { status: "A", name: "PhotoPicker.tsx", add: "+142" },
     { status: "M", name: "FriendList.tsx", add: "+67", del: "-5" },
     { status: "A", name: "usePhotoShare.ts", add: "+38" },
     { status: "M", name: "package.json", add: "+3", del: "-1" },
   ];
+  const experimemoDiffs: DiffRowData[] = (xs?.diffs ?? []).map(d => ({ status: d.status, name: d.name }));
+  const commitDiffs: DiffRowData[] = isExperimemo ? experimemoDiffs : petDiffs;
+  const branchDiffs: DiffRowData[] = isExperimemo
+    ? experimemoDiffs
+    : [
+        ...petDiffs,
+        { status: "M", name: "app.json", add: "+2" },
+        { status: "M", name: "Guidelines.md", add: "+18", del: "-4" },
+      ];
 
-  const branchDiffs: Array<{ status: "M" | "A"; name: string; add: string; del?: string }> = [
-    { status: "M", name: "camera.tsx", add: "+84", del: "-12" },
-    { status: "A", name: "PhotoPicker.tsx", add: "+142" },
-    { status: "M", name: "FriendList.tsx", add: "+67", del: "-5" },
-    { status: "A", name: "usePhotoShare.ts", add: "+38" },
-    { status: "M", name: "package.json", add: "+3", del: "-1" },
-    { status: "M", name: "app.json", add: "+2" },
-    { status: "M", name: "Guidelines.md", add: "+18", del: "-4" },
-  ];
+  const fileCount = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
+  const commitDiffSummary: { files: string; add?: string; del?: string } = isExperimemo
+    ? { files: fileCount(experimemoDiffs.length) }
+    : { files: "5 files", add: "+334", del: "-18" };
+  const branchDiffSummary: { files: string; add?: string; del?: string } = isExperimemo
+    ? { files: fileCount(experimemoDiffs.length) }
+    : { files: "7 files", add: "+354", del: "-22" };
 
-  const agentTasks = [
-    { done: true, label: "Implement PhotoPicker component" },
-    { done: true, label: "Wire up usePhotoShare hook" },
-    { done: isTutorialActive ? true : false, label: "Add friend list query to Supabase" },
-    { done: isTutorialActive ? true : false, label: "Handle photo library permissions" },
-    { done: isTutorialActive ? true : false, label: "Compress images before upload" },
-  ];
+  const agentTasks: Array<{ id: string; done: boolean; glowing: boolean; statusLabel: string; label: string; provider?: ProviderId }> = isExperimemo
+    ? (xs?.tasks ?? []).map(t => ({
+        id: t.id,
+        done: t.status === "completed",
+        glowing: t.glowing,
+        statusLabel: TASK_STATUS_LABEL[t.status],
+        label: t.label,
+        provider: t.provider,
+      }))
+    : [
+        { id: "photo-t1", done: true, glowing: false, statusLabel: "completed", label: "Implement PhotoPicker component" },
+        { id: "photo-t2", done: true, glowing: false, statusLabel: "completed", label: "Wire up usePhotoShare hook" },
+        { id: "photo-t3", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Add friend list query to Supabase" },
+        { id: "photo-t4", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Handle photo library permissions" },
+        { id: "photo-t5", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Compress images before upload" },
+      ];
+  const anyTaskGlowing = Boolean(isExperimemo && agentTasks.some(t => t.glowing));
+  const needsHumanVerificationGlow = Boolean(
+    isExperimemo &&
+      xs &&
+      ((xs.status === "NEEDS YOU" && areAllAgentTasksDone(xs)) ||
+        (xs.status === "PR OPEN" && xs.wrapUpPhase === "sanity-check"))
+  );
 
-  const explorerTree = [
-    { depth: 0, open: true, isFolder: true, name: "pet-show-and-tell-i2Workspace" },
-    { depth: 1, open: true, isFolder: true, name: "main" },
-    { depth: 2, open: true, isFolder: true, name: "src" },
-    { depth: 3, open: true, isFolder: true, name: "app" },
-    { depth: 4, open: false, isFolder: true, name: "(tabs)" },
-    { depth: 4, open: false, isFolder: false, name: "_layout.tsx" },
-    { depth: 3, open: false, isFolder: true, name: "components" },
-    { depth: 3, open: false, isFolder: true, name: "hooks" },
-    { depth: 1, open: false, isFolder: true, name: "feature/add-comments" },
-    { depth: 1, open: false, isFolder: true, name: "chore/fix-reaction-bug" },
-    { depth: 1, open: false, isFolder: true, name: "project" },
-    { depth: 1, open: false, isFolder: true, name: "temp" },
-    { depth: 1, open: false, isFolder: true, name: "generated" },
-  ];
+  const humanRows: CheckItem[] = isExperimemo ? (xs?.humanTests ?? []) : tests;
+
+  const explorerTree = isExperimemo
+    ? [
+        { depth: 0, open: true, isFolder: true, name: "experimemo-i2Workspace" },
+        { depth: 1, open: false, isFolder: true, name: "main" },
+        { depth: 1, open: false, isFolder: true, name: session.branch },
+        { depth: 1, open: false, isFolder: true, name: "project" },
+        { depth: 1, open: false, isFolder: true, name: "generated" },
+        { depth: 1, open: false, isFolder: true, name: "test-apps" },
+      ]
+    : [
+        { depth: 0, open: true, isFolder: true, name: "pet-show-and-tell-i2Workspace" },
+        { depth: 1, open: true, isFolder: true, name: "main" },
+        { depth: 2, open: true, isFolder: true, name: "src" },
+        { depth: 3, open: true, isFolder: true, name: "app" },
+        { depth: 4, open: false, isFolder: true, name: "(tabs)" },
+        { depth: 4, open: false, isFolder: false, name: "_layout.tsx" },
+        { depth: 3, open: false, isFolder: true, name: "components" },
+        { depth: 3, open: false, isFolder: true, name: "hooks" },
+        { depth: 1, open: false, isFolder: true, name: "feature/add-comments" },
+        { depth: 1, open: false, isFolder: true, name: "chore/fix-reaction-bug" },
+        { depth: 1, open: false, isFolder: true, name: "project" },
+        { depth: 1, open: false, isFolder: true, name: "temp" },
+        { depth: 1, open: false, isFolder: true, name: "generated" },
+      ];
+
+  const experimemoTabMeta: Record<SessionTabId, { label: string; accessibleLabel: string; accent: string }> = {
+    infie: { label: SESSION_TAB_LABEL.infie, accessibleLabel: SESSION_TAB_ACCESSIBLE_LABEL.infie, accent: "#2dd4bf" },
+    openai: { label: SESSION_TAB_LABEL.openai, accessibleLabel: SESSION_TAB_ACCESSIBLE_LABEL.openai, accent: PROVIDER_ACCENT.openai },
+    claude: { label: SESSION_TAB_LABEL.claude, accessibleLabel: SESSION_TAB_ACCESSIBLE_LABEL.claude, accent: PROVIDER_ACCENT.claude },
+    gemini: { label: SESSION_TAB_LABEL.gemini, accessibleLabel: SESSION_TAB_ACCESSIBLE_LABEL.gemini, accent: PROVIDER_ACCENT.gemini },
+  };
+
+  const activeExperimemoMessages: FlowMessage[] = isExperimemo ? getExperimemoMessagesForTab(activeAgentTab) : [];
+  const sessionActions = isExperimemo && xs ? getSessionActions(xs) : [];
+  const primaryAction = xs ? getPrimaryAction(xs) : null;
+
+  // The Experimemo session only exists after Start Session; never render a ghost.
+  if (isExperimemo && !xs) return null;
+
+  const explorerPanel = (
+          <div className="border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-clip shrink-0 w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]">
+            <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
+              <OS1DarkDotIcon />
+              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Explorer</span>
+            </div>
+            <div className="bg-[#252323] p-1">
+              {explorerTree.map((node, i) => {
+                const paddingLeft = 8 + node.depth * 14;
+                const isTsx = !node.isFolder && (node.name.endsWith(".tsx") || node.name.endsWith(".ts"));
+                return (
+                  <div key={i} className="flex gap-[6px] items-center py-[3px] rounded-[6px] w-full" style={{ paddingLeft, paddingRight: 8 }}>
+                    {node.isFolder ? (
+                      <>
+                        <div className="shrink-0 size-[12px] flex items-center justify-center">
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d={node.open ? "M3 4.5L6 7.5L9 4.5" : "M4.5 9L7.5 6L4.5 3"} stroke="#666" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </div>
+                        {node.open ? <OS1FolderOpenIcon /> : <OS1FolderClosedIcon />}
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-3 shrink-0" />
+                        {isTsx ? <OS1TsxLargeIcon /> : <OS1GreenFileIcon />}
+                      </>
+                    )}
+                    <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] truncate">{node.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+  );
 
   return (
-    <div className="size-full flex flex-col relative overflow-hidden" style={{ background: "#0a0814" }}>
+    <div
+      data-testid="session-screen"
+      data-active-tab={isExperimemo ? activeAgentTab : undefined}
+      data-session-status={xs?.status}
+      className="size-full flex flex-col relative overflow-hidden"
+      style={{ background: "#0a0814" }}
+    >
       <AnimatedGlows />
       <Header
         activeLevel="session"
@@ -5533,9 +6506,37 @@ function SessionScreen({
         onSelectSession={onSelectSession}
         highlightHomeNav={highlightHomeNav}
         disabled={disabled}
+        tab={isExperimemo ? "Workspace" : undefined}
+        onTabChange={
+          isExperimemo
+            ? (t) => {
+                if (t === "Emulators") onOpenWidget?.("emuWeb", "Web Preview");
+              }
+            : undefined
+        }
         rightSlot={
           <div className="flex items-center gap-2.5">
-            {isTutorialActive && demoSessionCompleted ? (
+            {isExperimemo ? (
+              <>
+                <div data-testid="session-status-badge">
+                  <StatusChip status={xs?.status ?? "CODING"} />
+                </div>
+                <button
+                  type="button"
+                  data-testid="session-web-preview-button"
+                  data-web-preview-glow={needsHumanVerificationGlow ? "true" : "false"}
+                  onClick={() => onOpenWidget?.("emuWeb", "Web Preview")}
+                  className={`bg-[#2dd4bf] text-[#061413] flex gap-[6px] h-[28px] items-center px-[10px] rounded-[5px] font-bold text-[11px] hover:brightness-110 cursor-pointer shadow-sm transition-all whitespace-nowrap ${
+                    needsHumanVerificationGlow
+                      ? "ring-2 ring-[#2dd4bf]/80 shadow-[0_0_16px_rgba(45,212,191,0.55)]"
+                      : ""
+                  }`}
+                >
+                  <Globe size={12} />
+                  <span>Web Preview</span>
+                </button>
+              </>
+            ) : isTutorialActive && demoSessionCompleted ? (
               <StatusChip status="COMPLETE" />
             ) : completionPending ? (
               <span
@@ -5560,19 +6561,19 @@ function SessionScreen({
             ) : (
               <StatusChip status={status} />
             )}
-            <button onClick={onPlayground} className="text-white/30 hover:text-white/70 transition-colors text-[12px] font-['Space_Grotesk',sans-serif] px-3 py-1.5 rounded-lg border border-white/8">Playground</button>
+            <button onClick={onPlayground} className="hidden sm:inline-flex text-white/30 hover:text-white/70 transition-colors text-[12px] font-['Space_Grotesk',sans-serif] px-3 py-1.5 rounded-lg border border-white/8">Playground</button>
           </div>
         }
       />
 
-      <div className="flex-1 flex gap-[10px] p-[10px] overflow-hidden min-h-0 relative z-10">
+      <div className="flex-1 flex gap-[10px] p-2 sm:p-[10px] overflow-hidden min-h-0 relative z-10">
 
-        {/* ── LEFT — 236px ── */}
-        {showTaskGroups && <div className="w-[236px] shrink-0 flex flex-col gap-[8px] overflow-y-auto">
+        {/* ── LEFT — 236px (collapsed during PR review split) ── */}
+        {showTaskGroups && !(isExperimemo && xs?.reviewOpen) && <div className="hidden md:flex w-[236px] shrink-0 flex-col gap-[8px] overflow-y-auto">
 
           {/* Project Folder */}
           <OSPanel greenHeader title="Project Folder">
-            {["Info.md", "Todo.md", "Guidelines.md"].map(f => (
+            {(isExperimemo ? ["Info.md", "Todo.md", "Style.md", "Guidelines.md"] : ["Info.md", "Todo.md", "Guidelines.md"]).map(f => (
               <div key={f} className="flex gap-2 items-center px-3 py-[6px] w-full">
                 <OS1GreenFileIcon />
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5]">{f}</span>
@@ -5590,7 +6591,9 @@ function SessionScreen({
               {/* Branch row */}
               <div className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-center px-3 py-2 w-full">
                 <OS1BranchIcon />
-                <span className="font-['Consolas',monospace] text-[11px] text-[#777] flex-1 truncate">feature/add-comments</span>
+                <span className="font-['Consolas',monospace] text-[11px] text-[#777] flex-1 truncate">
+                  {isExperimemo ? session.branch : "feature/add-comments"}
+                </span>
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#444]">↑ main</span>
               </div>
               {/* Commit Diffs collapsible */}
@@ -5599,9 +6602,12 @@ function SessionScreen({
                 <OS1MergeIcon />
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] uppercase tracking-[0.275px] text-[#888] flex-1">Commit Diffs</span>
                 <span className="font-['Consolas',monospace] text-[9px] text-[#555]">
-                  5 files · <span className="text-[#abefa3]">+334</span> <span className="text-[#ff6467]">-18</span>
+                  {commitDiffSummary.files}{commitDiffSummary.add && <> · <span className="text-[#abefa3]">{commitDiffSummary.add}</span> <span className="text-[#ff6467]">{commitDiffSummary.del}</span></>}
                 </span>
               </button>
+              {commitOpen && isExperimemo && commitDiffs.length === 0 && (
+                <p data-testid="diffs-empty" className="px-3 py-2 font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-[#555]">No changes yet</p>
+              )}
               {commitOpen && commitDiffs.map((d, i) => (
                 <OS1DiffRow key={i} status={d.status} name={d.name} add={d.add} del={d.del} />
               ))}
@@ -5611,7 +6617,7 @@ function SessionScreen({
                 <OS1PRIcon />
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] uppercase tracking-[0.275px] text-[#888] flex-1">Branch / PR</span>
                 <span className="font-['Consolas',monospace] text-[9px] text-[#555]">
-                  7 files · <span className="text-[#abefa3]">+354</span> <span className="text-[#ff6467]">-22</span>
+                  {branchDiffSummary.files}{branchDiffSummary.add && <> · <span className="text-[#abefa3]">{branchDiffSummary.add}</span> <span className="text-[#ff6467]">{branchDiffSummary.del}</span></>}
                 </span>
               </button>
               {branchOpen && branchDiffs.map((d, i) => (
@@ -5624,83 +6630,228 @@ function SessionScreen({
           <OSPanel title="Current Goal & Plan">
             <div className="bg-[#252323] px-3 py-[10px] flex flex-col gap-1.5">
               <div className="flex gap-2 items-start">
-                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] flex-1 leading-[17.875px]">Add feature: ability to send photos to friends</span>
+                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] flex-1 leading-[17.875px]">
+                  {isExperimemo ? (session.desc ?? session.name) : "Add feature: ability to send photos to friends"}
+                </span>
                 <div className="pt-[2px] shrink-0"><OS1PencilIcon /></div>
               </div>
               <div className="flex gap-2 items-center px-0 py-[6px]">
                 <OS1GreenFileIcon />
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5]">Plan.md</span>
               </div>
+              {isExperimemo && xs?.planMdNote && (
+                <div
+                  data-testid="session-plan-md-note"
+                  className="mt-1 rounded-[5px] border border-[rgba(45,212,191,0.22)] bg-[rgba(45,212,191,0.06)] px-2.5 py-2 font-mono text-[10px] leading-relaxed text-[#cbd5e1]"
+                >
+                  <p className="text-[#2dd4bf] uppercase tracking-wider text-[9px] mb-1">
+                    plan.md · Camera fix block added
+                  </p>
+                  <p>{xs.planMdNote}</p>
+                </div>
+              )}
             </div>
           </OSPanel>
 
           {/* Agent Tasks */}
-          <OSPanel title="Agent Tasks">
-            {agentTasks.map((t, i) => (
-              <div key={i} className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full">
+          <OSPanel
+            title="Agent Tasks"
+            testId={isExperimemo ? "agent-tasks-panel" : undefined}
+            glow={anyTaskGlowing}
+            dataGlowAttr={isExperimemo ? anyTaskGlowing : undefined}
+          >
+            {agentTasks.map((t) => (
+              <div
+                key={t.id}
+                data-testid={isExperimemo ? `session-task-${t.provider}` : undefined}
+                data-task-status={t.statusLabel}
+                data-task-glow={isExperimemo ? (t.glowing ? "true" : "false") : undefined}
+                className={`border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full transition-all ${
+                  t.glowing
+                    ? "bg-[rgba(45,212,191,0.14)] border-l-2 border-l-[#2dd4bf] shadow-[inset_0_0_16px_rgba(45,212,191,0.28)]"
+                    : ""
+                }`}
+              >
                 {t.done ? <OS1CheckDoneIcon /> : <OS1CheckPendingIcon />}
-                <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[11px] leading-[17.875px] ${t.done ? "line-through text-[#555]" : "text-[#c5c5c5]"}`}>{t.label}</span>
+                <div className="min-w-0 flex-1">
+                  <span className={`block font-['Rounded_Mplus_1c',sans-serif] text-[11px] leading-[17.875px] ${t.done ? "line-through text-[#555]" : t.glowing ? "text-white font-semibold" : "text-[#c5c5c5]"}`}>{t.label}</span>
+                  {isExperimemo && (
+                    <span className={`font-mono text-[9.5px] ${t.done ? "text-emerald-400" : t.statusLabel === "needs fix" ? "text-amber-400" : "text-[#2dd4bf]"}`}>
+                      {t.provider ? `${PROVIDER_TOPIC[t.provider]} (${PROVIDER_LABEL[t.provider]}) · ` : ""}{t.statusLabel}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </OSPanel>
+
+          {/* Explorer — bottom-left for Experimemo */}
+          {isExperimemo && explorerPanel}
         </div>}
 
-        {/* ── CENTER — flex-1 ── */}
-        <div className="flex-1 min-w-0 flex flex-col rounded-tl-[6px] rounded-tr-[6px] overflow-hidden border border-[rgba(255,255,255,0.05)]">
+        {/* ── CENTER (splits into Chat + PR Review when reviewOpen is active) ── */}
+        <div
+          data-testid="session-center-workspace"
+          data-review-open={isExperimemo && xs?.reviewOpen ? "true" : "false"}
+          className={`flex-1 min-w-0 min-h-0 flex ${isExperimemo && xs?.reviewOpen ? "flex-col md:flex-row gap-[10px]" : "flex-col"}`}
+        >
+        <div className={`${isExperimemo && xs?.reviewOpen ? "flex-1 md:w-1/2 min-h-[240px]" : "flex-1"} min-w-0 min-h-0 flex flex-col rounded-tl-[6px] rounded-tr-[6px] overflow-hidden border border-[rgba(255,255,255,0.05)]`}>
           {/* Tab bar */}
-          <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[37px] items-stretch overflow-hidden px-1 shrink-0">
-            {/* Infie Chat Tab */}
-            <div className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-4 shrink-0">
-              <OS1InfieAvatar maskId="os1-av-tab" />
-              <span className="font-['Rounded_Mplus_1c',sans-serif] font-extrabold text-[16px] text-[#2dd4bf] leading-none">Infie</span>
-              <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)] flex items-center justify-center px-[10px] py-1 rounded-[6px] shrink-0">
-                <span className="font-['Inter',sans-serif] font-bold text-[11px] text-[#f59e0b] uppercase leading-none">Waiting on test</span>
+          {isExperimemo ? (
+            <div
+              role="tablist"
+              aria-label="Session agents"
+              className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[40px] items-stretch overflow-x-auto no-scrollbar px-1 shrink-0"
+            >
+              {agentTabOrder.map((tabId, idx) => {
+                const isActive = activeAgentTab === tabId;
+                const count = getExperimemoMessagesForTab(tabId).length;
+                const meta = experimemoTabMeta[tabId];
+                return (
+                  <button
+                    key={tabId}
+                    ref={(el) => {
+                      agentTabRefs.current[tabId] = el;
+                    }}
+                    id={`tab-agent-${tabId}`}
+                    type="button"
+                    role="tab"
+                    data-testid={`tab-agent-${tabId}`}
+                    aria-selected={isActive}
+                    aria-controls={`panel-agent-${tabId}`}
+                    aria-label={meta.accessibleLabel}
+                    title={meta.accessibleLabel}
+                    tabIndex={isActive ? 0 : -1}
+                    onClick={() => tutorial.setActiveSessionTab(tabId)}
+                    onKeyDown={(e) => handleAgentTabKeyDown(e, idx)}
+                    data-nudge={xs?.nudge === tabId ? "true" : undefined}
+                    style={xs?.nudge === tabId ? { boxShadow: `inset 0 -2px 0 ${meta.accent}, 0 0 14px ${meta.accent}66` } : undefined}
+                    className={`flex gap-[5px] sm:gap-[7px] h-full items-center justify-center px-1.5 sm:px-3 border-b-2 min-w-0 flex-1 sm:flex-none sm:max-w-[205px] transition-colors cursor-pointer ${xs?.nudge === tabId ? "animate-pulse motion-reduce:animate-none" : ""} ${
+                      isActive
+                        ? "bg-[rgba(45,212,191,0.04)] border-[#2dd4bf] text-white"
+                        : "border-transparent text-[#888] hover:text-[#d4d4d8] hover:bg-white/[0.02]"
+                    }`}
+                  >
+                    {tabId === "infie" ? (
+                      <OS1InfieAvatar maskId="os1-av-exp-tab" />
+                    ) : (
+                      <ProviderIcon provider={tabId} size={14} className="shrink-0" />
+                    )}
+                    <span
+                      className={`font-['Rounded_Mplus_1c',sans-serif] truncate min-w-0 ${
+                        tabId === "infie" ? "font-extrabold text-[12px] sm:text-[14px] text-[#2dd4bf]" : "font-semibold text-[11px] sm:text-[12px]"
+                      }`}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded bg-black/30 text-[10px] font-mono text-[#94a3b8] shrink-0">
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="flex-1 min-w-0" />
+            </div>
+          ) : (
+            <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[37px] items-stretch overflow-hidden px-1 shrink-0">
+              {/* Infie Chat Tab */}
+              <div className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-4 shrink-0">
+                <OS1InfieAvatar maskId="os1-av-tab" />
+                <span className="font-['Rounded_Mplus_1c',sans-serif] font-extrabold text-[16px] text-[#2dd4bf] leading-none">Infie</span>
+                <div className="bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)] flex items-center justify-center px-[10px] py-1 rounded-[6px] shrink-0">
+                  <span className="font-['Inter',sans-serif] font-bold text-[11px] text-[#f59e0b] uppercase leading-none">Waiting on test</span>
+                </div>
               </div>
-            </div>
-            {/* separator */}
-            <div className="h-full py-2 shrink-0"><div className="bg-[rgba(255,255,255,0.06)] h-full w-px" /></div>
-            {/* Sending photos feature tab */}
-            <div className="flex gap-[6px] h-full items-center border-b-2 border-transparent px-3 shrink-0">
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <g clipPath="url(#ct1)">
-                  <path d={svgPathsOS1.pf97de80} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p61eb400} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p1b59f180} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p25c6d890} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                </g>
-                <defs><clipPath id="ct1"><rect width="11" height="11" fill="white" /></clipPath></defs>
-              </svg>
-              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#444] whitespace-nowrap">Sending photos feature</span>
-            </div>
-            {/* Fix dark mode on iOS tab */}
-            <div className="flex gap-[6px] h-full items-center border-b-2 border-transparent px-3 shrink-0">
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <g clipPath="url(#ct2)">
-                  <path d={svgPathsOS1.pf97de80} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p61eb400} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p1b59f180} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                  <path d={svgPathsOS1.p25c6d890} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
-                </g>
-                <defs><clipPath id="ct2"><rect width="11" height="11" fill="white" /></clipPath></defs>
-              </svg>
-              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#333] whitespace-nowrap">Fix dark mode on iOS</span>
-            </div>
-            {/* expand icon right */}
-            <div className="flex-1 flex items-center justify-end px-2">
-              <div className="flex flex-col items-start justify-center p-[6px] rounded-[4px]">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                  <path d="M8.125 1.625H11.375V4.875" stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                  <path d="M4.875 11.375H1.625V8.125" stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                  <path d={svgPathsOS1.p117dabc0} stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                  <path d={svgPathsOS1.p11087f00} stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+              {/* separator */}
+              <div className="h-full py-2 shrink-0"><div className="bg-[rgba(255,255,255,0.06)] h-full w-px" /></div>
+              {/* Sending photos feature tab */}
+              <div className="flex gap-[6px] h-full items-center border-b-2 border-transparent px-3 shrink-0">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <g clipPath="url(#ct1)">
+                    <path d={svgPathsOS1.pf97de80} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p61eb400} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p1b59f180} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p25c6d890} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                  </g>
+                  <defs><clipPath id="ct1"><rect width="11" height="11" fill="white" /></clipPath></defs>
                 </svg>
+                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#444] whitespace-nowrap">Sending photos feature</span>
+              </div>
+              {/* Fix dark mode on iOS tab */}
+              <div className="flex gap-[6px] h-full items-center border-b-2 border-transparent px-3 shrink-0">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <g clipPath="url(#ct2)">
+                    <path d={svgPathsOS1.pf97de80} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p61eb400} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p1b59f180} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                    <path d={svgPathsOS1.p25c6d890} stroke="#333" strokeLinecap="round" strokeLinejoin="round" strokeWidth="0.916667" />
+                  </g>
+                  <defs><clipPath id="ct2"><rect width="11" height="11" fill="white" /></clipPath></defs>
+                </svg>
+                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#333] whitespace-nowrap">Fix dark mode on iOS</span>
+              </div>
+              {/* expand icon right */}
+              <div className="flex-1 flex items-center justify-end px-2">
+                <div className="flex flex-col items-start justify-center p-[6px] rounded-[4px]">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <path d="M8.125 1.625H11.375V4.875" stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                    <path d="M4.875 11.375H1.625V8.125" stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                    <path d={svgPathsOS1.p117dabc0} stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                    <path d={svgPathsOS1.p11087f00} stroke="#555" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                  </svg>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Compact branch & task strip on narrow mobile screens */}
+          {isExperimemo && (
+            <div className="flex md:hidden items-center justify-between gap-2 px-3 py-1.5 bg-[#15141a] border-b border-[rgba(255,255,255,0.05)] text-[10px] font-['Rounded_Mplus_1c',sans-serif] text-[#94a3b8] shrink-0">
+              <span className="font-mono truncate">{"⊣"} {session.branch}</span>
+              <span className="shrink-0">
+                Tasks {agentTasks.filter((t) => t.done).length}/{agentTasks.length} · Human testing {humanRows.filter((r) => r.done).length}/{humanRows.length}
+              </span>
+            </div>
+          )}
 
           {/* Messages */}
-          <div ref={sessionChatListRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-4 bg-[#0a0814]">
-            {isTutorialActive ? (
+          <div
+            ref={sessionChatListRef}
+            id={isExperimemo ? `panel-agent-${activeAgentTab}` : undefined}
+            role={isExperimemo ? "tabpanel" : undefined}
+            aria-labelledby={isExperimemo ? `tab-agent-${activeAgentTab}` : undefined}
+            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 flex flex-col gap-4 bg-[#0a0814]"
+          >
+            {isExperimemo ? (
+              activeExperimemoMessages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[220px] text-center space-y-2.5 text-[#71717a] px-4">
+                  {activeAgentTab !== "infie" ? (
+                    <ProviderIcon provider={activeAgentTab} size={28} />
+                  ) : (
+                    <OS1InfieAvatar maskId="os1-av-exp-empty" />
+                  )}
+                  <p className="text-[13px] font-['Rounded_Mplus_1c',sans-serif] text-[#a1a1aa]">
+                    Waiting for Infie's handoff.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => tutorial.setActiveSessionTab("infie")}
+                    className="text-[11px] font-semibold text-[#2dd4bf] hover:underline cursor-pointer"
+                  >
+                    Return to Infie
+                  </button>
+                </div>
+              ) : (
+                activeExperimemoMessages.map((msg) => (
+                  <FlowMessageBubble
+                    key={msg.id}
+                    msg={msg}
+                    infieAvatar={<OS1InfieAvatar maskId={`os1-av-${msg.id}`} />}
+                    onJump={activeAgentTab === "infie" ? tutorial.setActiveSessionTab : undefined}
+                  />
+                ))
+              )
+            ) : isTutorialActive ? (
               <>
                 {dockedChat.history.map((m, idx) => {
                   const isLatest = idx === dockedChat.history.length - 1;
@@ -5775,122 +6926,238 @@ function SessionScreen({
             )}
           </AnimatePresence>
 
+          {/* Experimemo: completion form is strictly gated until Auto-merge moves session to MERGED with lesson === "form". */}
+          {isExperimemo && xs?.status === "MERGED" && xs?.lesson === "form" && (
+            <div data-testid="lesson-form" className="shrink-0 bg-[#0a0814]">
+              <SessionCompletionForm
+                key={`${xs.status}-${xs.lesson}`}
+                submitEnabled
+                summaryDefault={xs.lessonSummary}
+                correctedActionDefault={xs.lessonAction}
+                onSubmit={(values) =>
+                  tutorial.dispatchFlow({
+                    type: "SUBMIT_LESSON",
+                    summary: values.summary,
+                    correctedAction: values.correctedAction,
+                  })
+                }
+              />
+            </div>
+          )}
+
           {/* Action pills — directly above the input, no backdrop. The docked tutorial Continue
               sits first; the other pills are greyed out and inert during the tutorial. */}
-          <div className="mx-3 mb-2 shrink-0">
+          <div className="mx-2 sm:mx-3 mb-2 shrink-0">
             <div
               data-name="DockedChatActionRow"
               className={`flex gap-2 items-center justify-center p-2 flex-wrap ${
                 isTutorialActive ? "min-h-[54px]" : ""
               }`}
             >
-              {showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
-              {/* What's Next — teal */}
-              <button
-                onClick={isTutorialActive ? undefined : handleWhatsNext}
-                disabled={isTutorialActive}
-                data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-              >
-                <div aria-hidden className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                <div aria-hidden className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                <div className="flex flex-row items-center size-full">
-                  <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
-                    <span className="font-medium text-[#2dd4bf] text-[14px]">✦</span>
-                    <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">{`What's Next`}</span>
-                  </div>
-                </div>
-                <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
-              </button>
-              {/* Test changes — amber */}
-              <button
-                onClick={isTutorialActive ? undefined : handleTestChanges}
-                disabled={isTutorialActive}
-                data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-              >
-                <div aria-hidden className="absolute bg-[rgba(45,37,15,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                <div aria-hidden className="absolute border border-[rgba(251,191,36,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                <div className="flex flex-row items-center size-full">
-                  <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
-                    <span className="font-['Inter',sans-serif] font-medium text-[#fbbf24] text-[14px]">⚠</span>
-                    <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">Test changes</span>
-                  </div>
-                </div>
-                <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(251,191,36,0.25)]" />
-              </button>
-              {/* Action — teal compact */}
-              <button
-                onClick={isTutorialActive ? undefined : handleAction}
-                disabled={isTutorialActive}
-                data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-              >
-                <div aria-hidden className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
-                <div aria-hidden className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
-                <div className="flex flex-row items-center size-full">
-                  <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
-                    <span className="font-medium text-[#2dd4bf] text-[14px]">✦</span>
-                    <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">Action</span>
-                  </div>
-                </div>
-                <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
-              </button>
+              {isExperimemo ? (
+                <>
+                  {sessionActions.map((act) => {
+                    const iconByKey: Record<PrimaryActionKey, IconCmp> = {
+                      delegate: ArrowRight,
+                      fix: AlertTriangle,
+                      "open-pr": GitPullRequest,
+                      "review-changes": Search,
+                      "wrap-up": Stethoscope,
+                      "present-changes": Globe,
+                      "auto-merge": GitMerge,
+                      cleanup: Sparkles,
+                      "confirm-cleanup": CheckCircle2,
+                    };
+                    const handleActionClick = () => {
+                      switch (act.key) {
+                        case "delegate":
+                          tutorial.dispatchFlow({ type: "DELEGATE" });
+                          break;
+                        case "fix":
+                          tutorial.dispatchFlow({ type: "FIX_PROBLEMS" });
+                          break;
+                        case "open-pr":
+                          tutorial.dispatchFlow({ type: "OPEN_PR" });
+                          break;
+                        case "review-changes":
+                          tutorial.dispatchFlow({ type: "REVIEW_CHANGES" });
+                          break;
+                        case "wrap-up":
+                          tutorial.dispatchFlow({ type: "START_WRAP_UP" });
+                          break;
+                        case "present-changes":
+                          tutorial.dispatchFlow({ type: "PRESENT_CHANGES" });
+                          onOpenWidget?.("emuWeb", "Web Preview");
+                          break;
+                        case "auto-merge":
+                          tutorial.dispatchFlow({ type: "AUTO_MERGE" });
+                          break;
+                        case "cleanup":
+                          tutorial.dispatchFlow({ type: "REQUEST_CLEANUP" });
+                          break;
+                        case "confirm-cleanup":
+                          tutorial.dispatchFlow({ type: "CONFIRM_CLEANUP" });
+                          onOpenProject();
+                          break;
+                      }
+                    };
+                    return (
+                      <InfieFlowPill
+                        key={act.key}
+                        testId={`flow-action-${act.key}`}
+                        label={act.label}
+                        preset={act.preset}
+                        icon={iconByKey[act.key]}
+                        onClick={handleActionClick}
+                      />
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  {showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
+                  {/* What's Next — teal */}
+                  <button
+                    onClick={isTutorialActive ? undefined : handleWhatsNext}
+                    disabled={isTutorialActive}
+                    data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                    className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                  >
+                    <div aria-hidden className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div aria-hidden className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div className="flex flex-row items-center size-full">
+                      <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
+                        <span className="font-medium text-[#2dd4bf] text-[14px]">✦</span>
+                        <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">{`What's Next`}</span>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
+                  </button>
+                  {/* Test changes — amber */}
+                  <button
+                    onClick={isTutorialActive ? undefined : handleTestChanges}
+                    disabled={isTutorialActive}
+                    data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                    className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                  >
+                    <div aria-hidden className="absolute bg-[rgba(45,37,15,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div aria-hidden className="absolute border border-[rgba(251,191,36,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div className="flex flex-row items-center size-full">
+                      <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
+                        <span className="font-['Inter',sans-serif] font-medium text-[#fbbf24] text-[14px]">⚠</span>
+                        <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">Test changes</span>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(251,191,36,0.25)]" />
+                  </button>
+                  {/* Action — teal compact */}
+                  <button
+                    onClick={isTutorialActive ? undefined : handleAction}
+                    disabled={isTutorialActive}
+                    data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+                    className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 hover:opacity-90 transition-opacity ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
+                  >
+                    <div aria-hidden className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div aria-hidden className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
+                    <div className="flex flex-row items-center size-full">
+                      <div className="flex gap-2 items-center pl-3 pr-4 py-[7px] whitespace-nowrap relative">
+                        <span className="font-medium text-[#2dd4bf] text-[14px]">✦</span>
+                        <span className="font-['Inter',sans-serif] font-semibold text-[13px] text-white">Action</span>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* Input */}
           <div className="border-t border-[rgba(255,255,255,0.05)] py-3 px-3 shrink-0 bg-[#0a0814]">
-            <div className="bg-[#252323] border border-[rgba(45,212,191,0.14)] rounded-[8px] flex gap-2 items-end px-3 py-2">
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") handleSend(); }}
-                placeholder="Ask Infie to coordinate, scan, or switch agents… (⌘↵)"
-                className="flex-1 bg-transparent text-[12px] text-white placeholder-[#444] focus:outline-none"
-                style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+            {isExperimemo && xs ? (
+              <InfieComposer
+                value={xs.tabDrafts[activeAgentTab]}
+                onChange={v => tutorial.dispatchFlow({ type: "SET_SESSION_DRAFT", value: v })}
+                onSend={() => tutorial.dispatchFlow({ type: "SEND_SESSION", text: xs.tabDrafts[activeAgentTab] })}
+                placeholder={getSessionComposerPlaceholder(activeAgentTab)}
+                ariaLabel={
+                  activeAgentTab === "infie"
+                    ? "Message Infie"
+                    : `Message ${SESSION_TAB_ACCESSIBLE_LABEL[activeAgentTab]}`
+                }
+                glow={false}
               />
-              <button onClick={handleSend} className="bg-[rgba(255,255,255,0.05)] rounded-[6px] flex items-center justify-center shrink-0 size-7 hover:bg-white/10 transition-colors">
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                  <g clipPath="url(#send-clip)">
-                    <path d={svgPathsOS1.p2ca29780} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                    <path d={svgPathsOS1.p3f86e380} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
-                  </g>
-                  <defs><clipPath id="send-clip"><rect width="13" height="13" fill="white" /></clipPath></defs>
-                </svg>
-              </button>
-            </div>
+            ) : (
+              <div className="bg-[#252323] border border-[rgba(45,212,191,0.14)] rounded-[8px] flex gap-2 items-end px-3 py-2">
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleSend(); }}
+                  placeholder="Ask Infie to coordinate, scan, or switch agents… (⌘↵)"
+                  className="flex-1 min-w-0 bg-transparent text-[12px] text-white placeholder-[#555] focus:outline-none"
+                  style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  className="bg-[rgba(255,255,255,0.05)] rounded-[6px] flex items-center justify-center shrink-0 size-7 hover:bg-white/10 transition-colors disabled:opacity-40"
+                >
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+                    <g clipPath="url(#send-clip)">
+                      <path d={svgPathsOS1.p2ca29780} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                      <path d={svgPathsOS1.p3f86e380} stroke="#444" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.08333" />
+                    </g>
+                    <defs><clipPath id="send-clip"><rect width="13" height="13" fill="white" /></clipPath></defs>
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
+        {isExperimemo && xs?.reviewOpen && (
+          <ExperimemoPRReviewWidget session={xs} />
+        )}
+        </div>
 
-        {/* ── RIGHT — 230px — panels appear when introduced; the bordered music widget
-             always lives at its bottom (replacing the old widgets grid) ── */}
-        <div className="w-[230px] shrink-0 flex flex-col gap-[8px] overflow-y-auto min-h-0">
+        {/* ── RIGHT — hidden during PR review split so PR widget holds ~50% width cleanly ── */}
+        {!(isExperimemo && xs?.reviewOpen) && <div className={`hidden lg:flex ${isExperimemo ? "w-[336px]" : "w-[230px]"} shrink-0 flex-col gap-[8px] overflow-y-auto min-h-0`}>
           {showTaskGroups && <>
 
           {/* Human Testing */}
           <div
             data-name="HumanTestingPanel"
+            data-human-testing-glow={needsHumanVerificationGlow ? "true" : "false"}
             className={`rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
-              isTutorialActive && currentBeat === "B15" && turnIndex === 1
-                ? "border border-[#2dd4bf] shadow-[0_0_20px_rgba(45,212,191,0.45)]"
+              needsHumanVerificationGlow || (!isExperimemo && isTutorialActive && currentBeat === "B15" && turnIndex === 1)
+                ? "border border-[#2dd4bf] shadow-[0_0_20px_rgba(45,212,191,0.45)] animate-pulse motion-reduce:animate-none"
                 : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
             }`}
           >
             <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
               <OS1DarkDotIcon />
-              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Human Testing 1/4</span>
+              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">
+                {isExperimemo ? `Human Testing ${humanRows.filter(r => r.done).length}/${humanRows.length}` : "Human Testing 1/4"}
+              </span>
             </div>
             <div className="bg-[#252323]">
-              {tests.map(t => (
-                <button key={t.id} data-human-task-id={t.id} onClick={() => {
-                  const becomingDone = !t.done;
-                  setTests(ts => ts.map(x => x.id === t.id ? { ...x, done: !x.done } : x));
-                  if (becomingDone) {
-                    onHumanTaskVerified?.();
-                  }
-                }}
-                  className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full text-left hover:bg-white/[0.02] transition-colors">
+              {humanRows.map(t => (
+                <button
+                  key={t.id}
+                  data-human-task-id={t.id}
+                  data-done={t.done ? "true" : "false"}
+                  onClick={() => {
+                    if (isExperimemo) {
+                      tutorial.dispatchFlow({ type: "TOGGLE_HUMAN_TEST", id: t.id });
+                      return;
+                    }
+                    const becomingDone = !t.done;
+                    setTests(ts => ts.map(x => x.id === t.id ? { ...x, done: !x.done } : x));
+                    if (becomingDone) {
+                      onHumanTaskVerified?.();
+                    }
+                  }}
+                  className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full text-left hover:bg-white/[0.02] transition-colors"
+                >
                   {t.done ? <OS1CheckDoneIcon /> : <OS1CheckPendingIcon />}
                   <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[11px] leading-[17.875px] ${t.done ? "line-through text-[#555]" : "text-[#c5c5c5]"}`}>{t.text}</span>
                 </button>
@@ -5898,45 +7165,36 @@ function SessionScreen({
             </div>
           </div>
 
-          {/* Explorer */}
-          <div className="border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-clip shrink-0 w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]">
-            <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
-              <OS1DarkDotIcon />
-              <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Explorer</span>
-            </div>
-            <div className="bg-[#252323] p-1">
-              {explorerTree.map((node, i) => {
-                const paddingLeft = 8 + node.depth * 14;
-                const isTsx = !node.isFolder && node.name.endsWith(".tsx");
-                return (
-                  <div key={i} className="flex gap-[6px] items-center py-[3px] rounded-[6px] w-full" style={{ paddingLeft, paddingRight: 8 }}>
-                    {node.isFolder ? (
-                      <>
-                        <div className="shrink-0 size-[12px] flex items-center justify-center">
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d={node.open ? "M3 4.5L6 7.5L9 4.5" : "M4.5 9L7.5 6L4.5 3"} stroke="#666" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </div>
-                        {node.open ? <OS1FolderOpenIcon /> : <OS1FolderClosedIcon />}
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-3 shrink-0" />
-                        {isTsx ? <OS1TsxLargeIcon /> : <OS1GreenFileIcon />}
-                      </>
-                    )}
-                    <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] truncate">{node.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Inline web preview (Experimemo) */}
+          {isExperimemo && (
+            <ExperimemoPreviewWidget
+              glow={needsHumanVerificationGlow}
+              onEnlarge={() => onOpenWidget?.("emuWeb", "Web Preview")}
+            />
+          )}
 
+          {!isExperimemo && explorerPanel}
           </>}
           <div ref={musicSlotRef} data-name="MusicWidgetSlot" className="mt-auto shrink-0 w-full" />
-        </div>
+        </div>}
 
       </div>
+
+      {isExperimemo && xs?.workerLimitTab && (
+        <PrototypeLimit
+          variant="modal"
+          title="Prototype Limit"
+          subtitle={`${SESSION_TAB_ACCESSIBLE_LABEL[xs.workerLimitTab]} · Direct Agent Chat`}
+          featureName={`${PROVIDER_TOPIC[xs.workerLimitTab]} (${PROVIDER_LABEL[xs.workerLimitTab]})`}
+          description={`Direct interactive agent chat on the ${PROVIDER_TOPIC[xs.workerLimitTab]} tab will be available in the full application. Your note was recorded in this worker's thread without invoking a live model.`}
+          environmentNote="Simulated prototype · direct worker replies disabled; no live model calls"
+          primaryAction={{
+            label: "Return to tab",
+            onClick: () => tutorial.dispatchFlow({ type: "DISMISS_WORKER_LIMIT" }),
+          }}
+          onClose={() => tutorial.dispatchFlow({ type: "DISMISS_WORKER_LIMIT" })}
+        />
+      )}
     </div>
   );
 }
@@ -6029,6 +7287,7 @@ function I2HomeScreen({
   onProjectTypeChange,
   onSelectProject,
   onScopeNotice,
+  onTutorials,
   onOpenSessionShortcut,
   onPlayground,
   levelText = "Lvl. 1",
@@ -6054,6 +7313,7 @@ function I2HomeScreen({
   onSupportNewFramework,
   onNotifications,
   switchableProjects,
+  projects,
   allSessions,
   onSelectSession,
   currentProjectId,
@@ -6069,6 +7329,7 @@ function I2HomeScreen({
   projectType: ProjectType; onProjectTypeChange: (v: ProjectType) => void;
   onSelectProject: (p: ProtoProject) => void;
   onScopeNotice: (msg: string) => void;
+  onTutorials?: () => void;
   onOpenSessionShortcut: (sessionId: string) => void;
   onPlayground: () => void;
   levelText?: string;
@@ -6094,6 +7355,7 @@ function I2HomeScreen({
   onSupportNewFramework?: () => void;
   onNotifications?: () => void;
   switchableProjects?: ProtoProject[];
+  projects?: ProtoProject[];
   allSessions?: ProtoSession[];
   onSelectSession?: (s: ProtoSession) => void;
   currentProjectId?: string | null;
@@ -6132,7 +7394,7 @@ function I2HomeScreen({
 
   // Canonical B12 rule: show only the two existing seeded projects ("Pet Show and Tell" and "Not Hotdog");
   // no extra enclosing tutorial demo project card.
-  const displayedProjects = PROTOTYPE_PROJECTS;
+  const displayedProjects = projects ?? PROTOTYPE_PROJECTS;
 
   return (
     <div
@@ -6155,6 +7417,7 @@ function I2HomeScreen({
         tab={tab}
         onTabChange={setTab}
         onScopeNotice={onScopeNotice}
+        onTutorials={onTutorials}
         onWidgets={onWidgets}
         onNotifications={onNotifications}
         showHeaderControls={showHeaderControls}
@@ -6196,7 +7459,7 @@ function I2HomeScreen({
 
       {/* Main Content — Figma MainContent layout */}
       {tab === "Workspace" && (showConversationEntry || showProjectsAndActions) && <div className="flex-1 overflow-y-auto relative z-10">
-        <div className="content-stretch flex gap-[32px] items-center justify-center max-w-[1261px] min-h-full mx-auto pb-[48px] pt-[40px] px-[32px]">
+        <div className="content-stretch flex flex-col lg:flex-row gap-[24px] lg:gap-[32px] items-center justify-center max-w-[1261px] min-h-full mx-auto pb-[48px] pt-[24px] lg:pt-[40px] px-4 sm:px-[32px]">
 
           {/* LEFT — Infie Convo (flex-1) */}
           {showConversationEntry && (
@@ -6377,7 +7640,7 @@ function I2HomeScreen({
 
           {/* 18px spacer — kept when conversation entry is revealed so left column stays at its exact final width */}
           {(showConversationEntry || showProjectsAndActions) && (
-            <div aria-hidden="true" className="h-[100px] relative shrink-0 w-[18px]" />
+            <div aria-hidden="true" className="hidden lg:block h-[100px] relative shrink-0 w-[18px]" />
           )}
 
           {/* RIGHT SIDE — centered, fixed 558px project grid */}
@@ -6387,7 +7650,7 @@ function I2HomeScreen({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.35 }}
-              className="content-stretch flex flex-[1_0_0] flex-col gap-[72px] h-[604px] items-center justify-center min-w-px relative"
+              className="content-stretch flex flex-[1_0_0] flex-col gap-[40px] lg:gap-[72px] lg:h-[604px] items-center justify-center min-w-px w-full relative"
             >
             {/* Recent Projects */}
             {showResumeProjects && (
@@ -6396,13 +7659,13 @@ function I2HomeScreen({
                 initial={{ opacity: 0, y: isTutorialActive ? 14 : 0 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: B12_PROJECTS_FADE_MS / 1000, ease: "easeOut" }}
-                className="content-stretch flex flex-col items-start relative shrink-0 w-[558px]"
+                className="content-stretch flex flex-col items-start relative shrink-0 w-full max-w-[558px]"
               >
               <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
                 <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.3)", letterSpacing: "1.1px", textTransform: "uppercase", whiteSpace: "nowrap" }}>Active Projects</p>
               </div>
               <div className="content-stretch flex flex-col items-start pt-[16px] relative shrink-0 w-full">
-                <div className="gap-x-[20px] gap-y-[28px] grid grid-cols-2 relative shrink-0 w-full">
+                <div className="gap-x-[20px] gap-y-[20px] sm:gap-y-[28px] grid grid-cols-1 sm:grid-cols-2 relative shrink-0 w-full">
                   {displayedProjects.map(p => {
                     const canClickProject = !isTutorialActive || showTutorialDemoProject;
                     return (
@@ -6429,7 +7692,7 @@ function I2HomeScreen({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className={`content-stretch flex gap-[12px] h-[58px] items-center justify-center relative shrink-0 w-[511px] ${
+              className={`content-stretch flex flex-wrap sm:flex-nowrap gap-[12px] min-h-[58px] items-center justify-center relative shrink-0 w-full max-w-[420px] ${
                 isTutorialActive ? "pointer-events-none opacity-80" : ""
               }`}
             >
@@ -7472,11 +8735,10 @@ export default function App() {
     return { initialQueryBeat: undefined, startWithOpening: false };
   })();
   return (
-    <OnboardingProvider
-      initialBeat={initialQueryBeat ?? "COMPLETE"}
-      initialB00GateHeld={startWithOpening}
-    >
-      <PersistentAppShell initialOpening={startWithOpening} />
+    <OnboardingProvider initialBeat={initialQueryBeat ?? "COMPLETE"} initialB00GateHeld={startWithOpening}>
+      <TutorialProvider>
+        <PersistentAppShell initialOpening={startWithOpening} />
+      </TutorialProvider>
     </OnboardingProvider>
   );
 }
@@ -7500,6 +8762,16 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     completeOnboarding,
   } = useOnboarding();
 
+  const tutorial = useTutorial();
+  const { setOnJennyCompletedCallback, createProject } = tutorial;
+  useEffect(() => {
+    setOnJennyCompletedCallback(() => {
+      createProject();
+      setActiveProjectId(EXPERIMEMO_PROJECT_ID);
+      setActiveSessionId(null);
+      setRoute("project");
+    });
+  }, [setOnJennyCompletedCallback, createProject]);
   // The Napoleon Hill handwriting opening plays at new-tutorial entry (over pure
   // black B00 before B01 begins) and never interrupts completed users or ?beat= links.
   const [closingOpen, setClosingOpen] = useState(initialOpening);
@@ -7542,11 +8814,29 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
   const [supportFrameworkModalOpen, setSupportFrameworkModalOpen] = useState(false);
 
+  // Experimemo records exist only after Jenny completes (project) and Start Session (session).
+  const experimemoProject = tutorial.projectCreated
+    ? buildExperimemoProject(tutorial.sessionStarted ? 1 : 0)
+    : null;
+  const allProjects = experimemoProject ? [experimemoProject, ...PROTOTYPE_PROJECTS] : PROTOTYPE_PROJECTS;
+  const allSessions = tutorial.sessionStarted ? [EXPERIMEMO_SESSION, ...PROTOTYPE_SESSIONS] : PROTOTYPE_SESSIONS;
   const activeProject =
     (activeProjectId === TUTORIAL_DEMO_PROJECT.id
       ? TUTORIAL_DEMO_PROJECT
-      : PROTOTYPE_PROJECTS.find(p => p.id === activeProjectId)) ?? null;
-  const activeSession = PROTOTYPE_SESSIONS.find(s => s.id === activeSessionId) ?? null;
+      : allProjects.find(p => p.id === activeProjectId)) ?? null;
+  const activeSession = allSessions.find(s => s.id === activeSessionId) ?? null;
+
+  // Guard every retained id: if the tutorial-owned records vanish (reset, regenerate), leave their routes.
+  useEffect(() => {
+    if (activeProjectId === EXPERIMEMO_PROJECT_ID && !tutorial.projectCreated) {
+      setActiveProjectId(null);
+      setActiveSessionId(null);
+      setRoute("home");
+    } else if (activeSessionId === EXPERIMEMO_SESSION_ID && !tutorial.sessionStarted) {
+      setActiveSessionId(null);
+      setRoute(r => (r === "session" ? "project" : r));
+    }
+  }, [activeProjectId, activeSessionId, tutorial.projectCreated, tutorial.sessionStarted]);
 
   const goHome = () => {
     setRoute("home");
@@ -7565,8 +8855,12 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       advanceBeat("B13");
     }
   };
-  const openSession = (s: ProtoSession) => {
+  const openSession = (s: ProtoSession, opts?: { justStarted?: boolean }) => {
     if (currentBeat === "B12" || currentBeat === "B13") {
+      return;
+    }
+    // The Experimemo session cannot be opened by any path until Start Session created it.
+    if (s.id === EXPERIMEMO_SESSION_ID && !tutorial.sessionStarted && !opts?.justStarted) {
       return;
     }
     setActiveProjectId(activeProjectId === TUTORIAL_DEMO_PROJECT.id ? TUTORIAL_DEMO_PROJECT.id : s.projectId);
@@ -7576,7 +8870,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       advanceBeat("B15");
     }
   };
-  const openSessionById = (id: string) => { const s = PROTOTYPE_SESSIONS.find(x => x.id === id); if (s) openSession(s); };
+  const openSessionById = (id: string) => { const s = allSessions.find(x => x.id === id); if (s) openSession(s); };
   const [openedLabel, setOpenedLabel] = useState("expo-photo-share");
   const [projectType, setProjectType] = useState<ProjectType>(() => {
     return (localStorage.getItem("agentide-project-type") as ProjectType) ?? "expo";
@@ -7721,7 +9015,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       setModal(null);
       setRootModal(null);
       setWidgetsGalleryOpen(false);
-      const prj = PROTOTYPE_PROJECTS.find(p => p.id === pId);
+      const prj = allProjects.find(p => p.id === pId);
       if (prj) openProjectHome(prj);
     },
   };
@@ -7749,7 +9043,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     onNavigateProject: (pId: string) => {
       setRootModal(null);
       setWidgetsGalleryOpen(false);
-      const prj = PROTOTYPE_PROJECTS.find(p => p.id === pId);
+      const prj = allProjects.find(p => p.id === pId);
       if (prj) openProjectHome(prj);
     },
   };
@@ -7822,7 +9116,15 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       <StatusBar phase={phase} branch="feature/photo-share" />
 
       <AnimatePresence>
-        {modal?.kind === "emulator" && <EmulatorModal key="emu" id={modal.id} onClose={() => setModal(null)} />}
+        {modal?.kind === "emulator" && (
+          <EmulatorModal
+            key="emu"
+            id={modal.id}
+            onClose={() => setModal(null)}
+            activeProjectId={activeProjectId}
+            previewVersion={tutorial.previewVersion}
+          />
+        )}
         {modal?.kind === "standard" && <WidgetModal key="std" id={modal.id} label={modal.label} fullscreen={modal.fullscreen} onClose={() => setModal(null)} ctx={ctx} />}
       </AnimatePresence>
     </div>
@@ -7922,7 +9224,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   // the project layout (B13 roadmap/sessions), not only after the B18 widgets beat.
   const showProjectWidgetsPanel =
     showProjectRoadmapSessions || showWidgetMoveResize || isRevealed("library_entry_and_example");
-  const switchableProjects = PROTOTYPE_PROJECTS.filter((p) => p.wired);
+  const switchableProjects = allProjects.filter((p) => p.wired);
+  const experimemoSessions = tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : [];
   const hasAnyHomeShellRevealed =
     showLevelIndicator ||
     showHeaderBreadcrumbs ||
@@ -8038,7 +9341,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
           <motion.div key="welcome" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <I2HomeScreen
               onOpenProject={handleOpenProject}
-              onSuperStack={() => setWsState("superstack" as any)}
+              onSuperStack={() => tutorial.openJenny()}
               projectType={projectType}
               onProjectTypeChange={handleProjectTypeChange}
               onSelectProject={openProjectHome}
@@ -8070,7 +9373,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               onSupportNewFramework={() => setSupportFrameworkModalOpen(true)}
               onNotifications={handleOpenNotifications}
               switchableProjects={switchableProjects}
-              allSessions={PROTOTYPE_SESSIONS}
+              projects={allProjects}
+              allSessions={allSessions}
               onSelectSession={openSession}
               currentProjectId={activeProjectId}
               levelPillDocked={levelPillDocked}
@@ -8099,11 +9403,19 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               showRoadmapSessions={showProjectRoadmapSessions}
               showWidgetsPanel={showProjectWidgetsPanel}
               showStartAppSlot={isTutorialComplete}
-              switchableProjects={switchableProjects}
+              switchableProjects={
+                activeProjectId === EXPERIMEMO_PROJECT_ID && experimemoProject
+                  ? [experimemoProject]
+                  : switchableProjects
+              }
               onSwitchProject={(p) => openProjectHome(p)}
               onWidgets={() => setWidgetsGalleryOpen(true)}
               onNotifications={handleOpenNotifications}
-              allSessions={PROTOTYPE_SESSIONS}
+              allSessions={
+                activeProjectId === EXPERIMEMO_PROJECT_ID
+                  ? experimemoSessions
+                  : allSessions
+              }
               onSelectSession={openSession}
               levelPillDocked={levelPillDocked}
               breadcrumbsDocked={breadcrumbsDocked}
@@ -8133,9 +9445,18 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               }}
               onWidgets={() => setWidgetsGalleryOpen(true)}
               onNotifications={handleOpenNotifications}
-              switchableProjects={switchableProjects}
+              onOpenWidget={(id, label) => openRootWidget(id, label)}
+              switchableProjects={
+                activeProject.id === EXPERIMEMO_PROJECT_ID && experimemoProject
+                  ? [experimemoProject]
+                  : switchableProjects
+              }
               onSwitchProject={(p) => openProjectHome(p)}
-              allSessions={PROTOTYPE_SESSIONS}
+              allSessions={
+                activeProject.id === EXPERIMEMO_PROJECT_ID
+                  ? experimemoSessions
+                  : allSessions
+              }
               onSelectSession={openSession}
               highlightHomeNav={highlightHomeNav}
               disabled={isHeaderDisabled}
@@ -8234,12 +9555,21 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       {/* Root Widget Modal (opened from Widgets Gallery or outside IDE) */}
       <AnimatePresence>
         {rootModal?.kind === "emulator" && (
-          <EmulatorModal key="root-emu" id={rootModal.id} onClose={() => setRootModal(null)} />
+          <EmulatorModal
+            key="root-emu"
+            id={rootModal.id}
+            onClose={() => setRootModal(null)}
+            activeProjectId={activeProjectId}
+            previewVersion={tutorial.previewVersion}
+          />
         )}
         {rootModal?.kind === "standard" && (
           <WidgetModal key="root-std" id={rootModal.id} label={rootModal.label} fullscreen={rootModal.fullscreen} onClose={() => setRootModal(null)} ctx={rootCtx} />
         )}
       </AnimatePresence>
+
+      {/* Experimemo Interactive Tutorial Overlay */}
+      <TutorialOverlay />
 
     </div>
   );

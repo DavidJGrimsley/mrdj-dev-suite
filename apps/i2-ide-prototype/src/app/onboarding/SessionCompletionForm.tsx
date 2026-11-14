@@ -9,16 +9,16 @@ import { FloatingField, FloatingButton } from "./FloatingPrimitives";
 export function SessionCompletionForm({
   submitEnabled,
   onSubmit,
+  summaryDefault = "Implemented comment sheet & verified preview in session worktree.",
+  correctedActionDefault = "Check the platform before choosing a command.",
 }: {
   submitEnabled: boolean;
-  onSubmit: () => void;
+  onSubmit: (values: { summary: string; correctedAction: string }) => void;
+  summaryDefault?: string;
+  correctedActionDefault?: string;
 }) {
-  const [summary, setSummary] = useState(
-    "Implemented comment sheet & verified preview in session worktree."
-  );
-  const [correctedAction, setCorrectedAction] = useState(
-    "Check the platform before choosing a command."
-  );
+  const [summary, setSummary] = useState(summaryDefault);
+  const [correctedAction, setCorrectedAction] = useState(correctedActionDefault);
   const [rating, setRating] = useState(5);
   const [feedback, setFeedback] = useState("");
 
@@ -31,7 +31,7 @@ export function SessionCompletionForm({
       onSubmit={(e) => {
         e.preventDefault();
         // Enter in a field never acts as Continue; Submit only works on the final turn.
-        if (submitEnabled) onSubmit();
+        if (submitEnabled) onSubmit({ summary, correctedAction });
       }}
       className="flex flex-col gap-3 w-full px-4 pt-2 pb-2 shrink-0"
       style={{ background: "transparent", border: "none", boxShadow: "none" }}

@@ -36,6 +36,7 @@ import {
 } from '../src/project-memory.js';
 
 import type { OnboardAnswers } from '../src/project-memory.js';
+import { planRetrospectiveProjectOnboarding, retrospectivePlanDigest } from '../src/retrospective-onboarding.js';
 import {
   releaseGuidanceTasks,
   renderStoreReleaseGuidance,
@@ -43,6 +44,12 @@ import {
 } from '../src/release-guidance.js';
 
 const tempDirs: string[] = [];
+// These cases exercise the Expo-specific onboarding flow; make the fixture's framework explicit.
+async function runExpoOnboard(argv: Parameters<typeof runOnboardCommand>[0]): Promise<void> {
+  if (!argv.project) throw new Error('Expo onboarding fixture requires a project path');
+  await writeFile(path.join(argv.project, 'expo-env.d.ts'), '/// <reference types="expo/types" />\n', 'utf8');
+  await runOnboardCommand(argv);
+}
 const DEFAULT_SUPABASE_ENV_LOCAL = [
   'EXPO_PUBLIC_SUPABASE_URL=https://bvzekjnvpkbcdobccffn.supabase.co',
   'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable__NjNz5Lsu6MhXgqdpWOihQ_yxKo22M-',
@@ -145,11 +152,14 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
+    const plan = planRetrospectiveProjectOnboarding(appPath);
     await runOnboardCommand({
       project: appPath,
       yes: true,
       retrospective: true,
       projectOnly: true,
+      approvedPlanDigest: retrospectivePlanDigest(plan),
+      coordinatorApproved: true,
     });
 
     await expect(readFile(path.join(projectPath, 'info.md'), 'utf8')).resolves.toContain(
@@ -212,7 +222,7 @@ describe('runOnboardCommand', () => {
     );
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -656,7 +666,7 @@ describe('runOnboardCommand', () => {
     ).resolves.not.toContain('await import(');
     await expect(
       readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
-    ).resolves.toContain("path.join(projectRoot, 'project', 'theme.json')");
+    ).resolves.toContain('loaded.loadStylistTheme(projectRoot)');
     await expect(
       readFile(path.join(projectPath, 'scripts', 'stylist-sync-android.mjs'), 'utf8')
     ).resolves.toContain('createRequire');
@@ -985,7 +995,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1091,7 +1101,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1132,7 +1142,7 @@ describe('runOnboardCommand', () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-onboard-template-'));
     tempDirs.push(projectPath);
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1202,7 +1212,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1257,7 +1267,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1378,7 +1388,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1428,7 +1438,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1588,7 +1598,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1663,7 +1673,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1851,7 +1861,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1920,7 +1930,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -1987,7 +1997,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       force: true,
@@ -2026,7 +2036,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -2085,7 +2095,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       appName: 'Persist Local App',
@@ -2148,7 +2158,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       appName: 'Persist Zustand App',
@@ -2193,7 +2203,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -2271,7 +2281,7 @@ describe('runOnboardCommand', () => {
       'utf8'
     );
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,
@@ -2443,7 +2453,7 @@ describe('runOnboardCommand', () => {
       }
     });
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       appName: 'Install App',
@@ -2473,7 +2483,7 @@ describe('runOnboardCommand', () => {
     await mkdir(path.join(projectPath, 'app'), { recursive: true });
     const installRunner = vi.fn();
 
-    await runOnboardCommand({
+    await runExpoOnboard({
       project: projectPath,
       yes: true,
       noInstall: true,

@@ -406,6 +406,14 @@ describe('mds MCP helpers', () => {
       expect(promptNames.has('review_motion')).toBe(true);
       expect(promptNames.has('github_setup_guidance')).toBe(true);
       expect(promptNames.has('push_merge_loop')).toBe(true);
+      expect(promptNames.has('generate_project')).toBe(true);
+      const jennyPrompt = await client.getPrompt({ name: 'generate_project', arguments: {} });
+      const opening = jennyPrompt.messages[0]?.content;
+      expect(opening?.type).toBe('text');
+      if (opening?.type === 'text') {
+        expect(opening.text).toContain("Hello I'm Jenny. I'm ready to help you create a new project. What's the idea?");
+        expect(opening.text).toContain('"frameworkId":"exact"');
+      }
 
       const librarySearch = await client.callTool({
         name: 'library_search',
@@ -1070,5 +1078,114 @@ describe('mds MCP helpers', () => {
     expect(prompt).toContain('Repeat the fix/poll loop up to 5 total cycles');
     expect(prompt).toContain('Never auto-merge to `main`.');
     expect(prompt).toContain('project/release-policy.json');
+  });
+
+  describe('framework generation MCP tools', () => {
+    it('lists framework tools in listTools()', async () => {
+      const tools = await listTools();
+      const toolNames = tools.map((t) => t.name);
+
+      expect(toolNames).toContain('framework_list');
+      expect(toolNames).toContain('framework_check_prerequisites');
+      expect(toolNames).toContain('framework_plan_generation');
+      expect(toolNames).toContain('framework_validate_plan');
+      expect(toolNames).toContain('framework_generate');
+      expect(toolNames).toContain('framework_detect');
+    });
+
+    it('executes framework_list returning Exact by default', async () => {
+      const result = (await executeTool('framework_list', {})) as {
+        defaultFrameworkId: string;
+        frameworks: Array<{ id: string; displayName: string }>;
+        templates: Array<{ id: string }>;
+      };
+
+      expect(result.defaultFrameworkId).toBe('exact');
+      expect(result.frameworks.some((f) => f.id === 'exact')).toBe(true);
+      expect(result.frameworks.some((f) => f.id === 'expo-react-native')).toBe(true);
+      expect(result.templates.some((t) => t.id === 'blank')).toBe(true);
+      expect(result.templates.some((t) => t.id === 'chat')).toBe(true);
+    });
+
+    it('executes framework_check_prerequisites for exact', async () => {
+      const result = (await executeTool('framework_check_prerequisites', {
+        frameworkId: 'exact',
+      })) as {
+        frameworkId: string;
+        satisfied: boolean;
+        prerequisites: Array<{ name: string }>;
+      };
+
+      expect(result.frameworkId).toBe('exact');
+      expect(result.prerequisites.some((p) => p.name === 'Bun')).toBe(true);
+    });
+
+    it('executes plan, validate, and dry-run generate tools with approval check', async () => {
+      const targetDir = await mkdtemp(path.join(os.tmpdir(), 'mcp-plan-test-'));
+      tempDirs.push(targetDir);
+
+      const plan = (await executeTool('framework_plan_generation', {
+        frameworkId: 'exact',
+        appName: 'mcp-exact-app',
+        targetDirectory: path.join(targetDir, 'mcp-exact-app-i2Workspace'),
+        templateId: 'blank',
+      })) as {
+        planDigest: string;
+        frameworkId: string;
+        appName: string;
+      };
+
+      expect(plan.frameworkId).toBe('exact');
+      expect(plan.appName).toBe('mcp-exact-app');
+      expect(plan.planDigest).toMatch(/^[a-f0-9]{64}$/);
+
+      // Validate
+      const validation = (await executeTool('framework_validate_plan', { plan })) as {
+        valid: boolean;
+        planDigest: string;
+      };
+      expect(validation.valid).toBe(true);
+      expect(validation.planDigest).toBe(plan.planDigest);
+
+      // Rejection on bad digest
+      await expect(
+        executeTool('framework_generate', {
+          plan,
+          approvedPlanDigest: 'bad-digest',
+        })
+      ).rejects.toThrowError(/does not match/);
+
+      // Success on matching digest in dry-run
+      const genResult = (await executeTool('framework_generate', {
+        plan,
+        approvedPlanDigest: plan.planDigest,
+        dryRun: true,
+      })) as {
+        success: boolean;
+        frameworkId: string;
+        handoff: { verificationStatus: string };
+      };
+
+      expect(genResult.success).toBe(true);
+      expect(genResult.frameworkId).toBe('exact');
+    });
+
+    it('executes framework_detect', async () => {
+      const targetDir = await mkdtemp(path.join(os.tmpdir(), 'mcp-detect-test-'));
+      tempDirs.push(targetDir);
+
+      await writeFile(path.join(targetDir, 'app.contract'), 'title: "Test"');
+      await writeFile(path.join(targetDir, 'exact.mjs'), '// runner');
+
+      const result = (await executeTool('framework_detect', {
+        projectPath: targetDir,
+      })) as {
+        frameworkId: string;
+        confidence: string;
+      };
+
+      expect(result.frameworkId).toBe('exact');
+      expect(result.confidence).toBe('high');
+    });
   });
 });

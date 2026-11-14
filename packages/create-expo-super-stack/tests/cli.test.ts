@@ -678,6 +678,40 @@ describe("create-expo-super-stack CLI helpers", () => {
     expect(parsed.mds.legalUpdateGate).toBeUndefined();
   });
 
+  it("applies the onboarding display name only over the folder-derived Expo name", async () => {
+    const projectPath = await mkdtemp(
+      path.join(os.tmpdir(), "super-stack-display-name-"),
+    );
+    try {
+      const write = (name: string) =>
+        writeFile(
+          path.join(projectPath, "app.json"),
+          JSON.stringify({ expo: { name, slug: "experimemo" } }),
+          "utf8",
+        );
+      const readName = async () =>
+        (
+          JSON.parse(
+            await readFile(path.join(projectPath, "app.json"), "utf8"),
+          ) as { expo: { name: string; slug: string } }
+        ).expo;
+
+      await write("experimemo");
+      await repairExpoProjectIdentifiers(projectPath, "experimemo", [], "Experimemo");
+      expect(await readName()).toMatchObject({ name: "Experimemo", slug: "experimemo" });
+
+      await write("Custom Name");
+      await repairExpoProjectIdentifiers(projectPath, "experimemo", [], "Experimemo");
+      expect((await readName()).name).toBe("Custom Name");
+
+      await write("experimemo");
+      await repairExpoProjectIdentifiers(projectPath, "experimemo", []);
+      expect((await readName()).name).toBe("experimemo");
+    } finally {
+      await rm(projectPath, { recursive: true, force: true });
+    }
+  });
+
   it("sanitizes Expo slug and scheme values from display names", async () => {
     expect(toExpoSlug("Bandana Designer")).toBe("bandana-designer");
     expect(toExpoScheme("Bandana Designer")).toBe("bandana-designer");

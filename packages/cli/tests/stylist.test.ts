@@ -9,7 +9,7 @@ import {
   runStylistReconcileOutputCommand,
   runStylistSyncCommand,
 } from '../src/commands/stylist.js';
-import { loadStylistThemeWithDiagnostics } from '../src/stylist-theme.js';
+import { DEFAULT_STYLIST_THEME, loadStylistThemeWithDiagnostics, syncStylistTheme } from '../src/stylist-theme.js';
 
 const tempDirs: string[] = [];
 
@@ -19,6 +19,23 @@ afterEach(async () => {
 });
 
 describe('runStylistSyncCommand', () => {
+  it('writes workspace memory to the control repository while keeping runtime outputs in the app', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-workspace-'));
+    tempDirs.push(root);
+    const app = path.join(root, 'sample-main');
+    const project = path.join(root, 'project');
+    await mkdir(path.join(app, '.mds'), { recursive: true });
+    await mkdir(project, { recursive: true });
+    await writeFile(path.join(app, '.mds', 'workspace.json'), JSON.stringify({ schemaVersion: 1, workspaceId: 'sample' }));
+    await writeFile(path.join(project, 'mds.workspace.json'), JSON.stringify({ schemaVersion: 1, workspaceId: 'sample', name: 'Sample', repositories: [{ id: 'source', remote: 'https://example.com/sample.git', defaultBranch: 'main', mainFolder: 'sample-main', worktreePrefix: 'sample-' }], project: { path: 'project' } }));
+    await writeFile(path.join(app, 'global.css'), "@import 'tailwindcss';\n@import 'uniwind';\n");
+    await syncStylistTheme(app, DEFAULT_STYLIST_THEME, { styleLibrary: 'uniwind' });
+    await expect(access(path.join(project, 'theme.json'))).resolves.toBeUndefined();
+    await expect(access(path.join(project, 'style.md'))).resolves.toBeUndefined();
+    await expect(access(path.join(app, 'project', 'theme.json'))).rejects.toThrow();
+    expect((await loadStylistThemeWithDiagnostics(app)).diagnostics.source).toBe('theme.json');
+    expect(await readFile(path.join(app, 'global.css'), 'utf8')).toContain('MDS_STYLIST_THEME_START');
+  });
   it('loads startup theme from project/theme.json before style.md managed block', async () => {
     const projectPath = await mkdtemp(path.join(os.tmpdir(), 'mds-stylist-load-theme-json-'));
     tempDirs.push(projectPath);
