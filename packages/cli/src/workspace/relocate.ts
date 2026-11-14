@@ -39,7 +39,7 @@ function inside(candidate: string, parent: string): boolean {
 }
 
 function git(repoPath: string, args: string[]): string {
-  return execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  return execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }).trim();
 }
 
 function isPrimary(worktreePath: string): boolean {

@@ -32,6 +32,7 @@ import {
 import { writeMcpJsonToProject } from './mcp-install.js';
 import {
   applyRetrospectiveProjectOnboarding,
+  retrospectivePlanDigest,
   planRetrospectiveProjectOnboarding,
 } from '../retrospective-onboarding.js';
 import { discoverWorkspace as discoverControlPlaneWorkspace } from '../workspace/discover.js';
@@ -50,6 +51,8 @@ import type { Option } from '@clack/prompts';
 
 export interface OnboardArgv {
   project?: string;
+  approvedPlanDigest?: string;
+  coordinatorApproved?: boolean;
   yes?: boolean;
   force?: boolean;
   guidelinesTemplate?: boolean;
@@ -236,11 +239,9 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     if (!argv.retrospective || !argv.projectOnly) {
       throw new Error('Retrospective onboarding must be run with both --retrospective and --project-only.');
     }
-    if (!argv.yes) {
-      throw new Error('Retrospective project-only onboarding requires --yes.');
-    }
     const plan = planRetrospectiveProjectOnboarding(projectPath);
-    applyRetrospectiveProjectOnboarding(plan);
+    if (!argv.approvedPlanDigest) { console.log(JSON.stringify({plan,planDigest:retrospectivePlanDigest(plan)},null,2)); return; }
+    applyRetrospectiveProjectOnboarding(plan,{approvedPlanDigest:argv.approvedPlanDigest,coordinatorApproved:argv.coordinatorApproved === true});
     console.log(chalk.bold('mds retrospective onboarding'));
     console.log(chalk.dim(plan.appPath));
     console.log(`Project memory: ${plan.projectPath}`);
@@ -258,6 +259,12 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
       `This path belongs to the initialized ${controlWorkspace.manifest.name} workspace. ` +
         'Use `mds onboard --retrospective --project-only --yes` from a source checkout to update the control-repository project memory.'
     );
+  }
+  const { getFrameworkAdapterRegistry, onboardProject } = await import('../generator.js');
+  const framework = await getFrameworkAdapterRegistry().detectFramework(projectPath);
+  if (framework.frameworkId !== 'expo-react-native') {
+    const proposal = await onboardProject(projectPath,framework.frameworkId,{approvedPlanDigest:argv.approvedPlanDigest,coordinatorApproved:argv.coordinatorApproved});
+    console.log(JSON.stringify(proposal,null,2)); return;
   }
   const existingManifest = await readWorkspaceManifest(projectPath);
   const discovery = existingManifest ? null : await discoverWorkspace(projectPath);

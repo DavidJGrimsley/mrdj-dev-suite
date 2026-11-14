@@ -269,6 +269,7 @@ async function runSingleMain(initialParsed: ParsedArgs): Promise<void> {
     projectPath,
     projectName,
     plan.answers.targetPlatforms,
+    plan.answers.appName,
   );
   const stylistWebOutputRepairs = await repairExpoWebOutputForStylistLifecycle(
     projectPath,
@@ -958,6 +959,7 @@ async function finishWorkspaceExpoApp(
     projectPath,
     appPlan.app.id,
     onboardPlan.answers.targetPlatforms,
+    onboardPlan.answers.appName ?? appPlan.app.displayName,
   );
   await repairExpoWebOutputForStylistLifecycle(
     projectPath,
@@ -1969,7 +1971,13 @@ export async function runExpoProjectChecks(
     projectPath,
     buildPrettierWriteCommand(packageManager),
   );
-  await runProjectCommand(projectPath, buildExpoDoctorCommand(packageManager));
+  try {
+    await runProjectCommand(projectPath, buildExpoDoctorCommand(packageManager));
+  } catch (error) {
+    log.warning(
+      `Expo Doctor reported issues for ${path.basename(projectPath)}. Project generation will finish; run a focused Doctor check for the complete report.`,
+    );
+  }
 }
 
 async function runProjectCommand(
@@ -2654,6 +2662,7 @@ export async function repairExpoProjectIdentifiers(
   projectPath: string,
   projectName: string,
   targetPlatforms: string[] = [],
+  displayName?: string,
 ): Promise<string[]> {
   const appJsonPath = path.join(projectPath, "app.json");
   const raw = await readOptionalText(appJsonPath);
@@ -2688,6 +2697,16 @@ export async function repairExpoProjectIdentifiers(
   let changed = false;
   if (expo.slug !== nextSlug) {
     expo.slug = nextSlug;
+    changed = true;
+  }
+  // The onboarding display name replaces only the folder-derived default name; a customized name is kept.
+  const trimmedDisplayName = displayName?.trim();
+  if (
+    trimmedDisplayName &&
+    expo.name === projectName &&
+    trimmedDisplayName !== projectName
+  ) {
+    expo.name = trimmedDisplayName;
     changed = true;
   }
   if (

@@ -38,7 +38,7 @@ function isCanonicalControlProjectPath(value: string): boolean {
 }
 
 function git(repoPath: string, args: string[]): string {
-  return execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  return execFileSync('git', ['-C', repoPath, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }).trim();
 }
 
 function trackedProjectFiles(repoPath: string): string[] {
@@ -66,7 +66,7 @@ function merge(base: string, current: string, incoming: string): { content?: str
     fs.writeFileSync(basePath, base);
     fs.writeFileSync(incomingPath, incoming);
     try {
-      return { content: execFileSync('git', ['merge-file', '-p', currentPath, basePath, incomingPath], { encoding: 'utf8' }), conflict: false };
+      return { content: execFileSync('git', ['merge-file', '-p', currentPath, basePath, incomingPath], { encoding: 'utf8', windowsHide: true }), conflict: false };
     } catch (error) {
       const output = error && typeof error === 'object' && 'stdout' in error && typeof error.stdout === 'string' ? error.stdout : undefined;
       return { ...(output ? { content: output } : {}), conflict: true };

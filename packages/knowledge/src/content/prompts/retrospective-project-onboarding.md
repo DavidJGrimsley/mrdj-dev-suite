@@ -21,3 +21,6 @@ Finish onboarding an existing migrated project after `mds workspace init` genera
 - The review packet is temporary local evidence; keep durable, confirmed information only in canonical `project/` memory.
 - Keep this workflow project-only unless the UD explicitly asks for app-source changes.
 - Do not run full `mds onboard` scaffolding from this workflow.
+- Confirm the detected framework from several signals. Existing Exact and unknown projects do not require an Expo dependency or an Expo Router directory.
+- Keep framework-specific facts labelled as evidence; use Exact checks for Exact and do not infer Expo architecture from a generic `app.json`.
+- Preserve existing upstream `AGENTS.md`, `CLAUDE.md`, source/configuration and Git metadata. Ask approval for the precise missing-memory plan; never initialize or move a workspace merely to detect its framework.

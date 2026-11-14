@@ -50,6 +50,9 @@ importers:
       '@mr.dj2u/doctor':
         specifier: ^0.1.8
         version: link:../doctor
+      '@mr.dj2u/framework-registry':
+        specifier: 0.1.0
+        version: link:../framework-registry
       '@mr.dj2u/knowledge':
         specifier: ^0.1.9
         version: link:../knowledge
@@ -117,6 +120,15 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
+  packages/framework-registry:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+
   packages/knowledge:
     devDependencies:
       '@types/node':
@@ -146,6 +158,9 @@ importers:
       '@mr.dj2u/doctor':
         specifier: ^0.1.8
         version: link:../doctor
+      '@mr.dj2u/framework-registry':
+        specifier: 0.1.0
+        version: link:../framework-registry
       '@mr.dj2u/knowledge':
         specifier: ^0.1.9
         version: link:../knowledge

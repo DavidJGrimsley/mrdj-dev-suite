@@ -14,6 +14,11 @@ pnpm dev      # http://localhost:8443 (strict port; override with PORT)
 pnpm build    # vite build --config vite.figma.config.ts -> dist/
 ```
 
+For the portfolio package, run `pnpm build:hosted:archive`. Hosted builds preserve unrelated files
+in the output root and replace a previous `web/` build only when its manifest's file inventory
+matches. If an older build has no inventory, review it and use a fresh `--out` directory before
+rebuilding; the builder will not remove that older output automatically.
+
 Open `/?beat=B06` to jump to the controls beat, `/?onboarding=1` to run the Napoleon Hill handwriting opening sequence followed by the full tutorial from B00, `/closing` (or `?closing=1`) to preview the opening sequence directly over `#000000`, and `/closing?debug=1` for renderer diagnostics.
 
 ## Napoleon Hill Handwriting Opening Sequence

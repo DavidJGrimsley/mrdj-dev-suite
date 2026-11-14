@@ -1,5 +1,16 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { discoverWorkspace } from './workspace/discover.js';
+
+function stylistProjectDir(projectPath: string): string {
+  const workspace = discoverWorkspace(projectPath);
+  if (workspace?.sourceLink) return workspace.projectPath;
+  if (existsSync(path.join(projectPath, '.mds', 'workspace.json'))) {
+    throw new Error('Cannot resolve the linked i² workspace project directory.');
+  }
+  return path.join(projectPath, 'project');
+}
 
 export type StylistColorScheme = 'light' | 'dark';
 export type StylistColorMode = 'bg' | 'automatic';
@@ -237,7 +248,7 @@ export async function syncStylistTheme(
   options: SyncStylistThemeOptions = {}
 ): Promise<SyncStylistThemeResult> {
   const projectPath = path.resolve(projectPathInput);
-  const projectDir = path.join(projectPath, 'project');
+  const projectDir = stylistProjectDir(projectPath);
   const updatedFiles: string[] = [];
   await mkdir(projectDir, { recursive: true });
 
@@ -535,7 +546,7 @@ export async function resolveStylistContext(
 
 export async function loadStylistConfig(projectPathInput: string): Promise<StylistConfig | null> {
   const projectPath = path.resolve(projectPathInput);
-  const configPath = path.join(projectPath, 'project', 'stylist.config.json');
+  const configPath = path.join(stylistProjectDir(projectPath), 'stylist.config.json');
   const raw = await readOptionalText(configPath);
   if (!raw) {
     return null;
@@ -587,8 +598,9 @@ export async function loadStylistThemeWithDiagnostics(
   projectPathInput: string
 ): Promise<LoadStylistThemeResult> {
   const projectPath = path.resolve(projectPathInput);
-  const themePath = path.join(projectPath, 'project', 'theme.json');
-  const stylePath = path.join(projectPath, 'project', 'style.md');
+  const projectDir = stylistProjectDir(projectPath);
+  const themePath = path.join(projectDir, 'theme.json');
+  const stylePath = path.join(projectDir, 'style.md');
   const themeRaw = await readOptionalText(themePath);
   const styleRaw = await readOptionalText(stylePath);
 

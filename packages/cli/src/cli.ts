@@ -37,6 +37,15 @@ import { runShipCommand } from './commands/test-and-iterate.js';
 import { runSyncMainIntoTestCommand } from './commands/sync-main-into-test.js';
 import { runWorkspaceCommand } from './commands/workspace.js';
 import { runGitHubSetupCommand } from './commands/github-setup.js';
+import {
+  runFrameworkCheckCommand,
+  runFrameworkListCommand,
+} from './commands/framework.js';
+import {
+  runGeneratePlanCommand,
+  runGenerateRunCommand,
+  runGenerateValidateCommand,
+} from './commands/generate.js';
 
 import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { AgentArgv } from './commands/agent.js';
@@ -57,6 +66,8 @@ import type { ShipArgv } from './commands/test-and-iterate.js';
 import type { SyncMainIntoTestArgv } from './commands/sync-main-into-test.js';
 import type { WorkspaceArgv } from './commands/workspace.js';
 import type { GitHubSetupArgv } from './commands/github-setup.js';
+import type { FrameworkCheckArgv, FrameworkListArgv } from './commands/framework.js';
+import type { GeneratePlanArgv, GenerateRunArgv, GenerateValidateArgv } from './commands/generate.js';
 
 export interface DoctorArgv {
   path?: string;
@@ -148,6 +159,8 @@ async function main(): Promise<void> {
             type: 'boolean',
             default: false,
           })
+          .option('approved-plan-digest', {type:'string',describe:'Digest of reviewed onboarding proposal'})
+          .option('coordinator-approved', {type:'boolean',default:false,describe:'Coordinator authorization to apply canonical project memory'})
           .option('retrospective', {
             describe: 'Create project memory from an existing initialized workspace without app scaffolding',
             type: 'boolean',
@@ -1086,6 +1099,112 @@ async function main(): Promise<void> {
           }),
       async (argv) => {
         await runSyncMainIntoTestCommand(argv as SyncMainIntoTestArgv);
+      }
+    )
+    .command(
+      'framework <action> [framework]',
+      'Inspect registered frameworks (Exact default, Expo) and check local toolchains',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Action to perform',
+            choices: ['list', 'check'] as const,
+          })
+          .positional('framework', {
+            describe: 'Framework ID to inspect or check',
+            type: 'string',
+            default: 'exact',
+          })
+          .option('json', {
+            describe: 'Print result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        const action = String(argv.action);
+        if (action === 'check') {
+          await runFrameworkCheckCommand(argv as FrameworkCheckArgv);
+          return;
+        }
+        await runFrameworkListCommand(argv as FrameworkListArgv);
+      }
+    )
+    .command(
+      'generate <action> [planFile]',
+      'Plan, validate, and execute framework project generation with approval validation',
+      (builder) =>
+        builder
+          .positional('action', {
+            describe: 'Generation action: plan, validate, or run',
+            choices: ['plan', 'validate', 'run', 'execute'] as const,
+          })
+          .positional('planFile', {
+            describe: 'Path to plan JSON file (for validate or run)',
+            type: 'string',
+          })
+          .option('framework', {
+            describe: 'Framework to use (default: exact)',
+            type: 'string',
+            default: 'exact',
+          })
+          .option('name', {
+            describe: 'Application name (e.g. my-app)',
+            type: 'string',
+          })
+          .option('target', {
+            describe: 'Target directory for generation',
+            type: 'string',
+            default: '.',
+          })
+          .option('template', {
+            describe: 'Template starter (blank, chat, landscapes, softwear)',
+            type: 'string',
+          })
+          .option('options-file', {type:'string',describe:'JSON adapter options including explicit project identity and prepared checkout paths'})
+          .option('project-identity', {type:'string',choices:['new-workspace','workspace-member','standalone'] as const,describe:'new-workspace (default): create a complete new i2 workspace whose root is --target (<app>-i2Workspace); workspace-member and standalone are explicit opt-outs'})
+          .option('platforms', {type:'string',describe:'Comma-separated target platforms, e.g. ios,android (adapter default when omitted)'})
+          .option('bundle-id', {
+            describe: 'Application / bundle ID (e.g. com.example.myapp)',
+            type: 'string',
+          })
+          .option('out', {
+            describe: 'Output path for generated plan JSON',
+            type: 'string',
+          })
+          .option('approved-digest', {
+            describe: 'Approval plan digest required to authorize generation',
+            type: 'string',
+          })
+          .option('dry-run', {
+            describe: 'Simulate generation without writing files',
+            type: 'boolean',
+            default: false,
+          })
+          .option('json', {
+            describe: 'Output result as JSON',
+            type: 'boolean',
+            default: false,
+          }),
+      async (argv) => {
+        const action = String(argv.action);
+        if (action === 'plan') {
+          await runGeneratePlanCommand(argv as unknown as GeneratePlanArgv);
+          return;
+        }
+        if (action === 'validate') {
+          if (!argv.planFile) {
+            throw new Error('validate requires planFile argument.');
+          }
+          await runGenerateValidateCommand(argv as unknown as GenerateValidateArgv);
+          return;
+        }
+        if (action === 'run' || action === 'execute') {
+          if (!argv.planFile) {
+            throw new Error('run requires planFile argument.');
+          }
+          await runGenerateRunCommand(argv as unknown as GenerateRunArgv);
+          return;
+        }
       }
     )
     .demandCommand()

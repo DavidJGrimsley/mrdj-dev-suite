@@ -54,6 +54,7 @@ export function deriveGitFreshness(options: {
 function git(repoPath: string, args: string[]): string {
   return execFileSync('git', ['-C', repoPath, ...args], {
     encoding: 'utf8',
+    windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }

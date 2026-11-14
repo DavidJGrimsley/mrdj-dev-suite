@@ -19,6 +19,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout pinned Exact source for generator tests
+        uses: actions/checkout@v4
+        with:
+          repository: expo/exact
+          ref: 9398d982e02a6ba08e4c78d0db27624c3153c1c6
+          path: .ci/exact
+          persist-credentials: false
+
+      - name: Setup Bun for Exact plan validation
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -38,3 +51,5 @@ jobs:
 
       - name: Run package CI
         run: pnpm ci:repo
+        env:
+          EXACT_CHECKOUT: ${{ github.workspace }}/.ci/exact

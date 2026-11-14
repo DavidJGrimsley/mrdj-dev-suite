@@ -11,18 +11,21 @@ import path from 'node:path'
 import siteConfiguration from './.figma/make/site.json'
 import packageAliases from './.figma/make/migrated-package-aliases.json'
 import userConfig from './vite.config'
+import { resolveBasePath } from './scripts/lib/base-path.mjs'
+import { createPreviewServersVitePlugin } from './scripts/lib/local-preview-servers.mjs'
 
 const FIGMA_ASSET_PREFIX = 'figma:asset/'
 
 export default defineConfig(async (env) =>
   mergeConfig(await resolveUserConfig(env), {
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: Object.entries<string>(packageAliases).map(([find, replacement]) => ({
         find,
         replacement,
       })),
     },
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base: resolveBasePath(),
     build: {
       sourcemap: env.mode === 'development' ? 'inline' : false,
       minify: env.mode !== 'development',
@@ -34,6 +37,7 @@ export default defineConfig(async (env) =>
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      createPreviewServersVitePlugin(),
     ],
     server: {
       host: '0.0.0.0',

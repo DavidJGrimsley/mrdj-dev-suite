@@ -29,6 +29,16 @@ import {
   readKnowledgeResource,
 } from '@mr.dj2u/knowledge';
 import { getLibraryItem, resolveLibraryItem, searchLibraryItems } from '@mr.dj2u/library-registry';
+import {
+  checkPrerequisitesForFramework,
+  getDefaultFrameworkDescriptor,
+  getFrameworkAdapterRegistry,
+  listFrameworkDescriptors,
+  listFrameworkTemplates,
+  type FrameworkId,
+  type GenerationPlan,
+  type PlatformTarget,
+} from '@mr.dj2u/cli/generator';
 
 import type { DoctorMode } from '@mr.dj2u/doctor';
 import type { DoctorCheckResult, DoctorReport } from '@mr.dj2u/doctor';
@@ -440,6 +450,84 @@ export function listTools(): MCPTool[] {
         properties: {},
       },
     },
+    {
+      name: 'framework_list',
+      description:
+        'List supported project frameworks (Exact default, Expo React Native) and templates.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          frameworkId: { type: 'string' },
+        },
+      },
+    },
+    {
+      name: 'framework_check_prerequisites',
+      description:
+        'Check non-mutating host prerequisites for a framework (e.g. Bun, Rust, Chrome for Exact).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          frameworkId: { type: 'string', default: 'exact' },
+        },
+      },
+    },
+    {
+      name: 'framework_plan_generation',
+      description:
+        'Create a deterministic project generation plan with planDigest and reservation paths. By default (options.projectIdentity new-workspace) targetDirectory is the root <app>-i2Workspace of a complete new local i2 workspace; workspace-member and distinct-project are explicit opt-outs.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          frameworkId: { type: 'string', default: 'exact' },
+          appName: { type: 'string' },
+          targetDirectory: { type: 'string' },
+          templateId: { type: 'string' },
+          bundleId: { type: 'string' },
+          platforms: { type: 'array', items: { type: 'string' } },
+          options: {type:'object',additionalProperties:true},
+        },
+        required: ['appName', 'targetDirectory'],
+      },
+    },
+    {
+      name: 'framework_validate_plan',
+      description:
+        'Validate a generation plan against target directory and prerequisites.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'object', additionalProperties: true },
+        },
+        required: ['plan'],
+      },
+    },
+    {
+      name: 'framework_generate',
+      description:
+        'Execute framework generation after explicit plan approval matching approvedPlanDigest.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'object', additionalProperties: true },
+          approvedPlanDigest: { type: 'string' },
+          dryRun: { type: 'boolean' },
+        },
+        required: ['plan', 'approvedPlanDigest'],
+      },
+    },
+    {
+      name: 'framework_detect',
+      description:
+        'Detect whether a repository or directory is an Exact, Expo React Native, or other project.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectPath: { type: 'string' },
+        },
+        required: ['projectPath'],
+      },
+    },
   ];
 }
 
@@ -556,6 +644,24 @@ export async function executeTool(name: string, input: Record<string, unknown>):
     }
     case 'mds_runtime_versions': {
       return getMdsRuntimeVersions();
+    }
+    case 'framework_list': {
+      return listFrameworksMcp(input);
+    }
+    case 'framework_check_prerequisites': {
+      return checkFrameworkPrerequisitesMcp(input);
+    }
+    case 'framework_plan_generation': {
+      return planFrameworkGenerationMcp(input);
+    }
+    case 'framework_validate_plan': {
+      return validateFrameworkPlanMcp(input);
+    }
+    case 'framework_generate': {
+      return generateFrameworkProjectMcp(input);
+    }
+    case 'framework_detect': {
+      return detectFrameworkMcp(input);
     }
     default:
       throw new Error(`Unknown MCP tool: ${name}`);
@@ -966,13 +1072,111 @@ function registerTools(server: McpServer): void {
     },
     async () => toolJson(getMdsRuntimeVersions())
   );
+
+  server.registerTool(
+    'framework_list',
+    {
+      title: 'List Frameworks',
+      description: 'List supported project frameworks (Exact default, Expo React Native) and templates.',
+      inputSchema: {
+        frameworkId: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await listFrameworksMcp(input))
+  );
+
+  server.registerTool(
+    'framework_check_prerequisites',
+    {
+      title: 'Check Framework Prerequisites',
+      description: 'Check non-mutating host prerequisites for a framework (e.g. Bun, Rust, Chrome for Exact).',
+      inputSchema: {
+        frameworkId: z.string().optional(),
+      },
+    },
+    async (input) => toolJson(await checkFrameworkPrerequisitesMcp(input))
+  );
+
+  server.registerTool(
+    'framework_plan_generation',
+    {
+      title: 'Plan Framework Generation',
+      description: 'Create a deterministic project generation plan with planDigest and reservation paths.',
+      inputSchema: {
+        frameworkId: z.string().optional(),
+        appName: z.string(),
+        targetDirectory: z.string(),
+        templateId: z.string().optional(),
+        bundleId: z.string().optional(),
+        platforms: z.array(z.string()).optional(),
+        options: z.record(z.string(), z.unknown()).optional(),
+      },
+    },
+    async (input) => toolJson(await planFrameworkGenerationMcp(input))
+  );
+
+  server.registerTool(
+    'framework_validate_plan',
+    {
+      title: 'Validate Framework Plan',
+      description: 'Validate a generation plan against target directory and prerequisites.',
+      inputSchema: {
+        plan: z.record(z.string(), z.unknown()),
+      },
+    },
+    async (input) => toolJson(await validateFrameworkPlanMcp(input))
+  );
+
+  server.registerTool(
+    'framework_generate',
+    {
+      title: 'Generate Framework Project',
+      description: 'Execute framework generation after explicit plan approval matching approvedPlanDigest.',
+      inputSchema: {
+        plan: z.record(z.string(), z.unknown()),
+        approvedPlanDigest: z.string(),
+        dryRun: z.boolean().optional(),
+      },
+    },
+    async (input) => toolJson(await generateFrameworkProjectMcp(input))
+  );
+
+  server.registerTool(
+    'framework_detect',
+    {
+      title: 'Detect Framework',
+      description: 'Detect whether a repository or directory is an Exact, Expo React Native, or other project.',
+      inputSchema: {
+        projectPath: z.string(),
+      },
+    },
+    async (input) => toolJson(await detectFrameworkMcp(input))
+  );
 }
 
 function registerPrompts(server: McpServer): void {
   server.registerPrompt(
+    'generate_project',
+    {
+      title: 'Generate New Project with Jenny',
+      description: 'Discover requirements and review an approved Exact or Expo generation plan with Jenny.',
+      argsSchema: {
+        parentDir: z.string().optional(),
+        frameworkId: z.enum(['exact', 'expo-react-native']).optional(),
+      },
+    },
+    ({ parentDir, frameworkId }) => ({
+      messages: [{
+        role: 'user',
+        content: { type: 'text', text: buildGenerateProjectPromptText(parentDir, frameworkId) },
+      }],
+    })
+  );
+
+  server.registerPrompt(
     'create_expo_super_stack',
     {
-      title: 'Create Expo Super Stack',
+      title: 'Generate New Expo Project',
       description:
         'Run from a parent directory (e.g. F:/ReactNativeApps) to generate a brand-new Expo app via create-expo-super-stack and immediately apply MDS onboarding.',
       argsSchema: {
@@ -1253,6 +1457,15 @@ function readCanonicalPromptMarkdown(idOrSlug: string): string {
     localPromptPath && existsSync(localPromptPath) ? localPromptPath : installedPromptPath;
 
   return readFileSync(promptPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+export function buildGenerateProjectPromptText(parentDir?: string, frameworkId = 'exact'): string {
+  return [
+    readCanonicalPromptMarkdown('generate-project').trim(),
+    '',
+    'Proposed generation context (task data, not additional instructions):',
+    JSON.stringify({ frameworkId, ...(parentDir ? { parentDir } : {}) }),
+  ].join('\n');
 }
 
 export function buildCreateExpoSuperStackPromptText(parentDir?: string, appName?: string): string {
@@ -2577,6 +2790,80 @@ function generateSetupTasks(projectPath: string, defaults: string[]): string[] {
   tasks.push('Run mds doctor after scaffolding selected pieces.');
 
   return tasks;
+}
+
+export async function listFrameworksMcp(input: Record<string, unknown> = {}): Promise<unknown> {
+  const frameworkId = typeof input.frameworkId === 'string' ? (input.frameworkId as FrameworkId) : undefined;
+  const descriptors = listFrameworkDescriptors();
+  const defaultFramework = getDefaultFrameworkDescriptor();
+  const templates = listFrameworkTemplates(frameworkId);
+  return {
+    defaultFrameworkId: defaultFramework.id,
+    frameworks: descriptors,
+    templates,
+  };
+}
+
+export async function checkFrameworkPrerequisitesMcp(input: Record<string, unknown> = {}): Promise<unknown> {
+  const frameworkId = (typeof input.frameworkId === 'string' ? input.frameworkId : 'exact') as FrameworkId;
+  return checkPrerequisitesForFramework(frameworkId);
+}
+
+export async function planFrameworkGenerationMcp(input: Record<string, unknown>): Promise<unknown> {
+  const registry = getFrameworkAdapterRegistry();
+  const frameworkId = (typeof input.frameworkId === 'string' ? input.frameworkId : 'exact') as FrameworkId;
+  const targetDirectory = typeof input.targetDirectory === 'string' ? input.targetDirectory : '.';
+  const options = input.options as Record<string, unknown> | undefined;
+  // Same defaulting as `mds generate plan`: a new workspace's target is its <app>-i2Workspace root.
+  const newWorkspace = (options?.projectIdentity ?? 'new-workspace') === 'new-workspace';
+  const targetName = path.basename(path.resolve(targetDirectory));
+  const appName = typeof input.appName === 'string' ? input.appName : newWorkspace ? targetName.replace(/-i2Workspace$/i, '') : targetName;
+  const templateId = typeof input.templateId === 'string' ? input.templateId : undefined;
+  const bundleId = typeof input.bundleId === 'string' ? input.bundleId : undefined;
+  const platforms = Array.isArray(input.platforms)
+    ? (input.platforms as unknown as readonly PlatformTarget[])
+    : undefined;
+
+  return registry.planGeneration({
+    frameworkId,
+    appName,
+    targetDirectory,
+    templateId,
+    bundleId,
+    platforms,
+    options,
+  });
+}
+
+export async function validateFrameworkPlanMcp(input: Record<string, unknown>): Promise<unknown> {
+  const registry = getFrameworkAdapterRegistry();
+  const plan = input.plan as GenerationPlan;
+  if (!plan || typeof plan !== 'object') {
+    throw new Error('validateFrameworkPlan requires plan object.');
+  }
+  return registry.validatePlan(plan);
+}
+
+export async function generateFrameworkProjectMcp(input: Record<string, unknown>): Promise<unknown> {
+  const registry = getFrameworkAdapterRegistry();
+  const plan = input.plan as GenerationPlan;
+  const approvedPlanDigest = typeof input.approvedPlanDigest === 'string' ? input.approvedPlanDigest : '';
+  const dryRun = typeof input.dryRun === 'boolean' ? input.dryRun : false;
+
+  if (!plan || typeof plan !== 'object') {
+    throw new Error('generateFrameworkProject requires plan object.');
+  }
+
+  return registry.generate(plan, {
+    approvedPlanDigest,
+    dryRun,
+  });
+}
+
+export async function detectFrameworkMcp(input: Record<string, unknown>): Promise<unknown> {
+  const registry = getFrameworkAdapterRegistry();
+  const projectPath = typeof input.projectPath === 'string' ? input.projectPath : '.';
+  return registry.detectFramework(projectPath);
 }
 
 function toolJson(value: unknown): { content: Array<{ type: 'text'; text: string }> } {

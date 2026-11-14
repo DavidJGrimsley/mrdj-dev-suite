@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { assetUrl } from "../assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import {
   AlertTriangle,
@@ -47,7 +48,7 @@ export interface PrototypeLimitProps {
   rewardNote?: string;
 }
 
-const INFIE_SRC = "/assets/infie-form-mist.png";
+const INFIE_SRC = assetUrl("/assets/infie-form-mist.png");
 
 export function PrototypeLimit({
   title = "Prototype Limit",
