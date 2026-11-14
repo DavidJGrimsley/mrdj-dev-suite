@@ -922,11 +922,13 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
         await other.close()
       }
 
-      // Onboarding still starts: black pause (B00) then Infie's arrival (B01)
+      // The existing opening gates B00 until dismissed, then onboarding reaches Infie's arrival.
       const onboarding = await context.newPage()
       try {
         await onboarding.goto(`http://127.0.0.1:${appPort}/iSquared/?onboarding=1`, { waitUntil: 'domcontentloaded' })
         await onboarding.waitForSelector('[data-beat="B00"]', { timeout: 10000 })
+        await onboarding.getByRole('dialog', { name: 'Napoleon Hill opening quotation' }).waitFor({ state: 'visible', timeout: 10000 })
+        await onboarding.keyboard.press('Escape')
         await onboarding.waitForSelector('[data-beat="B01"]', { timeout: 15000 })
         assert.equal(await onboarding.locator('button:has-text("Generate new")').count(), 0)
       } finally {

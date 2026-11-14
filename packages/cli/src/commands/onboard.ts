@@ -253,18 +253,18 @@ export async function runOnboardCommand(argv: OnboardArgv): Promise<void> {
     console.log(chalk.yellow('Review generated project memory with the UD and resolve TodoForContext markers before implementation work.'));
     return;
   }
-  const { getFrameworkAdapterRegistry, onboardProject } = await import('../generator.js');
-  const framework = await getFrameworkAdapterRegistry().detectFramework(projectPath);
-  if (framework.frameworkId !== 'expo-react-native') {
-    const proposal = await onboardProject(projectPath,framework.frameworkId,{approvedPlanDigest:argv.approvedPlanDigest,coordinatorApproved:argv.coordinatorApproved});
-    console.log(JSON.stringify(proposal,null,2)); return;
-  }
   const controlWorkspace = discoverControlPlaneWorkspace(projectPath);
   if (controlWorkspace) {
     throw new Error(
       `This path belongs to the initialized ${controlWorkspace.manifest.name} workspace. ` +
         'Use `mds onboard --retrospective --project-only --yes` from a source checkout to update the control-repository project memory.'
     );
+  }
+  const { getFrameworkAdapterRegistry, onboardProject } = await import('../generator.js');
+  const framework = await getFrameworkAdapterRegistry().detectFramework(projectPath);
+  if (framework.frameworkId !== 'expo-react-native') {
+    const proposal = await onboardProject(projectPath,framework.frameworkId,{approvedPlanDigest:argv.approvedPlanDigest,coordinatorApproved:argv.coordinatorApproved});
+    console.log(JSON.stringify(proposal,null,2)); return;
   }
   const existingManifest = await readWorkspaceManifest(projectPath);
   const discovery = existingManifest ? null : await discoverWorkspace(projectPath);

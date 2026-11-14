@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { assetUrl } from "./assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -79,6 +79,9 @@ import {
   type SessionTabId,
   type TaskStatus,
 } from "../tutorial/index.ts";
+import { SimulatorPreview } from "./components/SimulatorPreview";
+
+const ClosingOverlay = lazy(() => import("./closing/ClosingOverlay").then(module => ({ default: module.ClosingOverlay })));
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -1891,11 +1894,13 @@ const EMU_DIMS: Record<EmuType, Record<EmuOrientation, { w: number; h: number; r
 };
 
 // Renders the device shell at its exact natural dimensions — no centering wrapper, no scroll.
-function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
+function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, controlsTarget }: {
   type: EmuType;
   dim: { w: number; h: number; r: number };
-  connected: boolean; device?: string; isLandscape?: boolean; isDesktop?: boolean;
+  connected: boolean; device?: string; isLandscape?: boolean; isDesktop?: boolean; controlsTarget?: HTMLElement | null;
 }) {
+  const [liveAndroid, setLiveAndroid] = useState(false);
+  const [localControls, setLocalControls] = useState<HTMLDivElement | null>(null);
   const showBrowser = type === "web" || isDesktop;
   const iosChrome = type === "ios" && !isLandscape && !isDesktop;
   const androidNav = type === "android" && !isDesktop;
@@ -1913,8 +1918,10 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
       {/* iOS Dynamic Island */}
       {iosChrome && <div style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", width: 126, height: 36, background: "#000", borderRadius: 18, zIndex: 10 }} />}
 
+      {type === "android" && !controlsTarget && <div ref={setLocalControls} />}
+
       {/* Top chrome */}
-      <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1e1e1e", padding: iosChrome ? "52px 12px 8px" : "8px 12px", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+      {!(type === "android" && liveAndroid) && <div style={{ background: "#0d0d0d", borderBottom: "1px solid #1e1e1e", padding: iosChrome ? "52px 12px 8px" : "8px 12px", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {showBrowser ? (
           <>
             <div style={{ display: "flex", gap: 4 }}>{["#ff5f57","#febc2e","#28c840"].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: 5, background: c }} />)}</div>
@@ -1935,9 +1942,13 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
         )}
       </div>
 
+      }
+
       {/* App viewport */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f0f", overflow: "hidden" }}>
-        {connected ? (
+        {type === "android" ? (
+          <SimulatorPreview projectId="pet-show-and-tell" platform="android" device={device} controlsTarget={controlsTarget || localControls} onLiveChange={setLiveAndroid} />
+        ) : connected ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center", padding: "0 24px" }}>
             <div style={{ width: 60, height: 60, borderRadius: 16, background: "rgba(171,239,163,0.1)", border: "1px solid rgba(171,239,163,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="26" height="22" viewBox="0 0 37.3892 31.5816" fill="none"><path d={svgPaths.p6491080} fill="#ABEFA3" opacity="0.9" /></svg>
@@ -1960,7 +1971,7 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop }: {
       </div>
 
       {/* Android nav bar */}
-      {androidNav && (
+      {androidNav && !liveAndroid && (
         <div style={{ height: 40, background: "#0d0d0d", borderTop: "1px solid #1e1e1e", display: "flex", alignItems: "center", justifyContent: "center", gap: 36, flexShrink: 0 }}>
           <div style={{ width: 16, height: 16, border: "1.5px solid #333", borderRadius: 3 }} />
           <div style={{ width: 16, height: 16, border: "1.5px solid #333", borderRadius: 8 }} />
@@ -2046,6 +2057,8 @@ function EmulatorModal({
   const isDesktop = breakpoint === "desktop" && type === "web";
   const dim = isDesktop ? { w: 960, h: 560, r: 8 } : EMU_DIMS[type][orientation];
 
+  const [simulatorControls, setSimulatorControls] = useState<HTMLDivElement | null>(null);
+
   // In opened mode: scale = 1, modal sized to device.
   // In fullscreen: scale to fill available body space (no upper cap — device grows).
   const scale = fullscreen && bodySize.w > 0 && bodySize.h > 0
@@ -2122,6 +2135,8 @@ function EmulatorModal({
             </select>
           )}
 
+          {type === "android" && <div ref={setSimulatorControls} />}
+
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setFullscreen(f => !f)}
               className="text-[#555] hover:text-[#abefa3] transition-colors"
@@ -2152,7 +2167,7 @@ function EmulatorModal({
               }}>
                 <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
                   <DeviceFrame type={type} dim={dim} connected
-                    device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} />
+                    device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} controlsTarget={simulatorControls} />
                 </div>
               </div>
             )
@@ -8403,11 +8418,14 @@ function OnboardInput({ onSend }: { onSend: (t: string) => void }) {
   );
 }
 
-// ─── Shared canvas backdrop (auth / pricing) ───────────────────────────────
+// ─── Shared canvas backdrop (choose-plan overlay) ───────────────────────────
 
 function I2Canvas({ children }: { children: React.ReactNode }) {
   return (
-    <div className="size-full flex flex-col relative overflow-hidden" style={{ background: "#0a0814" }}>
+    <div
+      className="w-full flex-auto min-h-0 flex flex-col relative overflow-hidden"
+      style={{ background: "#0a0814", maxHeight: "inherit" }}
+    >
       <AnimatedGlows />
       <div className="relative z-10 flex-1 min-h-0 flex flex-col">{children}</div>
     </div>
@@ -8418,49 +8436,73 @@ function I2Canvas({ children }: { children: React.ReactNode }) {
 
 function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
   return (
-    <I2Canvas>
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
+    <div
+      data-name="AuthScreen"
+      className="size-full flex flex-col relative overflow-y-auto"
+      style={{ background: "#000000" }}
+    >
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 min-h-full">
         <div className="flex flex-col items-center gap-2 mb-8">
           <I2Logo size={44} />
-          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.35)", marginTop: 6 }}>Infinite Intelligence</p>
+          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.62)", marginTop: 6 }}>
+            Infinite Intelligence
+          </p>
         </div>
 
-        <div className="w-full max-w-[380px] flex flex-col gap-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, padding: 28 }}>
+        <div
+          className="w-full max-w-[380px] flex flex-col gap-4"
+          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: 28 }}
+        >
           <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 20, fontWeight: 600, color: "#fff" }}>Welcome back</p>
 
           <div className="flex flex-col gap-3 mt-1">
-            <input placeholder="you@studio.dev" defaultValue="dev@i2.app"
-              className="w-full bg-white/[0.04] border border-white/10 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/25 focus:outline-none focus:border-[#2dd4bf]/40 transition-colors"
-              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }} />
-            <input type="password" placeholder="Password" defaultValue="password"
-              className="w-full bg-white/[0.04] border border-white/10 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/25 focus:outline-none focus:border-[#2dd4bf]/40 transition-colors"
-              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }} />
+            <input
+              placeholder="you@studio.dev"
+              defaultValue="dev@i2.app"
+              aria-label="Email address"
+              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              defaultValue="password"
+              aria-label="Password"
+              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+            />
           </div>
 
-          <button onClick={onSignIn}
-            className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90 mt-1"
-            style={{ padding: "12px", borderRadius: 10, background: "#2dd4bf", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: "#06201d" }}>
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90 mt-1 cursor-pointer"
+            style={{ padding: "12px", borderRadius: 10, background: "#2dd4bf", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: "#06201d" }}
+          >
             Sign In <ArrowRight size={15} />
           </button>
 
           <div className="flex items-center gap-3 my-1">
-            <div className="flex-1 border-t border-white/8" />
-            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.25)" }}>new to i2?</span>
-            <div className="flex-1 border-t border-white/8" />
+            <div className="flex-1 border-t border-white/12" />
+            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.52)" }}>new to i2?</span>
+            <div className="flex-1 border-t border-white/12" />
           </div>
 
-          <button onClick={onSignUp}
-            className="w-full flex items-center justify-center gap-2 transition-all hover:bg-white/[0.06] hover:border-white/20"
-            style={{ padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.8)" }}>
+          <button
+            type="button"
+            onClick={onSignUp}
+            className="w-full flex items-center justify-center gap-2 transition-all hover:bg-white/[0.08] hover:border-white/25 cursor-pointer"
+            style={{ padding: "12px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, color: "rgba(255,255,255,0.9)" }}
+          >
             Create an account
           </button>
         </div>
       </div>
-    </I2Canvas>
+    </div>
   );
 }
 
-// ─── Pricing screen ─────────────────────────────────────────────────────────
+// ─── Choose-plan overlay (post-tutorial above Home) ─────────────────────────
 
 interface PricingTier {
   name: string; price: string; cadence?: string; blurb: string;
@@ -8488,11 +8530,14 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
   const bg = tier.featured ? "rgba(45,212,191,0.06)" : "rgba(4,0,28,0.6)";
   const accent = "#2dd4bf";
   return (
-    <div style={{
-      backdropFilter: "blur(10px)", background: bg, borderRadius: 22, border,
-      padding: "28px 26px", display: "flex", flexDirection: "column", gap: 20,
-      flex: 1, minWidth: 240, maxWidth: 340, position: "relative",
-    }}>
+    <div
+      className="w-full sm:w-auto sm:flex-1 sm:min-w-[240px] max-w-[340px]"
+      style={{
+        backdropFilter: "blur(10px)", background: bg, borderRadius: 22, border,
+        padding: "26px 22px", display: "flex", flexDirection: "column", gap: 20,
+        position: "relative",
+      }}
+    >
       {tier.featured && (
         <span style={{ position: "absolute", top: -11, left: 26, background: accent, color: "#06201d", fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 100 }}>
           ✦ Most popular
@@ -8502,19 +8547,22 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
         <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 16, fontWeight: 600, color: "#fff" }}>{tier.name}</p>
         <div className="flex items-baseline gap-1">
           <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 34, fontWeight: 700, color: "#fff", letterSpacing: "-0.03em" }}>{tier.price}</span>
-          {tier.cadence && <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.35)" }}>{tier.cadence}</span>}
+          {tier.cadence && <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.5)" }}>{tier.cadence}</span>}
         </div>
         <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(160,163,189,1)" }}>{tier.blurb}</p>
       </div>
 
-      <button onClick={onSelect}
-        className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90"
+      <button
+        type="button"
+        onClick={onSelect}
+        className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90 cursor-pointer"
         style={{
           padding: "11px", borderRadius: 10, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 600,
-          background: tier.featured ? accent : "rgba(255,255,255,0.05)",
-          color: tier.featured ? "#06201d" : "rgba(255,255,255,0.85)",
-          border: tier.featured ? "none" : "1px solid rgba(255,255,255,0.12)",
-        }}>
+          background: tier.featured ? accent : "rgba(255,255,255,0.06)",
+          color: tier.featured ? "#06201d" : "rgba(255,255,255,0.9)",
+          border: tier.featured ? "none" : "1px solid rgba(255,255,255,0.14)",
+        }}
+      >
         {tier.cta}
       </button>
 
@@ -8523,11 +8571,11 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
       <div className="flex flex-col gap-2.5">
         {tier.bullets.map(b => (
           <div key={b} className="flex items-center gap-2.5">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <circle cx="7" cy="7" r="7" fill="rgba(45,212,191,0.12)" />
               <path d="M4.5 7L6.2 8.7L9.5 5.3" stroke={accent} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.65)" }}>{b}</span>
+            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.75)" }}>{b}</span>
           </div>
         ))}
       </div>
@@ -8535,87 +8583,174 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
   );
 }
 
-function PricingScreen({
+function PricingOverlay({
   onSelectTier,
-  onBack,
+  onDismiss,
 }: {
   onSelectTier: (tier: PricingTier) => void;
-  onBack: () => void;
+  onDismiss: () => void;
 }) {
   const [audience, setAudience] = useState<"personal" | "business">("personal");
   const tiers = audience === "personal" ? PERSONAL_TIERS : BUSINESS_TIERS;
+  const reducedMotion = usePrefersReducedMotion();
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
+
+  useEffect(() => {
+    const backdrop = backdropRef.current;
+    const dialog = dialogRef.current;
+    if (!backdrop || !dialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const siblings = [...(backdrop.parentElement?.children ?? [])]
+      .filter((sibling): sibling is HTMLElement => sibling instanceof HTMLElement && sibling !== backdrop)
+      .map(sibling => ({ sibling, inert: sibling.inert }));
+    siblings.forEach(({ sibling }) => {
+      sibling.inert = true;
+    });
+    dialog.focus({ preventScroll: true });
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        dismissRef.current();
+      }
+    };
+    backdrop.addEventListener("keydown", onKeyDown);
+    return () => {
+      backdrop.removeEventListener("keydown", onKeyDown);
+      siblings.forEach(({ sibling, inert }) => {
+        sibling.inert = inert;
+      });
+      if (previousFocus?.isConnected && previousFocus !== document.body) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
+  }, []);
 
   return (
-    <I2Canvas>
-      {/* Top chrome */}
-      <div className="flex items-center px-6 shrink-0" style={{ height: 54, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <I2Logo size={30} />
-        <button onClick={onBack} className="ml-auto flex items-center gap-1.5 text-white/40 hover:text-white/70 transition-colors" style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}>
-          <ChevronLeft size={15} /> Back
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto w-full px-8 py-12 flex flex-col items-center">
-          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 32, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}>
-            Choose your plan
-          </p>
-          <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.4)", marginTop: 8, textAlign: "center" }}>
-            Start free and scale your orchestration as you grow.
-          </p>
-
-          {/* Audience toggle */}
-          <div className="flex items-center gap-0.5 mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 100 }}>
-            {(["personal", "business"] as const).map(a => (
-              <button key={a} onClick={() => setAudience(a)}
-                style={{
-                  padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
-                  textTransform: "capitalize", transition: "all 0.15s",
-                  background: audience === a ? "#2dd4bf" : "transparent",
-                  color: audience === a ? "#06201d" : "rgba(255,255,255,0.5)",
-                }}>{a}</button>
-            ))}
+    <motion.div
+      ref={backdropRef}
+      data-name="ChoosePlanBackdrop"
+      initial={reducedMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onDismiss();
+      }}
+      className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-6"
+      style={{ background: "rgba(0, 0, 0, 0.72)", backdropFilter: "blur(8px)" }}
+    >
+      <motion.div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="choose-plan-heading"
+        data-name="ChoosePlanOverlay"
+        initial={reducedMotion ? false : { opacity: 0, y: 10, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-5xl max-h-[92dvh] min-h-0 flex flex-col overflow-hidden rounded-[22px] border border-white/12 shadow-2xl focus:outline-none"
+      >
+        <I2Canvas>
+          {/* Top chrome */}
+          <div className="flex items-center px-4 sm:px-6 shrink-0" style={{ height: 54, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <I2Logo size={30} />
+            <button
+              type="button"
+              onClick={onDismiss}
+              aria-label="Back to Home"
+              className="ml-auto flex items-center gap-1.5 text-white/65 hover:text-white transition-colors cursor-pointer"
+              style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}
+            >
+              <ChevronLeft size={15} /> Back
+            </button>
           </div>
 
-          {/* Tier cards */}
-          <div className="flex gap-5 items-stretch justify-center flex-wrap mt-10 w-full">
-            {tiers.map(t => (
-              <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
-            ))}
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            <div className="max-w-5xl mx-auto w-full px-4 py-7 sm:px-8 sm:py-10 flex flex-col items-center">
+              <h2
+                id="choose-plan-heading"
+                style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}
+              >
+                Choose your plan
+              </h2>
+              <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.58)", marginTop: 8, textAlign: "center" }}>
+                Start free and scale your orchestration as you grow.
+              </p>
+
+              {/* Audience toggle */}
+              <div className="flex items-center gap-0.5 mt-6 sm:mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100 }}>
+                {(["personal", "business"] as const).map(a => (
+                  <button
+                    key={a}
+                    type="button"
+                    aria-pressed={audience === a}
+                    onClick={() => setAudience(a)}
+                    className="cursor-pointer"
+                    style={{
+                      padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
+                      textTransform: "capitalize", transition: "all 0.15s",
+                      background: audience === a ? "#2dd4bf" : "transparent",
+                      color: audience === a ? "#06201d" : "rgba(255,255,255,0.68)",
+                    }}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tier cards */}
+              <div className="flex gap-5 items-stretch justify-center flex-wrap mt-8 sm:mt-10 w-full">
+                {tiers.map(t => (
+                  <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </I2Canvas>
+        </I2Canvas>
+      </motion.div>
+    </motion.div>
   );
 }
 
 // ─── Root ───────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const initialQueryBeat = (() => {
-    if (typeof window === "undefined") return undefined;
+  const { initialQueryBeat, startWithOpening } = (() => {
+    if (typeof window === "undefined") {
+      return { initialQueryBeat: undefined, startWithOpening: false };
+    }
     const params = new URLSearchParams(window.location.search);
     const b = params.get("beat") as OnboardingBeat | null;
-    if (b && BEAT_ORDER.includes(b)) return b;
-    if (params.get("onboarding") === "1") return "B00" as OnboardingBeat;
-    return undefined;
+    if (b && BEAT_ORDER.includes(b)) {
+      return { initialQueryBeat: b, startWithOpening: false };
+    }
+    if (params.get("onboarding") === "1") {
+      return { initialQueryBeat: "B00" as OnboardingBeat, startWithOpening: true };
+    }
+    return { initialQueryBeat: undefined, startWithOpening: false };
   })();
   return (
-    <OnboardingProvider initialBeat={initialQueryBeat ?? "COMPLETE"}>
+    <OnboardingProvider initialBeat={initialQueryBeat ?? "COMPLETE"} initialB00GateHeld={startWithOpening}>
       <TutorialProvider>
-        <PersistentAppShell />
+        <PersistentAppShell initialOpening={startWithOpening} />
       </TutorialProvider>
     </OnboardingProvider>
   );
 }
 
-function PersistentAppShell() {
+function PersistentAppShell({ initialOpening = false }: { initialOpening?: boolean }) {
   const {
     onboardingRunId,
     currentBeat,
     turnIndex,
     setTurnIndex,
     b00GateCompleted,
+    setB00GateHeld,
     isTutorialActive,
     isTutorialComplete,
     level,
@@ -8637,6 +8772,12 @@ function PersistentAppShell() {
       setRoute("project");
     });
   }, [setOnJennyCompletedCallback, createProject]);
+  // The Napoleon Hill handwriting opening plays at new-tutorial entry (over pure
+  // black B00 before B01 begins) and never interrupts completed users or ?beat= links.
+  const [closingOpen, setClosingOpen] = useState(initialOpening);
+  useEffect(() => {
+    setB00GateHeld(closingOpen);
+  }, [closingOpen, setB00GateHeld]);
 
   const [musicOutcome, setMusicOutcome] = useState<"none" | "played" | "quiet">("none");
   // Infie's button-press beat, bumped synchronously by the music Play button.
@@ -8645,8 +8786,8 @@ function PersistentAppShell() {
   const b05ResolvedRef = useRef(false);
   useEffect(() => { b05ResolvedRef.current = false; }, [onboardingRunId]);
 
-  // ── App phase gate (auth → pricing → app) ────────────────────────────────
-  const [appPhase, setAppPhase] = useState<"auth" | "pricing" | "app">(() => {
+  // ── App phase gate (auth → app, with post-tutorial Home choose-plan overlay) ─
+  const [appPhase, setAppPhase] = useState<"auth" | "app">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("beat") || params.get("onboarding") === "1") {
@@ -8655,6 +8796,11 @@ function PersistentAppShell() {
     }
     return "auth";
   });
+  const [selectedPlan, setSelectedPlan] = useState<PricingTier | null>(null);
+  const [planOverlayOpen, setPlanOverlayOpen] = useState(false);
+  const planEligibleRef = useRef(initialOpening);
+  const shownPlanForRunRef = useRef<number | null>(null);
+  const reducedMotion = usePrefersReducedMotion();
 
   // ── Workspace state machine ──────────────────────────────────────────────
   const [wsState, setWsState] = useState<WorkspaceState>("none");
@@ -8984,32 +9130,67 @@ function PersistentAppShell() {
     </div>
   );
 
-  // ── App phase gate: auth / pricing shown before the workspace router ──────
+  // Pop up Choose your plan once per newly started tutorial after B21 completes on Home.
+  useEffect(() => {
+    if (
+      appPhase !== "app" ||
+      currentBeat !== "COMPLETE" ||
+      !isTutorialComplete ||
+      wsState !== "none" ||
+      route !== "home" ||
+      closingOpen ||
+      planOverlayOpen ||
+      !planEligibleRef.current ||
+      shownPlanForRunRef.current === onboardingRunId
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (!planEligibleRef.current || shownPlanForRunRef.current === onboardingRunId) return;
+      planEligibleRef.current = false;
+      shownPlanForRunRef.current = onboardingRunId;
+      setPlanOverlayOpen(true);
+    }, reducedMotion ? 50 : 650);
+    return () => window.clearTimeout(timer);
+  }, [
+    appPhase,
+    currentBeat,
+    isTutorialComplete,
+    wsState,
+    route,
+    closingOpen,
+    planOverlayOpen,
+    onboardingRunId,
+    reducedMotion,
+  ]);
+
+  // ── App phase gate: auth screen before the workspace router ───────────────
   if (appPhase === "auth") {
     return (
       <div className="size-full overflow-hidden">
         <AuthScreen
           onSignIn={() => {
+            planEligibleRef.current = false;
+            setPlanOverlayOpen(false);
+            setB00GateHeld(false);
+            setClosingOpen(false);
             completeOnboarding();
             setAppPhase("app");
           }}
-          onSignUp={() => setAppPhase("pricing")}
-        />
-      </div>
-    );
-  }
-  if (appPhase === "pricing") {
-    return (
-      <div className="size-full overflow-hidden">
-        <PricingScreen
-          onSelectTier={() => {
+          onSignUp={() => {
             setMusicOutcome("none");
             setRoute("home");
             setWsState("none");
+            setActiveProjectId(null);
+            setActiveSessionId(null);
+            planEligibleRef.current = true;
+            shownPlanForRunRef.current = null;
+            setPlanOverlayOpen(false);
+            setB00GateHeld(true);
             startOnboarding();
+            setClosingOpen(true);
             setAppPhase("app");
           }}
-          onBack={() => setAppPhase("auth")}
         />
       </div>
     );
@@ -9085,7 +9266,28 @@ function PersistentAppShell() {
       style={{ backgroundColor: "#000000", isolation: "isolate" }}
       data-beat={currentBeat}
       data-b00-gate={b00GateCompleted ? "ready" : "waiting"}
+      data-selected-plan={selectedPlan?.name ?? ""}
     >
+      {closingOpen && (
+        <Suspense fallback={<div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "#000000" }} />}>
+          <ClosingOverlay
+            key={onboardingRunId}
+            onClose={() => {
+              setB00GateHeld(false);
+              setClosingOpen(false);
+            }}
+          />
+        </Suspense>
+      )}
+      {planOverlayOpen && (
+        <PricingOverlay
+          onSelectTier={(tier) => {
+            setSelectedPlan(tier);
+            setPlanOverlayOpen(false);
+          }}
+          onDismiss={() => setPlanOverlayOpen(false)}
+        />
+      )}
       {/* Ambient background layer (behind everything): fades in gradually beat by beat. */}
       <div
         aria-hidden="true"

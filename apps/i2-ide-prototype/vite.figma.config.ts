@@ -19,6 +19,7 @@ const FIGMA_ASSET_PREFIX = 'figma:asset/'
 export default defineConfig(async (env) =>
   mergeConfig(await resolveUserConfig(env), {
     resolve: {
+      dedupe: ['react', 'react-dom'],
       alias: Object.entries<string>(packageAliases).map(([find, replacement]) => ({
         find,
         replacement,
