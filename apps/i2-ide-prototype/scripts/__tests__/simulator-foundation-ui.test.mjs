@@ -92,7 +92,9 @@ test('App.tsx connects SimulatorPreview to the Android device frame', () => {
   const appContent = fs.readFileSync(appPath, 'utf8');
 
   assert.match(appContent, /import\s*\{\s*SimulatorPreview\s*\}\s*from\s*["']\.\/components\/SimulatorPreview["']/, 'App.tsx must import SimulatorPreview');
-  assert.match(appContent, /<SimulatorPreview\s+projectId=["']pet-show-and-tell["']\s+platform=["']android["']/, 'App.tsx must mount SimulatorPreview for Android Pet Show and Tell preview');
+  assert.match(appContent, /function simulatorProjectSlug/, 'App.tsx must map pet and tutorial-demo onto the Pet Show and Tell slug');
+  assert.match(appContent, /return "pet-show-and-tell"/, 'Pet Show and Tell remains the simulated Android project slug');
+  assert.match(appContent, /<SimulatorPreview\s+projectId=\{previewProject\}\s+platform=["']android["']/, 'App.tsx must mount SimulatorPreview with the selected project slug');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -196,6 +198,99 @@ test('Behavioral: Fallback action creates client session and renders labeled sim
   assert.match(SIMULATED_PREVIEW_HTML, /🐾 Pet Show and Tell/);
   assert.match(SIMULATED_PREVIEW_HTML, /🐶 Buster the Golden Retriever/);
   assert.match(SIMULATED_PREVIEW_HTML, /🐱 Mochi the Calico/);
+});
+
+test('Behavioral: Active non-Pet simulated session renders truthful unavailable state and never renders Pet document', () => {
+  const nonPetSession = {
+    id: 'sim_active_nothotdog_123',
+    projectId: 'nothotdog',
+    platform: 'android',
+    status: 'active',
+    durationSeconds: 300,
+    remainingSeconds: 260,
+  };
+
+  const activeHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(SimulatorPreview, {
+      projectId: 'nothotdog',
+      platform: 'android',
+      initialLoading: false,
+      initialProvider: { available: true, simulated: true, name: 'simulated_fallback' },
+      initialSession: nonPetSession,
+      initialSimulatedFallbackActive: true,
+      initialTimeRemaining: 260,
+    })
+  );
+
+  // Must render truthful unavailable state naming Not Hotdog
+  assert.match(activeHtml, /data-testid="simulator-unavailable"/);
+  assert.match(activeHtml, /No Android Build/);
+  assert.match(activeHtml, /No build to simulate · Not Hotdog/);
+  assert.match(activeHtml, /This project.*app.*isn.*t included in the prototype/);
+
+  // Must NEVER render Pet Show and Tell content or iframe
+  assert.doesNotMatch(activeHtml, /<iframe/i);
+  assert.doesNotMatch(activeHtml, /srcdoc/i);
+  assert.doesNotMatch(activeHtml, /🐾 Pet Show and Tell/);
+  assert.doesNotMatch(activeHtml, /🐶 Buster the Golden Retriever/);
+  assert.doesNotMatch(activeHtml, /🐱 Mochi the Calico/);
+  assert.doesNotMatch(activeHtml, /Simulated Preview · Not a Live EAS Simulator/);
+  assert.doesNotMatch(activeHtml, /SIMULATED PREVIEW/);
+});
+
+test('Behavioral: Active non-Pet real live EAS session preserves live provider path', () => {
+  const secretPreviewToken = 'bearer_token_secret_nothotdog_456';
+  const liveNonPetSession = {
+    id: 'eas_sess_live_nhd_456',
+    projectId: 'nothotdog',
+    platform: 'android',
+    status: 'active',
+    durationSeconds: 300,
+    remainingSeconds: 275,
+    previewApiUrl: 'https://preview.expo.dev/eas_sess_live_nhd_456',
+    webPreviewToken: secretPreviewToken,
+  };
+
+  const liveHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(SimulatorPreview, {
+      projectId: 'nothotdog',
+      platform: 'android',
+      initialLoading: false,
+      initialProvider: { available: true, simulated: false, name: 'eas' },
+      initialSession: liveNonPetSession,
+      initialSimulatedFallbackActive: false,
+      initialTimeRemaining: 275,
+    })
+  );
+
+  // Live provider path must NOT show unavailable panel or Pet iframe
+  assert.doesNotMatch(liveHtml, /data-testid="simulator-unavailable"/);
+  assert.doesNotMatch(liveHtml, /No Android Build/);
+  assert.doesNotMatch(liveHtml, /<iframe/i);
+  assert.doesNotMatch(liveHtml, /🐾 Pet Show and Tell/);
+  assert.doesNotMatch(liveHtml, /🐶 Buster the Golden Retriever/);
+});
+
+test('Behavioral: Idle non-Pet session renders truthful unavailable state and never renders Pet document', () => {
+  const idleHtml = ReactDOMServer.renderToStaticMarkup(
+    React.createElement(SimulatorPreview, {
+      projectId: 'nothotdog',
+      platform: 'android',
+      initialLoading: false,
+      initialProvider: { available: true, simulated: true },
+      initialSession: null,
+      initialBudget: null,
+    })
+  );
+
+  assert.match(idleHtml, /data-testid="simulator-unavailable"/);
+  assert.match(idleHtml, /No Android Build/);
+  assert.match(idleHtml, /No build to simulate · Not Hotdog/);
+  assert.doesNotMatch(idleHtml, /<iframe/i);
+  assert.doesNotMatch(idleHtml, /srcdoc/i);
+  assert.doesNotMatch(idleHtml, /🐾 Pet Show and Tell/);
+  assert.doesNotMatch(idleHtml, /🐶 Buster the Golden Retriever/);
+  assert.doesNotMatch(idleHtml, /Start Preview/);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -30,10 +30,12 @@ export interface DockedTutorialChatEntry {
 }
 
 export interface DockedTutorialChatState {
+  currentMessageId?: string;
   currentLine: string;
   history: ReadonlyArray<DockedTutorialChatEntry>;
   showContinue: boolean;
   onContinue?: () => void;
+  onTextComplete?: (messageId: string) => void;
 }
 
 export interface OnboardingContextValue {

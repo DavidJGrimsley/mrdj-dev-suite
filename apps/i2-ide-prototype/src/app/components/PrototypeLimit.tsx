@@ -339,7 +339,8 @@ export function PrototypeLimit({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/65 backdrop-blur-md"
+      data-testid="prototype-limit-modal"
+      className="fixed inset-0 z-[10060] flex items-center justify-center p-4 bg-black/65 backdrop-blur-md"
       onClick={onClose}
     >
       <motion.div

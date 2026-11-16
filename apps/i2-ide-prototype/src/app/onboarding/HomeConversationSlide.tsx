@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { B12_BRIDGE_READ_MS, B12_SLIDE_MS, B12_SLIDE_EASE } from "./onboardingTiming";
+import { chatScale } from "../widgets/chatScale";
 
 type SlidePhase = "measure" | "center" | "slide" | "rest";
 
@@ -31,7 +32,8 @@ export function HomeConversationSlide({
   useLayoutEffect(() => {
     if (!shouldSlide) return;
     const r = outerRef.current?.getBoundingClientRect();
-    setDx(r ? Math.round(window.innerWidth / 2 - (r.left + r.width / 2)) : 0);
+    // Home's content is zoomed on large screens, and a transform inside it is zoomed too.
+    setDx(r ? Math.round((window.innerWidth / 2 - (r.left + r.width / 2)) / chatScale()) : 0);
     setPhase("center");
     // Measure once on mount; the slide always ends at x: 0 even if the window resizes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,7 +6,7 @@ export interface Track {
   src: string;
 }
 
-export const PLAYLIST_NAME = "LeekBeats";
+export const PLAYLIST_NAME = "i² Curated";
 
 const base = import.meta.env.BASE_URL;
 

@@ -63,9 +63,9 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Infie:** “Hi there. I'm Infie. What should I call you?”
 
-**Reveal after the question:** Name, Email, Submit, and Sign in with GitHub. These are independent floating controls with labels. No heading, card or enclosing form outline. Keep the form close to Infie's message without overlapping her.
+**Reveal after the question:** Name, Email, Submit, and Sign in with GitHub (placeholders: `First name` and `you@e.mail`). These are independent floating controls with labels. No heading, card or enclosing form outline. Keep the form close to Infie's message without overlapping her.
 
-**Gate:** Submit validates a trimmed name and a plausible email, then stores the profile and advances once. Inline validation belongs beside the relevant field. Sign in with GitHub simulates a returned profile and calls the same successful completion path; typing first is not required. Use a clearly defined mock profile such as Alex / alex@example.com when no valid typed profile exists. The next message uses the resulting name. No additional signup steps.
+**Gate:** Submit validates a trimmed name and a plausible email, then stores the profile and advances once. Inline validation belongs beside the relevant field. Sign in with GitHub simulates a returned profile and calls the same successful completion path; typing first is not required. The GitHub profile always uses `Null` as the name and keeps a plausible typed email when provided, or uses `you@e.mail` otherwise. The next message uses the resulting name. No additional signup steps.
 
 ### B03 — Level
 
@@ -73,7 +73,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Reveal on “level zero”:** The actual level indicator, showing 0, spotlighted near Infie's message and, after a brief hold, automatically glides to its final top-right Home header anchor (shared Experience guidelines rule). The rest of the header remains absent.
 
-**Infie:** “What a noob. Let's see what we can do about that. Tutorials are one way to level up. You can review any tutorial at a later date, and ask me clarifying questions anytime. But I must get through this tutorial in its entirety before you can freely use this i². Hit Continue when you're ready.”
+**Infie:** “This onboarding tutorial may take 15 to twenty minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.”
 
 **Reveal:** A temporary Continue button beside the message. Reuse this pattern for later reading gates.
 
@@ -85,7 +85,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Reveal:** One short conversational reply field and Send. Keep this separate from the account form. The reply is required and nonempty, followed by Send only.
 
-**Infie:** “I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.”
+**Infie:** “I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. I won't hide your files and make things hard to edit by hand, or even interact with, like some other agentic IDEs. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.”
 
 **Gate:** A nonempty reply and **Send** only; after Send the next message appears with its own Continue. No Skip and no Continue bypass; Send is the only way forward. Store a submitted reply locally for the prototype. Make already has this gate wired; preserve it.
 
@@ -93,13 +93,13 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Infie:** “Btw… it's kinda quiet. Do you like music? Hit Play, or Continue and we'll keep it quiet.”
 
-**Reveal:** Only the music widget's own Play button. No separate Yes/Not now choice. Keep Continue available beside the current message.
+**Reveal:** Only the music widget's own Play button, starting to the left of Continue. No separate Yes/Not now choice. Keep Continue available beside the current message.
 
 **Stage:** Infie points to Play; synchronize her playful button-press animation with the user's click. Attempt playback within that click, before any awaited animation. If a local audio source exists and playback succeeds:
 
 **Infie:** “Oh yea, that's my jam. Your music player can live here for now.”
 
-**If Continue, no audio file, or playback is blocked:** “Your music player will be right here when you want it.” Leave it paused; do not falsely indicate playback. Play works when a valid local source exists.
+**If Continue, no audio file, or playback is blocked:** “Your music player will be right here when you want it and comes preloaded with some smooth Lo-fi but you can connect a music streaming service later.” Leave it paused; do not falsely indicate playback. Play works when a valid local source exists.
 
 **Reveal on “music player”:** The track/playlist label, previous and next appear around that same Play/Pause control. LeekBeats is the displayed playlist. No enclosing dashboard card. This is a default Home widget, not tutorial-only scenery. Reveal the complete paused widget on the Continue path too (the assembled widget glides automatically to its lower-left Home position after its hold, per the shared Experience guidelines rule).
 
@@ -115,7 +115,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Gate:** Simulated microphone choice: either “Allow microphone” or “Not now” advances to the next line. It is simulation only: the prototype never calls `getUserMedia` or any microphone/permission API and never accesses a microphone.
 
-**Stage — one continuous transparent chain:** A single muted video, `infie-controls-chain-alpha.webm` (VP9 with true alpha, 1080×1080, 30 fps, 16.000 s, no audio), plays once at Infie's position with no black box, card, panel or backplate; the stage background shows through it. It replaces the live Infie while it plays: Infie (Mist) transforms into the keyboard and mouse, then into the gamepad, then into the upright joystick and separate number pad, and the final devices hold until the video ends. There is no Mist between devices and the video is not restarted between messages. Video time: 0–1 s Mist, 1–4 s Infie → keyboard and mouse, 4–6 s hold, 6–9 s → gamepad, 9–11 s hold, 11–14 s → joystick and number pad, 14–16 s hold.
+**Stage — one continuous transparent chain:** A single muted video, `infie-controls-chain-alpha.webm` (VP9 with true alpha, 1080×1080, 30 fps, 16.000 s, no audio), plays once at Infie's position with no black box, card, panel or backplate; the stage background shows through it. When the video starts, Infie grows to 2x while the three messages appear and the chat animates sliding down to make room, then returns to normal size as the video ends. It replaces the live Infie while it plays: Infie (Mist) transforms into the keyboard and mouse, then into the gamepad, then into the upright joystick and separate number pad, and the final devices hold until the video ends. There is no Mist between devices and the video is not restarted between messages. Video time: 0–1 s Mist, 1–4 s Infie → keyboard and mouse, 4–6 s hold, 6–9 s → gamepad, 9–11 s hold, 11–14 s → joystick and number pad, 14–16 s hold.
 
 **Message cues (tied to video time, not wall-clock timers; each message appears when the video's current time reaches its cue and none is a Continue gate):**
 
@@ -152,18 +152,18 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Infie:** “I'm your orchestrator, coordinator, middle-man, question-answerer, and maybe friend. I take the repetitive, mundane, boring stuff out of building. Focus is key. I'll show you what you need when you need it.”
 
-**Infie:** “I'm an expert at revision control such as Git, Perforce, Diversion and more. I'm also packed with skills that help me be a great agent team lead. Most importantly, I help you keep track of tasks and projects in a way that makes it easy to jump back in after weeks away or manage multiple large projects at once. Think of me as your double, your partner-in-crime, your right-hand.”
+**Infie:** “I'm an expert at version control like Git, Perforce, Diversion, and more. But you don't need any of those to use i²! I'm also packed with skills that make me a great agent team lead. Most importantly, I help you manage tasks and projects, even after weeks away or across multiple projects. Think of me as your double, your partner-in-crime, your right hand.”
 
-**Infie:** “You can ask me for help with any aspect of the IDE just by holding hot keys and clicking on it. You can even do this for single words or phrases in agent chats to get an explanation catered to you.”
+**Infie:** “You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.”
 
-**Stage note:** This turn adds the explanation only. Do not invent a specific key combination or add a new help interface during this beat.
+**Stage note:** The spoken line stays as written. A short card centered in the empty area to the right of the chat lists the combinations: Alt+click asks a question (voice or text, then a follow-up); Shift+click reports a problem (confirm or ask, then a todo or an in-branch fix); Ctrl+click opens links, go-to-symbol, and import, or a quick summary. The card footer reads “Alt = question · Shift = problem.” This is a margin card only. Do not add a new help backend.
 
 **Gate:** Continue per turn.
 
 ### B08 — i2 Workspace and project folder
 
 **Turn 1 — workspace tree:**
-**Infie:** “Here you will work in an i2 Workspace. It has your project in it and is made to keep things neat, transparent, and keep disk usage low.”
+**Infie:** “Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.”
 
 **Reveal:** An animated, indented, VERTICAL folder tree built from native elements (no raster art, no file-explorer UI, no card/panel), modeled on a real workspace folder listing but renamed:
 
@@ -184,7 +184,7 @@ Exactly these six children; no environment-file folder. The tree animates in and
 **Gate:** Continue.
 
 **Turn 2 — UI navigation:**
-**Infie:** “It's also how the UI navigation is structured. Project changes to the name of your current project. A Session is another copy of your project (worktree if Git) that is focused on a feature, bug fix, experimentation, etc. You can start sessions by talking to me but we'll get there. First...”
+**Infie:** “That's also how navigation works. Project changes to the name of your current project. A Session is a space dedicated to a feature, bug fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me. First...”
 
 **Reveal (simultaneously with this message, tree stays visible):** The `i2 / Project / Session` navigation group (existing spotlight-then-dock motion).
 
@@ -193,12 +193,19 @@ Exactly these six children; no environment-file folder. The tree animates in and
 **Turn 3 — the project folder:**
 **Stage:** After the tree has faded, show ONLY the green `project/` folder (alone — no i2Workspace root and no main/worktree chips or labels).
 
-**Infie:** “The key to working with i² is the project folder. It's a magical place. It's an extra Git repository beside your worktrees in i2Workspace, where we keep the bigger picture. The whole team can read and edit these files. I'll keep them updated as we go.”
+**Infie:** “The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.”
 
 **Gate:** Continue.
 
-**Turn 4 — separate repo:**
-**Infie:** “This is a separate repo so we can edit it independently of the many worktrees I will manage for you, including cleaning them up as to not waste your disk space. This repo is also where agent coordination is tracked amongst your own sessions and other team members.”
+**Turn 4 — canonical files:**
+**Infie:** “It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.”
+
+**Stage:** The same green `project/` folder remains visible alone.
+
+**Gate:** Continue.
+
+**Turn 5 — i² Core & i² Sync:**
+**Infie:** “Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!”
 
 **Stage:** The same green `project/` folder remains visible alone.
 
@@ -210,17 +217,17 @@ Exactly these six children; no environment-file folder. The tree animates in and
 
 Introduce each file separately. The four file labels (info.md, todo.md, style.md, guidelines.md) appear as an indented vertical list under the green `project/` folder only as each line starts (no i2Workspace root, no main chip, no horizontal chips). No full document editors, tab bars or technical settings.
 
-**Infie:** “info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website.”
+**Infie:** “info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website. This is used by me to keep the Session Agents in check to make sure your vision is always in mind.”
 
-**Infie:** “todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself.”
+**Infie:** “todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself. When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.”
 
-**Reveal:** A static preview of the Stylist to the right of the messages.
+**Reveal:** A static preview of the Stylist centered in the empty area to the right of the chat, outside the scrolling message stack.
 
 **Infie:** “style.md is the colors, typography, and look we're going for and The Stylist is an interactive theme setter that helps you preview it. Your designer can use it on the website too.”
 
 **Stage:** Fade/retire the static preview of the Stylist before guidelines.md.
 
-**Infie:** “guidelines.md tells me and the other agents how to work. It's the most technical one you're meant to edit. There are extra files too, but I'll take care of those, silly human.”
+**Infie:** “guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.”
 
 **Gate:** Continue per turn. Retire the green `project/` folder and its file list after this explanation.
 
@@ -228,7 +235,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Stage:** Let the user configure the models they will use for their Session Agents.
 
-**Infie:** “I am run by an open-weight model on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.”
+**Infie:** “I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.”
 
 **Reveal:** An array of faux sign-in buttons to sign in with: Claude, ChatGPT, Grok, Gemini, Cline, plus a simulated local-model choice (“Use local models”). Each opens a simulated sign-in modal (clearly fake: no real OAuth, no network, no real credentials collected, no password fields that submit anywhere; completing it marks that provider “connected” in demo state).
 
@@ -236,15 +243,21 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Gate:** At least one completed choice is required before Continue is enabled; the user may complete more. Never initiate real OAuth or collect real credentials.
 
+**Final quick turn — Preference Sliders:** After connecting a model and clicking Continue, retire the provider choices and show a small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed. These are shared by every model and conversation.
+
+**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider below—even while I'm talking.”
+
+**Gate:** Speed changes apply immediately, including to the current line; Continue advances to B11. Keep this preview compact. Reduced motion still shows text immediately.
+
 ### B11 — The rest of the header bar
 
 **Reveal:** The `Tutorials, Widgets, Games` part of the header (remove “coming soon” from Games if it's still present).
 
-**Infie:** “Whenever you want to visit more tutorials you can click this in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!”
+**Infie:** “Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for Session Agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!”
 
 **Reveal:** The `Notification/Settings` part of the header.
 
-**Infie:** “A combined list of alerts for your review and other notifications live here as well as settings.”
+**Infie:** “A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.”
 
 **Gate:** Continue per turn; each Continue sends the header group just introduced to its docked position (it spotlights and holds first, per the shared Experience guidelines rule).
 
@@ -262,7 +275,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Infie:** “We're now in i² Home.”
 
-**Infie:** “Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our global todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'”
+**Infie:** “Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our Global Todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'”
 
 **Reveal:** Action buttons associated with dummy data.
 
@@ -276,11 +289,15 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B13 — Project Home
 
-**Infie:** “This is Project Home. Click the project name to switch projects, or head back to i² Home. You can switch while work carries on, even across windows. Don't overload your brain. That's what I'm here for.”
+**Infie:** “This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.”
 
 **Reveal:** Existing project title/switcher and Home navigation, introduced together. The new view occupies the normal project content area; the persistent player and level stay mounted.
 
-**Infie:** “I handle long-term planning, version control, branches and worktrees, and what to do next. Your roadmap and Sessions live here.”
+**Infie:** “I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.”
+
+**Gate:** Continue.
+
+**Infie:** “I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.”
 
 **Reveal:** The demo project's existing roadmap/session groups. Do not add every possible widget.
 
@@ -292,27 +309,33 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Reveal:** One seeded Session entry, if its containing list already exists. Add its details only now.
 
-**Infie:** “When an agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.”
+**Infie:** “When a Session Agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.”
 
 **Reveal:** The demo agent question arrives as an ordinary message in the Infie chat with its bordered reply field and Send (unless calling out something far from the chat). No enclosing attention card added for the tutorial. Example: “Ready for you to review the preview. Shall I use the teal accent?”
 
 **Gate:** Send a reply; show a brief acknowledgement.
 
-**Infie:** “Or click the Session name and talk to the agent directly. Let's do that now.”
+**Infie:** “Or click the Session name and talk to the Session Agent directly. Let's do that now.”
 
 **Gate:** Open the demo Session. Keep inline reply and opening the Session as distinct actions.
 
 ### B15 — Agents and tasks
 
-**Infie:** “Each Session has agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.”
+**Infie:** “Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.”
 
 **Reveal:** Existing Session identity/switcher and compact agent/model control when named; no model catalogue or extra-agent lecture.
 
-**Infie:** “Tasks come in two groups: Agent tasks and Human tasks. You're the human. This one's ready for you to verify.”
+**Infie:** “Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.”
 
-**Reveal:** The existing two task groups. Demo Agent tasks are already complete; one Human task asks the user to confirm the preview.
+**Infie:** “Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.”
 
-**Gate:** Check the demo Human review task. It must not simulate an automatic real merge.
+**Stage note:** These two turns add explanation only (Continue per turn). No MCP settings, tool list or simulator is opened during this beat.
+
+**Infie:** “Tasks come in two groups: Session Agent tasks and Human tasks. You're the human. This one's ready for you to verify. Click on all open tasks to mark them complete.”
+
+**Reveal:** The existing two task groups. Demo Session Agent tasks are already complete; the open Human tasks are ready for the user to verify.
+
+**Gate:** Check all open demo Human review tasks. It must not simulate an automatic real merge.
 
 ### B16 — Completion pending
 
@@ -324,41 +347,59 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B17 — Session completion and Infinite Intelligence
 
-**Infie:** “This is the Session Completion Form. I do most of the work. You check the corrections, give feedback, and hit Submit.”
+**Infie:** “This is the Session Completion Form. I do most of the work. You check the corrections, give feedback, and hit Submit. They're quick and easy, and I've already filled in most of it.”
 
 **Reveal:** A short floating form: Infie-prefilled summary, a corrected-action example, a simple rating, optional feedback, and Submit. Fields have borders and transparent interiors; buttons have fill and borders. No outer form card. Example corrected action: “Check the platform before choosing a command.” No codebase content in the example.
 
-**Infie:** “They're quick and easy, and I've already filled in most of it.”
+**Infie:** “If you're on the free plan, session completion forms are required and users on the paid plans are still welcome to contribute. You can also turn on auto-submit on merge in Settings for future sessions. An auto-submitted form still counts as your completion form. These boost your level and are the primary way to passively increase it while you work. We greatly appreciate it.”
 
-**Infie:** “If you're on the free plan, session completion forms are required and users on the paid plans are still welcome to contribute.”
+**Infie:** “Either way, the corrected actions are what get sent back to improve iSquared, not your codebase. That means the next time you or another dev attempt this same thing, we will avoid that mistake.”
 
-**Infie:** “You can also turn on auto-submit on merge in Settings for future sessions. An auto-submitted form still counts as your completion form.”
-
-**Infie:** “Either way, the corrected actions are what get sent back to improve iSquared, not your codebase.”
+**Infie:** “iSquared is also exploring quantum computing: quantum machine learning runs in tandem with the regular analysis of those requests, so we can see where quantum computing really fits into the IDE. It's research for now. Nothing you build depends on it.”
 
 **Infie:** “Session Completion Forms, donors, and paid users are what keep this experience running.”
 
-**Infie:** “It's great to contribute to the Infinite Intelligence which drives this experience which was only possible due to the vast open source and free education materials present today.”
+**Infie:** “It's great to contribute to the Infinite Intelligence that drives this experience, made possible by the vast open source and free education materials available today. For which my creator is eternally grateful to the community.”
 
-**Gate:** Continue between turns 1–6 (six Continues); Submit appears and enables only after the final explanation turn (turn 7). Implementations must derive the number of turns from the explanation list, not hard-coded constants. Keep the form visible throughout without revealing new fields. Auto-submit-on-merge is mentioned only: no settings walkthrough, no new toggle, and no UI is added in the tutorial. The tutorial demonstrates manual Submit and must not bypass Submit or auto-submit this demo session on its already-completed (demo) merge; auto-submit satisfies required completion forms for future sessions only. Submission is local demo behavior and marks the demo Session complete. Do not add sharing opt-outs, a consent pitch, account-closure threats or broader data promises.
+**Gate:** Continue between every explanation turn but the last (five Continues for the six turns above); Submit appears and enables only after the final explanation turn. Implementations must derive the number of turns from the explanation list, not hard-coded constants. Keep the form visible throughout without revealing new fields. Auto-submit-on-merge is mentioned only: no settings walkthrough, no new toggle, and no UI is added in the tutorial. The tutorial demonstrates manual Submit and must not bypass Submit or auto-submit this demo session on its already-completed (demo) merge; auto-submit satisfies required completion forms for future sessions only. Submission is local demo behavior and marks the demo Session complete. Do not add sharing opt-outs, a consent pitch, account-closure threats or broader data promises.
+
+**Infie:** “Submitted. Next I close the session: its branches are merged and cleaned up, both locally and on the remote, barring your approval.”
+
+**Gate:** Continue.
+
+**Infie:** “So that's the flow of a session, now onto the rest of the UI.”
 
 ### B18 — Widgets and Library
 
-**Infie:** “Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player.”
+**Infie:** “Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player to the bottom panel underneath this chat.”
 
-**Reveal:** The player's drag/resize affordances now, plus the existing widget controls as they are named. Provide a keyboard-accessible Move option. Let the user try it or Continue. Retain its new position and playback state.
+**Reveal:** The player's drag/resize affordances now, plus the existing widget controls as they are named, and the open bottom panel drop target. Provide a keyboard-accessible Move option. No Continue button on this turn; gated by moving the music player into the bottom panel. Retain its new position and playback state.
+
+**Infie:** “You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.”
+
+**Gate:** Continue.
+
+**Infie:** “Click Widgets in the header to see everything else you can add to your workspace.”
+
+**Reveal:** Highlight and enable `Widgets` in the header. No Continue button; clicking `Widgets` opens the Widgets gallery and advances to the Library callout.
 
 **Infie:** “One of my favorites is the Library: screens, flows, components, and packages that fit your project.”
 
-**Reveal:** The existing Library entry and a small representative Library widget, using the product's own style. Demonstrate close/reopen briefly. Only this tutorial-owned example closes when the beat ends; do not close user widgets.
+**Reveal:** The existing Library entry highlighted in the open Widgets gallery with a floating callout below the gallery and the same line recorded in the docked chat history. Show a single Continue control.
 
-**Gate:** Continue. Music remains available as the default Home widget.
+**Gate:** Continue closes the gallery and advances to the segue. Music remains available as the default Home widget.
+
+**Infie:** “This IDE is just one surface of iSquared.”
+
+**Gate:** Reading dwell auto-advances to B19.
 
 ### B19 — Away from the desk; older projects
 
-**Infie:** “The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away.”
+**Infie:** “The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away. You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.”
 
-**Infie:** “And if your project didn't start in i², I'll walk you through a one-time onboarding. Then we're ready to go. Let's head Home.”
+**Gate:** Continue.
+
+**Infie:** “If your project didn't start in i², I'll onboard it for you. Don't worry about what that means as I'll prompt you with a tutorial any time you do something new here. For now, let's head Home. Click i2 in the top left corner.”
 
 **Reveal:** Use the already-introduced Home navigation as the next target. No install modal, QR code, download claim, extra settings or importer walkthrough.
 
@@ -366,9 +407,9 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B20 — Tutorials and level-up
 
-**Infie:** “That's about it to get started. Check out the other tutorials. I recommend 'Generate a new project' and 'Widgets, widgets, widgets.' There are tutorials for every aspect of this experience so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.”
+**Infie:** “That's about it to get started. This prototype has one more tutorial, 'Generate a new project', which you can go through by clicking that button to the right. In the full experience, Learn in the header has tutorials for every aspect of iSquared, like 'Widgets, widgets, widgets', so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.”
 
-**Infie:** “Games unlock at level five, so hop to it. There are computer science and game development tutorials too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?”
+**Infie:** “Games unlock at level five, so hop to it. Learn has computer science and game development lessons too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?”
 
 **Infie:** “The number of open sessions without submitted Completion Reports will be limited based on your level and plan. I hope this gives you everything you could need but please submit feedback directly to me at any time and I'll make sure it goes to the proper channel and give you a ticket to follow-up.”
 
@@ -392,4 +433,5 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 - Music uses a supplied local sample if available. Do not depend on external streaming or add a music login. The player/audio element and level widget persist across tutorial navigation.
 - Questions may pause the current turn through an introduced reply affordance and return to it; keep required gates intact. A small canned prototype response is enough. No unrestricted assistant backend is required.
 - The Tutorials entry opens the existing Tutorials list if available; otherwise it is a visual entry for this pass. New replay behavior is out of scope. Clicking it must never reset the user's identity, level, layout or audio.
+- The quantum line describes exploratory research (see the deferred "Quantum Upgrade" roadmap section and the quantum hardware strategy note); it must stay worded as exploration, never as a shipped or performance feature. The MCP/tools, simulator, and VR/mobile/website lines likewise express product direction.
 - Mobile, game unlocks, rewards, and shared-learning behavior here express the user's product vision. The prototype does not verify release availability or implement data handling. Keep this note out of the user's tutorial dialogue.

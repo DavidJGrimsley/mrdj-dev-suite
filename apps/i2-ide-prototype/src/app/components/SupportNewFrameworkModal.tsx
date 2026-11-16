@@ -3,6 +3,7 @@ import { assetUrl } from "../assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, Sparkles, X, Terminal, Send, Check } from "lucide-react";
 import { PrototypeLimit } from "./PrototypeLimit";
+import { RevealingInfieText } from "../widgets/infiePreferencesContext";
 
 export interface SupportNewFrameworkModalProps {
   isOpen: boolean;
@@ -169,8 +170,7 @@ export function SupportNewFrameworkModal({
                       lineHeight: 1.6,
                     }}
                   >
-                    What framework would you like to use? We can optimize it as we go and submit
-                    it to the Infinite Intelligence for a huge XP reward.
+                    <RevealingInfieText text="What framework would you like to use? We can optimize it as we go and submit it to the Infinite Intelligence for a huge XP reward." />
                   </div>
                 </div>
               </div>

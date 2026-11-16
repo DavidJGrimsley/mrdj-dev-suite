@@ -26,8 +26,18 @@ function isLoopbackPreviewUrl(url: string): boolean {
   }
 }
 
+/** A preview served beside the prototype (same origin) instead of from the Experimemo manifest. */
+export interface PreviewSource {
+  url: string;
+  label: string;
+  /** JSON file that only exists when the preview is really deployed at `url`. */
+  probe?: string;
+}
+
 interface ExactWebPreviewFrameProps {
   version: PreviewVersion;
+  /** Overrides the manifest entry for `version`. */
+  source?: PreviewSource;
   device: PreviewDevice;
   orientation: PreviewOrientation;
   /** "inline" fits the viewport to the column width (capped by maxHeight); "fill" fits the parent box. */
@@ -43,17 +53,21 @@ interface ExactWebPreviewFrameProps {
  */
 export function ExactWebPreviewFrame({
   version,
+  source,
   device,
   orientation,
   mode = "inline",
   maxHeight = 420,
   className = "",
 }: ExactWebPreviewFrameProps) {
-  const manifest = PREVIEW_MANIFEST[version];
-  const [resolvedUrl, setResolvedUrl] = useState<string>(() => getResolvedPreviewUrl(version));
+  const manifest = source ?? PREVIEW_MANIFEST[version];
+  const sourceUrl = source?.url;
+  const sourceProbe = source?.probe;
+  const resolve = () => sourceUrl ?? getResolvedPreviewUrl(version);
+  const [resolvedUrl, setResolvedUrl] = useState<string>(resolve);
   const [probeReady, setProbeReady] = useState<boolean>(() => {
-    const initial = getResolvedPreviewUrl(version);
-    return Boolean(initial) && !isLoopbackPreviewUrl(initial);
+    const initial = resolve();
+    return Boolean(initial) && !sourceProbe && !isLoopbackPreviewUrl(initial);
   });
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
     resolvedUrl ? "loading" : "unavailable"
@@ -63,12 +77,33 @@ export function ExactWebPreviewFrame({
   const [box, setBox] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    const url = getResolvedPreviewUrl(version);
+    const url = resolve();
     setResolvedUrl(url);
     if (!url) {
       setProbeReady(false);
       setStatus("unavailable");
       return;
+    }
+    if (sourceProbe) {
+      // Same-origin preview: confirm its marker file is real JSON before mounting the iframe,
+      // because a single-page host answers unknown paths with its own index.html.
+      let cancelled = false;
+      setProbeReady(false);
+      setStatus("loading");
+      void fetch(sourceProbe, { cache: "no-store" })
+        .then(async (res) => {
+          if (!res.ok) throw new Error("missing");
+          JSON.parse(await res.text());
+          if (!cancelled) setProbeReady(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setProbeReady(false);
+          setStatus("unavailable");
+        });
+      return () => {
+        cancelled = true;
+      };
     }
     if (!isLoopbackPreviewUrl(url)) {
       setProbeReady(true);
@@ -105,7 +140,8 @@ export function ExactWebPreviewFrame({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [version, reloadNonce]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version, reloadNonce, sourceUrl, sourceProbe]);
 
   useEffect(() => {
     if (status !== "loading") return;
@@ -144,7 +180,8 @@ export function ExactWebPreviewFrame({
         mode === "fill" ? "w-full h-full" : "w-full"
       } ${className}`}
       data-testid="exact-web-preview-frame"
-      data-preview-version={version}
+      data-preview-version={source ? undefined : version}
+      data-preview-source={source ? source.label : undefined}
       data-device={device}
       data-orientation={orientation}
       data-layout-width={viewport.width}

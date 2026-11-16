@@ -32,15 +32,15 @@ export const B12_PROJECTS_FADE_MS = 700;
 export const B18_GALLERY_OPEN_DELAY_MS = 400;
 
 /** Before the chat docks, the action row + chat input float this far above the bottom edge. */
-export const PREDOCK_BOTTOM_OFFSET = "14vh";
+export const PREDOCK_BOTTOM_OFFSET = "var(--i2-predock-bottom, 14vh)";
 
 /**
  * Segue lines have no gate: they show for at least 0.5s, longer for longer lines
  * (~220ms per word, a comfortable reading pace).
  */
-export function segueDwellMs(text: string): number {
+export function segueDwellMs(text: string, factor = 1): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(500, Math.round(words * 220));
+  return Math.max(500, Math.round(words * 220 * factor));
 }
 
 /**
