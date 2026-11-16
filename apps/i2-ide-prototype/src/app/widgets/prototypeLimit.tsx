@@ -33,7 +33,7 @@ export function PrototypeLimitProvider({ children }: { children: ReactNode }) {
       {createPortal(
         <AnimatePresence>
           {request && (
-            <div key="prototype-limit" data-testid="prototype-limit-modal" className="relative z-[90]">
+            <div key="prototype-limit" className="contents">
               <PrototypeLimit
                 variant="modal"
                 subtitle={request.subtitle ?? "Interactive Prototype Boundary"}
@@ -85,6 +85,18 @@ export function notHotdogLimit(what: string): PrototypeLimitRequest {
     subtitle: "Not Hotdog · placeholder project",
     description:
       "Not Hotdog is here to show a second project in the list; its files and workspace aren't wired into this prototype. Check out Pet Show and Tell for more interactivity: real project files, a working Explorer and a live web preview.",
+    environmentNote: "Simulated prototype · this project's sources are not included",
+    suggestPet: true,
+  };
+}
+
+/** An imported sample project: sessions, files, and simulators stop here. */
+export function importedProjectLimit(projectName: string, what: string): PrototypeLimitRequest {
+  return {
+    featureName: what,
+    subtitle: `${projectName} · imported placeholder`,
+    description:
+      `${projectName} was imported to show a project with many sessions. Its files, sessions, and simulators aren't wired into this prototype. Check out Pet Show and Tell for more interactivity: real project files, a working Explorer and a live web preview.`,
     environmentNote: "Simulated prototype · this project's sources are not included",
     suggestPet: true,
   };

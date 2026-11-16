@@ -4,6 +4,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Play } from "lucide-react";
+import { HOVER_OPEN_MS, popoverPosition, sessionsUseFullCards, type DockSideName } from "./dockBehavior";
 
 export interface SessionCardData {
   id: string;
@@ -23,11 +24,7 @@ export interface SessionCardData {
   statusTestId?: string;
 }
 
-const FULL_CARD_MIN_WIDTH = 290;
-const FULL_CARD_MIN_HEIGHT = 168;
-const HOVER_OPEN_MS = 250;
 const HOVER_CLOSE_MS = 140;
-const POPOVER_WIDTH = 340;
 
 function Stat({ label, children, testId }: { label: string; children: ReactNode; testId?: string }) {
   return (
@@ -38,7 +35,7 @@ function Stat({ label, children, testId }: { label: string; children: ReactNode;
   );
 }
 
-function FullCard({ s, icon, popover = false }: { s: SessionCardData; icon: ReactNode; popover?: boolean }) {
+function FullCard({ s, icon, popover = false, hug = false }: { s: SessionCardData; icon: ReactNode; popover?: boolean; hug?: boolean }) {
   const tone = s.action?.tone === "amber"
     ? "bg-[rgba(245,158,11,0.1)] border-[rgba(245,158,11,0.3)] text-[#f59e0b]"
     : "bg-[#2dd4bf] border-[#2dd4bf] text-[#061413]";
@@ -51,12 +48,13 @@ function FullCard({ s, icon, popover = false }: { s: SessionCardData; icon: Reac
       tabIndex={0}
       onClick={s.onOpen}
       onKeyDown={(e) => { if (e.key === "Enter") s.onOpen(); }}
-      className={`relative bg-[#0b131d] flex flex-col gap-[12px] p-[14px] rounded-[12px] border cursor-pointer text-left hover:brightness-110 transition-all min-w-0 ${popover ? "w-full" : "flex-1 h-full"} ${s.highlight ? "infie-glow border-[#2dd4bf]" : "border-[rgba(255,255,255,0.1)]"}`}
+      className={`relative bg-[#0b131d] flex flex-col rounded-[12px] border cursor-pointer text-left hover:brightness-110 transition-all min-w-0 ${hug ? "gap-[8px] p-[10px] w-full" : "gap-[12px] p-[14px]"} ${popover ? "w-full" : hug ? "!flex-none !h-auto !self-start" : "flex-1 h-full"} ${s.highlight ? "infie-glow border-[#2dd4bf]" : "border-[rgba(255,255,255,0.1)]"}`}
+      style={hug ? { width: "100%", maxWidth: "100%" } : undefined}
     >
       <div className="flex items-center gap-[8px] w-full min-w-0">
         <span className="shrink-0">{icon}</span>
         <div className="flex-1 min-w-0">
-          <p className="font-['Inter',sans-serif] font-bold text-[#f3f4f6] text-[16px] leading-tight truncate">{s.name}</p>
+          <p className={`font-['Inter',sans-serif] font-bold text-[#f3f4f6] leading-tight truncate ${hug ? "text-[14px]" : "text-[16px]"}`}>{s.name}</p>
           <p className="font-['Cousine',monospace] text-[#9ca3af] text-[11px] truncate">{"⊣"} {s.branch}</p>
         </div>
         {s.action && (
@@ -101,6 +99,9 @@ export function SessionsPanel({
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [hovered, setHovered] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [hug, setHug] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [zone, setZone] = useState<DockSideName | null>(null);
   const timers = useRef<{ open: number; close: number }>({ open: 0, close: 0 });
 
   useLayoutEffect(() => {
@@ -113,16 +114,32 @@ export function SessionsPanel({
     return () => ro.disconnect();
   }, []);
   useEffect(() => () => { window.clearTimeout(timers.current.open); window.clearTimeout(timers.current.close); }, []);
+  // Expanded and fullscreen views are portaled. Cards there keep their content size.
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const mode = el.closest("[data-widget-overlay]")?.getAttribute("data-widget-mode");
+    const next = mode === "expanded" || mode === "fullscreen";
+    setHug((prev) => (prev === next ? prev : next));
+    const rawZone = el.closest("[data-dock-zone]")?.getAttribute("data-dock-zone");
+    const nextZone: DockSideName | null =
+      rawZone === "left" || rawZone === "right" || rawZone === "bottom" ? rawZone : null;
+    setZone((prev) => (prev === nextZone ? prev : nextZone));
+    setSharing(el.closest("[data-flow-shared]")?.getAttribute("data-flow-shared") === "true");
+  });
 
   const count = sessions.length;
-  const gaps = Math.max(0, count - 1) * 6 + 20;
-  // Before the first measurement assume the roomy layout so nothing flashes compact.
-  const full = box.w === 0 || (box.w >= count * FULL_CARD_MIN_WIDTH + gaps && box.h >= FULL_CARD_MIN_HEIGHT);
+  // Width only in the bottom zone; sidebars (left/right) always use compact list cards.
+  // Expanded and fullscreen cards always hug.
+  const full = sessionsUseFullCards(hug, box.w, count, zone) && (hug || (!sharing && box.h >= 230));
 
   const scheduleOpen = (id: string, el: HTMLElement) => {
     window.clearTimeout(timers.current.close);
     window.clearTimeout(timers.current.open);
-    timers.current.open = window.setTimeout(() => setHovered({ id, rect: el.getBoundingClientRect() }), HOVER_OPEN_MS);
+    timers.current.open = window.setTimeout(() => {
+      if (!el.isConnected) return;
+      setHovered({ id, rect: el.getBoundingClientRect() });
+    }, HOVER_OPEN_MS);
   };
   const scheduleClose = () => {
     window.clearTimeout(timers.current.open);
@@ -134,28 +151,21 @@ export function SessionsPanel({
   const hoveredSession = hovered ? sessions.find((s) => s.id === hovered.id) : undefined;
   let popoverStyle: React.CSSProperties | undefined;
   if (hovered) {
-    const { rect } = hovered;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const fitsRight = rect.right + 8 + POPOVER_WIDTH <= vw - 8;
-    const fitsLeft = rect.left - 8 - POPOVER_WIDTH >= 8;
-    const left = fitsRight ? rect.right + 8 : fitsLeft ? rect.left - 8 - POPOVER_WIDTH : Math.max(8, Math.min(rect.left, vw - POPOVER_WIDTH - 8));
-    // Beside the row when there is room, otherwise just above it.
-    const top = fitsRight || fitsLeft ? Math.max(8, Math.min(rect.top - 20, vh - 230)) : Math.max(8, rect.top - 216);
-    popoverStyle = { left, top, width: POPOVER_WIDTH };
+    popoverStyle = popoverPosition(hovered.rect, { width: window.innerWidth, height: window.innerHeight });
   }
 
   return (
     <div
       ref={boxRef}
       data-sessions-layout={full ? "cards" : "compact"}
-      className={`bg-[#252323] flex-1 min-h-0 min-w-0 p-[10px] ${full ? "flex gap-[6px] items-stretch justify-center" : "overflow-y-auto"}`}
+      data-session-hug={hug ? "true" : "false"}
+      className={`bg-[#252323] min-w-0 p-[10px] ${hug ? "!flex-none !h-auto !w-full !max-w-full !self-start" : "flex-1 min-h-min w-full"} ${full ? (hug ? "grid grid-cols-2 gap-[8px] items-start content-start" : "flex gap-[6px] items-stretch justify-center") : "overflow-y-auto"}`}
       style={{ scrollbarWidth: "thin" }}
     >
       {count === 0 ? (
         <div className="size-full grid place-items-center">{empty}</div>
       ) : full ? (
-        sessions.map((s) => <FullCard key={s.id} s={s} icon={icon} />)
+        sessions.map((s) => <FullCard key={s.id} s={s} icon={icon} hug={hug} />)
       ) : (
         <div className="grid gap-[6px]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 210px), 1fr))" }}>
           {sessions.map((s) => (
@@ -184,7 +194,7 @@ export function SessionsPanel({
         createPortal(
           <div
             data-session-popover={hoveredSession.id}
-            className="fixed z-[60] rounded-[12px] shadow-[0_18px_50px_rgba(0,0,0,0.65)]"
+            className="fixed z-[10050] rounded-[12px] shadow-[0_18px_50px_rgba(0,0,0,0.65)]"
             style={popoverStyle}
             onPointerEnter={keepOpen}
             onPointerLeave={scheduleClose}

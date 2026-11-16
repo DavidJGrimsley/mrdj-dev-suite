@@ -222,7 +222,7 @@ export function FileViewerProvider({ children }: { children: ReactNode }) {
               >
                 <FolderOpen size={14} className="text-[#abefa3] shrink-0" />
                 <span className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white truncate flex-1 min-w-0">{viewer.spec.rootName}</span>
-                <span className="hidden sm:inline font-['Rounded_Mplus_1c',sans-serif] text-[10px] uppercase tracking-wide text-[#555] shrink-0">Read-only</span>
+                <span data-testid="file-viewer-readonly" title="Read-only (Simulator limitation). Editing is available in the full app." className="hidden sm:inline font-['Rounded_Mplus_1c',sans-serif] text-[10px] uppercase tracking-wide text-[#555] shrink-0">Read-only (Simulator limitation). Editing is available in the full app.</span>
                 <button type="button" data-testid="file-viewer-fullscreen" onClick={toggleFullscreen} aria-label={viewer.fullscreen ? "Exit fullscreen" : "Fullscreen"} title={viewer.fullscreen ? "Exit fullscreen" : "Fullscreen"} className="p-1 rounded text-[#666] hover:text-[#abefa3] hover:bg-white/5 transition-colors shrink-0">
                   {viewer.fullscreen ? <Minimize2 size={13} /> : <Expand size={13} />}
                 </button>

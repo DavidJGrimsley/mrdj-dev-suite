@@ -249,6 +249,13 @@ export function SimulatorPreview({
   const [timeRemaining, setTimeRemaining] = useState<number>(initialTimeRemaining);
   const [simulatedFallbackActive, setSimulatedFallbackActive] = useState<boolean>(initialSimulatedFallbackActive);
 
+  const isPet = !projectId || projectId === "pet" || projectId === "pet-show-and-tell" || projectId === "tutorial-demo";
+  const projectDisplayName = isPet
+    ? "Pet Show and Tell"
+    : projectId === "nothotdog"
+    ? "Not Hotdog"
+    : projectId;
+
   // Poll / check session status
   const fetchStatus = useCallback(async () => {
     try {
@@ -509,6 +516,24 @@ export function SimulatorPreview({
   }
 
   if (session?.status === "starting" || session?.status === "stopping") {
+    if (!isPet && (provider.simulated || simulatedFallbackActive)) {
+      return (
+        <div data-testid="simulator-unavailable" className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0d0d0d] text-white select-none">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+            <AlertTriangle size={24} className="text-[#f59e0b]" />
+          </div>
+          <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 uppercase tracking-wider mb-2">
+            No Android Build
+          </span>
+          <h3 className="font-['Rounded_Mplus_1c',sans-serif] text-[14px] font-bold mb-1">
+            No build to simulate · {projectDisplayName}
+          </h3>
+          <p className="text-[11px] text-[#9a9aa2] max-w-[260px] leading-relaxed">
+            This project's app isn't included in the prototype. Pet Show and Tell has a live preview.
+          </p>
+        </div>
+      );
+    }
     return <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0d0d0d] text-white">
       <RefreshCw size={24} className="animate-spin text-[#abefa3] mb-3" />
       <p>{session.status === "starting" ? "Starting Android preview…" : "Stopping Android preview…"}</p>
@@ -529,6 +554,25 @@ export function SimulatorPreview({
       !session.id.startsWith("sim_client_") &&
       Boolean(session.previewApiUrl && session.webPreviewToken);
     const isSimulated = !isLiveEas;
+
+    if (!isPet && isSimulated) {
+      return (
+        <div data-testid="simulator-unavailable" className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0d0d0d] text-white select-none">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+            <AlertTriangle size={24} className="text-[#f59e0b]" />
+          </div>
+          <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 uppercase tracking-wider mb-2">
+            No Android Build
+          </span>
+          <h3 className="font-['Rounded_Mplus_1c',sans-serif] text-[14px] font-bold mb-1">
+            No build to simulate · {projectDisplayName}
+          </h3>
+          <p className="text-[11px] text-[#9a9aa2] max-w-[260px] leading-relaxed">
+            This project's app isn't included in the prototype. Pet Show and Tell has a live preview.
+          </p>
+        </div>
+      );
+    }
 
     return (
       <div className="flex flex-col h-full w-full bg-[#0d0d0d] overflow-hidden select-none">
@@ -571,7 +615,7 @@ export function SimulatorPreview({
           ) : (
             <iframe
               srcDoc={SIMULATED_PREVIEW_HTML}
-              title="Pet Show and Tell Android Simulator (Simulated Preview)"
+              title={`${projectDisplayName} Android Simulator (Simulated Preview)`}
               sandbox="allow-scripts allow-same-origin allow-forms"
               referrerPolicy="no-referrer"
               className="w-full h-full border-0"
@@ -668,6 +712,25 @@ export function SimulatorPreview({
   }
 
   // 7. Idle / Ready to Start State
+  if (!isPet) {
+    return (
+      <div data-testid="simulator-unavailable" className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0d0d0d] text-white select-none">
+        <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-3">
+          <AlertTriangle size={24} className="text-[#f59e0b]" />
+        </div>
+        <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 uppercase tracking-wider mb-2">
+          No Android Build
+        </span>
+        <h3 className="font-['Rounded_Mplus_1c',sans-serif] text-[14px] font-bold mb-1">
+          No build to simulate · {projectDisplayName}
+        </h3>
+        <p className="text-[11px] text-[#9a9aa2] max-w-[260px] leading-relaxed">
+          This project's app isn't included in the prototype. Pet Show and Tell has a live preview.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0d0d0d] text-white select-none">
       <div className="w-14 h-14 rounded-2xl bg-[#1d1b20] border border-white/10 flex items-center justify-center mb-3 shadow-lg">
@@ -681,7 +744,7 @@ export function SimulatorPreview({
       </div>
 
       <h3 className="font-['Rounded_Mplus_1c',sans-serif] text-[15px] font-bold text-white mb-1">
-        Pet Show and Tell
+        {projectDisplayName}
       </h3>
       <p className="text-[11px] text-[#777] mb-3">
         Android Preview · {device}

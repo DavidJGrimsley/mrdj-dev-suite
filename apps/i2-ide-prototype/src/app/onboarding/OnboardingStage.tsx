@@ -25,6 +25,12 @@ import {
   B15_TASKS_TURN,
   B17_TO_UI_SEGUE,
   B18_TO_SURFACES_SEGUE,
+  B18_MOVE_TURN,
+  B18_PANELS_TURN,
+  B18_OPEN_WIDGETS_TURN,
+  B18_LIBRARY_TURN,
+  B18_SEGUE_TURN,
+  B18_LINES,
   B19_HOME_TURN,
   B19_LINES,
   B19_TURN2_LINE,
@@ -40,6 +46,7 @@ import {
 import { useInfieDance } from "./infieDanceAnimation";
 import { StylistPreview } from "./StylistPreview";
 import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
+import { chatScale } from "../widgets/chatScale";
 import {
   B03_NOOB_TIMER_MS,
   B06_VIDEO_START_WATCHDOG_MS,
@@ -51,7 +58,6 @@ import {
   B12_SLIDE_MS,
   B12_LANDED_DWELL_MS,
   B12_PROJECTS_FADE_MS,
-  B18_GALLERY_OPEN_DELAY_MS,
   PREDOCK_BOTTOM_OFFSET,
   segueDwellMs,
 } from "./onboardingTiming";
@@ -165,6 +171,32 @@ function useReducedMotion(): boolean {
     return () => mq.removeEventListener?.("change", handler);
   }, []);
   return reduced;
+}
+
+/** Widths below 1280px shift the early chat left so the right-margin card stays clear. */
+function useNarrowStage(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1279px)");
+    setNarrow(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener?.("change", handler);
+    return () => mq.removeEventListener?.("change", handler);
+  }, []);
+  return narrow;
+}
+
+function useViewportWidth(): number {
+  const [width, setWidth] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth : 1280
+  );
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return width;
 }
 
 // Living Infie Hero Artwork: uses the supplied 2048x2048 transparent form stills
@@ -306,6 +338,8 @@ export function OnboardingStage({
   } = useOnboarding();
 
   const reducedMotion = useReducedMotion();
+  const narrowStage = useNarrowStage();
+  const viewportWidth = useViewportWidth();
 
   // B01 arrival choreography state: "lettering" -> "mark" -> "outro" (fade to black before Infie fades into B02)
   const [b01Stage, setB01Stage] = useState<"lettering" | "mark" | "outro">("lettering");
@@ -514,7 +548,7 @@ export function OnboardingStage({
       if (turnIndex === 0) at(600, () => revealGroup(["music_play_only", "continue_button"]));
       else {
         at(120, () => revealGroup(["music_play_only", "music_full_player"]));
-        at(900, () => revealGroup("continue_button"));
+        at(1050, () => revealGroup("continue_button"));
       }
     } else if (currentBeat === "B06") {
       if (turnIndex === 0) {
@@ -675,23 +709,30 @@ export function OnboardingStage({
         retireGroup("session_completion_form");
         at(400, () => revealGroup("continue_button"));
       } else {
-        // Segue to the rest of the UI: no gate.
+        // Segue to the rest of the UI: no gate (dwell halved per B17 timing rule).
         retireGroup("session_completion_form");
-        at(segueDwellMs(B17_TO_UI_SEGUE), () => advanceBeat("B18"), false);
+        at(segueDwellMs(B17_TO_UI_SEGUE, 0.5), () => advanceBeat("B18"), false);
       }
     } else if (currentBeat === "B18") {
       retireGroup("session_completion_form");
-      if (turnIndex === 0) {
-        revealGroup("widget_move_resize");
+      if (turnIndex === B18_MOVE_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_PANELS_TURN) {
+        retireGroup("library_entry_and_example");
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
         at(450, () => revealGroup("continue_button"));
-      } else if (turnIndex === 1) {
-        // The header Widgets gallery opens automatically; the floating callout's
-        // Continue follows once the gallery is up.
-        revealGroup(["widget_move_resize", "library_entry_and_example"]);
-        at(B18_GALLERY_OPEN_DELAY_MS + 350, () => revealGroup("continue_button"));
+      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_LIBRARY_TURN) {
+        // Gallery is opened by clicking Widgets in Turn 2; reveal Library callout Continue.
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize", "library_entry_and_example"]);
+        at(350, () => revealGroup("continue_button"));
       } else {
         // Segue from widgets to the other surfaces of iSquared: no gate.
-        revealGroup("widget_move_resize");
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
         at(segueDwellMs(B18_TO_SURFACES_SEGUE), () => advanceBeat("B19"), false);
       }
     } else if (currentBeat === "B19") {
@@ -736,7 +777,7 @@ export function OnboardingStage({
     [currentBeat, setUserProfile, retireGroup, advanceBeat]
   );
 
-  const displayName = userProfile?.name || "Alex";
+  const displayName = userProfile?.name || "Null";
 
   // B02 Identity Handlers
   const validateAndSubmitIdentity = (e?: React.FormEvent) => {
@@ -778,14 +819,12 @@ export function OnboardingStage({
   };
 
   const handleGitHubSignIn = () => {
-    const trimmedName = nameDraft.trim();
     const trimmedEmail = emailDraft.trim();
-    const hasValidTyped =
-      Boolean(trimmedName) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+    const hasValidTypedEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
 
     completeB02Identity({
-      name: hasValidTyped ? trimmedName : "Alex",
-      email: hasValidTyped ? trimmedEmail : "alex@example.com",
+      name: "Null",
+      email: hasValidTypedEmail ? trimmedEmail : "you@e.mail",
       authMethod: "github",
     });
   };
@@ -808,7 +847,7 @@ export function OnboardingStage({
         onContinue = undefined;
       } else {
         currentLine =
-          "Let's see what we can do about that. Tutorials are one way to level up. You can review any tutorial at a later date, and ask me clarifying questions anytime. But I must get through this tutorial in its entirety before you can freely use this i². Hit Continue when you're ready.";
+          "This onboarding tutorial may take 15 to twenty minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.";
         onContinue = () => advanceBeat("B04");
       }
       break;
@@ -819,7 +858,7 @@ export function OnboardingStage({
         onContinue = undefined;
       } else {
         currentLine =
-          "I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
+          "I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. I won't hide your files and make things hard to edit by hand, or even interact with, like some other agentic IDEs. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
         onContinue = () => advanceBeat("B05");
       }
       break;
@@ -835,7 +874,7 @@ export function OnboardingStage({
         currentLine =
           musicOutcome === "played"
             ? "Oh yea, that's my jam. Your music player can live here for now. You can also connect a music streaming service later in settings."
-            : "Your music player will be right here when you want it, and you can connect a music streaming service later in settings.";
+            : "Your music player will be right here when you want it and comes preloaded with some smooth Lo-fi but you can connect a music streaming service later.";
         onContinue = () => advanceBeat("B06");
       }
       break;
@@ -873,22 +912,22 @@ export function OnboardingStage({
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "I'm an expert at revision control such as Git, Perforce, Diversion and more. I'm also packed with skills that help me be a great agent team lead. Most importantly, I help you keep track of tasks and projects in a way that makes it easy to jump back in after weeks away or manage multiple large projects at once. Think of me as your double, your partner-in-crime, your right-hand.";
+          "I'm an expert at version control like Git, Perforce, Diversion, and more. But you don't need any of those to use i²! I'm also packed with skills that make me a great agent team lead. Most importantly, I help you manage tasks and projects, even after weeks away or across multiple projects. Think of me as your double, your partner-in-crime, your right hand.";
         onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
-          "You can ask me for help with any aspect of the IDE just by holding hot keys and clicking on it. You can even do this for single words or phrases in agent chats to get an explanation catered to you.";
+          "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.";
         onContinue = () => advanceBeat("B08");
       }
       break;
     case "B08":
       if (turnIndex === 0) {
         currentLine =
-          "Here you will work in an i2 Workspace. It has your project in it and is made to keep things neat, transparent, and keep disk usage low.";
+          "Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "It's also how the UI navigation is structured. Project changes to the name of your current project. A Session is another copy of your project (worktree if Git) that is focused on a feature, bug fix, experimentation, etc. You can start sessions by talking to me but we'll get there. First...";
+          "That's also how navigation works. Project changes to the name of your current project. A Session is a space dedicated to a feature, bug fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me. First...";
         onContinue = () => {
           retireGroup("workspace_tree");
           revealGroup(["project_folder_only", "folder_illustration"]);
@@ -896,22 +935,26 @@ export function OnboardingStage({
         };
       } else if (turnIndex === 2) {
         currentLine =
-          "The key to working with i² is the project folder. It's a magical place. It's an extra Git repository beside your worktrees in i2Workspace, where we keep the bigger picture. The whole team can read and edit these files. I'll keep them updated as we go.";
+          "The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.";
         onContinue = () => setTurnIndex(3);
+      } else if (turnIndex === 3) {
+        currentLine =
+          "It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.";
+        onContinue = () => setTurnIndex(4);
       } else {
         currentLine =
-          "This is a separate repo so we can edit it independently of the many worktrees I will manage for you, including cleaning them up as to not waste your disk space. This repo is also where agent coordination is tracked amongst your own sessions and other team members.";
+          "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!";
         onContinue = () => advanceBeat("B09");
       }
       break;
     case "B09":
       if (turnIndex === 0) {
         currentLine =
-          "info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website.";
+          "info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website. This is used by me to keep the Session Agents in check to make sure your vision is always in mind.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself.";
+          "todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself. When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.";
         onContinue = () => setTurnIndex(2);
       } else if (turnIndex === 2) {
         currentLine =
@@ -922,7 +965,7 @@ export function OnboardingStage({
         };
       } else {
         currentLine =
-          "guidelines.md tells me and the other agents how to work. It's the most technical one you're meant to edit. There are extra files too, but I'll take care of those, silly human.";
+          "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.";
         onContinue = () => {
           retireGroup(["project_folder_only", "folder_illustration", "stylist_preview"]);
           advanceBeat("B10");
@@ -932,7 +975,7 @@ export function OnboardingStage({
     case "B10":
       if (turnIndex === 0) {
         currentLine =
-          "I am run by an open-weight model on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
+          "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
         onContinue = () => setTurnIndex(1);
       } else {
         currentLine =
@@ -950,12 +993,12 @@ export function OnboardingStage({
     case "B11":
       if (turnIndex === 0) {
         currentLine =
-          "Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!";
+          "Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for Session Agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentMessageId = "B11-1";
         currentLine =
-          "A combined list of alerts for your review and other notifications live here as well as settings.";
+          "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.";
         onContinue = () => {
           retireGroup("continue_button");
           setTurnIndex(2);
@@ -963,7 +1006,7 @@ export function OnboardingStage({
       } else {
         currentMessageId = "B11-1";
         currentLine =
-          "A combined list of alerts for your review and other notifications live here as well as settings.";
+          "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.";
         onContinue = undefined;
       }
       break;
@@ -983,7 +1026,7 @@ export function OnboardingStage({
         onContinue = () => setTurnIndex(4);
       } else if (turnIndex === 4) {
         currentLine =
-          "Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our global todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'";
+          "Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our Global Todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'";
         onContinue = () => setTurnIndex(5);
       } else if (turnIndex === 5) {
         currentLine =
@@ -1000,6 +1043,10 @@ export function OnboardingStage({
         currentLine =
           "This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.";
         onContinue = () => setTurnIndex(1);
+      } else if (turnIndex === 1) {
+        currentLine =
+          "I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.";
+        onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
           "I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.";
@@ -1013,11 +1060,11 @@ export function OnboardingStage({
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "When an agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.";
+          "When a Session Agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.";
         onContinue = undefined;
       } else {
         currentLine =
-          "Or click the Session name and talk to the agent directly. Let's do that now.";
+          "Or click the Session name and talk to the Session Agent directly. Let's do that now.";
         onContinue = undefined;
       }
       break;
@@ -1038,7 +1085,7 @@ export function OnboardingStage({
       const lastExplanationIdx = B17_EXPLANATIONS.length - 1;
       if (turnIndex <= lastExplanationIdx) {
         currentLine = B17_EXPLANATIONS[Math.max(turnIndex, 0)];
-        // Turns 1–6 Continue; the final explanation turn is gated by the form's Submit.
+        // Continue through every explanation but the last; Submit gates the final one.
         onContinue =
           turnIndex < lastExplanationIdx
             ? () => setTurnIndex((t) => Math.min(t + 1, lastExplanationIdx))
@@ -1054,15 +1101,19 @@ export function OnboardingStage({
       break;
     }
     case "B18":
-      if (turnIndex === 0) {
-        currentLine =
-          "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player.";
-        onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
-        currentLine =
-          "One of my favorites is the Library: screens, flows, components, and packages that fit your project.";
+      if (turnIndex === B18_MOVE_TURN) {
+        currentLine = B18_LINES[B18_MOVE_TURN];
+        onContinue = undefined;
+      } else if (turnIndex === B18_PANELS_TURN) {
+        currentLine = B18_LINES[B18_PANELS_TURN];
+        onContinue = () => setTurnIndex(B18_OPEN_WIDGETS_TURN);
+      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
+        currentLine = B18_LINES[B18_OPEN_WIDGETS_TURN];
+        onContinue = undefined;
+      } else if (turnIndex === B18_LIBRARY_TURN) {
+        currentLine = B18_LINES[B18_LIBRARY_TURN];
         // The shell closes the tutorial-opened Widgets gallery when the turn changes.
-        onContinue = () => setTurnIndex(2);
+        onContinue = () => setTurnIndex(B18_SEGUE_TURN);
       } else {
         // Segue (no gate): the cue effect advances to B19 after a short dwell.
         currentLine = B18_TO_SURFACES_SEGUE;
@@ -1143,33 +1194,34 @@ export function OnboardingStage({
   const stageScrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!isEarlyCenterStage) return;
-    const t = window.setTimeout(() => {
+    const scrollToLatest = () => {
       const el = stageScrollRef.current;
       if (el && el.scrollHeight > el.clientHeight + 1) {
         el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
       }
-    }, 280);
-    return () => window.clearTimeout(t);
-  }, [isEarlyCenterStage, messageStack, currentBeat, turnIndex, isRevealed, reducedMotion]);
+    };
+    const t = window.setTimeout(scrollToLatest, 280);
+    const tGrowth =
+      currentBeat === "B06" && b06VideoPhase === "playing" && !reducedMotion
+        ? window.setTimeout(scrollToLatest, 680)
+        : undefined;
+    return () => {
+      window.clearTimeout(t);
+      if (tGrowth !== undefined) window.clearTimeout(tGrowth);
+    };
+  }, [isEarlyCenterStage, messageStack, currentBeat, turnIndex, isRevealed, b06VideoPhase, reducedMotion]);
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
-  // The only floating callout left is B18 Turn 1, which points at the header Widgets gallery
-  // (opened over the whole screen, far from the chat). That line is never duplicated in the chat.
-  const isFloatingCallout = currentBeat === "B18" && turnIndex === 1;
+  // B18 Turn 3 (Library) also renders a floating callout beneath the open Widgets gallery while
+  // recording its message in the rolling 3-message docked chat feed (with a single Continue on the callout).
+  const isFloatingCallout = currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
 
   useEffect(() => {
     if (isEarlyCenterStage || currentBeat === "B00" || currentBeat === "COMPLETE" || !currentLine) {
       return;
     }
-    if (isFloatingCallout) {
-      setDockedChat((prev) =>
-        prev.showContinue || prev.onContinue
-          ? { ...prev, showContinue: false, onContinue: undefined }
-          : prev
-      );
-      return;
-    }
-    const nextShowContinue = showContinueNow;
+    const nextShowContinue = isFloatingCallout ? false : showContinueNow;
+    const nextOnContinue = isFloatingCallout ? undefined : triggerDockedContinue;
     setDockedChat((prev) => {
       const msgId = currentMessageId;
       const baseHistory: ReadonlyArray<DockedTutorialChatEntry> =
@@ -1185,7 +1237,7 @@ export function OnboardingStage({
         exists &&
         prev.currentLine === currentLine &&
         prev.showContinue === nextShowContinue &&
-        prev.onContinue === triggerDockedContinue &&
+        prev.onContinue === nextOnContinue &&
         prev.history.length > 0
       ) {
         return prev;
@@ -1211,7 +1263,7 @@ export function OnboardingStage({
         currentLine,
         history: nextHistory,
         showContinue: nextShowContinue,
-        onContinue: triggerDockedContinue,
+        onContinue: nextOnContinue,
       };
     });
   }, [
@@ -1358,27 +1410,53 @@ export function OnboardingStage({
       besideMedia === "array" ? B06_ARRAY_WIDTH_PX : besideMedia === "single" ? B06_SINGLE_PNG_PX : 0;
     const infieGroupShift = besideMedia ? -(besideWidth + B06_BESIDE_GAP_PX) / 2 : 0;
     const besideLeft = `calc(100% + ${B06_BESIDE_GAP_PX}px)`;
+    const showHotkeyCard = currentBeat === "B07" && turnIndex === 2;
+    const showStylistMargin = currentBeat === "B09" && turnIndex === 2 && isRevealed("stylist_preview");
+    const showRightMargin = showHotkeyCard || showStylistMargin;
+    const chatShift = narrowStage && showRightMargin;
+    const shiftPad = chatShift ? "min(280px, 36vw)" : undefined;
+    const padLeft = 24;
+    const padRight = chatShift ? Math.min(280, viewportWidth * 0.36) : 24;
+    const chatCenterX = (padLeft + viewportWidth - padRight) / 2;
+    const chatVisualWidth = Math.min(540 * chatScale(), Math.max(0, viewportWidth - padLeft - padRight));
+    const rightMarginLeft = Math.round(chatCenterX + chatVisualWidth / 2);
+    const b06ScaleDuration = reducedMotion ? 0 : isB06VideoActive ? 0.65 : B06_RECENTER_MS / 1000;
 
     return (
       <>
       <div
-        ref={stageScrollRef}
-        className="fixed inset-0 z-30 flex flex-col items-center px-6 pointer-events-none overflow-y-auto"
+        data-name="OnboardingStageFrame"
+        data-chat-shift={chatShift ? "true" : "false"}
+        className="fixed inset-0 z-30 flex flex-col items-center px-6 pointer-events-none overflow-hidden"
         style={{
           background: "transparent",
-          paddingTop: STAGE_TOP,
-          // Keep stage content clear of the lifted action row + chat input.
-          paddingBottom: `calc(${PREDOCK_BOTTOM_OFFSET} + 128px)`,
+          paddingRight: shiftPad,
         }}
       >
-        <div className="i2-chat-scale flex flex-col items-center gap-2 max-w-4xl w-full pointer-events-auto">
-          {/* Infie Stage Row: Live Infie (or B06 transformation video) + B06 floating device PNGs */}
-          <div
-            className="relative flex items-center justify-center w-full min-h-[132px]"
+        <div
+          data-name="OnboardingChatColumn"
+          className="i2-chat-scale flex flex-col items-center gap-2 max-w-4xl w-full h-full min-h-0 pointer-events-auto"
+          style={{
+            paddingTop: STAGE_TOP,
+            paddingBottom: `calc(${PREDOCK_BOTTOM_OFFSET} + 132px)`,
+          }}
+        >
+          {/* Infie Stage Row: Live Infie (or B06 transformation video) + B06 floating device PNGs.
+              When the B06 transformation video plays, the row grows from 132px to 264px so the
+              chat below slides down smoothly to make room, then returns to 132px when it ends. */}
+          <motion.div
+            data-name="InfieStageRow"
+            initial={false}
+            animate={{ height: isB06VideoActive ? 264 : 132 }}
+            transition={{
+              height: { duration: b06ScaleDuration, ease: [0.22, 1, 0.36, 1] },
+            }}
+            className="relative flex items-center justify-center w-full shrink-0"
             style={{ background: "transparent", border: "none" }}
           >
             <motion.div
               data-name="InfieStageGroup"
+              data-b06-scaled={isB06VideoActive ? "2x" : "1x"}
               initial={false}
               animate={{ x: infieGroupShift }}
               transition={{
@@ -1391,72 +1469,83 @@ export function OnboardingStage({
               style={{ width: 132, height: 132 }}
             >
               <motion.div
-                data-name="InfieArrival"
-                initial={currentBeat === "B02" ? { opacity: 0 } : false}
-                animate={{ opacity: 1 }}
+                data-name="InfieVideoScale"
+                initial={false}
+                animate={{ scale: isB06VideoActive ? 2 : 1 }}
                 transition={{
-                  opacity: {
-                    duration: reducedMotion ? 0.75 : 1.4,
-                    ease: "easeInOut",
-                  },
+                  scale: { duration: b06ScaleDuration, ease: [0.22, 1, 0.36, 1] },
                 }}
                 className="relative flex items-center justify-center"
+                style={{ width: 132, height: 132, transformOrigin: "center center" }}
               >
-                <InfieHeroArtwork
-                  reducedMotion={reducedMotion}
-                  pointingToPlay={currentBeat === "B05" && turnIndex === 0}
-                  pressNonce={pressNonce}
-                  danceNonce={danceNonce}
-                  size="lg"
-                  formId={currentForm}
-                  hiddenForVideo={isB06VideoActive}
-                />
+                <motion.div
+                  data-name="InfieArrival"
+                  initial={currentBeat === "B02" ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  transition={{
+                    opacity: {
+                      duration: reducedMotion ? 0.75 : 1.4,
+                      ease: "easeInOut",
+                    },
+                  }}
+                  className="relative flex items-center justify-center"
+                >
+                  <InfieHeroArtwork
+                    reducedMotion={reducedMotion}
+                    pointingToPlay={currentBeat === "B05" && turnIndex === 0}
+                    pressNonce={pressNonce}
+                    danceNonce={danceNonce}
+                    size="lg"
+                    formId={currentForm}
+                    hiddenForVideo={isB06VideoActive}
+                  />
+                </motion.div>
+                {/* B06 Muted black-background transformation video at Infie's position */}
+                <AnimatePresence>
+                  {activeControlsMedia && isB06VideoActive && (
+                    <motion.div
+                      key="b06-controls-chain-video"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.28, ease: "easeInOut" }}
+                      className="absolute inset-0 pointer-events-none select-none z-20"
+                      style={{ width: 132, height: 132, background: "transparent" }}
+                    >
+                      {/* True-alpha WebM: a plain <video> so the browser composites the alpha itself. */}
+                      <video
+                        ref={(el) => {
+                          b06VideoRef.current = el;
+                        }}
+                        data-name="ControlsTransformationVideo"
+                        data-video-phase={b06VideoPhase}
+                        src={B06_CONTROLS_CHAIN_VIDEO_SRC}
+                        muted
+                        playsInline
+                        autoPlay
+                        preload="auto"
+                        aria-hidden="true"
+                        className="absolute inset-0 size-full object-contain pointer-events-none select-none"
+                        style={{ background: "transparent" }}
+                        onPlaying={() => {
+                          b06VideoStartedRef.current = true;
+                        }}
+                        onEnded={(e) => {
+                          if (e.currentTarget !== b06VideoRef.current) return;
+                          if (b06VideoPhase !== "playing") return;
+                          // The chain is over: all three devices (Turn 4).
+                          setTurnIndex(4);
+                        }}
+                        onError={(e) => {
+                          if (e.currentTarget !== b06VideoRef.current) return;
+                          // Still PNG fallback; the failed-phase effect moves on after a dwell.
+                          setB06VideoPhase("failed");
+                        }}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
-              {/* B06 Muted black-background transformation video at Infie's position */}
-              <AnimatePresence>
-                {activeControlsMedia && isB06VideoActive && (
-                  <motion.div
-                    key="b06-controls-chain-video"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.28, ease: "easeInOut" }}
-                    className="absolute inset-0 pointer-events-none select-none z-20"
-                    style={{ width: 132, height: 132, background: "transparent" }}
-                  >
-                    {/* True-alpha WebM: a plain <video> so the browser composites the alpha itself. */}
-                    <video
-                      ref={(el) => {
-                        b06VideoRef.current = el;
-                      }}
-                      data-name="ControlsTransformationVideo"
-                      data-video-phase={b06VideoPhase}
-                      src={B06_CONTROLS_CHAIN_VIDEO_SRC}
-                      muted
-                      playsInline
-                      autoPlay
-                      preload="auto"
-                      aria-hidden="true"
-                      className="absolute inset-0 size-full object-contain pointer-events-none select-none"
-                      style={{ background: "transparent" }}
-                      onPlaying={() => {
-                        b06VideoStartedRef.current = true;
-                      }}
-                      onEnded={(e) => {
-                        if (e.currentTarget !== b06VideoRef.current) return;
-                        if (b06VideoPhase !== "playing") return;
-                        // The chain is over: all three devices (Turn 4).
-                        setTurnIndex(4);
-                      }}
-                      onError={(e) => {
-                        if (e.currentTarget !== b06VideoRef.current) return;
-                        // Still PNG fallback; the failed-phase effect moves on after a dwell.
-                        setB06VideoPhase("failed");
-                      }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
               {/* Beside Infie: still PNG (reduced motion / failed video) or Turn 4 all-three array */}
               <AnimatePresence>
@@ -1526,58 +1615,55 @@ export function OnboardingStage({
                 )}
               </AnimatePresence>
             </motion.div>
-          </div>
+          </motion.div>
 
-          {/* 3-Message Rolling Stack (plus optional B09 Stylist static preview to the right) */}
-          <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-5 w-full">
-          <div className="flex flex-col items-center gap-1.5 w-full max-w-[540px]">
-            <AnimatePresence initial={currentBeat === "B02"}>
-              {displayedMessages.map((msg, idx) => {
-                const isLatest = idx === displayedMessages.length - 1;
-                const isB02Greeting = msg.id === "B02-0";
-                const greetingDelay = isB02Greeting ? (reducedMotion ? 0.35 : 0.75) : 0;
-                const greetingDuration = isB02Greeting ? (reducedMotion ? 0.3 : 0.5) : 0.22;
-                return (
-                  <motion.div
-                    layout="position"
-                    key={msg.id}
-                    data-slot={isLatest ? "infie-message" : "infie-message-history"}
-                    data-message-id={msg.id}
-                    initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-                      opacity: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
-                      y: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
-                    }}
-                    role={isLatest ? "status" : undefined}
-                    aria-live={isLatest ? "polite" : undefined}
-                    className="px-3.5 py-2 rounded-[12px] w-full"
-                    style={{
-                      background: "transparent",
-                      border: isLatest
-                        ? "1px solid rgba(45, 212, 191, 0.45)"
-                        : "1px solid rgba(45, 212, 191, 0.2)",
-                      backdropFilter: "blur(6px)",
-                      color: isLatest
-                        ? "rgba(255, 255, 255, 0.95)"
-                        : "rgba(255, 255, 255, 0.7)",
-                      fontFamily: "'Rounded Mplus 1c', sans-serif",
-                      fontSize: 13.5,
-                      lineHeight: 1.48,
-                    }}
-                  >
-                    {msg.text}
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-
-          {/* B09 Turn 2 (style.md): a self-running preview of The Stylist to the right of the messages */}
-          {currentBeat === "B09" && turnIndex === 2 && isRevealed("stylist_preview") && (
-            <StylistPreview reducedMotion={reducedMotion} />
-          )}
+          {/* Only the message stack scrolls. Infie and the illustrations stay put. */}
+          <div
+            ref={stageScrollRef}
+            data-name="OnboardingMessageScroller"
+            className="mt-auto shrink min-h-0 overflow-y-auto w-full max-w-[540px]"
+          >
+            <div className="flex flex-col items-center gap-1.5 w-full">
+              <AnimatePresence initial={currentBeat === "B02"}>
+                {displayedMessages.map((msg, idx) => {
+                  const isLatest = idx === displayedMessages.length - 1;
+                  const isB02Greeting = msg.id === "B02-0";
+                  const greetingDelay = isB02Greeting ? (reducedMotion ? 0.35 : 0.75) : 0;
+                  const greetingDuration = isB02Greeting ? (reducedMotion ? 0.3 : 0.5) : 0.22;
+                  return (
+                    <motion.div
+                      key={msg.id}
+                      data-slot={isLatest ? "infie-message" : "infie-message-history"}
+                      data-message-id={msg.id}
+                      initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{
+                        opacity: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
+                        y: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
+                      }}
+                      role={isLatest ? "status" : undefined}
+                      aria-live={isLatest ? "polite" : undefined}
+                      className="px-3.5 py-2 rounded-[12px] w-full break-words shrink-0"
+                      style={{
+                        background: "transparent",
+                        border: isLatest
+                          ? "1px solid rgba(45, 212, 191, 0.45)"
+                          : "1px solid rgba(45, 212, 191, 0.2)",
+                        backdropFilter: "blur(6px)",
+                        color: isLatest
+                          ? "rgba(255, 255, 255, 0.95)"
+                          : "rgba(255, 255, 255, 0.7)",
+                        fontFamily: "'Rounded Mplus 1c', sans-serif",
+                        fontSize: 13.5,
+                        lineHeight: 1.48,
+                      }}
+                    >
+                      {msg.text}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* B02: Name and Email fields in center content flow */}
@@ -1592,7 +1678,7 @@ export function OnboardingStage({
                 ref={nameInputRef}
                 id="onboarding-name"
                 label="Name"
-                placeholder="Alex"
+                placeholder="First name"
                 value={nameDraft}
                 onChange={(v) => {
                   setNameDraft(v);
@@ -1609,7 +1695,7 @@ export function OnboardingStage({
                 id="onboarding-email"
                 label="Email"
                 type="email"
-                placeholder="alex@example.com"
+                placeholder="you@e.mail"
                 value={emailDraft}
                 onChange={(v) => {
                   setEmailDraft(v);
@@ -1886,6 +1972,41 @@ export function OnboardingStage({
           )}
 
         </div>
+        {showRightMargin && (
+          <div
+            data-name="OnboardingRightMargin"
+            className="fixed inset-y-0 right-0 flex items-center justify-center p-4 pointer-events-none z-10"
+            style={{ left: rightMarginLeft }}
+          >
+            <div className="w-full max-w-[350px] flex justify-center pointer-events-auto">
+              {showHotkeyCard && (
+                <div
+                  data-name="OnboardingHotkeyCard"
+                  className="rounded-[12px] p-3.5 flex flex-col gap-2 w-full max-w-[290px]"
+                  style={{
+                    background: "rgba(18, 16, 27, 0.92)",
+                    border: "1px solid rgba(45, 212, 191, 0.45)",
+                  }}
+                >
+                  <p style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: "#2dd4bf" }}>Hotkeys</p>
+                  <p style={{ fontFamily: "'Rounded Mplus 1c', sans-serif", fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.9)" }}>
+                    Alt+click asks a question. Voice or text, then a follow-up.
+                  </p>
+                  <p style={{ fontFamily: "'Rounded Mplus 1c', sans-serif", fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.9)" }}>
+                    Shift+click reports a problem. Confirm or ask, then a todo or an in-branch fix.
+                  </p>
+                  <p style={{ fontFamily: "'Rounded Mplus 1c', sans-serif", fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.9)" }}>
+                    Ctrl+click opens links, go-to-symbol, and import, or a quick summary.
+                  </p>
+                  <p style={{ fontFamily: "'Rounded Mplus 1c', sans-serif", fontSize: 11.5, color: "rgba(255,255,255,0.62)" }}>
+                    Alt = question · Shift = problem.
+                  </p>
+                </div>
+              )}
+              {showStylistMargin && <StylistPreview reducedMotion={reducedMotion} />}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* B10 Clearly Simulated Sign-In Modal (no real OAuth, no network, no password/credentials) */}
@@ -1973,8 +2094,9 @@ export function OnboardingStage({
           Before the input exists (B02–B04) an invisible spacer keeps them in the same spot. */}
       <div
         data-name="PredockBottomZone"
+        data-chat-shift={chatShift ? "true" : "false"}
         className="i2-chat-scale fixed inset-x-0 z-40 pointer-events-none flex flex-col items-center gap-3 px-4"
-        style={{ bottom: PREDOCK_BOTTOM_OFFSET }}
+        style={{ bottom: PREDOCK_BOTTOM_OFFSET, paddingRight: shiftPad }}
       >
         <div
           data-name="DockedChatActionRow"
@@ -2103,7 +2225,7 @@ export function OnboardingStage({
       data-name="FloatingInfieCallout"
       initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: B18_GALLERY_OPEN_DELAY_MS / 1000, ease: "easeOut" }}
+      transition={{ duration: 0.3, delay: 0.15, ease: "easeOut" }}
       className="fixed inset-x-0 z-[60] flex justify-center px-6 pointer-events-none"
       style={{ bottom: "5vh", background: "transparent" }}
     >

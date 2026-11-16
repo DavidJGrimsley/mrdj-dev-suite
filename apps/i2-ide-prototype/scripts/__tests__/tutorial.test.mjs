@@ -390,3 +390,150 @@ test('ExactWebPreviewFrame probes loopback URLs before mounting iframe and suppo
   assert.match(frameSource, /probeReady && status !== "unavailable"/)
   assert.match(frameSource, /data-testid="preview-retry-button"/)
 })
+
+test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy, B08 5-turn reveal, B15 both-tasks gate, B17 half-dwell, B18 5-turn dock/gallery flow, and B20 conditional Generate glow', async () => {
+  const onboardingDir = path.join(appRoot, 'src', 'app', 'onboarding')
+  const primitivesSrc = fs.readFileSync(path.join(onboardingDir, 'FloatingPrimitives.tsx'), 'utf8')
+  const stageSrc = fs.readFileSync(path.join(onboardingDir, 'OnboardingStage.tsx'), 'utf8')
+  const contextSrc = fs.readFileSync(path.join(onboardingDir, 'OnboardingContext.tsx'), 'utf8')
+  const ledgerSrc = fs.readFileSync(path.join(onboardingDir, 'revealLedger.ts'), 'utf8')
+  const timingSrc = fs.readFileSync(path.join(onboardingDir, 'onboardingTiming.ts'), 'utf8')
+  const leekSrc = fs.readFileSync(path.join(onboardingDir, 'LeekBeatsWidget.tsx'), 'utf8')
+  const dockSrc = fs.readFileSync(path.join(appRoot, 'src', 'app', 'widgets', 'WidgetDock.tsx'), 'utf8')
+  const appSrc = fs.readFileSync(path.join(appRoot, 'src', 'app', 'App.tsx'), 'utf8')
+  const cssSrc = fs.readFileSync(path.join(appRoot, 'src', 'styles', 'widgets.css'), 'utf8')
+  const transcriptSrc = fs.readFileSync(path.join(appRoot, 'tutorial-script.md'), 'utf8')
+
+  // 1. FloatingPrimitives exports & no duplicate MessageFeed in FloatingPrimitives or OnboardingStage
+  for (const exportName of [
+    'FloatingInfieMessage',
+    'FloatingContinueButton',
+    'FloatingField',
+    'FloatingButton',
+    'FloatingControlGroup',
+  ]) {
+    assert.match(primitivesSrc, new RegExp(`export (?:function|const) ${exportName}\\b`), `FloatingPrimitives must export ${exportName}`)
+  }
+  assert.equal(/MessageFeed/.test(primitivesSrc), false, 'FloatingPrimitives must not contain destructive MessageFeed replacement')
+  assert.equal(/MessageFeed/.test(stageSrc), false, 'OnboardingStage must not use duplicate MessageFeed')
+
+  // 2. WidgetDock has both invalid duplicate collapseAll helpers removed and supports removable, showDropHint, and data-widget-move-grip
+  const collapseAllMatches = dockSrc.match(/const collapseAll\s*=/g) || []
+  assert.equal(collapseAllMatches.length, 0, 'WidgetDock must have both invalid duplicate collapseAll helpers removed')
+  assert.match(dockSrc, /removable\?:\s*boolean/)
+  assert.match(dockSrc, /showDropHint\?:\s*boolean/)
+  assert.match(dockSrc, /\[data-widget-move-grip\]/)
+
+  // 3. Bundle revealLedger and onboardingTiming in-memory via esbuild to verify runtime exports & timing helpers
+  const esbuild = await import('esbuild')
+  const built = await esbuild.build({
+    stdin: {
+      contents: `export * from './revealLedger.ts'; export * from './onboardingTiming.ts';`,
+      resolveDir: onboardingDir,
+      loader: 'ts',
+    },
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'neutral',
+    define: { 'import.meta.env.BASE_URL': '"/"' },
+  })
+  const dataUrl = `data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`
+  const mod = await import(dataUrl)
+
+  assert.match(contextSrc, /currentBeat === "B08"[\s\S]*turns 2-4/, 'OnboardingContext B08 must handle turns 0..4')
+  assert.equal(mod.B18_MOVE_TURN, 0)
+  assert.equal(mod.B18_PANELS_TURN, 1)
+  assert.equal(mod.B18_OPEN_WIDGETS_TURN, 2)
+  assert.equal(mod.B18_LIBRARY_TURN, 3)
+  assert.equal(mod.B18_SEGUE_TURN, 4)
+  assert.equal(mod.B18_LINES.length, 5, 'B18 must have 5 turns')
+
+  // B17 segue dwell is halved via factor 0.5 while B18 segue keeps factor 1
+  const fullB17Dwell = mod.segueDwellMs(mod.B17_TO_UI_SEGUE)
+  const halfB17Dwell = mod.segueDwellMs(mod.B17_TO_UI_SEGUE, 0.5)
+  assert.equal(halfB17Dwell, Math.round(fullB17Dwell * 0.5))
+  assert.match(stageSrc, /segueDwellMs\(B17_TO_UI_SEGUE,\s*0\.5\)/)
+  assert.match(stageSrc, /segueDwellMs\(B18_TO_SURFACES_SEGUE\)/)
+
+  // Pre-dock bottom offset responsive custom property
+  assert.equal(mod.PREDOCK_BOTTOM_OFFSET, 'var(--i2-predock-bottom, 14vh)')
+  assert.match(cssSrc, /--i2-predock-bottom:\s*14vh/)
+  assert.match(cssSrc, /min-width:\s*1500px[\s\S]*--i2-predock-bottom:\s*10vh/)
+  assert.match(cssSrc, /min-width:\s*1800px[\s\S]*--i2-predock-bottom:\s*7\.5vh/)
+  assert.match(cssSrc, /min-width:\s*2300px[\s\S]*--i2-predock-bottom:\s*5\.5vh/)
+
+  // 4. Synchronized copy checks across runtime and tutorial-script.md
+  const requiredCopy = [
+    "I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. I won't hide your files and make things hard to edit by hand, or even interact with, like some other agentic IDEs. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.",
+    "Your music player will be right here when you want it and comes preloaded with some smooth Lo-fi but you can connect a music streaming service later.",
+    "I'm an expert at version control like Git, Perforce, Diversion, and more. But you don't need any of those to use i²! I'm also packed with skills that make me a great agent team lead. Most importantly, I help you manage tasks and projects, even after weeks away or across multiple projects. Think of me as your double, your partner-in-crime, your right hand.",
+    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.",
+    "Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.",
+    "That's also how navigation works. Project changes to the name of your current project. A Session is a space dedicated to a feature, bug fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me. First...",
+    "The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.",
+    "It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.",
+    "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!",
+    "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.",
+    "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.",
+    "I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.",
+    "This is used by me to keep the Session Agents in check to make sure your vision is always in mind.",
+    "When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.",
+    "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.",
+    "Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our Global Todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'",
+    "When a Session Agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.",
+    "Or click the Session name and talk to the Session Agent directly. Let's do that now.",
+    "Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.",
+    "Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.",
+    "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.",
+    "Tasks come in two groups: Session Agent tasks and Human tasks. You're the human. This one's ready for you to verify. Click on all open tasks to mark them complete.",
+    "It's great to contribute to the Infinite Intelligence that drives this experience, made possible by the vast open source and free education materials available today.",
+    "Submitted. Next I close the session: its branches are merged and cleaned up, both locally and on the remote, barring your approval.",
+    "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player to the bottom panel underneath this chat.",
+    "You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.",
+    "Click Widgets in the header to see everything else you can add to your workspace.",
+    "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
+    "If your project didn't start in i², I'll onboard it for you. Don't worry about what that means as I'll prompt you with a tutorial any time you do something new here. For now, let's head Home. Click i2 in the top left corner.",
+    "The number of open sessions without submitted Completion Reports will be limited based on your level and plan. I hope this gives you everything you could need but please submit feedback directly to me at any time and I'll make sure it goes to the proper channel and give you a ticket to follow-up.",
+  ]
+
+  for (const snippet of requiredCopy) {
+    assert.ok(
+      stageSrc.includes(snippet) || ledgerSrc.includes(snippet),
+      `Runtime onboarding source must include exact copy: "${snippet.slice(0, 60)}..."`
+    )
+    assert.ok(
+      transcriptSrc.includes(snippet),
+      `tutorial-script.md must include exact copy: "${snippet.slice(0, 60)}..."`
+    )
+  }
+
+  assert.equal(stageSrc.includes('other Session Agents'), false, 'B09-3 must not say "other Session Agents"')
+  assert.match(stageSrc, /\(Global Todo Widget\)/)
+  assert.match(stageSrc, /Global Todo list/)
+
+  // 5. B15 both-tasks gate in App.tsx SessionScreen
+  assert.match(appSrc, /if \(becomingDone && \(!isTutorialActive \|\| nextTests\.every\(x => x\.done\)\)\)/)
+
+  // 6. B18 layout-driven gate, keyboard move hook, Widgets button gate, and rolling feed without duplicate Continue
+  assert.equal((appSrc.match(/const musicAsWidget = true/g) || []).length, 2)
+  assert.match(
+    stageSrc,
+    /currentBeat === "B18"[\s\S]*?revealGroup\(\["music_play_only", "music_full_player", "widget_move_resize"\]\)/,
+    'OnboardingStage B18 cue must reveal music_play_only and music_full_player alongside widget_move_resize'
+  )
+  assert.match(
+    contextSrc,
+    /currentBeat === "B18"[\s\S]*?revealGroup\(\["music_play_only", "music_full_player", "widget_move_resize"\]\)/,
+    'OnboardingContext B18 sync must reveal music_play_only and music_full_player alongside widget_move_resize'
+  )
+  assert.match(appSrc, /const musicInBottom = dock\.layout\.bottom\.includes\("music"\)/)
+  assert.match(appSrc, /setTurnIndex\(B18_PANELS_TURN\)/)
+  assert.match(appSrc, /setTurnIndex\(B18_LIBRARY_TURN\)/)
+  assert.match(leekSrc, /onMoveToBottomPanel\?:\s*\(\)\s*=>\s*void/)
+  assert.match(stageSrc, /const isFloatingCallout = currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN/)
+  assert.match(stageSrc, /const nextShowContinue = isFloatingCallout \? false : showContinueNow/)
+
+  // 7. Conditional GenerateProjectButton glow only on B20 Turn 0 during tutorial
+  assert.match(appSrc, /glow=\{isTutorialActive && currentBeat === "B20" && turnIndex === 0\}/)
+})

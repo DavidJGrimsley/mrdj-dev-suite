@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { Play, Pause, SkipBack, SkipForward, GripHorizontal, Move, Music2, Check, Volume2 } from "lucide-react";
@@ -21,7 +21,7 @@ export interface LeekBeatsWidgetProps {
   fullPlayerRevealed: boolean;
   moveResizeRevealed: boolean;
   calloutGlow?: boolean;
-  /** When true, starts larger & centered in B05 and glides to lower-left on fullPlayerRevealed. */
+  /** When true, enlarges the B05 Play button beside Continue, then glides it home after assembly. */
   animateIntro?: boolean;
   /** External docking control (stays in spotlight until advancing past B05). */
   docked?: boolean;
@@ -46,6 +46,8 @@ export interface LeekBeatsWidgetProps {
    * "try moving the music player"). Outside the tutorial the dock moves it like any widget.
    */
   allowPanelFloat?: boolean;
+  /** Accessible keyboard Move handler when the player is a dock widget. */
+  onMoveToBottomPanel?: () => void;
   /** Fires whenever audio starts playing or changes to a new track. */
   onMusicPlay?: () => void;
   /** Fires synchronously in the click handler, same tick as audio.play(). */
@@ -67,6 +69,39 @@ function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+// Spotlight coordinates: place the Play button directly to the left of the pre-dock
+// Continue button on the same row, then glide home to the lower-left after assembly.
+function measureMusicSpotlightPos(): { left: number; bottom: number } {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const s = chatScale();
+  const rowEl =
+    typeof document !== "undefined"
+      ? document.querySelector('[data-name="DockedChatActionRow"]')
+      : null;
+  if (rowEl) {
+    const rowRect = rowEl.getBoundingClientRect();
+    const btnEl = rowEl.querySelector("button");
+    const btnRect = btnEl?.getBoundingClientRect();
+    const rowCenterY = (rowRect.top + rowRect.bottom) / 2;
+    const continueLeft = btnRect
+      ? btnRect.left
+      : (rowRect.left + rowRect.right) / 2 - 54 * s;
+    // Play is 40px wide, centered at x=62 within LeekBeatsWidget, scaled 1.35x around
+    // "62px 50%" (visual radius 27px). Keep a clean 24px gap left of Continue.
+    const playCenterX = continueLeft - 24 - 27;
+    return {
+      left: Math.max(12, Math.round(playCenterX - 62)),
+      bottom: Math.max(12, Math.round(vh - rowCenterY - 20)),
+    };
+  }
+  const fallbackContinueLeft = vw / 2 - 54 * s;
+  return {
+    left: Math.max(12, Math.round(fallbackContinueLeft - 24 - 27 - 62)),
+    bottom: Math.max(80, Math.round(vh * 0.14 + 54 * s)),
+  };
+}
+
 export function LeekBeatsWidget({
   playButtonRevealed,
   fullPlayerRevealed,
@@ -80,6 +115,7 @@ export function LeekBeatsWidget({
   libraryMode = "library",
   onProviderConnect,
   allowPanelFloat = true,
+  onMoveToBottomPanel,
   onMusicPlay,
   onPressStart,
   onPlayAttempt,
@@ -94,6 +130,7 @@ export function LeekBeatsWidget({
   const [position, setPosition] = useState(DEFAULT_POSITION);
   const [internalDocked, setInternalDocked] = useState<boolean>(() => !animateIntro || fullPlayerRevealed);
   const docked = controlledDocked !== undefined ? controlledDocked : internalDocked;
+  const [spotlightPos, setSpotlightPos] = useState<{ left: number; bottom: number } | null>(null);
   const [keyboardMoveActive, setKeyboardMoveActive] = useState(false);
   // Once the user drags (or keyboard-moves) the player it floats at their position everywhere.
   const [userMoved, setUserMoved] = useState(false);
@@ -122,8 +159,8 @@ export function LeekBeatsWidget({
   const framed = placement === "panel";
 
   // Reset docked state when hidden at the start of an onboarding run;
-  // once fullPlayerRevealed becomes true in B05 Turn 1, hold briefly in the
-  // center spotlight so the user sees the full player assemble, then glide to lower-left.
+  // once fullPlayerRevealed becomes true in B05 Turn 1, hold briefly in its spotlight
+  // position so the user sees the full player assemble, then glide to lower-left.
   useEffect(() => {
     if (!playButtonRevealed && !fullPlayerRevealed) {
       setInternalDocked(!animateIntro);
@@ -139,7 +176,7 @@ export function LeekBeatsWidget({
     if (controlledDocked === undefined && fullPlayerRevealed && !internalDocked) {
       const timer = window.setTimeout(() => {
         setInternalDocked(true);
-      }, 1100);
+      }, 800);
       return () => window.clearTimeout(timer);
     }
   }, [playButtonRevealed, fullPlayerRevealed, animateIntro, internalDocked, controlledDocked]);
@@ -263,7 +300,21 @@ export function LeekBeatsWidget({
     };
   }, [moveResizeRevealed, updatePosition]);
 
-  const handleMoveKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleMoveKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (mode === "panel" && !allowPanelFloat && onMoveToBottomPanel) {
+      if (
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowUp" ||
+        (keyboardMoveActive && (e.key === "Enter" || e.key === " "))
+      ) {
+        e.preventDefault();
+        setKeyboardMoveActive(false);
+        onMoveToBottomPanel();
+        return;
+      }
+    }
     if (!keyboardMoveActive) return;
     const step = e.shiftKey ? 32 : 16;
     const deltas: Record<string, [number, number]> = {
@@ -296,18 +347,27 @@ export function LeekBeatsWidget({
     boxShadow: "0 0 14px rgba(45, 212, 191, 0.45)",
   };
 
-  // Spotlight coordinates: positioned with generous space to the LEFT of Infie's message box
-  // Message box has max-w-[540px] (half-width = 270px, left edge = vw / 2 - 270).
-  // Full widget width is ~274px. With spotlightLeft = vw / 2 - 270 - 340, the entire widget
-  // (including Prev, Play, Next, and the track Label) ends at vw / 2 - 270 - 40px, giving
-  // plenty of clear space to the left of the message view with zero overlap.
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const spotlightLeft = Math.max(20, Math.round(vw / 2 - 270 * chatScale() - 340));
-  const spotlightBottom = Math.max(160, Math.round(vh - 380));
   const isDockedNow = docked || userMoved;
-  const targetLeft = isDockedNow ? position.left : spotlightLeft;
-  const targetBottom = isDockedNow ? position.bottom : spotlightBottom;
+
+  useLayoutEffect(() => {
+    if (!anyRevealed) {
+      setSpotlightPos(null);
+      return;
+    }
+    if (isDockedNow || mode !== "floating") return;
+    setSpotlightPos((prev) => prev ?? measureMusicSpotlightPos());
+    const onResize = () => {
+      if (!fullPlayerRevealed) {
+        setSpotlightPos(measureMusicSpotlightPos());
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [anyRevealed, isDockedNow, mode, fullPlayerRevealed]);
+
+  const activeSpotlight = spotlightPos ?? measureMusicSpotlightPos();
+  const targetLeft = isDockedNow ? position.left : activeSpotlight.left;
+  const targetBottom = isDockedNow ? position.bottom : activeSpotlight.bottom;
   const targetScale = isDockedNow ? 1 : fullPlayerRevealed ? 1.1 : 1.35;
 
   const compact = framed;
@@ -321,12 +381,14 @@ export function LeekBeatsWidget({
       <button
         ref={gripRef}
         type="button"
+        data-widget-move-grip
         aria-label={keyboardMoveActive ? "Move player with arrow keys, press Enter when done" : "Move player"}
         aria-pressed={keyboardMoveActive}
         title="Drag, or press and use arrow keys"
         onClick={() => setKeyboardMoveActive((v) => !v)}
         onKeyDown={handleMoveKeyDown}
         onPointerDown={(e) => {
+          if (mode === "panel" && !allowPanelFloat) return;
           if (mode === "panel" && panelRef.current) {
             const r = panelRef.current.getBoundingClientRect();
             const start = { left: Math.round(r.left), bottom: Math.round(window.innerHeight - r.bottom) };
@@ -425,12 +487,14 @@ export function LeekBeatsWidget({
           style={compact ? undefined : { minWidth: 120 }}
         >
           <span
+            data-testid="music-track-primary"
             className={compact ? "truncate" : undefined}
             style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: "#abefa3", letterSpacing: "-0.01em" }}
           >
-            {PLAYLIST_NAME}
+            {compact ? track.artist : PLAYLIST_NAME}
           </span>
           <span
+            data-testid="music-track-title"
             className={compact ? "truncate" : undefined}
             style={{ fontFamily: "'Rounded Mplus 1c', sans-serif", fontSize: 11, color: "rgba(255,255,255,0.6)" }}
           >
@@ -445,7 +509,7 @@ export function LeekBeatsWidget({
   const renderFrame = (gripRef?: React.Ref<HTMLButtonElement>) => (
     <div
       data-name="LeekBeatsFrame"
-      className={`w-full rounded-[6px] overflow-clip transition-shadow ${calloutGlow ? "infie-glow" : ""}`}
+      className={`w-full flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip transition-shadow ${calloutGlow ? "infie-glow" : ""}`}
       style={{
         border: calloutGlow ? "1px solid #2dd4bf" : "1px solid rgba(255, 255, 255, 0.05)",
         boxShadow: calloutGlow ? undefined : "0px 4px 6px -1px rgba(0, 0, 0, 0.1)",
@@ -453,20 +517,22 @@ export function LeekBeatsWidget({
     >
       <div
         data-widget-header
-        className="flex items-center gap-2 px-3 py-[7px] bg-[#1d1b20]"
+        tabIndex={mode === "panel" ? 0 : undefined}
+        onKeyDown={mode === "panel" ? handleMoveKeyDown : undefined}
+        className="flex items-center gap-2 px-3 py-[7px] bg-[#1d1b20] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
         style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}
       >
         <Music2 size={12} className="text-[#555] shrink-0" aria-hidden="true" />
         <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">
           Music
         </span>
-        {moveResizeRevealed && (
+        {moveResizeRevealed && mode !== "panel" && (
           <div data-name="LeekBeatsMoveResizeControls" className="ml-auto flex items-center gap-1.5">
             {renderMoveControls(gripRef)}
           </div>
         )}
       </div>
-      <div className="flex items-center px-3 py-2.5 bg-[#252323]" style={{ gap: gapPx }}>
+      <div className="flex items-center px-3 py-2.5 bg-[#252323] flex-1 min-h-0" style={{ gap: gapPx }}>
         {transport}
       </div>
     </div>
@@ -479,6 +545,7 @@ export function LeekBeatsWidget({
     ({ t }) => !artistFilter || t.artist === artistFilter
   );
   const PROVIDERS = [
+    { name: "Brain.Fm", tint: "#38bdf8" },
     { name: "Apple Music", tint: "#fa586a" },
     { name: "Spotify", tint: "#1ed760" },
     { name: "YouTube Music", tint: "#ff4e45" },
@@ -543,8 +610,8 @@ export function LeekBeatsWidget({
             <p className="px-1 font-['Rounded_Mplus_1c',sans-serif] text-[9.5px] uppercase tracking-wider text-[#666]">Music providers</p>
             <div className="flex items-center gap-2 px-3 py-2 rounded-[8px] bg-[#abefa3]/8" style={{ border: "1px solid rgba(171,239,163,0.3)" }}>
               <span className="size-2 rounded-full bg-[#abefa3] shrink-0" />
-              <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white truncate">{PLAYLIST_NAME} (built in)</span>
-              <span className="inline-flex items-center gap-1 font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#abefa3]"><Check size={11} /> Playing from</span>
+              <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white truncate">i² Curated</span>
+              <span className="inline-flex items-center gap-1 font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#abefa3]"><Check size={11} /> Playing</span>
             </div>
             {PROVIDERS.map((p) => (
               <div key={p.name} className="flex items-center gap-2 px-3 py-2 rounded-[8px] bg-white/[0.03]" style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
@@ -604,7 +671,7 @@ export function LeekBeatsWidget({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="w-full select-none"
+            className="w-full flex flex-col flex-1 min-h-0 select-none"
           >
             {renderFrame()}
           </motion.div>,
@@ -612,7 +679,7 @@ export function LeekBeatsWidget({
         )}
 
       {/* Floating: unboxed spotlight → lower-left dock on Home; bordered when moved in Project/Session. */}
-      {mode === "floating" && (
+      {mode === "floating" && (isDockedNow || spotlightPos !== null) && (
         <motion.div
           ref={floatingRef}
           data-name="LeekBeatsWidget"

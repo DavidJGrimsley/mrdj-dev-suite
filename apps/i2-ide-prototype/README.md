@@ -21,6 +21,10 @@ rebuilding; the builder will not remove that older output automatically.
 
 Open `/?beat=B06` to jump to the controls beat, `/?onboarding=1` to run the Napoleon Hill handwriting opening sequence followed by the full tutorial from B00, `/closing` (or `?closing=1`) to preview the opening sequence directly over `#000000`, and `/closing?debug=1` for renderer diagnostics.
 
+## Home
+
+With two active projects the right column stays `604px` tall, including during the tutorial, and the home canvas keeps `48px` under Generate / Import. A third project lets that column grow so the Active Projects header rises and the buttons move down. The header opens an expanded or fullscreen list you can scroll. Import offers one i² workspace, Field Notes: Infie asks the app's purpose, says the remaining questions are simulated, points at Generate a new project for the full info.md flow, then flags and starts nine sessions. Field Notes lands on the normal project home; its sessions, files, and simulator stop at the prototype limit. Pricing is Free (limited active sessions), Premium (unlimited sessions and optional Session Completion Forms), Team, and Enterprise. `/?beat=COMPLETE&plan=1` opens the plan overlay without walking the tutorial.
+
 ## Napoleon Hill Handwriting Opening Sequence
 
 - **Preview URL**: `http://127.0.0.1:8444/closing` (or `http://127.0.0.1:8444/?onboarding=1` for the live tutorial entry).

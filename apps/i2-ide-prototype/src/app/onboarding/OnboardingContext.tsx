@@ -6,10 +6,15 @@ import {
   PERSISTENT_RELEASE_GROUPS,
   B15_TASKS_TURN,
   B17_EXPLANATIONS,
+  B18_MOVE_TURN,
+  B18_PANELS_TURN,
+  B18_OPEN_WIDGETS_TURN,
+  B18_LIBRARY_TURN,
   B19_HOME_TURN,
   B14_AGENT_REPLY_DEFAULT,
   getInfieFormForBeat,
   getInfieFormAssetForBeat,
+  getInitialRevealedGroupsForBeat,
 } from "./revealLedger";
 import {
   OnboardingContext,
@@ -67,7 +72,7 @@ export function OnboardingProvider({
     onContinue: undefined,
   });
   const [revealedGroups, setRevealedGroups] = useState<Set<RevealGroupId>>(() =>
-    initialBeat === "COMPLETE" ? new Set(PERSISTENT_RELEASE_GROUPS) : new Set()
+    getInitialRevealedGroupsForBeat(initialBeat)
   );
   const [tutorialRecords, setTutorialRecords] = useState<TutorialOwnedRecord[]>([
     { id: "pet", kind: "project", isTutorialDemo: true },
@@ -175,7 +180,7 @@ export function OnboardingProvider({
       // B07 Working with Infie (3 turns)
       retireGroup(["controls_mic_prompt", "controls_illustrations"]);
     } else if (currentBeat === "B08") {
-      // B08 Workspace tree (turns 0-1) & green project/ folder alone (turns 2-3)
+      // B08 Workspace tree (turns 0-1) & green project/ folder alone (turns 2-4)
       if (turnIndex >= 2) {
         retireGroup("workspace_tree");
         revealGroup(["project_folder_only", "folder_illustration", "header_breadcrumbs"]);
@@ -250,14 +255,26 @@ export function OnboardingProvider({
       }
     } else if (currentBeat === "B18") {
       retireGroup("session_completion_form");
-      if (turnIndex === 0) {
-        revealGroup(["widget_move_resize", "continue_button"]);
-      } else {
+      if (turnIndex === B18_MOVE_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_PANELS_TURN) {
+        retireGroup("library_entry_and_example");
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize", "continue_button"]);
+      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_LIBRARY_TURN) {
         revealGroup([
+          "music_play_only",
+          "music_full_player",
           "widget_move_resize",
           "library_entry_and_example",
           "continue_button",
         ]);
+      } else {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
       }
     } else if (currentBeat === "B19") {
       retireGroup("library_entry_and_example");

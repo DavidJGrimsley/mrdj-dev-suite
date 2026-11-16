@@ -20,11 +20,53 @@
 }
 
 .infie-glow {
+  /* Above sibling panels, below modals (z-50 and up). position is required for z-index;
+     absolute, fixed and sticky targets keep their own position. pointer-events stays on
+     so a glowing submit or send control is not covered or blocked. */
+  z-index: 40;
+  pointer-events: auto;
   border-color: #2dd4bf !important;
   box-shadow:
     0 0 0 1px rgba(45, 212, 191, 0.9),
     0 0 28px 5px rgba(45, 212, 191, 0.6);
   animation: infie-glow-ring 1.5s ease-in-out infinite;
+}
+
+.infie-glow:where(:not(.absolute):not(.fixed):not(.sticky)) {
+  position: relative;
+}
+
+button.infie-glow,
+.infie-glow[type="submit"],
+.infie-glow[aria-label="Send"],
+.infie-glow[aria-label="Send message to Infie"],
+[data-name="SessionCompletionSubmit"],
+[data-testid="composer-send"][data-glow="true"] {
+  position: relative;
+  z-index: 40;
+  pointer-events: auto !important;
+  border-color: #2dd4bf !important;
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, 0.9),
+    0 0 28px 5px rgba(45, 212, 191, 0.6);
+  animation: infie-glow-ring 1.5s ease-in-out infinite;
+}
+
+:has(> [data-name="SessionCompletionForm"]) {
+  overflow: visible !important;
+}
+
+/* Let the ring paint past the widget chrome. The page shell and the chat transcript stay clipped. */
+[data-dock-panel]:has(.infie-glow),
+[data-dock-panel-body]:has(.infie-glow),
+[data-dock-zone]:has(.infie-glow),
+[data-dock-column]:has(.infie-glow),
+[data-dock-item]:has(.infie-glow),
+[data-dock-center]:has(.infie-glow),
+[data-dock-chat]:has(.infie-glow),
+.overflow-clip:has(.infie-glow),
+.infie-glow.overflow-clip {
+  overflow: visible !important;
 }
 
 .infie-glow.animate-pulse {
@@ -42,18 +84,31 @@
 
 /* ── Chat text scaling ───────────────────────────────────────────────────────
    Infie's messages, replies and the composer read small on big monitors, so the chat
-   surfaces scale up with the viewport. `zoom` keeps every hand-tuned px value in proportion. */
+   surfaces scale up with the viewport. `zoom` keeps every hand-tuned px value in proportion.
+   Pre-dock bottom offset steps down as zoom increases so center-stage content is never crowded. */
+:root {
+  --i2-predock-bottom: 14vh;
+}
 @media (min-width: 1500px) {
+  :root {
+    --i2-predock-bottom: 10vh;
+  }
   .i2-chat-scale {
     zoom: 1.12;
   }
 }
 @media (min-width: 1800px) {
+  :root {
+    --i2-predock-bottom: 7.5vh;
+  }
   .i2-chat-scale {
     zoom: 1.22;
   }
 }
 @media (min-width: 2300px) {
+  :root {
+    --i2-predock-bottom: 5.5vh;
+  }
   .i2-chat-scale {
     zoom: 1.34;
   }
@@ -100,4 +155,81 @@
 }
 .i2-dock-splitter:focus-visible {
   outline: none;
+}
+
+.i2-widget-edge-handle {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 8px;
+  z-index: 45;
+  cursor: row-resize;
+  touch-action: none;
+}
+.i2-widget-edge-handle::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: rgba(45, 212, 191, 0);
+  transition: background 0.15s ease;
+}
+.i2-widget-edge-handle:hover::after,
+.i2-widget-edge-handle:focus-visible::after,
+.i2-widget-edge-handle[data-dragging="true"]::after {
+  background: rgba(45, 212, 191, 0.78);
+}
+.i2-widget-edge-handle:focus-visible {
+  outline: none;
+}
+[data-widget-resizing="true"] iframe {
+  pointer-events: none !important;
+}
+
+/* U+2026 in Rounded Mplus 1c sits on the midline. This bundled Latin glyph (three of the
+   font's own periods, on the baseline) replaces only that character, in literal text,
+   placeholders and `text-overflow: ellipsis` alike.
+   The weight descriptors must equal the ones the real faces declare (fonts.css: 400 from Google
+   Fonts, 500 for the Figma ":Medium" alias). Faces of one family are only layered by
+   unicode-range when their descriptors are identical; a "100 900" range is a different face,
+   so it lost to the real one at 400 and replaced the whole font (Arial) at every other weight.
+   Tailwind writes `Rounded_Mplus_1c` as `Rounded Mplus 1c`, so there is no underscore family. */
+@font-face {
+  font-family: "Rounded Mplus 1c";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./ellipsis-latin.ttf") format("truetype");
+  unicode-range: U+2026;
+}
+@font-face {
+  font-family: "Rounded Mplus 1c";
+  font-style: normal;
+  font-weight: 500;
+  src: url("./ellipsis-latin.ttf") format("truetype");
+  unicode-range: U+2026;
+}
+@font-face {
+  font-family: "Rounded Mplus 1c";
+  font-style: normal;
+  font-weight: 600;
+  src: url("./ellipsis-latin.ttf") format("truetype");
+  unicode-range: U+2026;
+}
+@font-face {
+  font-family: "Rounded Mplus 1c";
+  font-style: normal;
+  font-weight: 700;
+  src: url("./ellipsis-latin.ttf") format("truetype");
+  unicode-range: U+2026;
+}
+@font-face {
+  font-family: "Rounded Mplus 1c:Medium";
+  font-style: normal;
+  font-weight: 500;
+  src: url("./ellipsis-latin.ttf") format("truetype");
+  unicode-range: U+2026;
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback, createContext, useContext } from "react";
 import { assetUrl } from "./assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -31,6 +31,10 @@ import {
   B14_AGENT_REPLY_DEFAULT,
   B15_TASKS_TURN,
   B17_EXPLANATIONS,
+  B18_MOVE_TURN,
+  B18_PANELS_TURN,
+  B18_OPEN_WIDGETS_TURN,
+  B18_LIBRARY_TURN,
   B19_HOME_TURN,
 } from "./onboarding/revealLedger";
 import {
@@ -42,7 +46,6 @@ import { useInfieDance } from "./onboarding/infieDanceAnimation";
 import { HomeConversationSlide } from "./onboarding/HomeConversationSlide";
 import { SessionCompletionForm } from "./onboarding/SessionCompletionForm";
 import {
-  B18_GALLERY_OPEN_DELAY_MS,
   B12_PROJECTS_FADE_MS,
   ambientProgressForBeat,
 } from "./onboarding/onboardingTiming";
@@ -86,10 +89,22 @@ import {
 import { SimulatorPreview } from "./components/SimulatorPreview";
 import {
   WidgetDockProvider, WidgetZone, DockPanel, DockSplitter, useWidgetDock, useDockApi, buildDock, useDockSizes, useDockDragging,
-  useRegisterLibraryWidgets, useLibraryDrag, useRemovedWidgets, type DockWidget, type WidgetMode,
+  useRegisterLibraryWidgets, useLibraryDrag, useRemovedWidgets, useWidgetFillsContainer, type DockWidget, type WidgetMode,
 } from "./widgets/WidgetDock";
 import { FileViewerProvider, WorkspaceExplorer, useFileViewer, useOpenProjectFile, workspaceSpecFor } from "./widgets/workspaceFiles";
-import { PrototypeLimitProvider, usePrototypeLimit, useRegisterPrototypeLimitNav, TUTORIAL_CHAT_LIMIT, notHotdogLimit } from "./widgets/prototypeLimit";
+import { PrototypeLimitProvider, usePrototypeLimit, useRegisterPrototypeLimitNav, TUTORIAL_CHAT_LIMIT, importedProjectLimit, notHotdogLimit } from "./widgets/prototypeLimit";
+import { HOME_PRICING_REPLY, PERSONAL_TIERS, BUSINESS_TIERS, type PricingTier } from "./home/pricing";
+import { ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS, HOME_BOTTOM_PADDING_CLASS, WIDGET_HEADER_CLICK_MS, activeProjectsFit, headerClickAction } from "./home/homeLayout";
+import { ImportProjectFlow, ImportedExplorer } from "./home/ImportProjectFlow";
+import {
+  IMPORT_FOLDER_LABEL,
+  IMPORT_PROJECT_ID,
+  IMPORT_PROJECT_NAME,
+  IMPORTED_PROJECT,
+  IMPORTED_SESSIONS,
+  isImportedProject,
+  isImportedSession,
+} from "./home/importedProject";
 import { SessionsPanel, type SessionCardData } from "./widgets/SessionsPanel";
 import { chatScale } from "./widgets/chatScale";
 import { SimulatorTargetProvider, SimulatorTargetPicker, useSimulatorTargets, PET_WEB_PREVIEW, type SimOption } from "./widgets/simulator";
@@ -1170,13 +1185,7 @@ function WidgetContent({ id, ctx, expanded }: { id: WidgetId; ctx: AppContext; e
     </div>
   );
   if (id === "emuWeb" || id === "emuAndroid" || id === "emuIos") {
-    const type: EmuType = id === "emuWeb" ? "web" : id === "emuAndroid" ? "android" : "ios";
-    // In the standard widget modal the body fills the modal, so we use a full-height scaled device
-    return (
-      <div className="flex-1 flex items-center justify-center bg-[#111] h-full overflow-hidden">
-        <ScaledDevice type={type} orientation="portrait" connected={ctx.emuConnected} targetH={420} />
-      </div>
-    );
+    return <LiveSimulatorBody kind={id} targetH={420} />;
   }
   if (id === "sessions") return <SessionsContent ctx={ctx} />;
   if (id === "actions") return <ActionsContent ctx={ctx} />;
@@ -1920,12 +1929,34 @@ const EMU_DIMS: Record<EmuType, Record<EmuOrientation, { w: number; h: number; r
   ios:     { portrait: { w: 420, h: 860, r: 50 }, landscape: { w: 860, h: 420, r: 40 } },
 };
 
+type SimulatorSurfaceValue = {
+  route: "home" | "project" | "session" | string;
+  projectId: string | null;
+  sessionId: string | null;
+  projects: { id: string; name: string }[];
+};
+
+const SimulatorSurfaceContext = createContext<SimulatorSurfaceValue>({
+  route: "home",
+  projectId: null,
+  sessionId: null,
+  projects: [],
+});
+
+/** Pet and the tutorial demo share the Pet Show and Tell simulated build. */
+function simulatorProjectSlug(projectId: string | null | undefined): string {
+  if (!projectId || projectId === "pet" || projectId === "tutorial-demo") return "pet-show-and-tell";
+  return projectId;
+}
+
 // Renders the device shell at its exact natural dimensions — no centering wrapper, no scroll.
-function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, controlsTarget }: {
+function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, controlsTarget, projectId }: {
   type: EmuType;
   dim: { w: number; h: number; r: number };
   connected: boolean; device?: string; isLandscape?: boolean; isDesktop?: boolean; controlsTarget?: HTMLElement | null;
+  projectId?: string | null;
 }) {
+  const previewProject = simulatorProjectSlug(projectId);
   const [liveAndroid, setLiveAndroid] = useState(false);
   const [localControls, setLocalControls] = useState<HTMLDivElement | null>(null);
   const showBrowser = type === "web" || isDesktop;
@@ -1974,14 +2005,14 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, con
       {/* App viewport */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f0f", overflow: "hidden" }}>
         {type === "android" ? (
-          <SimulatorPreview projectId="pet-show-and-tell" platform="android" device={device} controlsTarget={controlsTarget || localControls} onLiveChange={setLiveAndroid} />
+          <SimulatorPreview projectId={previewProject} platform="android" device={device} controlsTarget={controlsTarget || localControls} onLiveChange={setLiveAndroid} />
         ) : connected ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center", padding: "0 24px" }}>
             <div style={{ width: 60, height: 60, borderRadius: 16, background: "rgba(171,239,163,0.1)", border: "1px solid rgba(171,239,163,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <svg width="26" height="22" viewBox="0 0 37.3892 31.5816" fill="none"><path d={svgPaths.p6491080} fill="#ABEFA3" opacity="0.9" /></svg>
             </div>
             <div>
-              <p style={{ fontFamily: "'Rounded Mplus 1c',sans-serif", fontSize: 13, color: "#d9d9d9", marginBottom: 4 }}>expo-photo-share</p>
+              <p style={{ fontFamily: "'Rounded Mplus 1c',sans-serif", fontSize: 13, color: "#d9d9d9", marginBottom: 4 }}>{previewProject}</p>
               <p style={{ fontFamily: "'Rounded Mplus 1c',sans-serif", fontSize: 11, color: "#555" }}>
                 {device ? `${device} · ` : ""}Running · port 8081
               </p>
@@ -2017,9 +2048,9 @@ function DeviceFrame({ type, dim, connected, device, isLandscape, isDesktop, con
 }
 
 // Scales a DeviceFrame to fit a target height using CSS transform — no scrollbars.
-function ScaledDevice({ type, orientation = "portrait", connected, device, isDesktop, targetH }: {
+function ScaledDevice({ type, orientation = "portrait", connected, device, isDesktop, targetH, projectId }: {
   type: EmuType; orientation?: EmuOrientation; connected: boolean;
-  device?: string; isDesktop?: boolean; targetH: number;
+  device?: string; isDesktop?: boolean; targetH: number; projectId?: string | null;
 }) {
   const dim = isDesktop
     ? { w: 960, h: 560, r: 8 }
@@ -2032,7 +2063,7 @@ function ScaledDevice({ type, orientation = "portrait", connected, device, isDes
     // Outer reserves the scaled footprint; inner sits at natural size and scales down.
     <div style={{ width: scaledW, height: scaledH, flexShrink: 0, position: "relative", overflow: "hidden" }}>
       <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
-        <DeviceFrame type={type} dim={dim} connected={connected} device={device}
+        <DeviceFrame type={type} dim={dim} connected={connected} device={device} projectId={projectId}
           isLandscape={orientation === "landscape"} isDesktop={isDesktop} />
       </div>
     </div>
@@ -2214,7 +2245,7 @@ function EmulatorModal({
                 />
               </div>
             </div>
-          ) : type === "web" && sim.web.kind === "none" ? (
+          ) : (type === "web" || type === "android") && sim.web.kind === "none" ? (
             <SimulatorUnavailable projectId={simProjectId} />
           ) : (
             /* Opened: render at natural size (scale=1). Fullscreen: render at computed scale. */
@@ -2225,7 +2256,7 @@ function EmulatorModal({
                 flexShrink: 0, position: "relative", overflow: "hidden",
               }}>
                 <div style={{ position: "absolute", top: 0, left: 0, transformOrigin: "top left", transform: `scale(${scale})` }}>
-                  <DeviceFrame type={type} dim={dim} connected
+                  <DeviceFrame type={type} dim={dim} connected projectId={simProjectId}
                     device={device} isLandscape={orientation === "landscape"} isDesktop={isDesktop} controlsTarget={simulatorControls} />
                 </div>
               </div>
@@ -2864,11 +2895,12 @@ const CANVAS_DEVICES: { id: WidgetId; label: string; type: EmuType; port: number
   { id: "emuIos",     label: "iOS",          type: "ios",     port: 8082 },
 ];
 
-function EmulatorCanvas({ connected, openEmuModal, webSlot }: {
+function EmulatorCanvas({ connected, openEmuModal, webSlot, projectId }: {
   connected: boolean;
   openEmuModal: (id: WidgetId) => void;
   /** Real web preview for the Web device (replaces the mock device frame). */
   webSlot?: React.ReactNode;
+  projectId?: string | null;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasH, setCanvasH] = useState(0);
@@ -2906,7 +2938,7 @@ function EmulatorCanvas({ connected, openEmuModal, webSlot }: {
               {webSlot}
             </div>
           ) : (
-            <ScaledDevice type={type} orientation="portrait" connected={connected} targetH={targetH} />
+            <ScaledDevice type={type} orientation="portrait" connected={connected} targetH={targetH} projectId={projectId} />
           )}
 
           {/* URL bar below */}
@@ -2992,6 +3024,7 @@ interface HeaderProps {
   notificationsSettingsDocked?: boolean;
   highlightHomeNav?: boolean;
   highlightTutorialsNav?: boolean;
+  highlightWidgetsNav?: boolean;
   disabled?: boolean;
 }
 
@@ -3147,6 +3180,7 @@ function Header({
   notificationsSettingsDocked,
   highlightHomeNav = false,
   highlightTutorialsNav = false,
+  highlightWidgetsNav = false,
   disabled = false,
 }: HeaderProps) {
   const [internalTab, setInternalTab] = useState<"Workspace" | "Emulators">("Workspace");
@@ -3425,6 +3459,7 @@ function Header({
         <div ref={sessionRef} className="content-stretch flex items-center relative shrink-0" data-node-id="200:13" data-name="Container">
           <button
             type="button"
+            data-testid="header-session-menu"
             onClick={() => {
               if (disabled) return;
               setProjectDropdownOpen(false);
@@ -3493,6 +3528,7 @@ function Header({
                           <button
                             key={s.id}
                             type="button"
+                            data-session-id={s.id}
                             onClick={() => {
                               setSessionDropdownOpen(false);
                               onSelectSession?.(s);
@@ -3539,6 +3575,7 @@ function Header({
                       <button
                         key={s.id}
                         type="button"
+                        data-session-id={s.id}
                         onClick={() => {
                           setSessionDropdownOpen(false);
                           onSelectSession?.(s);
@@ -3605,23 +3642,36 @@ function Header({
             </p>
           </button>
         )}
-        <button
-          type="button"
-          onClick={disabled ? undefined : handleWidgets}
-          disabled={disabled}
-          className={`content-stretch flex flex-col items-center justify-center px-[12px] py-[4px] relative rounded-[7px] shrink-0 transition-colors ${
-            disabled ? "opacity-60 cursor-default pointer-events-none" : "hover:bg-white/5 cursor-pointer"
-          }`}
-          data-node-id="200:19"
-          data-name="Button"
-        >
-          <p
-            className="[word-break:break-word] font-['Space_Grotesk:Regular',sans-serif] font-normal leading-[19.5px] relative shrink-0 text-[13px] text-[rgba(255,255,255,0.55)] hover:text-white/80 text-center whitespace-nowrap transition-colors"
-            data-node-id="200:20"
-          >
-            Widgets
-          </p>
-        </button>
+        {(() => {
+          const widgetsEnabled = !disabled || highlightWidgetsNav || activeLevel === "project" || activeLevel === "session";
+          return (
+            <button
+              type="button"
+              onClick={widgetsEnabled ? handleWidgets : undefined}
+              disabled={!widgetsEnabled}
+              className={`content-stretch flex flex-col items-center justify-center px-[12px] py-[4px] relative rounded-[7px] shrink-0 transition-all ${
+                highlightWidgetsNav
+                  ? "infie-glow border border-[#2dd4bf] bg-[rgba(45,212,191,0.14)] cursor-pointer"
+                  : !widgetsEnabled
+                  ? "opacity-60 cursor-default pointer-events-none"
+                  : "hover:bg-white/5 cursor-pointer"
+              }`}
+              data-node-id="200:19"
+              data-name="HeaderWidgetsButton"
+            >
+              <p
+                className={`[word-break:break-word] font-['Space_Grotesk:Regular',sans-serif] font-normal leading-[19.5px] relative shrink-0 text-[13px] text-center whitespace-nowrap transition-colors ${
+                  highlightWidgetsNav
+                    ? "text-[#2dd4bf] font-semibold"
+                    : "text-[rgba(255,255,255,0.55)] hover:text-white/80"
+                }`}
+                data-node-id="200:20"
+              >
+                Widgets
+              </p>
+            </button>
+          );
+        })()}
         <button
           type="button"
           onClick={disabled ? undefined : () => onScopeNotice?.("Games unlock at Level 5!")}
@@ -4069,7 +4119,7 @@ function infieHomeReply(text: string): string {
   const t = text.toLowerCase();
   if (/session|branch|worktree/.test(t)) return "Each session gets its own branch and git worktree, so parallel work never collides. Want me to spin one up?";
   if (/library|component|design|mds/.test(t)) return "The Library is your design-resource registry — drag components in and I'll handle any conflicts against your MDS source of truth.";
-  if (/pricing|plan|price|cost|upgrade/.test(t)) return "You can review plans on the pricing page — Free to get going, Premium and Pro for heavier orchestration, or Team/Enterprise for your org.";
+  if (/pricing|plan|price|cost|upgrade/.test(t)) return HOME_PRICING_REPLY;
   if (/generate|super ?stack|new project|scaffold/.test(t)) return "I can scaffold a fresh project with Super Stack — pick your framework in the Generate button and I'll set up project memory for you.";
   if (/open|project|folder|workspace/.test(t)) return "Hit “Open Project Workspace” below and I'll scan the folder, detect the stack, and load your sessions.";
   if (/hi|hey|hello|yo/.test(t)) return "Hey! Ready when you are — want to open a project or generate a new one?";
@@ -4176,6 +4226,30 @@ interface ProtoSession {
   id: string; projectId: string; name: string; branch: string; model: string;
   agents: number; tasksTotal: number; tasksDone: number; initial: SessionStatus; wired: boolean;
   desc?: string;
+  /** Explicit card counts for sessions that are not in DEMO_SESSION_TASKS. */
+  counts?: { agentDone: number; agentTotal: number; humanDone: number; humanTotal: number };
+}
+
+function importedLiveSessions(): ProtoSession[] {
+  return IMPORTED_SESSIONS.map((seed) => ({
+    id: seed.id,
+    projectId: IMPORT_PROJECT_ID,
+    name: seed.name,
+    branch: seed.branch,
+    model: "Infie",
+    agents: seed.agents,
+    tasksTotal: seed.agentTotal,
+    tasksDone: seed.agentDone,
+    initial: seed.status,
+    wired: false,
+    desc: seed.name,
+    counts: {
+      agentDone: seed.agentDone,
+      agentTotal: seed.agentTotal,
+      humanDone: seed.humanDone,
+      humanTotal: seed.humanTotal,
+    },
+  }));
 }
 
 const PROTOTYPE_SESSIONS: ProtoSession[] = [
@@ -4250,6 +4324,12 @@ function demoTaskCounts(s: ProtoSession): { agent: { done: number; total: number
     return {
       agent: { done: rows.agent.filter(r => r.done).length, total: rows.agent.length },
       human: { done: rows.human.filter(r => r.done).length, total: rows.human.length },
+    };
+  }
+  if (s.counts) {
+    return {
+      agent: { done: s.counts.agentDone, total: s.counts.agentTotal },
+      human: { done: s.counts.humanDone, total: s.counts.humanTotal },
     };
   }
   const human = SESSION_HUMAN_TESTS[s.id] ?? [];
@@ -4946,12 +5026,14 @@ function FlowMessageBubble({
 function musicDockWidget(
   slotRef?: (el: HTMLDivElement | null) => void,
   libraryRef?: (el: HTMLDivElement | null) => void,
+  removable = true,
+  onHeaderKeyDown?: () => void,
 ): DockWidget {
   return {
-    id: "music", title: "Music", zone: "right", pushBottom: true, small: true, fill: "expanded",
+    id: "music", title: "Music", zone: "right", pushBottom: true, small: true, minHeight: 86, fill: "expanded", removable, onHeaderKeyDown,
     node: (mode: WidgetMode) =>
       mode === "normal" ? (
-        <div ref={slotRef} data-name="MusicWidgetSlot" className="w-full min-h-[86px]" />
+        <div ref={slotRef} data-name="MusicWidgetSlot" className="flex flex-col flex-1 w-full min-h-[86px]" />
       ) : (
         <div key={mode} ref={libraryRef} data-name="MusicLibrarySlot" data-library-mode={mode === "fullscreen" ? "providers" : "library"} className="flex flex-col w-full min-h-[380px]" />
       ),
@@ -4986,7 +5068,9 @@ function useSimPreview(projectId: string | null, lockedSessionId?: string): {
     ? []
     : isExperimemo
       ? (tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : [])
-      : PROTOTYPE_SESSIONS.filter(s => s.projectId === dataProjectId);
+      : dataProjectId === IMPORT_PROJECT_ID
+        ? IMPORTED_SESSIONS.map(s => ({ id: s.id, name: s.name }))
+        : PROTOTYPE_SESSIONS.filter(s => s.projectId === dataProjectId);
   const options: SimOption[] = dataProjectId
     ? [
         { id: "main", label: "main", kind: "branch" },
@@ -5011,19 +5095,101 @@ function useSimPreview(projectId: string | null, lockedSessionId?: string): {
   return { options, target, setTarget: (t) => { if (projectId) setTarget(projectId, t); }, web, note };
 }
 
+/** Gallery and widget-modal simulators: the same live frame and target pickers as the screens. */
+function LiveSimulatorBody({ kind, targetH = 420 }: { kind: "emuWeb" | "emuAndroid" | "emuIos"; targetH?: number }) {
+  const surface = useContext(SimulatorSurfaceContext);
+  const simCtx = useSimulatorTargets();
+  const tutorial = useTutorial();
+  const fillsContainer = useWidgetFillsContainer();
+  const projects = surface.projects;
+  const needsProjectChoice = !surface.projectId && projects.length > 0;
+  const simProjectId = surface.projectId ?? (needsProjectChoice ? simCtx.homeProjectId ?? projects[0]?.id ?? null : null);
+  const lockedSessionId = surface.route === "session" ? surface.sessionId ?? undefined : undefined;
+  const sim = useSimPreview(simProjectId, lockedSessionId);
+  const type: EmuType = kind === "emuWeb" ? "web" : kind === "emuAndroid" ? "android" : "ios";
+  const liveWeb = sim.web.kind === "exact" || sim.web.kind === "source";
+  return (
+    <div
+      data-testid="library-simulator"
+      data-sim-kind={kind}
+      data-project={simProjectId ?? ""}
+      className={`flex flex-col flex-1 ${fillsContainer ? "h-full" : ""} min-h-0 bg-[#111] overflow-hidden`}
+    >
+      <div className="px-2 py-1.5 shrink-0 bg-[#1d1b20]">
+        <SimulatorTargetPicker
+          projects={needsProjectChoice ? projects : undefined}
+          projectId={simProjectId}
+          onProjectChange={needsProjectChoice ? simCtx.setHomeProjectId : undefined}
+          options={sim.options}
+          value={sim.target}
+          onChange={sim.setTarget}
+          locked={Boolean(lockedSessionId)}
+          sessionIcon={<SessionGlyph size={13} color="rgba(255,255,255,0.75)" />}
+          projectIcon={<ProjectGlyph size={13} color="rgba(255,255,255,0.75)" />}
+        />
+      </div>
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden p-2">
+        {kind === "emuWeb" ? (
+          liveWeb ? (
+            <div className={`flex flex-col w-full ${fillsContainer ? "h-full" : ""} min-h-0 gap-2`}>
+              <PreviewViewportControls
+                device={tutorial.previewDevice}
+                orientation={tutorial.previewOrientation}
+                onDeviceChange={tutorial.setPreviewDevice}
+                onOrientationChange={tutorial.setPreviewOrientation}
+              />
+              {sim.note && <p data-testid="simulator-note" className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#8a8a92]">{sim.note}</p>}
+              <ExactWebPreviewFrame
+                key={sim.web.kind === "source" ? sim.web.source.url : "exact"}
+                version={sim.web.kind === "exact" ? sim.web.version : "v1"}
+                source={sim.web.kind === "source" ? sim.web.source : undefined}
+                device={tutorial.previewDevice}
+                orientation={tutorial.previewOrientation}
+                mode={fillsContainer ? "fill" : "inline"}
+                maxHeight={targetH}
+                className={fillsContainer ? "flex-1 min-h-0" : ""}
+              />
+            </div>
+          ) : (
+            <div className="h-full w-full"><SimulatorUnavailable projectId={simProjectId} /></div>
+          )
+        ) : sim.web.kind === "none" ? (
+          <div className="h-full w-full"><SimulatorUnavailable projectId={simProjectId} /></div>
+        ) : (
+          <ScaledDevice
+            type={type}
+            orientation="portrait"
+            connected
+            projectId={simulatorProjectSlug(simProjectId)}
+            targetH={Math.max(160, targetH - 48)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Shown where a project has no build to simulate in the prototype. */
 function SimulatorUnavailable({ projectId }: { projectId: string | null }) {
   const limit = usePrototypeLimit();
+  const projectDisplayName = projectId === "nothotdog" ? "Not Hotdog" : projectId || "this project";
   return (
     <div data-testid="simulator-unavailable" className="flex flex-col items-center justify-center gap-2 p-4 text-center size-full">
       <AlertTriangle size={20} className="text-[#f59e0b]" />
       <p className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white">No build to simulate</p>
       <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#9a9aa2] max-w-[240px]">
-        This project's app isn't included in the prototype. Pet Show and Tell has a live web preview.
+        Android preview not configured for {projectDisplayName}. Pet Show and Tell has a live simulated preview.
       </p>
       <button
         type="button"
-        onClick={() => limit(notHotdogLimit(projectId === "nothotdog" ? "Not Hotdog simulator" : "Simulator"))}
+        data-testid="simulator-limit"
+        onClick={() => limit(
+          projectId === "nothotdog"
+            ? notHotdogLimit("Not Hotdog simulator")
+            : isImportedProject(projectId)
+              ? importedProjectLimit(IMPORT_PROJECT_NAME, `${IMPORT_PROJECT_NAME} simulator`)
+              : notHotdogLimit("Simulator"),
+        )}
         className="px-3 py-1 rounded-md bg-[#27272a] text-white text-[11px] hover:bg-[#3f3f46]"
       >
         More info
@@ -5042,11 +5208,12 @@ function WebPreviewWidget({ projectId, lockedSessionId, onEnlarge, glow = false 
 }) {
   const tutorial = useTutorial();
   const sim = useSimPreview(projectId, lockedSessionId);
+  const fillsContainer = useWidgetFillsContainer();
   return (
     <div
       data-testid="inline-web-preview"
       data-web-preview-glow={glow ? "true" : "false"}
-      className={`flex flex-col rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
+      className={`flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip w-full transition-all ${
         glow
           ? "infie-glow border border-[#2dd4bf]"
           : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
@@ -5065,7 +5232,7 @@ function WebPreviewWidget({ projectId, lockedSessionId, onEnlarge, glow = false 
           <Maximize2 size={11} />
         </button>
       </div>
-      <div className="bg-[#252323] p-2 flex flex-col gap-2">
+      <div className="bg-[#252323] p-2 flex flex-col flex-1 min-h-0 gap-2">
         <SimulatorTargetPicker
           projectId={projectId}
           options={sim.options}
@@ -5089,12 +5256,13 @@ function WebPreviewWidget({ projectId, lockedSessionId, onEnlarge, glow = false 
               source={sim.web.kind === "source" ? sim.web.source : undefined}
               device={tutorial.previewDevice}
               orientation={tutorial.previewOrientation}
-              mode="inline"
+              mode={fillsContainer ? "fill" : "inline"}
               maxHeight={sim.web.kind === "exact" ? 440 : 300}
+              className={fillsContainer ? "flex-1 min-h-0" : ""}
             />
           </>
         ) : (
-          <div className="h-[200px]"><SimulatorUnavailable projectId={projectId} /></div>
+          <div className={fillsContainer ? "flex-1 min-h-[160px]" : "h-[200px]"}><SimulatorUnavailable projectId={projectId} /></div>
         )}
       </div>
     </div>
@@ -5144,6 +5312,7 @@ function EmulatorScreen({ projectId, lockedSessionId, projects, onEnlarge }: {
       </div>
       <EmulatorCanvas
         connected={real}
+        projectId={simProjectId}
         openEmuModal={onEnlarge}
         webSlot={
           sim.web.kind === "exact" || sim.web.kind === "source" ? (
@@ -5170,9 +5339,9 @@ function ExperimemoHumanTesting({ session }: { session: SessionFlowState | null 
   const rows = session?.humanTests ?? [];
   const done = rows.filter(r => r.done).length;
   return (
-    <div data-name="HumanTestingPanel" className="border border-[rgba(255,255,255,0.05)] flex flex-col overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] shrink-0 w-full">
+    <div data-name="HumanTestingPanel" className="border border-[rgba(255,255,255,0.05)] flex flex-col flex-1 min-h-0 overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
       <OP4SectionHeader label={`Human Testing ${done}/${rows.length}`} color="dark" icon={<OP4DotIcon />} />
-      <div className="bg-[#252323] flex flex-col w-full">
+      <div className="bg-[#252323] flex flex-col flex-1 min-h-0 overflow-y-auto w-full" style={{ scrollbarWidth: "thin" }}>
         {session && rows.length > 0 && (
           <>
             <div className="bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full">
@@ -5446,9 +5615,11 @@ function ProjectHomeScreen({
   onOpenWidget,
   levelPillDocked,
   breadcrumbsDocked,
+  highlightWidgetsNav = false,
   disabled,
   musicSlotRef,
   musicLibraryRef,
+  moveMusicToBottomRef,
   animatePanelsIn = false,
 }: {
   project: ProtoProject;
@@ -5472,22 +5643,31 @@ function ProjectHomeScreen({
   onOpenWidget?: (id: WidgetId, label: string) => void;
   levelPillDocked?: boolean;
   breadcrumbsDocked?: boolean;
+  highlightWidgetsNav?: boolean;
   disabled?: boolean;
   /** Slot the persistent music player renders into (a dock widget outside the tutorial). */
   musicSlotRef?: (el: HTMLDivElement | null) => void;
   /** Slot for the expanded / fullscreen music library. */
   musicLibraryRef?: (el: HTMLDivElement | null) => void;
+  /** Registers an imperative helper to move the music widget into the bottom panel. */
+  moveMusicToBottomRef?: React.MutableRefObject<(() => void) | null>;
   /** Tutorial: the side and bottom panels slide in toward the chat when they first appear. */
   animatePanelsIn?: boolean;
 }) {
-  const sessions = PROTOTYPE_SESSIONS.filter(
+  const sessionSource = allSessions && allSessions.length > 0 ? allSessions : PROTOTYPE_SESSIONS;
+  const sessions = sessionSource.filter(
     s => s.projectId === project.id || (project.id === "tutorial-demo" && s.projectId === "pet")
   );
   const fixReaction = sessions.find(s => s.id === "fix-reaction-bug");
   const addComments = sessions.find(s => s.id === "add-comments") ?? sessions[0];
   const tutorial = useTutorial();
+  const importedHome = isImportedProject(project.id);
   const openSession = (s: ProtoSession | undefined) => {
     if (!s) return;
+    if (isImportedSession(s.id) || importedHome) {
+      limit(importedProjectLimit(project.name, s.name));
+      return;
+    }
     s.wired ? onOpenSession(s) : onScopeNotice("This session is not wired into this prototype yet.");
   };
   const {
@@ -5519,9 +5699,8 @@ function ProjectHomeScreen({
   const awaitingAgentReply = isTutorialActive && currentBeat === "B14" && turnIndex === 1 && !agentQuestionReplied;
   const explorerSpec = workspaceSpecFor(project.id, { sessionBranch: tutorial.session ? EXPERIMEMO_SESSION.branch : null });
   const openProjectFile = useOpenProjectFile(explorerSpec);
-  // Outside the tutorial the music player is a dock widget like any other; during the tutorial
-  // it keeps its own slot (the tutorial moves and highlights it).
-  const musicAsWidget = !isTutorialActive;
+  // Music is a dock widget on Project Home at every beat, including B13.
+  const musicAsWidget = true;
   const sizes = useDockSizes("project", { left: 236, right: 336, bottom: 300 });
   const dockDragging = useDockDragging();
 
@@ -5568,7 +5747,7 @@ function ProjectHomeScreen({
       <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777] truncate">{label}</p>
     </div>
   );
-  const panelShell = "border border-[rgba(255,255,255,0.05)] flex flex-col overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full";
+  const panelShell = "border border-[rgba(255,255,255,0.05)] flex flex-col flex-1 min-h-0 overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full";
 
   // Every panel is a dockable widget: drag its header to another area, double-click to expand,
   // triple-click for fullscreen, remove it with the × (bring it back from Widgets).
@@ -5578,9 +5757,9 @@ function ProjectHomeScreen({
       node: (
         <div className={panelShell}>
           <OP4SectionHeader label="Project Folder" color="green" icon={<OP4DotIcon />} />
-          <div className="bg-[#252323] flex flex-col w-full">
+          <div className="bg-[#252323] flex flex-col flex-1 min-h-0 overflow-y-auto w-full" style={{ scrollbarWidth: "thin" }}>
             {["Info.md", "Todo.md", "Style.md", "Guidelines.md"].map(f => (
-              <button type="button" key={f} data-project-file={f} onClick={() => openProjectFile(f)} title={`Open project/${f}`} className="flex gap-[8px] items-center px-[12px] py-[6px] w-full text-left cursor-pointer hover:bg-white/5 transition-colors">
+              <button type="button" key={f} data-project-file={f} onClick={() => importedHome ? limit(importedProjectLimit(project.name, `project/${f}`)) : openProjectFile(f)} title={`Open project/${f}`} className="flex gap-[8px] items-center px-[12px] py-[6px] w-full text-left cursor-pointer hover:bg-white/5 transition-colors">
                 <OP4FileIcon />
                 <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[11px]">{f}</p>
               </button>
@@ -5592,8 +5771,9 @@ function ProjectHomeScreen({
     {
       id: "agentTasks", title: "Agent Tasks", zone: "left", grow: true,
       node: (
-            <div className="border border-[rgba(255,255,255,0.05)] flex flex-1 flex-col min-h-px overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
+            <div className="border border-[rgba(255,255,255,0.05)] flex flex-1 flex-col min-h-0 overflow-clip rounded-[6px] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] w-full">
               <OP4SectionHeader label="Agent Tasks" color="dark" icon={<OP4DotIcon />} />
+              <div className="bg-[#252323] flex flex-col flex-1 min-h-0 overflow-y-auto w-full" style={{ scrollbarWidth: "thin" }}>
               {project.id === "experimemo" ? (
                 <>
                   {/* INFIE */}
@@ -5659,6 +5839,7 @@ function ProjectHomeScreen({
                   ))}
                 </>
               )}
+              </div>
             </div>
       ),
     },
@@ -5667,7 +5848,9 @@ function ProjectHomeScreen({
       node: (
         <div data-testid="project-explorer" className={panelShell}>
           <OP4SectionHeader label="Explorer" color="dark" icon={<OP4DotIcon />} />
-          <WorkspaceExplorer spec={explorerSpec} />
+          {importedHome
+            ? <ImportedExplorer onOpen={(folder) => limit(importedProjectLimit(project.name, folder))} />
+            : <WorkspaceExplorer spec={explorerSpec} />}
         </div>
       ),
     },
@@ -5678,20 +5861,22 @@ function ProjectHomeScreen({
           node: (
             <div data-name="HumanTestingPanel" className={panelShell}>
               <OP4SectionHeader label={`Human Testing ${demoHumanRows.filter(r => r.done).length}/${demoHumanRows.length}`} color="dark" icon={<OP4DotIcon />} />
-              {demoTaskGroups.map((g, i) => (
-                <div key={g.s.id} className="contents">
-                  {taskGroupHeader(g.rows.label, i === 0)}
-                  <div className="bg-[#252323] flex flex-col w-full shrink-0">
-                    {g.rows.human.map(r => <OP4CheckRow key={r.text} done={r.done} text={r.text} />)}
+              <div className="bg-[#252323] flex flex-col flex-1 min-h-0 overflow-y-auto w-full" style={{ scrollbarWidth: "thin" }}>
+                {demoTaskGroups.map((g, i) => (
+                  <div key={g.s.id} className="contents">
+                    {taskGroupHeader(g.rows.label, i === 0)}
+                    <div className="bg-[#252323] flex flex-col w-full shrink-0">
+                      {g.rows.human.map(r => <OP4CheckRow key={r.text} done={r.done} text={r.text} />)}
+                    </div>
                   </div>
-                </div>
-              ))}
-              <div className="bg-[#252323] flex flex-col w-full"><OP4AddItemRow /></div>
+                ))}
+                <div className="bg-[#252323] flex flex-col w-full"><OP4AddItemRow /></div>
+              </div>
             </div>
           ),
         },
     {
-      id: "webPreview", title: "Web Preview", zone: "right", flowWidth: 360,
+      id: "webPreview", title: "Web Preview", zone: "right", grow: true, fill: true, growWeight: 1.5, minHeight: 160, flowWidth: 360,
       onExpand: () => onOpenWidget?.("emuWeb", "Web Preview"),
       node: <WebPreviewWidget projectId={project.id} onEnlarge={() => onOpenWidget?.("emuWeb", "Web Preview")} />,
     },
@@ -5718,13 +5903,19 @@ function ProjectHomeScreen({
           </div>
         ),
     },
-    musicAsWidget && musicDockWidget(musicSlotRef, musicLibraryRef),
-  ]);
+    musicDockWidget(musicSlotRef, musicLibraryRef, true, () => moveMusicToBottomRef?.current?.()),
+  ].filter((widget) => showWidgetsPanel || (Boolean(widget) && (widget as DockWidget).id === "music")));
+
+  if (moveMusicToBottomRef) {
+    moveMusicToBottomRef.current = () => {
+      dock.move("music", "bottom", 0, { stack: false, column: 0, row: 0 });
+      if (sizes.get("bottom") === 0) sizes.set("bottom", sizes.defaults.bottom);
+    };
+  }
 
   // A panel with nothing in it gets out of the way; while a widget is being dragged, collapsed
   // and empty panels open enough to be drop targets.
-  const zoneEmpty = (side: "left" | "right" | "bottom") =>
-    dock.layout[side].length === 0 && !(side === "right" && !musicAsWidget);
+  const zoneEmpty = (side: "left" | "right" | "bottom") => dock.layout[side].length === 0;
   const panelSize = (side: "left" | "right" | "bottom") => {
     const stored = sizes.get(side);
     const empty = zoneEmpty(side);
@@ -5734,10 +5925,10 @@ function ProjectHomeScreen({
   const reopen = (side: "left" | "right" | "bottom") => () => {
     if (sizes.get(side) === 0) sizes.set(side, sizes.defaults[side]);
   };
-  const showRightPanel = showWidgetsPanel || !musicAsWidget;
+  const showRightPanel = showWidgetsPanel || musicAsWidget;
 
   return (
-    <div className="size-full flex flex-col relative overflow-hidden" style={{ background: "#0a0814" }}>
+    <div data-testid="project-home" data-project-id={project.id} className="size-full flex flex-col relative overflow-hidden" style={{ background: "#0a0814" }}>
       {/* Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute left-[-200px] rounded-[400px] size-[800px] top-[-250px]" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg viewBox='0 0 800 800' xmlns='http://www.w3.org/2000/svg'><rect width='100%25' height='100%25' fill='url(%23g)'/><defs><radialGradient id='g' gradientUnits='userSpaceOnUse' cx='0' cy='0' r='10' gradientTransform='matrix(0 -56.569 -56.569 0 400 400)'><stop stop-color='rgba(45,212,191,0.08)' offset='0'/><stop stop-color='rgba(45,212,191,0)' offset='0.65'/></radialGradient></defs></svg>\")" }} />
@@ -5765,10 +5956,15 @@ function ProjectHomeScreen({
         onSelectSession={onSelectSession ?? onOpenSession}
         levelPillDocked={levelPillDocked}
         breadcrumbsDocked={breadcrumbsDocked}
+        highlightWidgetsNav={highlightWidgetsNav}
         disabled={disabled}
         tab={screenTab}
         onTabChange={setScreenTab}
         onOpenSession={() => {
+          if (importedHome) {
+            limit(importedProjectLimit(project.name, "Sessions"));
+            return;
+          }
           const firstWired = project.id === EXPERIMEMO_PROJECT_ID
             ? (tutorial.sessionStarted ? EXPERIMEMO_SESSION : undefined)
             : sessions.find(s => s.wired);
@@ -5825,11 +6021,15 @@ function ProjectHomeScreen({
         )}
 
         {/* ── CENTER COLUMN ── */}
-        <div className="flex-1 min-w-0 flex flex-col gap-0 overflow-hidden">
+        <div data-dock-center className="flex-1 min-w-0 min-h-0 flex flex-col gap-0 overflow-visible">
           {/* Messages + Infie header + actions + input */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Infie header row */}
-            <div className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-[16px] py-[8px] w-full shrink-0">
+          <div data-dock-chat className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
+            {/* Infie header row. Double-click collapses every panel and restores the exact sizes. */}
+            <div
+              data-testid="project-infie-header"
+              onDoubleClick={() => sizes.toggleAll()}
+              className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-[16px] py-[8px] w-full shrink-0"
+            >
               <OP4InfieAvatar />
               <div className="flex flex-col flex-1 min-w-0">
                 <p className="font-['Rounded_Mplus_1c',sans-serif] font-extrabold text-[#2dd4bf] text-[12px]">Infie</p>
@@ -6089,11 +6289,7 @@ function ProjectHomeScreen({
           <>
             <DockSplitter side="right" value={sizes.get("right")} onChange={(px) => sizes.set("right", px)} defaultSize={sizes.defaults.right} className="hidden lg:block" />
             <DockPanel side="right" size={panelSize("right")} animateIn={animatePanelsIn} className="hidden lg:flex">
-              {showWidgetsPanel
-                ? <WidgetZone dock={dock} zone="right" onReceive={reopen("right")} className="flex flex-col flex-1 min-h-0" />
-                : <div className="flex-1" />}
-              {/* During the tutorial the music player keeps its own spot at the bottom of the column. */}
-              {!musicAsWidget && <div ref={musicSlotRef} data-name="MusicWidgetSlot" className="mt-auto pt-[8px] shrink-0 w-full" />}
+              <WidgetZone dock={dock} zone="right" onReceive={reopen("right")} className="flex flex-col flex-1 min-h-0" />
             </DockPanel>
           </>
         )}
@@ -6349,7 +6545,7 @@ function OSPanel({
     <div
       data-testid={testId}
       data-task-widget-glow={dataGlowAttr !== undefined ? (dataGlowAttr ? "true" : "false") : undefined}
-      className={`rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
+      className={`flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip w-full transition-all ${
         glow
           ? "infie-glow border border-[#2dd4bf] animate-pulse motion-reduce:animate-none"
           : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
@@ -6359,7 +6555,7 @@ function OSPanel({
         <OS1DarkDotIcon />
         <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase ${titleColor}`}>{title}</span>
       </div>
-      <div className="bg-[#252323]">
+      <div className="bg-[#252323] flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
         {children}
       </div>
     </div>
@@ -6399,9 +6595,11 @@ function SessionScreen({
   allSessions,
   onSelectSession,
   highlightHomeNav = false,
+  highlightWidgetsNav = false,
   disabled,
   musicSlotRef,
   musicLibraryRef,
+  moveMusicToBottomRef,
 }: {
   session: ProtoSession; project: ProtoProject;
   onHome: () => void; onOpenProject: () => void; onPlayground: () => void;
@@ -6418,11 +6616,14 @@ function SessionScreen({
   allSessions?: ProtoSession[];
   onSelectSession?: (s: ProtoSession) => void;
   highlightHomeNav?: boolean;
+  highlightWidgetsNav?: boolean;
   disabled?: boolean;
   /** Slot the persistent music player renders into (a dock widget outside the tutorial). */
   musicSlotRef?: (el: HTMLDivElement | null) => void;
   /** Slot for the expanded / fullscreen music library. */
   musicLibraryRef?: (el: HTMLDivElement | null) => void;
+  /** Registers an imperative helper to move the music widget into the bottom panel (B18 keyboard Move). */
+  moveMusicToBottomRef?: React.MutableRefObject<(() => void) | null>;
 }) {
   const isExperimemo = project.id === EXPERIMEMO_PROJECT_ID;
   const tutorial = useTutorial();
@@ -6440,6 +6641,7 @@ function SessionScreen({
   const agentTabRefs = useRef<Partial<Record<SessionTabId, HTMLButtonElement | null>>>({});
 
   const {
+    onboardingRunId,
     isTutorialActive,
     currentBeat,
     turnIndex,
@@ -6450,7 +6652,7 @@ function SessionScreen({
     setTurnIndex,
   } = useOnboarding();
   const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
-  // B17: the form stays up through the seven explanation turns; Submit retires it.
+  // B17: the form stays up through the explanation turns; Submit retires it.
   const showCompletionForm =
     !isExperimemo &&
     isTutorialActive &&
@@ -6636,9 +6838,6 @@ function SessionScreen({
   const sessionActions = isExperimemo && xs ? getSessionActions(xs) : [];
   const primaryAction = xs ? getPrimaryAction(xs) : null;
 
-  // The Experimemo session only exists after Start Session; never render a ghost.
-  if (isExperimemo && !xs) return null;
-
   const explorerPanel = (
     <div className="border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-clip w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)] flex flex-col min-h-0">
       <div data-widget-header className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
@@ -6687,7 +6886,7 @@ function SessionScreen({
     openFile({ path: planPath, content: md, note: "This session's plan, as synthesized during planning in this walkthrough." }, explorerSpec);
   };
 
-  const musicAsWidget = !isTutorialActive;
+  const musicAsWidget = true;
   const dock = buildDock(dockApi, `session:${session.id}`, ["left", "right", "bottom"], [
     {
       id: "projectFolder", title: "Project Folder", zone: "left",
@@ -6705,12 +6904,12 @@ function SessionScreen({
     {
       id: "currentDiffs", title: "Current Diffs", zone: "left",
       node: (
-        <div className="border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-clip shrink-0 w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]">
-          <div data-widget-header className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
+        <div className="border border-[rgba(255,255,255,0.05)] flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip w-full shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]">
+          <div data-widget-header className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px] shrink-0">
             <OS1DarkDotIcon />
             <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Current Diffs</span>
           </div>
-          <div className="bg-[#1a1a1a] flex flex-col">
+          <div className="bg-[#1a1a1a] flex flex-col flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
             {/* Branch row */}
             <div className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-center px-3 py-2 w-full">
               <OS1BranchIcon />
@@ -6781,7 +6980,7 @@ function SessionScreen({
       ),
     },
     {
-      id: "agentTasks", title: "Agent Tasks", zone: "left",
+      id: "agentTasks", title: "Agent Tasks", zone: "left", grow: true, minHeight: 120,
       node: (
         <OSPanel
           title="Agent Tasks"
@@ -6822,19 +7021,19 @@ function SessionScreen({
         <div
           data-name="HumanTestingPanel"
           data-human-testing-glow={needsHumanVerificationGlow ? "true" : "false"}
-          className={`rounded-[6px] overflow-clip shrink-0 w-full transition-all ${
+          className={`flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip w-full transition-all ${
             needsHumanVerificationGlow || (!isExperimemo && isTutorialActive && currentBeat === "B15" && turnIndex === B15_TASKS_TURN)
               ? "infie-glow border border-[#2dd4bf] animate-pulse motion-reduce:animate-none"
               : "border border-[rgba(255,255,255,0.05)] shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1)]"
           }`}
         >
-          <div data-widget-header className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px]">
+          <div data-widget-header className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex items-center gap-2 px-3 py-[7px] shrink-0">
             <OS1DarkDotIcon />
             <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">
               {`Human Testing ${humanRows.filter(r => r.done).length}/${humanRows.length}`}
             </span>
           </div>
-          <div className="bg-[#252323]">
+          <div className="bg-[#252323] flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
             {humanRows.map(t => (
               <button
                 key={t.id}
@@ -6846,8 +7045,9 @@ function SessionScreen({
                     return;
                   }
                   const becomingDone = !t.done;
-                  setTests(ts => ts.map(x => x.id === t.id ? { ...x, done: !x.done } : x));
-                  if (becomingDone) {
+                  const nextTests = tests.map(x => x.id === t.id ? { ...x, done: !x.done } : x);
+                  setTests(nextTests);
+                  if (becomingDone && (!isTutorialActive || nextTests.every(x => x.done))) {
                     onHumanTaskVerified?.();
                   }
                 }}
@@ -6862,7 +7062,7 @@ function SessionScreen({
       ),
     },
     {
-      id: "webPreview", title: "Web Preview", zone: "right", flowWidth: 360,
+      id: "webPreview", title: "Web Preview", zone: "right", grow: true, fill: true, growWeight: 1.5, minHeight: 160, flowWidth: 360,
       onExpand: () => onOpenWidget?.("emuWeb", "Web Preview"),
       node: (
         <WebPreviewWidget
@@ -6874,16 +7074,49 @@ function SessionScreen({
       ),
     },
     !isExperimemo && { id: "explorer", title: "Explorer", zone: "right", grow: true, fill: true, minHeight: 140, flowWidth: 260, node: explorerPanel },
-    musicAsWidget && musicDockWidget(musicSlotRef, musicLibraryRef),
-  ]);
+    musicDockWidget(musicSlotRef, musicLibraryRef, true, () => moveMusicToBottomRef?.current?.()),
+  ].filter((widget) => showTaskGroups || (musicAsWidget && Boolean(widget) && (widget as DockWidget).id === "music")));
 
   // A panel with nothing in it gets out of the way; while a widget is being dragged, collapsed
-  // and empty panels open enough to be drop targets.
-  const zoneEmpty = (side: "left" | "right" | "bottom") =>
-    dock.layout[side].length === 0 && !(side === "right" && !musicAsWidget);
+  // and empty panels open enough to be drop targets. During B18 Turn 0 the bottom panel stays open
+  // as the explicit drop target for the music player.
+  const isB18MoveTurn =
+    !isExperimemo && isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN;
+  const b18EntryNormalizedRef = useRef<number | null>(null);
+  const musicInBottom = dock.layout.bottom.includes("music");
+  if (moveMusicToBottomRef) {
+    moveMusicToBottomRef.current = () => {
+      dock.move("music", "bottom", 0, { stack: false, column: 0, row: 0 });
+      if (sizes.get("bottom") === 0) sizes.set("bottom", sizes.defaults.bottom);
+    };
+  }
+  useEffect(() => {
+    if (!isB18MoveTurn) return;
+    if (b18EntryNormalizedRef.current !== onboardingRunId) {
+      b18EntryNormalizedRef.current = onboardingRunId;
+      const placed = (["left", "right", "bottom"] as const).some((zone) => dock.layout[zone]?.includes("music"));
+      if (!placed) {
+        dock.restore("music");
+        return;
+      }
+      if (musicInBottom) {
+        dock.move("music", "right", dock.layout.right.length);
+        return;
+      }
+    }
+    if (musicInBottom) {
+      setTurnIndex(B18_PANELS_TURN);
+    }
+  }, [isB18MoveTurn, musicInBottom, onboardingRunId, dock, setTurnIndex]);
+
+  // The Experimemo session only exists after Start Session; never render a ghost.
+  if (isExperimemo && !xs) return null;
+
+  const zoneEmpty = (side: "left" | "right" | "bottom") => dock.layout[side].length === 0;
   const panelSize = (side: "left" | "right" | "bottom") => {
     const stored = sizes.get(side);
     const empty = zoneEmpty(side);
+    if (side === "bottom" && isB18MoveTurn && (stored === 0 || empty)) return 130;
     if (dockDragging && (stored === 0 || empty)) return side === "bottom" ? 130 : 180;
     return empty ? 0 : stored;
   };
@@ -6919,6 +7152,7 @@ function SessionScreen({
         allSessions={allSessions}
         onSelectSession={onSelectSession}
         highlightHomeNav={highlightHomeNav}
+        highlightWidgetsNav={highlightWidgetsNav}
         disabled={disabled}
         tab={screenTab}
         onTabChange={setScreenTab}
@@ -6992,18 +7226,20 @@ function SessionScreen({
 
         {/* ── CENTER (splits into Chat + PR Review when reviewOpen is active), with the widget
              panel underneath ── */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div data-dock-center className="flex-1 min-w-0 min-h-0 flex flex-col overflow-visible">
         <div
           data-testid="session-center-workspace"
           data-review-open={isExperimemo && xs?.reviewOpen ? "true" : "false"}
           className={`flex-1 min-w-0 min-h-0 flex ${isExperimemo && xs?.reviewOpen ? "flex-col md:flex-row gap-[10px]" : "flex-col"}`}
         >
-        <div className={`${isExperimemo && xs?.reviewOpen ? "flex-1 md:w-1/2 min-h-[240px]" : "flex-1"} min-w-0 min-h-0 flex flex-col rounded-tl-[6px] rounded-tr-[6px] overflow-hidden border border-[rgba(255,255,255,0.05)]`}>
+        <div data-dock-chat style={{ minHeight: 0 }} className={`${isExperimemo && xs?.reviewOpen ? "flex-1 md:w-1/2 min-h-[240px]" : "flex-1"} min-w-0 flex flex-col rounded-tl-[6px] rounded-tr-[6px] overflow-hidden border border-[rgba(255,255,255,0.05)]`}>
           {/* Tab bar */}
           {isExperimemo ? (
             <div
               role="tablist"
               aria-label="Session agents"
+              data-testid="session-agent-tabs"
+              onDoubleClick={() => sizes.toggleAll()}
               className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[40px] items-stretch overflow-x-auto no-scrollbar px-1 shrink-0"
             >
               {agentTabOrder.map((tabId, idx) => {
@@ -7056,7 +7292,11 @@ function SessionScreen({
               <div className="flex-1 min-w-0" />
             </div>
           ) : (
-            <div className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[37px] items-stretch overflow-hidden px-1 shrink-0">
+            <div
+              data-testid="session-tab-strip"
+              onDoubleClick={() => sizes.toggleAll()}
+              className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[37px] items-stretch overflow-hidden px-1 shrink-0"
+            >
               {/* Infie Chat Tab */}
               <div className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-4 shrink-0">
                 <OS1InfieAvatar maskId="os1-av-tab" />
@@ -7426,7 +7666,7 @@ function SessionScreen({
           <>
             <DockSplitter side="bottom" value={sizes.get("bottom")} onChange={(px) => sizes.set("bottom", px)} defaultSize={sizes.defaults.bottom} min={130} />
             <DockPanel side="bottom" size={panelSize("bottom")}>
-              <WidgetZone dock={dock} zone="bottom" layout="flow" onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
+              <WidgetZone dock={dock} zone="bottom" layout="flow" showDropHint={isB18MoveTurn} onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
             </DockPanel>
           </>
         )}
@@ -7436,12 +7676,8 @@ function SessionScreen({
         {sidePanelsVisible && (
           <>
             <DockSplitter side="right" value={sizes.get("right")} onChange={(px) => sizes.set("right", px)} defaultSize={sizes.defaults.right} thickness={10} className="hidden lg:block" />
-            <DockPanel side="right" size={showTaskGroups ? panelSize("right") : sizes.get("right")} className="hidden lg:flex">
-              {showTaskGroups
-                ? <WidgetZone dock={dock} zone="right" onReceive={reopen("right")} className="flex flex-col flex-1 min-h-0" />
-                : <div className="flex-1" />}
-              {/* During the tutorial the music player keeps its own spot at the bottom of the column. */}
-              {!musicAsWidget && <div ref={musicSlotRef} data-name="MusicWidgetSlot" className="mt-auto pt-[8px] shrink-0 w-full" />}
+            <DockPanel side="right" size={panelSize("right")} className="hidden lg:flex">
+              <WidgetZone dock={dock} zone="right" onReceive={reopen("right")} className="flex flex-col flex-1 min-h-0" />
             </DockPanel>
           </>
         )}
@@ -7592,6 +7828,7 @@ function I2HomeScreen({
   tutorialsWidgetsGamesDocked,
   notificationsSettingsDocked,
   highlightTutorialsNav = false,
+  highlightWidgetsNav = false,
   disabled,
   danceNonce = 0,
 }: {
@@ -7636,6 +7873,7 @@ function I2HomeScreen({
   tutorialsWidgetsGamesDocked?: boolean;
   notificationsSettingsDocked?: boolean;
   highlightTutorialsNav?: boolean;
+  highlightWidgetsNav?: boolean;
   disabled?: boolean;
   danceNonce?: number;
 }) {
@@ -7649,8 +7887,17 @@ function I2HomeScreen({
   const [emuConnected, setEmuConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: "greet", role: "assistant", content: INFIE_HOME_GREETING }]);
   const [input, setInput] = useState("");
+  const [projectsMode, setProjectsMode] = useState<null | "expanded" | "fullscreen">(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const headerClickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const headerCountRef = useRef(0);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, dockedChat.history]);
+  useEffect(() => {
+    if (!projectsMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setProjectsMode(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [projectsMode]);
 
   const limit = usePrototypeLimit();
   const send = () => {
@@ -7674,6 +7921,19 @@ function I2HomeScreen({
   // Canonical B12 rule: show only the two existing seeded projects ("Pet Show and Tell" and "Not Hotdog");
   // no extra enclosing tutorial demo project card.
   const displayedProjects = projects ?? PROTOTYPE_PROJECTS;
+  const projectsFit = activeProjectsFit(displayedProjects.length, isTutorialActive);
+  const handleProjectsHeaderClick = (e: React.MouseEvent) => {
+    if (isTutorialActive) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    headerCountRef.current += 1;
+    if (headerClickRef.current) clearTimeout(headerClickRef.current);
+    headerClickRef.current = setTimeout(() => {
+      const action = headerClickAction(headerCountRef.current);
+      headerCountRef.current = 0;
+      if (action === "expand") setProjectsMode("expanded");
+      else if (action === "fullscreen") setProjectsMode("fullscreen");
+    }, WIDGET_HEADER_CLICK_MS);
+  };
 
   return (
     <div
@@ -7712,6 +7972,7 @@ function I2HomeScreen({
         tutorialsWidgetsGamesDocked={tutorialsWidgetsGamesDocked}
         notificationsSettingsDocked={notificationsSettingsDocked}
         highlightTutorialsNav={highlightTutorialsNav}
+        highlightWidgetsNav={highlightWidgetsNav}
         disabled={disabled}
       />
 
@@ -7726,7 +7987,7 @@ function I2HomeScreen({
 
       {/* Main Content — Figma MainContent layout */}
       {tab === "Workspace" && (showConversationEntry || showProjectsAndActions) && <div className="flex-1 overflow-y-auto relative z-10">
-        <div className="i2-chat-scale content-stretch flex flex-col lg:flex-row gap-[24px] lg:gap-[32px] items-center justify-center max-w-[1261px] min-h-full mx-auto pb-[48px] pt-[24px] lg:pt-[40px] px-4 sm:px-[32px]">
+        <div data-testid="home-canvas" className={`i2-chat-scale content-stretch flex flex-col lg:flex-row gap-[24px] lg:gap-[32px] items-center justify-center max-w-[1261px] min-h-full mx-auto ${HOME_BOTTOM_PADDING_CLASS} pt-[24px] lg:pt-[40px] px-4 sm:px-[32px]`}>
 
           {/* LEFT — Infie Convo (flex-1) */}
           {showConversationEntry && (
@@ -7914,10 +8175,13 @@ function I2HomeScreen({
           {showProjectsAndActions ? (
             <motion.div
               data-name="HomeProjectsAndActions"
+              data-testid="home-projects-column"
+              data-projects-fit={projectsFit}
+              data-project-count={displayedProjects.length}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.35 }}
-              className="content-stretch flex flex-[1_0_0] flex-col gap-[40px] lg:gap-[72px] lg:h-[604px] items-center justify-center min-w-px w-full relative"
+              className={`content-stretch flex flex-[1_0_0] flex-col gap-[40px] lg:gap-[72px] ${projectsFit === "fixed" ? ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS : ""} items-center justify-center min-w-px w-full relative`}
             >
             {/* Recent Projects */}
             {showResumeProjects && (
@@ -7929,7 +8193,26 @@ function I2HomeScreen({
                 className="content-stretch flex flex-col items-start relative shrink-0 w-full max-w-[558px]"
               >
               <div className="content-stretch flex flex-col items-start relative shrink-0 w-full">
-                <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.3)", letterSpacing: "1.1px", textTransform: "uppercase", whiteSpace: "nowrap" }}>Active Projects</p>
+                <div
+                  data-testid="active-projects-header"
+                  data-header-root
+                  onClick={handleProjectsHeaderClick}
+                  title={isTutorialActive ? undefined : "Double-click to expand · Triple-click for fullscreen"}
+                  className="group flex items-center justify-between w-full cursor-pointer select-none"
+                >
+                  <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.3)", letterSpacing: "1.1px", textTransform: "uppercase", whiteSpace: "nowrap" }}>Active Projects</p>
+                  {!isTutorialActive && (
+                    <button
+                      type="button"
+                      data-testid="active-projects-expand"
+                      title="Expand"
+                      onClick={(e) => { e.stopPropagation(); setProjectsMode("expanded"); }}
+                      className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-[#abefa3] transition-all p-0.5"
+                    >
+                      <Maximize2 size={10} />
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="content-stretch flex flex-col items-start pt-[16px] relative shrink-0 w-full">
                 <div className="gap-x-[20px] gap-y-[20px] sm:gap-y-[28px] grid grid-cols-1 sm:grid-cols-2 relative shrink-0 w-full">
@@ -7959,7 +8242,7 @@ function I2HomeScreen({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className={`content-stretch flex flex-wrap sm:flex-nowrap gap-[12px] min-h-[58px] items-center justify-center relative shrink-0 w-full max-w-[420px] ${
+              className={`content-stretch flex flex-wrap sm:flex-nowrap gap-[12px] min-h-[58px] items-center justify-center relative shrink-0 w-full max-w-[558px] ${
                 isTutorialActive ? "pointer-events-none" : ""
               }`}
             >
@@ -7968,6 +8251,7 @@ function I2HomeScreen({
                 onChange={onProjectTypeChange}
                 onGenerate={onSuperStack}
                 onSupportNewFramework={onSupportNewFramework}
+                glow={isTutorialActive && currentBeat === "B20" && turnIndex === 0}
               />
               <button onClick={onOpenProject}
                 className="bg-[rgba(255,255,255,0.04)] border-[0.667px] border-[rgba(255,255,255,0.08)] content-stretch flex gap-[8px] h-full items-center justify-center px-[20px] py-[14px] relative rounded-[12px] shrink-0 whitespace-nowrap hover:bg-white/[0.07] transition-colors"
@@ -7987,6 +8271,73 @@ function I2HomeScreen({
 
         </div>
       </div>}
+      {projectsMode && (
+        <ActiveProjectsModal
+          mode={projectsMode}
+          projects={displayedProjects}
+          onClose={() => setProjectsMode(null)}
+          onSelect={(project) => {
+            if (isTutorialActive && !showTutorialDemoProject) return;
+            onSelectProject(project);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ActiveProjectsModal({
+  mode,
+  projects,
+  onClose,
+  onSelect,
+}: {
+  mode: "expanded" | "fullscreen";
+  projects: ProtoProject[];
+  onClose: () => void;
+  onSelect: (project: ProtoProject) => void;
+}) {
+  const [fullscreen, setFullscreen] = useState(mode === "fullscreen");
+  useEffect(() => { setFullscreen(mode === "fullscreen"); }, [mode]);
+  const shown = fullscreen ? "fullscreen" : "expanded";
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        data-testid="active-projects-modal"
+        data-mode={shown}
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-[#1a1a1a] border border-white/8 rounded-[10px] shadow-2xl flex flex-col overflow-hidden ${fullscreen ? "fixed inset-3" : "w-[420px]"}`}
+      >
+        <div className="flex items-center justify-between px-4 py-3 bg-[#1d1b20] border-b border-white/5 shrink-0">
+          <span className="font-['Rounded_Mplus_1c',sans-serif] text-[13px] text-white">Active Projects</span>
+          <div className="flex items-center gap-2">
+            {fullscreen
+              ? <button type="button" onClick={() => setFullscreen(false)} className="text-[#555] hover:text-[#abefa3]" title="Exit fullscreen"><Minimize2 size={14} /></button>
+              : <button type="button" data-testid="active-projects-fullscreen" onClick={() => setFullscreen(true)} className="text-[#555] hover:text-[#abefa3]" title="Fullscreen"><Maximize2 size={14} /></button>}
+            <button type="button" onClick={onClose} aria-label="Close active projects" className="text-[#555] hover:text-[#c5c5c5]"><X size={14} /></button>
+          </div>
+        </div>
+        <div
+          data-testid="active-projects-scroll"
+          className={`overflow-y-auto ${fullscreen ? "flex-1 min-h-0" : "max-h-[160px]"}`}
+        >
+          {projects.map((project) => (
+            <button
+              key={project.id}
+              type="button"
+              data-project-id={project.id}
+              onClick={() => { onClose(); onSelect(project); }}
+              className="w-full min-h-[56px] text-left px-4 py-3 border-b border-white/5 hover:bg-white/[0.04]"
+            >
+              <p className="font-['Space_Grotesk',sans-serif] text-[13px] text-white">{project.name}</p>
+              <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-white/50 mt-0.5">{project.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -8045,11 +8396,12 @@ function ProjectCard({
 
 // ─── Generate button with embedded framework dropdown ──────────────────────
 
-function GenerateProjectButton({ value, onChange, onGenerate, onSupportNewFramework }: {
+function GenerateProjectButton({ value, onChange, onGenerate, onSupportNewFramework, glow = false }: {
   value: ProjectType;
   onChange: (v: ProjectType) => void;
   onGenerate: () => void;
   onSupportNewFramework?: () => void;
+  glow?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -8064,11 +8416,11 @@ function GenerateProjectButton({ value, onChange, onGenerate, onSupportNewFramew
       <div className="flex items-stretch w-full overflow-hidden" style={{ borderRadius: 12, background: "linear-gradient(160deg, #8cffff 5%, #1a9999 87%)" }}>
         {/* Main action */}
         <button onClick={onGenerate}
-          className="flex-1 flex items-center justify-center gap-2 transition-opacity hover:opacity-90 infie-glow"
+          className={`flex-1 flex items-center justify-center gap-2 transition-opacity hover:opacity-90 ${glow ? "infie-glow" : ""}`}
           style={{ padding: "14px 18px", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: "#061413" }}>
           <Zap size={16} />
           {value === "generic" ? (
-            <>Generate New Project</>
+            <span className="whitespace-nowrap">Generate New Project</span>
           ) : (
             <>Generate new <span className="underline decoration-1.5 underline-offset-4 decoration-[#061413]/70 font-bold">{PROJECT_TYPE_LABELS[value]}</span> Project</>
           )}
@@ -8373,11 +8725,11 @@ const WORKSPACE_SCENARIOS: Scenario[] = [
   { id: "ws-onboard",  icon: <LayoutGrid size={20} />,  label: "monorepo.code-workspace",     sublabel: "Workspace · 3 repos, no workspace project/",    tag: "Onboard",  tagColor: "bg-orange-400 text-[#1d1b20]" },
 ];
 
-function OpenPickerModal({ onClose, onSelect }: {
+function OpenPickerModal({ onClose, onSelect, alreadyImported }: {
   onClose: () => void;
-  onSelect: (id: ScenarioId) => void;
+  onSelect: () => void;
+  alreadyImported: boolean;
 }) {
-  const scenarios = [...FOLDER_SCENARIOS, ...WORKSPACE_SCENARIOS];
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", h);
@@ -8386,6 +8738,7 @@ function OpenPickerModal({ onClose, onSelect }: {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      data-testid="import-picker"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}>
       <motion.div
@@ -8398,31 +8751,37 @@ function OpenPickerModal({ onClose, onSelect }: {
           <div className="flex items-center gap-2">
             <FolderOpen size={16} className="text-[#abefa3]" />
             <span className="font-['Rounded_Mplus_1c',sans-serif] text-[14px] text-white">
-              Open Project Workspace
+              Import into i²
             </span>
           </div>
           <button onClick={onClose} className="text-[#555] hover:text-[#aaa] transition-colors"><X size={15} /></button>
         </div>
         <div className="px-4 py-3">
-          <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#555] mb-3 uppercase tracking-wider">Select a scenario to simulate</p>
-          <div className="flex flex-col gap-2">
-            {scenarios.map(s => (
-              <button key={s.id} onClick={() => onSelect(s.id)}
-                className="flex items-center gap-3 p-3.5 rounded-[8px] bg-[#252323] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#2a2828] transition-all text-left group">
-                <div className="w-10 h-10 rounded-[6px] bg-[#1d1b20] border border-white/8 flex items-center justify-center shrink-0 text-[#abefa3]/60 group-hover:text-[#abefa3] transition-colors">
-                  {s.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-mono text-[13px] text-white">{s.label}</p>
-                  <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#555] mt-0.5">{s.sublabel}</p>
-                </div>
-                <span className={`text-[10px] font-['Rounded_Mplus_1c',sans-serif] px-2 py-0.5 rounded-full shrink-0 ${s.tagColor}`}>{s.tag}</span>
-              </button>
-            ))}
-          </div>
+          <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#555] mb-3 uppercase tracking-wider">i² workspace</p>
+          {alreadyImported ? (
+            <p data-testid="import-empty" className="font-['Rounded_Mplus_1c',sans-serif] text-[13px] text-white/70 px-1 py-3">
+              {IMPORT_PROJECT_NAME} is already in Active Projects.
+            </p>
+          ) : (
+            <button
+              type="button"
+              data-testid="import-choice"
+              data-import-folder={IMPORT_FOLDER_LABEL}
+              onClick={onSelect}
+              className="flex items-center gap-3 p-3.5 rounded-[8px] bg-[#252323] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#2a2828] transition-all text-left w-full"
+            >
+              <div className="w-10 h-10 rounded-[6px] bg-[#1d1b20] border border-white/8 flex items-center justify-center shrink-0 text-[#abefa3]">
+                <Folder size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-[13px] text-white">{IMPORT_FOLDER_LABEL}</p>
+                <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#555] mt-0.5">i² workspace · {IMPORT_PROJECT_NAME}</p>
+              </div>
+            </button>
+          )}
         </div>
         <div className="px-4 pb-4">
-          <p className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#444] text-center">In the real IDE, this opens a native file picker. Scenarios simulate different project states.</p>
+          <p className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#444] text-center">Infie asks what the app is for, then starts the sessions she finds.</p>
         </div>
       </motion.div>
     </motion.div>
@@ -8812,33 +9171,13 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
 
 // ─── Choose-plan overlay (post-tutorial above Home) ─────────────────────────
 
-interface PricingTier {
-  name: string; price: string; cadence?: string; blurb: string;
-  bullets: string[]; cta: string; featured?: boolean;
-}
-
-const PERSONAL_TIERS: PricingTier[] = [
-  { name: "Free", price: "$0", cadence: "/mo", blurb: "Explore the agentic IDE", cta: "Start free",
-    bullets: ["1 active session", "Infie orchestration (basic)", "Community Library access", "Local emulators"] },
-  { name: "Premium", price: "$100", cadence: "/mo", blurb: "For serious solo builders", featured: true, cta: "Choose Premium",
-    bullets: ["Up to 8 parallel sessions", "Full Infie orchestration", "Private Library + conflict resolution", "Priority model routing", "PR lifecycle automation"] },
-  { name: "Pro", price: "$200", cadence: "/mo", blurb: "Maximum throughput", cta: "Choose Pro",
-    bullets: ["Unlimited sessions", "Advanced multi-agent workflows", "Custom project memory", "Cloud emulators + logs", "Priority support"] },
-];
-
-const BUSINESS_TIERS: PricingTier[] = [
-  { name: "Team", price: "$500", cadence: "/mo", blurb: "Shared orchestration for squads", featured: true, cta: "Choose Team",
-    bullets: ["Everything in Pro", "Up to 10 seats", "Shared Library + design system", "Org-wide project memory", "Role-based access"] },
-  { name: "Enterprise", price: "Contact us", blurb: "Scale across your org", cta: "Contact sales",
-    bullets: ["Unlimited seats", "SSO / SAML", "Dedicated infrastructure", "Security review + audit logs", "SLA + solutions engineering"] },
-];
-
 function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => void }) {
   const border = tier.featured ? "1px solid rgba(45,212,191,0.4)" : "1px solid rgba(81,79,110,0.5)";
   const bg = tier.featured ? "rgba(45,212,191,0.06)" : "rgba(4,0,28,0.6)";
   const accent = "#2dd4bf";
   return (
     <div
+      data-testid={`pricing-tier-${tier.name}`}
       className="w-full sm:w-auto sm:flex-1 sm:min-w-[240px] max-w-[340px]"
       style={{
         backdropFilter: "blur(10px)", background: bg, borderRadius: 22, border,
@@ -8883,7 +9222,7 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
               <circle cx="7" cy="7" r="7" fill="rgba(45,212,191,0.12)" />
               <path d="M4.5 7L6.2 8.7L9.5 5.3" stroke={accent} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.75)" }}>{b}</span>
+            <span data-pricing-bullet style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, color: "rgba(255,255,255,0.75)" }}>{b}</span>
           </div>
         ))}
       </div>
@@ -9114,18 +9453,34 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   });
   const [selectedPlan, setSelectedPlan] = useState<PricingTier | null>(null);
   const [planOverlayOpen, setPlanOverlayOpen] = useState(false);
-  const planEligibleRef = useRef(initialOpening);
+  const planEligibleRef = useRef(
+    initialOpening ||
+    (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("plan") === "1"),
+  );
   const shownPlanForRunRef = useRef<number | null>(null);
   const reducedMotion = usePrefersReducedMotion();
 
   // ── Workspace state machine ──────────────────────────────────────────────
   const [wsState, setWsState] = useState<WorkspaceState>("none");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [importFlowOpen, setImportFlowOpen] = useState(false);
+  const [importedLive, setImportedLive] = useState(false);
+  const importedLimitRef = useRef<(what: string) => void>(() => {});
 
   // ── Prototype router (home → project → session) ──────────────────────────
-  const [route, setRoute] = useState<"home" | "project" | "session">("home");
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [route, setRoute] = useState<"home" | "project" | "session">(() => {
+    if (["B13", "B14"].includes(currentBeat)) return "project";
+    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "session";
+    return "home";
+  });
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+    if (["B13", "B14", "B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return TUTORIAL_DEMO_PROJECT.id;
+    return null;
+  });
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "add-comments";
+    return null;
+  });
   const [scopeNotice, setScopeNotice] = useState<string | null>(null);
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
   const [supportFrameworkModalOpen, setSupportFrameworkModalOpen] = useState(false);
@@ -9134,8 +9489,13 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const experimemoProject = tutorial.projectCreated
     ? buildExperimemoProject(tutorial.sessionStarted ? 1 : 0)
     : null;
-  const allProjects = experimemoProject ? [experimemoProject, ...PROTOTYPE_PROJECTS] : PROTOTYPE_PROJECTS;
-  const allSessions = tutorial.sessionStarted ? [EXPERIMEMO_SESSION, ...PROTOTYPE_SESSIONS] : PROTOTYPE_SESSIONS;
+  const baseProjects = experimemoProject ? [experimemoProject, ...PROTOTYPE_PROJECTS] : PROTOTYPE_PROJECTS;
+  const allProjects = importedLive ? [...baseProjects, { ...IMPORTED_PROJECT }] : baseProjects;
+  const allSessions = [
+    ...(tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : []),
+    ...PROTOTYPE_SESSIONS,
+    ...(importedLive ? importedLiveSessions() : []),
+  ];
   const activeProject =
     (activeProjectId === TUTORIAL_DEMO_PROJECT.id
       ? TUTORIAL_DEMO_PROJECT
@@ -9172,6 +9532,10 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     }
   };
   const openSession = (s: ProtoSession, opts?: { justStarted?: boolean }) => {
+    if (isImportedSession(s.id) || isImportedProject(s.projectId)) {
+      importedLimitRef.current(s.name);
+      return;
+    }
     if (currentBeat === "B12" || currentBeat === "B13") {
       return;
     }
@@ -9198,6 +9562,16 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   };
 
   const handleOpenProject = () => setPickerOpen(true);
+  const beginImportedProject = () => {
+    if (importedLive) return;
+    setPickerOpen(false);
+    setImportFlowOpen(true);
+  };
+  const finishImport = () => {
+    setImportedLive(true);
+    setImportFlowOpen(false);
+    openProjectHome({ ...IMPORTED_PROJECT });
+  };
 
   const handleScenario = (id: ScenarioId) => {
     setPickerOpen(false);
@@ -9246,30 +9620,38 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const [musicSlotEl, setMusicSlotEl] = useState<HTMLDivElement | null>(null);
   // Expanded / fullscreen music widget: slot for the song picker and provider options.
   const [musicLibraryEl, setMusicLibraryEl] = useState<HTMLDivElement | null>(null);
+  const moveMusicToBottomRef = useRef<(() => void) | null>(null);
   const limit = usePrototypeLimit();
+  importedLimitRef.current = (what: string) => limit(importedProjectLimit(IMPORT_PROJECT_NAME, what));
   // "Open Pet Show and Tell" on prototype-limit modals (Not Hotdog has no sources).
   useRegisterPrototypeLimitNav(() => {
     const pet = PROTOTYPE_PROJECTS.find(p => p.id === "pet");
     if (pet) openProjectHome(pet);
   });
 
-  // B18 Turn 1: the tutorial opens the header Widgets gallery (Library highlighted)
-  // and closes it again when the beat moves on (only if the tutorial opened it).
-  const isTutorialGalleryTurn = isTutorialActive && currentBeat === "B18" && turnIndex === 1;
+  // B18 Turn 2 prompts the user to click Widgets in the header; B18 Turn 3 highlights Library
+  // in the opened gallery and closes it again when advancing to Turn 4.
+  const isB18OpenWidgetsTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
+  const isTutorialGalleryTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
   const tutorialOpenedGalleryRef = useRef(false);
   useEffect(() => {
     if (isTutorialGalleryTurn) {
-      const t = window.setTimeout(() => {
-        tutorialOpenedGalleryRef.current = true;
-        setWidgetsGalleryOpen(true);
-      }, B18_GALLERY_OPEN_DELAY_MS);
-      return () => window.clearTimeout(t);
+      tutorialOpenedGalleryRef.current = true;
+      setWidgetsGalleryOpen(true);
+      return;
     }
     if (tutorialOpenedGalleryRef.current) {
       tutorialOpenedGalleryRef.current = false;
       setWidgetsGalleryOpen(false);
     }
   }, [isTutorialGalleryTurn]);
+  const handleHeaderWidgetsClick = useCallback(() => {
+    setWidgetsGalleryOpen(true);
+    if (isB18OpenWidgetsTurn) {
+      tutorialOpenedGalleryRef.current = true;
+      setTurnIndex(B18_LIBRARY_TURN);
+    }
+  }, [isB18OpenWidgetsTurn, setTurnIndex]);
 
   const openRootWidget = useCallback((id: WidgetId, label: string) => {
     const emuIds: WidgetId[] = ["emuWeb", "emuAndroid", "emuIos"];
@@ -9379,12 +9761,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     (widgetId, mode) => {
       const id = widgetId as WidgetId;
       if (id === "emuWeb" || id === "emuAndroid" || id === "emuIos") {
-        const type: EmuType = id === "emuWeb" ? "web" : id === "emuAndroid" ? "android" : "ios";
-        return (
-          <div className="flex items-center justify-center bg-[#111] h-full overflow-hidden">
-            <ScaledDevice type={type} orientation="portrait" connected={false} targetH={mode === "normal" ? 190 : 420} />
-          </div>
-        );
+        return <LiveSimulatorBody kind={id} targetH={mode === "normal" ? 340 : 420} />;
       }
       return <WidgetContent id={id} ctx={rootCtx} expanded={mode !== "normal"} />;
     },
@@ -9450,7 +9827,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
                 </button>
               </div>
               {/* Canvas — fills remaining height, no scrollbars */}
-              <EmulatorCanvas connected={emuConnected} openEmuModal={openEmuModal} />
+              <EmulatorCanvas connected={emuConnected} openEmuModal={openEmuModal} projectId={activeProjectId} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -9600,9 +9977,18 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const isHeaderDisabled = !isTutorialComplete;
   const highlightHomeNav = isTutorialActive && currentBeat === "B19" && turnIndex === B19_HOME_TURN;
   const highlightTutorialsNav = isTutorialActive && currentBeat === "B20" && turnIndex === 0;
+  const highlightWidgetsNav = isB18OpenWidgetsTurn;
 
   // ── Workspace state machine router ───────────────────────────────────────
   return (
+    <SimulatorSurfaceContext.Provider
+      value={{
+        route,
+        projectId: route === "home" ? null : activeProjectId,
+        sessionId: route === "session" ? activeSessionId : null,
+        projects: allProjects.map((project) => ({ id: project.id, name: project.name })),
+      }}
+    >
     <div
       className="size-full overflow-hidden relative"
       style={{ backgroundColor: "#000000", isolation: "isolate" }}
@@ -9660,7 +10046,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         playButtonRevealed={showMusicPlayOnly}
         fullPlayerRevealed={showMusicFullPlayer}
         moveResizeRevealed={showWidgetMoveResize && (isTutorialActive || route === "home")}
-        calloutGlow={isTutorialActive && currentBeat === "B18" && turnIndex === 0}
+        calloutGlow={isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN}
         animateIntro={!isTutorialComplete}
         docked={musicWidgetDocked}
         placement={
@@ -9669,12 +10055,13 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         panelSlot={musicSlotEl}
         librarySlot={musicLibraryEl}
         libraryMode={musicLibraryEl?.dataset.libraryMode === "providers" ? "providers" : "library"}
-        allowPanelFloat={isTutorialActive}
+        allowPanelFloat={false}
+        onMoveToBottomPanel={() => moveMusicToBottomRef.current?.()}
         onProviderConnect={(name) =>
           limit({
             featureName: `${name} sign-in`,
             subtitle: "Music providers",
-            description: `Connecting ${name} needs a real sign-in, which this prototype doesn't perform. The built-in LeekBeats tracks keep playing.`,
+            description: `Connecting ${name} needs a real sign-in, which this prototype doesn't perform. The built-in i² Curated tracks keep playing.`,
           })
         }
         onPressStart={() => setPlayPressNonce((n) => n + 1)}
@@ -9689,7 +10076,13 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       />
 
       {!isB00Blackout && hasAnyHomeShellRevealed && <AnimatePresence mode="wait">
-        {wsState === "none" && route === "home" && (
+        {wsState === "none" && route === "home" && importFlowOpen && (
+          <motion.div key="import-flow" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+            <ImportProjectFlow onCancel={() => setImportFlowOpen(false)} onComplete={finishImport} />
+          </motion.div>
+        )}
+
+        {wsState === "none" && route === "home" && !importFlowOpen && (
           <motion.div key="welcome" className="size-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
             <I2HomeScreen
               onOpenEmulator={(id) => openRootWidget(id, id === "emuWeb" ? "Web Preview" : id === "emuAndroid" ? "Android" : "iOS")}
@@ -9722,7 +10115,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               onReturnToActiveProject={
                 activeProject ? () => setRoute("project") : undefined
               }
-              onWidgets={() => setWidgetsGalleryOpen(true)}
+              onWidgets={handleHeaderWidgetsClick}
               onSupportNewFramework={() => setSupportFrameworkModalOpen(true)}
               onNotifications={handleOpenNotifications}
               switchableProjects={switchableProjects}
@@ -9735,6 +10128,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               tutorialsWidgetsGamesDocked={tutorialsWidgetsGamesDocked}
               notificationsSettingsDocked={notificationsSettingsDocked}
               highlightTutorialsNav={highlightTutorialsNav}
+              highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               danceNonce={danceNonce}
             />
@@ -9763,7 +10157,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
                   : switchableProjects
               }
               onSwitchProject={(p) => openProjectHome(p)}
-              onWidgets={() => setWidgetsGalleryOpen(true)}
+              onWidgets={handleHeaderWidgetsClick}
               onNotifications={handleOpenNotifications}
               allSessions={
                 activeProjectId === EXPERIMEMO_PROJECT_ID
@@ -9773,10 +10167,12 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               onSelectSession={openSession}
               levelPillDocked={levelPillDocked}
               breadcrumbsDocked={breadcrumbsDocked}
+              highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               onOpenWidget={(id, label) => openRootWidget(id, label)}
               musicSlotRef={setMusicSlotEl}
               musicLibraryRef={setMusicLibraryEl}
+              moveMusicToBottomRef={moveMusicToBottomRef}
             />
           </motion.div>
         )}
@@ -9798,7 +10194,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
                   advanceBeat("B16");
                 }
               }}
-              onWidgets={() => setWidgetsGalleryOpen(true)}
+              onWidgets={handleHeaderWidgetsClick}
               onNotifications={handleOpenNotifications}
               onOpenWidget={(id, label) => openRootWidget(id, label)}
               switchableProjects={
@@ -9814,9 +10210,11 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               }
               onSelectSession={openSession}
               highlightHomeNav={highlightHomeNav}
+              highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               musicSlotRef={setMusicSlotEl}
               musicLibraryRef={setMusicLibraryEl}
+              moveMusicToBottomRef={moveMusicToBottomRef}
             />
           </motion.div>
         )}
@@ -9859,7 +10257,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
           <OpenPickerModal
             key="picker"
             onClose={() => setPickerOpen(false)}
-            onSelect={handleScenario}
+            onSelect={beginImportedProject}
+            alreadyImported={importedLive}
           />
         )}
       </AnimatePresence>
@@ -9934,5 +10333,6 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       <TutorialOverlay />
 
     </div>
+    </SimulatorSurfaceContext.Provider>
   );
 }
