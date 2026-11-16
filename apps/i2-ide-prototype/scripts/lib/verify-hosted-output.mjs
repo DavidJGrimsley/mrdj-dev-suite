@@ -16,7 +16,7 @@ function* walk(dir) {
   }
 }
 
-export function verifyHostedOutput({ dir, basePath }) {
+export function verifyHostedOutput({ dir, basePath, requirePetPreviews = false }) {
   const errors = []
   const files = []
   const indexPath = path.join(dir, 'index.html')
@@ -43,18 +43,51 @@ export function verifyHostedOutput({ dir, basePath }) {
     }
   }
 
-  const html = fs.readFileSync(indexPath, 'utf8')
-  for (const match of html.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)) {
-    const url = match[1]
-    if (/^(?:[a-z][a-z0-9+.-]*:|#|data:)/i.test(url) || url.startsWith('//')) continue
-    if (url.startsWith('/') && !url.startsWith(basePath)) {
-      errors.push(`index.html: "${url}" is not under base ${basePath}`)
-    } else if (!url.startsWith('/')) {
-      errors.push(`index.html: "${url}" is relative; expected an absolute path under ${basePath}`)
+  const checkHtmlUrls = (htmlPath, expectedBase, label) => {
+    const html = fs.readFileSync(htmlPath, 'utf8')
+    for (const match of html.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)) {
+      const url = match[1]
+      if (/^(?:[a-z][a-z0-9+.-]*:|#|data:)/i.test(url) || url.startsWith('//')) continue
+      if (url.startsWith('/') && !url.startsWith(expectedBase)) {
+        errors.push(`${label}: "${url}" is not under base ${expectedBase}`)
+      } else if (!url.startsWith('/')) {
+        errors.push(`${label}: "${url}" is relative; expected an absolute path under ${expectedBase}`)
+      }
     }
+    if (!/<script[^>]+(?:type="module"[^>]+src="[^"]+"|src="[^"]+"[^>]*defer)/.test(html)) {
+      errors.push(`${label}: no entry script found`)
+    }
+    return html
   }
-  if (!/<script[^>]+type="module"[^>]+src="[^"]+"/.test(html)) {
+
+  const rootHtml = checkHtmlUrls(indexPath, basePath, 'index.html')
+  if (!/<script[^>]+type="module"[^>]+src="[^"]+"/.test(rootHtml)) {
     errors.push('index.html: no module script found')
+  }
+
+  for (const ver of ['v1', 'v2']) {
+    const nestedDir = path.join(dir, 'preview', 'pet-show-and-tell', ver)
+    const nestedIndex = path.join(nestedDir, 'index.html')
+    const nestedMeta = path.join(nestedDir, 'metadata.json')
+    const exists = fs.existsSync(nestedIndex)
+    if (requirePetPreviews && !exists) {
+      errors.push(`preview/pet-show-and-tell/${ver}/index.html not found`)
+      continue
+    }
+    if (exists) {
+      const expectedBase = `${basePath}preview/pet-show-and-tell/${ver}/`
+      const nestedHtml = checkHtmlUrls(
+        nestedIndex,
+        expectedBase,
+        `preview/pet-show-and-tell/${ver}/index.html`,
+      )
+      if (!nestedHtml.includes('data-i2-pet-index-shim="1"')) {
+        errors.push(`preview/pet-show-and-tell/${ver}/index.html: missing pre-router path normalization shim`)
+      }
+      if (!fs.existsSync(nestedMeta)) {
+        errors.push(`preview/pet-show-and-tell/${ver}/metadata.json not found`)
+      }
+    }
   }
 
   return { errors, files }

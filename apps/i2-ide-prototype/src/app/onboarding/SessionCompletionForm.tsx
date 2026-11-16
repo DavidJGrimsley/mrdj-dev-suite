@@ -6,25 +6,35 @@ import { FloatingField, FloatingButton } from "./FloatingPrimitives";
 // B17 Session Completion Form, rendered inside the Session chat column (above the
 // action row) so it never overlaps the chat. Unboxed: bordered fields with
 // transparent interiors, filled/bordered buttons, and no outer form card.
+// `blankNotice` renders the special blank report: no learnings fields, just the notice that
+// nothing was found to add to Infinite Intelligence (summary/correctedAction submit empty).
 export function SessionCompletionForm({
   submitEnabled,
   onSubmit,
   summaryDefault = "Implemented comment sheet & verified preview in session worktree.",
   correctedActionDefault = "Check the platform before choosing a command.",
+  blankNotice,
+  submitLabel = "Submit",
+  testId,
 }: {
   submitEnabled: boolean;
   onSubmit: (values: { summary: string; correctedAction: string }) => void;
   summaryDefault?: string;
   correctedActionDefault?: string;
+  blankNotice?: string;
+  submitLabel?: string;
+  testId?: string;
 }) {
-  const [summary, setSummary] = useState(summaryDefault);
-  const [correctedAction, setCorrectedAction] = useState(correctedActionDefault);
+  const [summary, setSummary] = useState(blankNotice ? "" : summaryDefault);
+  const [correctedAction, setCorrectedAction] = useState(blankNotice ? "" : correctedActionDefault);
   const [rating, setRating] = useState(5);
   const [feedback, setFeedback] = useState("");
 
   return (
     <motion.form
       data-name="SessionCompletionForm"
+      data-testid={testId}
+      data-report-kind={blankNotice ? "blank" : "learnings"}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
@@ -36,6 +46,28 @@ export function SessionCompletionForm({
       className="flex flex-col gap-3 w-full px-4 pt-2 pb-2 shrink-0"
       style={{ background: "transparent", border: "none", boxShadow: "none" }}
     >
+      {blankNotice ? (
+        <div
+          data-name="SessionCompletionBlankNotice"
+          className="flex flex-col gap-1 rounded-[8px] px-3 py-2.5"
+          style={{ border: "1px dashed rgba(255, 255, 255, 0.22)" }}
+        >
+          <span
+            style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "rgba(255, 255, 255, 0.72)",
+            }}
+          >
+            Session learnings
+          </span>
+          <p className="text-[13px] text-[#e4e4e7]">{blankNotice}</p>
+          <p className="text-[11px] text-[rgba(255,255,255,0.5)]">
+            This report is intentionally blank — submitting it adds nothing to Infinite Intelligence memory.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <FloatingField
           id="b17-summary"
@@ -50,6 +82,7 @@ export function SessionCompletionForm({
           onChange={setCorrectedAction}
         />
       </div>
+      )}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <span
@@ -115,7 +148,7 @@ export function SessionCompletionForm({
                 fontWeight: 600,
               }}
             >
-              Submit
+              {submitLabel}
             </FloatingButton>
           </motion.div>
         )}

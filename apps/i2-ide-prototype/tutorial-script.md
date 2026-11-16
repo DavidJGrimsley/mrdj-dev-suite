@@ -235,7 +235,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Stage:** Let the user configure the models they will use for their Session Agents.
 
-**Infie:** “I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.”
+**Infie:** “I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.”
 
 **Reveal:** An array of faux sign-in buttons to sign in with: Claude, ChatGPT, Grok, Gemini, Cline, plus a simulated local-model choice (“Use local models”). Each opens a simulated sign-in modal (clearly fake: no real OAuth, no network, no real credentials collected, no password fields that submit anywhere; completing it marks that provider “connected” in demo state).
 

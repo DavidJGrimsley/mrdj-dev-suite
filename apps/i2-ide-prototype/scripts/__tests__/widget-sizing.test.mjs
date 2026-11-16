@@ -343,7 +343,7 @@ test('browser: bottom panel stays anchored, fits arrivals, and permits manual st
     }
     await drag(page.locator('[data-dock-item="explorer"] [data-widget-header]'), page.locator('[data-dock-zone="bottom"]'))
     assert.equal(await panel.locator('[data-dock-column]').count(), 2)
-    assert.equal(await panel.locator('[data-dock-item="sessions"] [data-compact="true"]').count(), 2)
+    assert.equal(await panel.locator('[data-dock-item="sessions"] [data-compact="true"]').count(), 1)
     const fit = async () => page.evaluate(() => {
       const panel = document.querySelector('[data-dock-panel="bottom"]'), center = document.querySelector('[data-dock-center]')
       const r = panel.getBoundingClientRect()

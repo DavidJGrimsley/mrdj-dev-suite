@@ -519,7 +519,7 @@ export function OnboardingStage({
     case "B10":
       if (turnIndex === 0) {
         currentLine =
-          "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
+          "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =

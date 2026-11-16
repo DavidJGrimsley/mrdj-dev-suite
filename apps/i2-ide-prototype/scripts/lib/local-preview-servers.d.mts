@@ -14,3 +14,10 @@ export declare function createPreviewServersVitePlugin(options?: {
   host?: string
   allowEphemeralFallback?: boolean
 }): Plugin
+export declare function createPetPreviewVitePlugin(options?: {
+  v1Dir?: string
+  v2Dir?: string
+  dir?: string
+  prototypeRoot?: string
+  workspaceRoot?: string
+}): Plugin

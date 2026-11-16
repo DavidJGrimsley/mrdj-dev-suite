@@ -304,8 +304,7 @@ test('browser: dock panels, gestures, cards, glow, ellipsis, and the read-only c
     measured.hug = hug
     assert.equal(hug.hug, 'true')
     assert.equal(hug.layout, 'cards')
-    assert.ok(hug.count >= 2, `fullscreen sessions cards ${hug.count}`)
-    assert.equal(hug.twoColumns, true)
+    assert.equal(hug.count, 1, `fullscreen sessions cards ${hug.count}`)
     assert.ok(hug.cardWidth >= 180 && hug.cardWidth <= 560, `hug width ${hug.cardWidth}`)
     assert.ok(hug.cardHeight > 80 && hug.cardHeight < 320, `hug height ${hug.cardHeight}`)
     assert.ok(hug.layoutHeight >= hug.cardHeight)
@@ -341,7 +340,7 @@ test('browser: dock panels, gestures, cards, glow, ellipsis, and the read-only c
     })
     measured.stacked = stacked
     assert.ok(stacked.cols.some((col) => col.ids.includes('humanTesting')))
-    assert.equal(await page.locator('[data-dock-item="sessions"] [data-compact="true"]').count(), 2)
+    assert.equal(await page.locator('[data-dock-item="sessions"] [data-compact="true"]').count(), 1)
     assert.ok(stacked.panelHeight <= bottomPanelBeforeStack + 2, `fit before growing: ${bottomPanelBeforeStack} -> ${stacked.panelHeight}`)
     assert.ok(stacked.chatHeight >= 180, `chat height after stack ${stacked.chatHeight}`)
 
@@ -600,17 +599,27 @@ test('browser: dock panels, gestures, cards, glow, ellipsis, and the read-only c
     assert.ok(goalStack.panelHeight <= sessionBottomAfterFirst + 2, `fit before growing: ${sessionBottomAfterFirst} -> ${goalStack.panelHeight}`)
     assert.ok(goalStack.chatHeight >= 180, `session chat ${goalStack.chatHeight}`)
 
+    await page.evaluate(() => localStorage.clear())
     await page.goto(`http://127.0.0.1:${port}/?beat=COMPLETE&plan=1`, { waitUntil: 'domcontentloaded' })
     await page.locator('[data-testid="pricing-tier-Premium"]').waitFor()
     assert.equal(await page.locator('[data-testid="pricing-tier-Pro"]').count(), 0)
     await page.getByRole('button', { name: 'Back to Home' }).click()
     await page.getByRole('button', { name: 'Import Project' }).waitFor()
 
-    // Single-session project (NotHotDog) uses full cards in bottom zone, but forces compact list cards in 336px right sidebar.
-    await page.locator('button[data-project-id="nothotdog"]').click()
+    // Single-session project (Pet Show and Tell) uses full cards in bottom zone, but forces compact list cards in 336px right sidebar.
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.locator('button[data-project-id="pet"]').click()
     await page.locator('[data-testid="project-home"]').waitFor()
     assert.equal(await page.locator('[data-sessions-layout]').getAttribute('data-sessions-layout'), 'cards')
-    await drag(page.locator('[data-dock-item="sessions"] [data-widget-header]'), page.locator('[data-dock-zone="right"]'), 0.5)
+    {
+      const fromBox = await page.locator('[data-dock-item="sessions"] [data-widget-header]').boundingBox()
+      const rightBox = await page.locator('[data-dock-zone="right"]').boundingBox()
+      await page.mouse.move(fromBox.x + Math.min(24, fromBox.width / 2), fromBox.y + fromBox.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(rightBox.x + rightBox.width * 0.5, rightBox.y + 24, { steps: 14 })
+      await page.mouse.up()
+      await page.waitForTimeout(80)
+    }
     const singleSidebarLayout = await page.locator('[data-dock-zone="right"] [data-sessions-layout]').getAttribute('data-sessions-layout')
     const singleSidebarCompactCount = await page.locator('[data-dock-zone="right"] [data-sessions-layout] [data-compact="true"]').count()
     measured.singleSessionSidebar = { layout: singleSidebarLayout, compactCount: singleSidebarCompactCount }
