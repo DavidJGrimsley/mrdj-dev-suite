@@ -522,8 +522,10 @@ export function buildDock({ layouts, setLayout, registry, pruneWidgetResize }: D
     let column = flow.column;
     let row = flow.row;
     if (srcCol !== -1) {
+      const sameColumn = srcCol === flow.column;
+      if (sameColumn && before[srcCol].length === 1) return;
       if (before[srcCol].length === 1 && srcCol < column) column -= 1;
-      if (srcCol === column && srcRow < row) row -= 1;
+      if (sameColumn && srcRow < row) row -= 1;
     }
     const cols = before.map((col) => col.filter((x) => x !== id)).filter((col) => col.length > 0);
     if (flow.stack) {
@@ -1454,6 +1456,7 @@ function WidgetFrame({ dock, widget, slot }: { dock: WidgetDockHandle; widget: D
       data-widget-mode={mode}
       tabIndex={widget.onHeaderKeyDown ? 0 : undefined}
       onKeyDown={widget.onHeaderKeyDown ? (event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "Enter") {
           event.preventDefault();
           widget.onHeaderKeyDown?.();

@@ -204,7 +204,7 @@ export function FileViewerProvider({ children }: { children: ReactNode }) {
           <div
             data-testid="file-viewer"
             data-fullscreen={viewer.fullscreen ? "true" : "false"}
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2"
+            className="fixed inset-0 z-[10030] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2"
             onClick={close}
           >
             <div
