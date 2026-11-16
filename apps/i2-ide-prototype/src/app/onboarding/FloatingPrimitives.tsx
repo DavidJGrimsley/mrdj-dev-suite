@@ -1,6 +1,7 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
+import { RevealingInfieText, useTextRevealGate } from "../widgets/infiePreferencesContext";
 
 // ─── Unboxed Floating UI Primitives ─────────────────────────────────────────
 // Experience contract:
@@ -16,6 +17,7 @@ export interface FloatingInfieMessageProps {
   message: string;
   showContinue?: boolean;
   onContinue?: () => void;
+  onTextComplete?: () => void;
   continueLabel?: string;
   className?: string;
 }
@@ -24,17 +26,25 @@ export function FloatingInfieMessage({
   message,
   showContinue = false,
   onContinue,
+  onTextComplete,
   continueLabel = "Continue",
   className = "",
 }: FloatingInfieMessageProps) {
+  const { isComplete: textComplete, onComplete: handleGateComplete } = useTextRevealGate(message);
+  const onTextCompleteRef = React.useRef(onTextComplete);
+  onTextCompleteRef.current = onTextComplete;
+
+  const handleTextComplete = React.useCallback(() => {
+    handleGateComplete();
+    onTextCompleteRef.current?.();
+  }, [handleGateComplete]);
+
   return (
     <div
       className={`relative flex flex-col items-center ${className}`}
       style={{ background: "transparent", border: "none" }}
     >
       <div
-        role="status"
-        aria-live="polite"
         className="px-4 py-3 rounded-[12px] max-w-[540px]"
         style={{
           background: "transparent",
@@ -46,9 +56,13 @@ export function FloatingInfieMessage({
           lineHeight: 1.55,
         }}
       >
-        {message}
+        <RevealingInfieText
+          text={message}
+          live
+          onComplete={handleTextComplete}
+        />
       </div>
-      {showContinue && onContinue && (
+      {showContinue && onContinue && textComplete && (
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}

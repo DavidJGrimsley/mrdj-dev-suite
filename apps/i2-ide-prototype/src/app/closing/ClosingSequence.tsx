@@ -3,6 +3,7 @@ import { TegakiEngine, type TegakiFrame, type TegakiPaintContext } from "tegaki/
 import printFont from "./fonts/print/bundle";
 import signatureFont from "./fonts/signature/bundle";
 import { closingConfig, type ClosingConfig } from "./closingConfig";
+import { quoteSemicolonPause } from "./quoteSemicolonPause";
 import { dipPenPlugin, drawDipPen, penPosition, type PenPoint, type PenPosition } from "./dipPen";
 import "./closing.css";
 
@@ -357,7 +358,10 @@ export function ClosingSequence({ config = closingConfig, debug = false, onCompl
           text: quote,
           font: printFont,
           time: reduced ? "100%" : { mode: "uncontrolled", playing: false, speed: config.quoteSpeed, loop: false },
-          plugins: [dipPenPlugin(hiddenPen, observe("quote"), penFailure)],
+          plugins: [
+            dipPenPlugin(hiddenPen, observe("quote"), penFailure),
+            ...(!reduced ? [quoteSemicolonPause(config.quoteSpeed)] : []),
+          ],
           onComplete: quoteComplete,
         });
         const signatureEngine = new TegakiEngine(signatureHost.current, {

@@ -97,10 +97,10 @@ test('diagnosed corrections: R01, R04, R10, R14, R15', () => {
   assert.match(app, /\(type === "web" \|\| type === "android"\) && sim\.web\.kind === "none"/)
   assert.match(app, /sim\.web\.kind === "none"\s*\?\s*\(\s*<div className="h-full w-full"><SimulatorUnavailable/)
 
-  // R10: One scroller without justify-end, bubbles break words and don't collide
-  const scrollerBlock = stage.slice(stage.indexOf('function OnboardingMessageScroller'), stage.indexOf('function OnboardingMessageScroller') + 500)
-  assert.doesNotMatch(scrollerBlock, /justify-end/)
-  assert.match(stage, /className="[^"]*\bmt-auto\b[^"]*"/)
+  // Keep the conversation directly below Infie, rather than pushed to the bottom.
+  const scrollerBlock = stage.slice(stage.indexOf('data-name="OnboardingMessageScroller"'), stage.indexOf('data-name="OnboardingMessageScroller"') + 200)
+  assert.doesNotMatch(scrollerBlock, /justify-end|mt-auto/)
+  assert.match(scrollerBlock, /overflow-y-auto/)
   assert.match(stage, /break-words shrink-0/)
 
   // R14: Header Widgets button enabled on project/session to allow restoring removed widgets

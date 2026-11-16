@@ -16,7 +16,7 @@ const workspaceRoot = path.resolve(appRoot, '../../..')
 const snapshotRoot = `${workspaceRoot}/generated/exact-jenny/tutorial`
 const V1_DIR = `${snapshotRoot}/v1-starter/extracted`
 const V2_DIR = `${snapshotRoot}/v2-merged/dist`
-const screenshotDir = `${snapshotRoot}/session-review-polish/screenshots`
+const screenshotDir = path.join(appRoot, '.agents', 'verification', 'screenshots')
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -217,6 +217,41 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       await page.keyboard.press('Escape')
     })
 
+    await t.test('Infie preferences have discrete keyboard controls and shared session values', async () => {
+      await page.locator('[data-name="HeaderWidgetsButton"]').click()
+      await page.locator('[data-widget-entry="infiePreferences"]').click()
+      const widget = page.locator('[data-testid="infie-preferences-widget"]')
+      await widget.waitFor()
+      const sliders = widget.getByRole('slider')
+      assert.equal(await sliders.count(), 5)
+      assert.equal(await sliders.nth(0).getAttribute('aria-valuenow'), '3')
+      assert.match(await sliders.nth(0).getAttribute('aria-valuetext'), /Autonomous/)
+      assert.equal(await sliders.nth(1).getAttribute('aria-valuenow'), '4')
+      assert.equal(await sliders.nth(2).getAttribute('aria-valuenow'), '0')
+      for (let i = 0; i < 5; i++) {
+        assert.equal(await sliders.nth(i).getAttribute('aria-valuemax'), i === 4 ? '2' : '4')
+      }
+      await sliders.nth(0).focus()
+      await page.keyboard.press('Home')
+      assert.match(await sliders.nth(0).getAttribute('aria-valuetext'), /Ask Every Step/)
+      await page.keyboard.press('End')
+      assert.match(await sliders.nth(0).getAttribute('aria-valuetext'), /Act on my behalf/)
+      await page.getByRole('tooltip').waitFor()
+      await sliders.nth(4).focus()
+      await page.keyboard.press('End')
+      assert.match(await sliders.nth(4).getAttribute('aria-valuetext'), /Fast/)
+      await page.keyboard.press('Escape')
+      await widget.waitFor({ state: 'detached' })
+      await page.locator('[data-name="HeaderWidgetsButton"]').click()
+      await page.locator('[data-widget-entry="infiePreferences"]').click()
+      await widget.waitFor()
+      assert.equal(await widget.getByRole('slider').nth(4).getAttribute('aria-valuenow'), '2')
+      await widget.getByRole('button', { name: 'Reset', exact: true }).click()
+      assert.equal(await widget.getByRole('slider').nth(0).getAttribute('aria-valuenow'), '3')
+      await page.keyboard.press('Escape')
+      await widget.waitFor({ state: 'detached' })
+    })
+
     await t.test('Jenny completion opens an almost-empty project with the real starter preview', async () => {
       await completeJenny(page)
 
@@ -262,8 +297,9 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       // Infie's first words are exact and What's Next glows
       const messages = page.locator('[data-testid="flow-message"]')
       assert.equal(await messages.count(), 1)
+      await messages.first().locator('[data-text-reveal="complete"]').waitFor()
       assert.equal(
-        (await messages.first().locator('p').innerText()).trim(),
+        (await messages.first().locator('[data-revealed-text]').innerText()).trim(),
         "This is what your app currently looks like. It's just a shell with the framework and setup in place."
       )
       assert.equal(await page.locator('[data-testid="whats-next-button"]').getAttribute('data-glow'), 'true')
@@ -350,6 +386,7 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
         null,
         { timeout: 10000 }
       )
+      await page.locator('[data-testid="composer-send"]:not([disabled])').waitFor()
       const composer = await homeComposerStage()
       assert.equal(composer.value, 'Bundle it!', 'Bundle it! sits in the real composer')
       assert.equal(composer.glow, 'true', 'Send glows')
@@ -373,6 +410,7 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       )
       const userBubble = page.locator('[data-testid="flow-message"][data-role="user"]')
       assert.equal((await userBubble.last().locator('p').innerText()).trim(), 'Bundle it!')
+      await page.locator('[data-testid="composer-send"]:not([disabled])').waitFor()
       assert.equal(await inputEl.inputValue(), 'Let a model propose one.')
       assert.equal(await inputEl.getAttribute('readonly'), '', 'schema answer is uneditable')
       assert.equal(await page.locator('[data-testid="composer-send"]').getAttribute('data-glow'), 'true')
@@ -396,6 +434,7 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       const initialPlanCursor = Number(await planWidget.getAttribute('data-plan-cursor'))
 
       await page.locator('[data-testid="start-session-button"]').waitFor({ state: 'visible', timeout: 25000 })
+      await page.locator('[data-testid="start-session-button"]:not([disabled])').waitFor()
       const finalPlanCursor = Number(await planWidget.getAttribute('data-plan-cursor'))
       assert.ok(finalPlanCursor > initialPlanCursor, `Plan widget progressed (${initialPlanCursor} -> ${finalPlanCursor})`)
       const planWidgetText = await planWidget.innerText()
@@ -499,6 +538,7 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       await page.keyboard.press('Escape')
 
       // Only the Continue action is offered; no second Start Session
+      await page.locator('[data-testid="flow-action-delegate"]:not([disabled])').waitFor()
       assert.equal(await page.locator('[data-testid="flow-action-delegate"]').getAttribute('data-glow'), 'true')
       assert.match(await page.locator('[data-testid="flow-action-delegate"]').innerText(), /Continue/)
       assert.equal(await page.locator('[data-testid="start-session-button"]').count(), 0)
@@ -632,6 +672,7 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       assert.match(infieText, /plan\.md/)
 
       const fix = page.locator('[data-testid="flow-action-fix"]')
+      await page.locator('[data-testid="flow-action-fix"]:not([disabled])').waitFor()
       assert.match(await fix.innerText(), /Fix Problems/)
       assert.equal(await fix.getAttribute('data-glow'), 'true')
       await shot(page, '08-review-fixes-camera-triage.png')
@@ -882,6 +923,29 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       } finally {
         if (tempPreviewServer) await close(tempPreviewServer)
         await remote.close()
+      }
+    })
+
+    await t.test('docked tutorial actions follow Infie even when an agent question follows it', async () => {
+      const tutorial = await context.newPage()
+      try {
+        await tutorial.goto(`http://127.0.0.1:${appPort}/iSquared/?beat=B14`, { waitUntil: 'domcontentloaded' })
+        const next = tutorial.getByRole('button', { name: 'Continue', exact: true })
+        await next.click({ timeout: 15000 })
+        await tutorial.locator('[data-name="InlineAgentQuestionMessage"]').waitFor()
+        await tutorial.locator('[data-text-reveal="revealing"]').waitFor()
+        const send = tutorial.locator('[data-testid="composer-send"]')
+        assert.equal(await send.isDisabled(), true, 'Reply waits for the current Infie line')
+        await tutorial.emulateMedia({ reducedMotion: 'reduce' })
+        await tutorial.locator('[data-testid="composer-send"]:not([disabled])').waitFor({ timeout: 5000 })
+        assert.equal(await tutorial.locator('[data-text-reveal="revealing"]').count(), 0)
+        await send.click()
+        await tutorial.emulateMedia({ reducedMotion: 'no-preference' })
+        await tutorial.goto(`http://127.0.0.1:${appPort}/iSquared/?beat=B12`, { waitUntil: 'domcontentloaded' })
+        await next.waitFor({ state: 'visible', timeout: 15000 })
+        await next.click()
+      } finally {
+        await tutorial.close()
       }
     })
 

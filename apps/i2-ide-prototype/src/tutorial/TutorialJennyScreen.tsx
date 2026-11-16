@@ -21,6 +21,7 @@ import {
   APPROVAL_ANSWER_TEXT,
 } from "./scriptedData.ts";
 import type { TutorialBlueprintState } from "./types.ts";
+import { RevealingInfieText, useTextRevealGate } from "../app/widgets/infiePreferencesContext.tsx";
 
 interface TutorialJennyScreenProps {
   onComplete: () => void;
@@ -52,6 +53,12 @@ export function TutorialJennyScreen({
     },
   ]);
   const [isAdvancing, setIsAdvancing] = useState<boolean>(false);
+  const latestMsg = messages[messages.length - 1];
+  const isLatestJenny = latestMsg?.role === "jenny";
+  const { isComplete: jennyTextComplete, onComplete: handleJennyComplete } = useTextRevealGate(
+    isLatestJenny ? latestMsg.text : "",
+    isLatestJenny ? latestMsg.id : undefined
+  );
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationStep, setGenerationStep] = useState<string>("");
   const [mobileTab, setMobileTab] = useState<"chat" | "blueprint">("chat");
@@ -71,8 +78,8 @@ export function TutorialJennyScreen({
 
   // Handle clicking the single fixed sample answer
   const handleAnswerClick = useCallback(() => {
-    // Double click guard: prevent advancing twice
-    if (isAdvancingRef.current || isAdvancing) return;
+    // Double click guard: prevent advancing twice or while Jenny's question is revealing
+    if (isAdvancingRef.current || isAdvancing || !jennyTextComplete) return;
 
     if (currentTurnIndex < SCRIPTED_JENNY_TURNS.length) {
       isAdvancingRef.current = true;
@@ -153,7 +160,7 @@ export function TutorialJennyScreen({
         }, 400);
       }, 400);
     }
-  }, [currentTurnIndex, isAdvancing, onComplete]);
+  }, [currentTurnIndex, isAdvancing, jennyTextComplete, onComplete]);
 
   // Current answer button text
   const currentAnswerText =
@@ -897,10 +904,11 @@ export function TutorialJennyScreen({
           <div
             ref={chatScrollRef}
             data-testid="chat-messages-container"
-            className="flex-1 overflow-y-auto p-6 space-y-4"
+            className="i2-conversation-scroll flex-1 overflow-y-auto p-6 space-y-4"
           >
-            {messages.map((msg) => {
+            {messages.map((msg, idx) => {
               const isJenny = msg.role === "jenny";
+              const isLatestMsg = idx === messages.length - 1;
               return (
                 <div
                   key={msg.id}
@@ -919,7 +927,14 @@ export function TutorialJennyScreen({
                         : "bg-[#2dd4bf] text-[#042f2e] font-medium shadow-sm"
                     }`}
                   >
-                    {msg.text}
+                    {isJenny && isLatestJenny && isLatestMsg ? (
+                      <RevealingInfieText
+                        text={msg.text}
+                        onComplete={handleJennyComplete}
+                      />
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 </div>
               );
@@ -942,9 +957,9 @@ export function TutorialJennyScreen({
                   type="button"
                   data-testid="sample-answer-button"
                   onClick={handleAnswerClick}
-                  disabled={isAdvancing || isGenerating}
+                  disabled={isAdvancing || isGenerating || !jennyTextComplete}
                   className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                    isAdvancing || isGenerating
+                    isAdvancing || isGenerating || !jennyTextComplete
                       ? "opacity-50 pointer-events-none bg-[#1c1c22] border-[#27272a] text-[#71717a]"
                       : currentTurnIndex === SCRIPTED_JENNY_TURNS.length
                       ? "bg-[#2dd4bf] hover:bg-[#14b8a6] text-[#042f2e] border-[#2dd4bf] font-semibold shadow-md"

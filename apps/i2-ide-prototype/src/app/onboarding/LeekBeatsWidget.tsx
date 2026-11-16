@@ -477,7 +477,7 @@ export function LeekBeatsWidget({
         )}
       </div>
 
-      {/* label (playlist + track text) */}
+      {/* Artist and track title in every transport layout. */}
       {fullPlayerRevealed && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -491,7 +491,7 @@ export function LeekBeatsWidget({
             className={compact ? "truncate" : undefined}
             style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 12, fontWeight: 700, color: "#abefa3", letterSpacing: "-0.01em" }}
           >
-            {compact ? track.artist : PLAYLIST_NAME}
+            {track.artist}
           </span>
           <span
             data-testid="music-track-title"

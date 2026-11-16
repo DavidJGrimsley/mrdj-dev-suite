@@ -243,6 +243,12 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Gate:** At least one completed choice is required before Continue is enabled; the user may complete more. Never initiate real OAuth or collect real credentials.
 
+**Final quick turn — Preference Sliders:** After connecting a model and clicking Continue, retire the provider choices and show a small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed. These are shared by every model and conversation.
+
+**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider below—even while I'm talking.”
+
+**Gate:** Speed changes apply immediately, including to the current line; Continue advances to B11. Keep this preview compact. Reduced motion still shows text immediately.
+
 ### B11 — The rest of the header bar
 
 **Reveal:** The `Tutorials, Widgets, Games` part of the header (remove “coming soon” from Games if it's still present).

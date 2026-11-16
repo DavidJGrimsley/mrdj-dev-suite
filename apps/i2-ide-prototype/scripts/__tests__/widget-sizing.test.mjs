@@ -160,10 +160,10 @@ test('browser: compact music artist/title, tall restored Web Preview, and top/bo
     const page = await context.newPage()
     page.on('pageerror', (err) => pageErrors.push(err.message))
 
-    // 1. Check Floating Home non-compact music card retains playlist name
+    // 1. Floating Home player shows the artist too.
     await page.goto(url, { waitUntil: 'networkidle' })
     const homeMusicText = await page.locator('[data-testid="music-track-primary"]').first().innerText()
-    assert.match(homeMusicText, /i² Curated/)
+    assert.equal(homeMusicText.trim(), 'Leek Beats')
 
     // Open Pet Show and Tell Project Home
     await page.locator('[data-testid="home-projects-column"] button:has-text("Pet Show and Tell")').first().click()

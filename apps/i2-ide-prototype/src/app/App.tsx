@@ -92,6 +92,8 @@ import {
   useRegisterLibraryWidgets, useLibraryDrag, useRemovedWidgets, useWidgetFillsContainer, type DockWidget, type WidgetMode,
 } from "./widgets/WidgetDock";
 import { FileViewerProvider, WorkspaceExplorer, useFileViewer, useOpenProjectFile, workspaceSpecFor } from "./widgets/workspaceFiles";
+import { InfiePreferencesProvider, RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "./widgets/infiePreferencesContext";
+import { InfiePreferencesWidget } from "./widgets/InfiePreferencesWidget";
 import { PrototypeLimitProvider, usePrototypeLimit, useRegisterPrototypeLimitNav, TUTORIAL_CHAT_LIMIT, importedProjectLimit, notHotdogLimit } from "./widgets/prototypeLimit";
 import { HOME_PRICING_REPLY, PERSONAL_TIERS, BUSINESS_TIERS, type PricingTier } from "./home/pricing";
 import { ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS, HOME_BOTTOM_PADDING_CLASS, WIDGET_HEADER_CLICK_MS, activeProjectsFit, headerClickAction } from "./home/homeLayout";
@@ -153,7 +155,7 @@ type WidgetId =
   | "terminal" | "eas" | "stylist" | "doctor" | "problems"
   | "extensions" | "timeline" | "search" | "outline"
   | "emuWeb" | "emuAndroid" | "emuIos" | "sessions" | "actions" | "library"
-  | "globalTodo";
+  | "globalTodo" | "infiePreferences";
 interface WidgetDef { id: WidgetId; label: string; icon: React.ReactNode; description: string; }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -186,6 +188,7 @@ const ALL_WIDGETS: WidgetDef[] = [
   { id: "sessions",   label: "Sessions",        icon: <LayoutDashboard size={14} />, description: "All sessions across workspaces" },
   { id: "actions",    label: "Actions",         icon: <Zap size={14} />,             description: "i² quick actions" },
   { id: "library", label: "Library",      icon: <Layers size={14} />,          description: "Design resource library" },
+  { id: "infiePreferences", label: "Preference Sliders", icon: <Sparkles size={14} />, description: "Guidance, tone, and pacing for all models and conversations" },
 ];
 
 const INIT_MESSAGES: Message[] = [
@@ -287,12 +290,7 @@ const INIT_GLOBAL_TODOS: GlobalTodoItem[] = [
 const INFIE_HERO_SRC = assetUrl("/assets/infie-form-mist.png");
 
 function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-  }, []);
-  return reduced;
+  return usePrefersReducedMotion();
 }
 
 // ─── Shared: Diff file row ──────────────────────────────────────────────────
@@ -1190,6 +1188,7 @@ function WidgetContent({ id, ctx, expanded }: { id: WidgetId; ctx: AppContext; e
   if (id === "sessions") return <SessionsContent ctx={ctx} />;
   if (id === "actions") return <ActionsContent ctx={ctx} />;
   if (id === "library") return <LibraryContent expanded={expanded} />;
+  if (id === "infiePreferences") return <InfiePreferencesWidget expanded={expanded} />;
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2">
       <span className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-[#444]">{ALL_WIDGETS.find(w => w.id === id)?.label}</span>
@@ -2359,7 +2358,7 @@ function WidgetsPicker({ onOpen }: { onOpen: (w: WidgetDef) => void }) {
         <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] uppercase tracking-wide text-[#777]">Widgets</span>
       </div>
       <div className="bg-[#252323] p-2 grid grid-cols-3 gap-1.5 overflow-y-auto flex-1 min-h-0">
-        {ALL_WIDGETS.map(w => (
+        {ALL_WIDGETS.filter(w => w.id !== "infiePreferences").map(w => (
           <button key={w.id} onClick={() => onOpen(w)}
             className="flex flex-col items-center gap-1.5 p-2.5 rounded-[6px] bg-[#1d1b20] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#252323] transition-all group"
             title={w.description}>
@@ -2504,7 +2503,7 @@ function ChatBubble({ msg, searchQuery = "" }: { msg: Message; searchQuery?: str
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-2`}>
       <div className={`max-w-[86%] rounded-[8px] px-3 py-2 text-[12px] font-['Rounded_Mplus_1c',sans-serif] leading-relaxed ${isUser ? "bg-[#abefa3] text-[#1d1b20]" : "bg-[#2a2828] text-[#d9d9d9] border border-white/6"}`}>
-        {highlightText(msg.content, searchQuery)}
+        {!isUser && !searchQuery.trim() ? <RevealingInfieText text={msg.content} /> : highlightText(msg.content, searchQuery)}
       </div>
     </div>
   );
@@ -2694,7 +2693,7 @@ function InfieChatPanel({ onSend }: { onSend: (t: string) => void }) {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+      <div ref={scrollRef} className="i2-conversation-scroll flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {messages.map(msg => (
           <div key={msg.id} className={`flex gap-2.5 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
             {msg.role === "assistant"
@@ -2706,7 +2705,7 @@ function InfieChatPanel({ onSend }: { onSend: (t: string) => void }) {
                 ? "bg-[#373434] text-[#c5c5c5] rounded-tr-[3px]"
                 : "rounded-tl-[3px] text-[#c5c5c5]"
             }`} style={msg.role === "assistant" ? { background: `${INFIE_TEAL}0d`, border: `1px solid ${INFIE_TEAL}20` } : {}}>
-              {msg.content}
+              {msg.role === "assistant" ? <RevealingInfieText text={msg.content} /> : msg.content}
             </div>
           </div>
         ))}
@@ -4061,18 +4060,6 @@ function RecentProjectCard({ project, onClick }: { project: typeof RECENT_PROJEC
 
 // ─── Animated ambient background glows ─────────────────────────────────────
 
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
-  }, []);
-  return reduced;
-}
-
 const GLOW_CIRCLES = [
   { color: "rgba(45,212,191,0.08)",  size: 800, top: -250 as number | string, left: -200 as number | string, x: [0, 70, -30, 0],  y: [0, 50, 90, 0],   dur: 26 },
   { color: "rgba(74,58,255,0.07)",   size: 700, top: 50,   left: "auto", right: -150,                                 x: [0, -60, 25, 0], y: [0, 65, -35, 0],  dur: 32 },
@@ -4845,6 +4832,7 @@ function InfieComposer({
   placeholder,
   glow = false,
   disabled = false,
+  sendDisabled = false,
   readOnly = false,
   ariaLabel = "Message Infie",
   className = "",
@@ -4855,11 +4843,12 @@ function InfieComposer({
   placeholder: string;
   glow?: boolean;
   disabled?: boolean;
+  sendDisabled?: boolean;
   readOnly?: boolean;
   ariaLabel?: string;
   className?: string;
 }) {
-  const canSend = !disabled && value.trim().length > 0;
+  const canSend = !disabled && !sendDisabled && value.trim().length > 0;
   const glowOn = glow && canSend;
   return (
     <div className={`bg-[#252323] border border-[rgba(45,212,191,0.14)] rounded-[8px] flex gap-2 items-end px-3 py-2 ${className}`}>
@@ -4908,23 +4897,34 @@ function InfieFlowPill({
   glow = true,
   onClick,
   testId,
+  disabled = false,
 }: {
   label: string;
   preset: ActionPreset;
   icon?: IconCmp;
   glow?: boolean;
-  onClick: () => void;
+  onClick?: () => void;
   testId: string;
+  disabled?: boolean;
 }) {
   const c = PRESET_RGB[preset];
   return (
     <button
       type="button"
       data-testid={testId}
-      data-glow={glow ? "true" : "false"}
-      onClick={onClick}
-      className="relative rounded-[999px] shrink-0 hover:brightness-110 transition-all"
-      style={{ filter: `drop-shadow(0px 0px ${glow ? 10 : 6}px rgba(${c},${glow ? 0.55 : 0.35}))` }}
+      data-glow={glow && !disabled ? "true" : "false"}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      className={`relative rounded-[999px] shrink-0 transition-all ${
+        disabled
+          ? "opacity-40 cursor-not-allowed pointer-events-none"
+          : "hover:brightness-110 cursor-pointer"
+      }`}
+      style={{
+        filter: disabled
+          ? undefined
+          : `drop-shadow(0px 0px ${glow ? 10 : 6}px rgba(${c},${glow ? 0.55 : 0.35}))`,
+      }}
     >
       <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[999px]" style={{ background: `rgba(${c},0.12)` }} />
       <div aria-hidden className="absolute inset-0 pointer-events-none rounded-[999px]" style={{ border: `1px solid rgba(${c},0.6)` }} />
@@ -4954,14 +4954,31 @@ function FlowMessageBubble({
   msg,
   infieAvatar,
   onJump,
+  isLatest = false,
+  onComplete,
 }: {
   msg: FlowMessage;
   infieAvatar: React.ReactNode;
   onJump?: (tab: SessionTabId) => void;
+  isLatest?: boolean;
+  onComplete?: () => void;
 }) {
   const isUser = msg.role === "user";
   const isProvider = msg.role !== "infie" && msg.role !== "user";
   const avatar = isUser ? null : isProvider ? <ProviderAvatar provider={msg.role as ProviderId} /> : infieAvatar;
+  const shouldReveal = !isUser && isLatest;
+
+  const { isComplete: innerComplete, onComplete: handleInnerComplete } = useTextRevealGate(
+    shouldReveal ? msg.text : ""
+  );
+
+  const isComplete = !shouldReveal || innerComplete;
+
+  const handleRevealComplete = () => {
+    handleInnerComplete();
+    onComplete?.();
+  };
+
   const tone =
     msg.kind === "problem"
       ? "bg-[rgba(251,191,36,0.07)] border-[rgba(251,191,36,0.35)]"
@@ -4996,8 +5013,8 @@ function FlowMessageBubble({
               : `px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] border text-[#d4d4d8] ${tone || "bg-[rgba(45,212,191,0.05)] border-[rgba(45,212,191,0.16)]"}`
           }`}
         >
-          <p>{msg.text}</p>
-          {msg.details && msg.details.length > 0 && (
+          <p>{shouldReveal ? <RevealingInfieText text={msg.text} onComplete={handleRevealComplete} /> : msg.text}</p>
+          {msg.details && msg.details.length > 0 && isComplete && (
             <ul className="mt-1.5 font-mono text-[10px] text-[#7dd3fc] space-y-0.5">
               {msg.details.map((d, i) => <li key={i}>{d}</li>)}
             </ul>
@@ -5006,8 +5023,13 @@ function FlowMessageBubble({
             <button
               type="button"
               data-testid={`handoff-jump-${msg.target}`}
-              onClick={() => onJump(msg.target!)}
-              className="mt-2 px-2 py-0.5 rounded bg-[rgba(45,212,191,0.16)] border border-[rgba(45,212,191,0.35)] text-[#2dd4bf] text-[10px] font-semibold hover:brightness-110 flex items-center gap-1 cursor-pointer"
+              disabled={!isComplete}
+              onClick={isComplete ? () => onJump(msg.target!) : undefined}
+              className={`mt-2 px-2 py-0.5 rounded border text-[10px] font-semibold flex items-center gap-1 transition-all ${
+                !isComplete
+                  ? "opacity-40 cursor-not-allowed bg-white/5 border-white/10 text-white/40 pointer-events-none"
+                  : "bg-[rgba(45,212,191,0.16)] border-[rgba(45,212,191,0.35)] text-[#2dd4bf] hover:brightness-110 cursor-pointer"
+              }`}
             >
               <span>Open {PROVIDER_TOPIC[msg.target]}</span>
               <ArrowRight size={10} />
@@ -5683,11 +5705,23 @@ function ProjectHomeScreen({
   const [inlineAgentReplyDraft, setInlineAgentReplyDraft] = useState(B14_AGENT_REPLY_DEFAULT);
   const highlightDemoSessionCard =
     isTutorialActive && currentBeat === "B14" && turnIndex === 2;
-  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
+  const { isComplete: projectDockedTextComplete, onComplete: handleProjectDockedComplete } = useTextRevealGate(
+    dockedChat.currentLine,
+    dockedChat.currentMessageId
+  );
+  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue && projectDockedTextComplete);
   // Keep the newest tutorial line in view (scroll only the message list, never ancestors).
   const projectChatListRef = useRef<HTMLDivElement>(null);
   const isExperimemoHome = project.id === EXPERIMEMO_PROJECT_ID;
   const experimemoFlow = tutorial.flow;
+  const latestExperimemoHomeMsg = isExperimemoHome ? experimemoFlow.homeMessages[experimemoFlow.homeMessages.length - 1] : undefined;
+  const isLatestHomeInfie = latestExperimemoHomeMsg?.role === "infie";
+  const { isComplete: experimemoHomeTextComplete, onComplete: handleExperimemoHomeTextComplete } = useTextRevealGate(
+    isLatestHomeInfie ? (latestExperimemoHomeMsg?.text ?? "") : "",
+    isLatestHomeInfie ? latestExperimemoHomeMsg?.id : undefined
+  );
+  const isExperimemoQuestionStage =
+    experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question";
   useEffect(() => {
     const el = projectChatListRef.current;
     if ((isTutorialActive || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -6040,15 +6074,23 @@ function ProjectHomeScreen({
                 <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#2dd4bf] text-[9px]">Active</p>
               </div>
             </div>
-            <div ref={projectChatListRef} className="i2-chat-scale flex-1 overflow-y-auto p-[16px] flex flex-col gap-[16px]">
+            <div ref={projectChatListRef} className="i2-chat-scale i2-conversation-scroll flex-1 overflow-y-auto p-[16px] flex flex-col gap-[16px]">
               {isExperimemoHome ? (
-                experimemoFlow.homeMessages.map(m => (
-                  <FlowMessageBubble key={m.id} msg={m} infieAvatar={<OP4InfieAvatar />} />
+                experimemoFlow.homeMessages.map((m, idx) => (
+                  <FlowMessageBubble
+                    key={m.id}
+                    msg={m}
+                    infieAvatar={<OP4InfieAvatar />}
+                    isLatest={idx === experimemoFlow.homeMessages.length - 1}
+                    onComplete={handleExperimemoHomeTextComplete}
+                  />
                 ))
               ) : isTutorialActive ? (
                 <>
                   {dockedChat.history.map((m, idx) => {
-                    const isLatest = idx === dockedChat.history.length - 1;
+                    const isLatest = dockedChat.currentMessageId
+                      ? m.id === dockedChat.currentMessageId
+                      : idx === dockedChat.history.length - 1;
                     if (m.kind === "agent_question") {
                       // B14: the demo agent question arrives as an ordinary chat message,
                       // in conversation order, with its bordered reply field and Send.
@@ -6089,8 +6131,6 @@ function ProjectHomeScreen({
                         <div
                           data-slot={isLatest ? "infie-message" : undefined}
                           data-message-id={m.id}
-                          role={isLatest ? "status" : undefined}
-                          aria-live={isLatest ? "polite" : undefined}
                           className="flex flex-col items-start px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] flex-1"
                           style={{
                             background: "transparent",
@@ -6100,7 +6140,18 @@ function ProjectHomeScreen({
                           }}
                         >
                           <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#e5e7eb] text-[13px] leading-[19.5px]">
-                            {m.text}
+                            {isLatest ? (
+                              <RevealingInfieText
+                                text={m.text}
+                                live={Boolean(dockedChat.onTextComplete)}
+                                onComplete={() => {
+                                  handleProjectDockedComplete();
+                                  dockedChat.onTextComplete?.(m.id);
+                                }}
+                              />
+                            ) : (
+                              m.text
+                            )}
                           </p>
                         </div>
                       </div>
@@ -6112,11 +6163,13 @@ function ProjectHomeScreen({
                   "Session initialised. Scanning `expo-photo-share/project/Todo.md`… found 3 open tasks, 2 completed.",
                   "Worktree `feature/photo-share` is active. Claude is working on `PhotoPicker.tsx` and `usePhotoShare.ts`. No conflicts between worktrees detected.",
                   "Emulator connected on port 8081. Doctor passed all checks. Handing control to session agent.",
-                ].map((msg, i) => (
+                ].map((msg, i, arr) => (
                   <div key={i} className="flex gap-[10px] items-start w-full">
                     <OP4InfieAvatar />
                     <div className="bg-[rgba(45,212,191,0.05)] border border-[rgba(45,212,191,0.13)] flex flex-col items-start px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] flex-1">
-                      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[12px] leading-[19.5px]">{msg}</p>
+                      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[12px] leading-[19.5px]">
+                        {i === arr.length - 1 ? <RevealingInfieText text={msg} /> : msg}
+                      </p>
                     </div>
                   </div>
                 ))
@@ -6138,7 +6191,8 @@ function ProjectHomeScreen({
                         testId="whats-next-button"
                         label="What's Next"
                         preset="teal"
-                        onClick={() => tutorial.dispatchFlow({ type: "WHATS_NEXT" })}
+                        disabled={!experimemoHomeTextComplete}
+                        onClick={experimemoHomeTextComplete ? () => tutorial.dispatchFlow({ type: "WHATS_NEXT" }) : undefined}
                       />
                     )}
                     {experimemoFlow.stage === "plan-ready" && (
@@ -6147,10 +6201,11 @@ function ProjectHomeScreen({
                         label={SESSION_FLOW.READY.label}
                         preset={SESSION_FLOW.READY.preset}
                         icon={SESSION_FLOW.READY.icon}
-                        onClick={() => {
+                        disabled={!experimemoHomeTextComplete}
+                        onClick={experimemoHomeTextComplete ? () => {
                           tutorial.dispatchFlow({ type: "START_SESSION" });
                           onOpenSession(EXPERIMEMO_SESSION, { justStarted: true });
-                        }}
+                        } : undefined}
                       />
                     )}
                   </>
@@ -6230,8 +6285,9 @@ function ProjectHomeScreen({
                       ? PLAN_COMPOSER_GHOST
                       : "Ask Infie to coordinate, scan, or switch agents… (⌘↵)"
                   }
-                  glow={experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question"}
-                  readOnly={experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question"}
+                  glow={isExperimemoQuestionStage}
+                  readOnly={isExperimemoQuestionStage}
+                  sendDisabled={isExperimemoQuestionStage && !experimemoHomeTextComplete}
                   disabled={
                     experimemoFlow.stage === "scanning" ||
                     experimemoFlow.stage === "planning" ||
@@ -6252,7 +6308,8 @@ function ProjectHomeScreen({
                   }}
                   placeholder="Reply to the agent…"
                   ariaLabel="Reply to the session agent"
-                  glow
+                  sendDisabled={!projectDockedTextComplete}
+                  glow={projectDockedTextComplete}
                   readOnly
                 />
               ) : (
@@ -6651,7 +6708,11 @@ function SessionScreen({
     demoSessionCompleted,
     setTurnIndex,
   } = useOnboarding();
-  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
+  const { isComplete: sessionDockedTextComplete, onComplete: handleSessionDockedComplete } = useTextRevealGate(
+    dockedChat.currentLine,
+    dockedChat.currentMessageId
+  );
+  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue && sessionDockedTextComplete);
   // B17: the form stays up through the explanation turns; Submit retires it.
   const showCompletionForm =
     !isExperimemo &&
@@ -6835,6 +6896,12 @@ function SessionScreen({
   };
 
   const activeExperimemoMessages: FlowMessage[] = isExperimemo ? getExperimemoMessagesForTab(activeAgentTab) : [];
+  const latestExperimemoSessionMsg = isExperimemo ? activeExperimemoMessages[activeExperimemoMessages.length - 1] : undefined;
+  const isLatestSessionInfie = latestExperimemoSessionMsg?.role === "infie";
+  const { isComplete: experimemoSessionTextComplete, onComplete: handleExperimemoSessionTextComplete } = useTextRevealGate(
+    isLatestSessionInfie ? (latestExperimemoSessionMsg?.text ?? "") : "",
+    isLatestSessionInfie ? latestExperimemoSessionMsg?.id : undefined
+  );
   const sessionActions = isExperimemo && xs ? getSessionActions(xs) : [];
   const primaryAction = xs ? getPrimaryAction(xs) : null;
 
@@ -7363,7 +7430,7 @@ function SessionScreen({
             id={isExperimemo ? `panel-agent-${activeAgentTab}` : undefined}
             role={isExperimemo ? "tabpanel" : undefined}
             aria-labelledby={isExperimemo ? `tab-agent-${activeAgentTab}` : undefined}
-            className="i2-chat-scale flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 flex flex-col gap-4 bg-[#0a0814]"
+            className="i2-chat-scale i2-conversation-scroll flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 py-4 flex flex-col gap-4 bg-[#0a0814]"
           >
             {isExperimemo ? (
               activeExperimemoMessages.length === 0 ? (
@@ -7385,27 +7452,29 @@ function SessionScreen({
                   </button>
                 </div>
               ) : (
-                activeExperimemoMessages.map((msg) => (
+                activeExperimemoMessages.map((msg, idx) => (
                   <FlowMessageBubble
                     key={msg.id}
                     msg={msg}
                     infieAvatar={<OS1InfieAvatar maskId={`os1-av-${msg.id}`} />}
                     onJump={activeAgentTab === "infie" ? tutorial.setActiveSessionTab : undefined}
+                    isLatest={idx === activeExperimemoMessages.length - 1}
+                    onComplete={handleExperimemoSessionTextComplete}
                   />
                 ))
               )
             ) : isTutorialActive ? (
               <>
                 {dockedChat.history.map((m, idx) => {
-                  const isLatest = idx === dockedChat.history.length - 1;
+                  const isLatest = dockedChat.currentMessageId
+                    ? m.id === dockedChat.currentMessageId
+                    : idx === dockedChat.history.length - 1;
                   return (
                     <div key={m.id} className="flex gap-[10px] items-start justify-start">
                       <OS1InfieAvatar maskId={`os1-av-tut-${idx}`} />
                       <div
                         data-slot={isLatest ? "infie-message" : undefined}
                         data-message-id={m.id}
-                        role={isLatest ? "status" : undefined}
-                        aria-live={isLatest ? "polite" : undefined}
                         style={{
                           borderRadius: "3px 10px 10px 10px",
                           padding: "10px 14px",
@@ -7420,7 +7489,18 @@ function SessionScreen({
                           maxWidth: "85%",
                         }}
                       >
-                        {m.text}
+                        {isLatest ? (
+                          <RevealingInfieText
+                            text={m.text}
+                            live={Boolean(dockedChat.onTextComplete)}
+                            onComplete={() => {
+                              handleSessionDockedComplete();
+                              dockedChat.onTextComplete?.(m.id);
+                            }}
+                          />
+                        ) : (
+                          m.text
+                        )}
                       </div>
                     </div>
                   );
@@ -7440,7 +7520,7 @@ function SessionScreen({
                     color: m.role === "user" ? "#06201d" : "#c5c5c5",
                     border: m.role === "user" ? "none" : "0.667px solid rgba(45,212,191,0.13)",
                     maxWidth: "85%",
-                  }}>{m.content}</div>
+                  }}>{m.role === "assistant" ? <RevealingInfieText text={m.content} /> : m.content}</div>
                 </div>
               ))
             )}
@@ -7551,7 +7631,8 @@ function SessionScreen({
                         label={act.label}
                         preset={act.preset}
                         icon={iconByKey[act.key]}
-                        onClick={handleActionClick}
+                        disabled={!experimemoSessionTextComplete}
+                        onClick={experimemoSessionTextComplete ? handleActionClick : undefined}
                       />
                     );
                   })}
@@ -7882,7 +7963,11 @@ function I2HomeScreen({
   // B12 Turn 0 is the only time the conversation entry mounts sliding in from center
   // (HomeConversationSlide latches this at mount); later mounts render in place.
   const slideConversationIn = isTutorialActive && currentBeat === "B12" && turnIndex === 0;
-  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue);
+  const { isComplete: homeDockedTextComplete, onComplete: handleHomeDockedComplete } = useTextRevealGate(
+    dockedChat.currentLine,
+    dockedChat.currentMessageId
+  );
+  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue && homeDockedTextComplete);
   const [tab, setTab] = useState<"Workspace" | "Emulators">("Workspace");
   const [emuConnected, setEmuConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: "greet", role: "assistant", content: INFIE_HOME_GREETING }]);
@@ -8022,12 +8107,14 @@ function I2HomeScreen({
                   }
                 >
                   {/* Scrollable messages */}
-                  <div className="flex flex-col gap-2 overflow-y-auto mb-3 flex-1">
+                  <div className="i2-conversation-scroll flex flex-col gap-2 overflow-y-auto mb-3 flex-1">
                     {isTutorialActive ? (
                       <>
-                        <AnimatePresence initial={false}>
+                        <AnimatePresence initial={false} mode="popLayout">
                         {dockedChat.history.map((m, idx) => {
-                          const isLatest = idx === dockedChat.history.length - 1;
+                          const isLatest = dockedChat.currentMessageId
+                            ? m.id === dockedChat.currentMessageId
+                            : idx === dockedChat.history.length - 1;
                           return (
                             <motion.div
                               layout="position"
@@ -8044,8 +8131,6 @@ function I2HomeScreen({
                               <div
                                 data-slot={isLatest ? "infie-message" : "infie-message-history"}
                                 data-message-id={m.id}
-                                role={isLatest ? "status" : undefined}
-                                aria-live={isLatest ? "polite" : undefined}
                                 className="rounded-[12px] px-[13px] py-[9px] text-[13px]"
                                 style={{
                                   maxWidth: "92%",
@@ -8058,7 +8143,18 @@ function I2HomeScreen({
                                     : "1px solid rgba(45, 212, 191, 0.18)",
                                 }}
                               >
-                                {m.text}
+                                {isLatest ? (
+                                  <RevealingInfieText
+                                    text={m.text}
+                                    live={Boolean(dockedChat.onTextComplete)}
+                                    onComplete={() => {
+                                      handleHomeDockedComplete();
+                                      dockedChat.onTextComplete?.(m.id);
+                                    }}
+                                  />
+                                ) : (
+                                  m.text
+                                )}
                               </div>
                             </motion.div>
                           );
@@ -8075,7 +8171,7 @@ function I2HomeScreen({
                               background: m.role === "user" ? "#2dd4bf" : "rgba(255,255,255,0.05)",
                               color: m.role === "user" ? "#06201d" : "rgba(255,255,255,0.8)",
                               border: "none",
-                            }}>{m.content}</div>
+                            }}>{m.role === "assistant" ? <RevealingInfieText text={m.content} /> : m.content}</div>
                         </div>
                       ))
                     )}
@@ -8561,7 +8657,7 @@ function WidgetsGalleryModal({
 
   const removed = useRemovedWidgets(dockScreen);
   const devTools = ALL_WIDGETS.filter(w =>
-    ["terminal", "eas", "git", "search", "stylist", "extensions", "actions", "sessions", "library"].includes(w.id)
+    ["terminal", "eas", "git", "search", "stylist", "extensions", "actions", "sessions", "library", "infiePreferences"].includes(w.id)
   );
   const diagnostics = ALL_WIDGETS.filter(w =>
     ["doctor", "problems", "timeline", "humanTesting", "outline"].includes(w.id)
@@ -8598,7 +8694,7 @@ function WidgetsGalleryModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ duration: 0.18 }}
-        className={`w-full max-w-[680px] ${tutorialMode ? "max-h-[62vh]" : "max-h-[85vh]"} bg-[#161517] border border-white/10 rounded-[16px] shadow-2xl flex flex-col overflow-hidden text-white`}
+        className={`w-full max-w-[760px] ${tutorialMode ? "max-h-[62vh]" : "max-h-[85vh]"} bg-[#161517] border border-white/10 rounded-[16px] shadow-2xl flex flex-col overflow-hidden text-white`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -8679,7 +8775,7 @@ function WidgetsGalleryModal({
           {/* Developer Tools */}
           <div>
             <h4 className="font-['Space_Grotesk',sans-serif] text-[12px] font-bold text-[#777] uppercase tracking-wider mb-2.5">Developer Tools</h4>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {devTools.map(w => (
                 <GalleryTile key={w.id} w={w} onOpenWidget={onOpenWidget} highlighted={w.id === highlightWidgetId} inert={tutorialMode} />
               ))}
@@ -9384,15 +9480,17 @@ export default function App() {
   return (
     <OnboardingProvider initialBeat={initialQueryBeat ?? "COMPLETE"} initialB00GateHeld={startWithOpening}>
       <TutorialProvider>
-        <PrototypeLimitProvider>
-          <SimulatorTargetProvider>
-            <FileViewerProvider>
-              <WidgetDockProvider>
-                <PersistentAppShell initialOpening={startWithOpening} />
-              </WidgetDockProvider>
-            </FileViewerProvider>
-          </SimulatorTargetProvider>
-        </PrototypeLimitProvider>
+        <InfiePreferencesProvider>
+          <PrototypeLimitProvider>
+            <SimulatorTargetProvider>
+              <FileViewerProvider>
+                <WidgetDockProvider>
+                  <PersistentAppShell initialOpening={startWithOpening} />
+                </WidgetDockProvider>
+              </FileViewerProvider>
+            </SimulatorTargetProvider>
+          </PrototypeLimitProvider>
+        </InfiePreferencesProvider>
       </TutorialProvider>
     </OnboardingProvider>
   );

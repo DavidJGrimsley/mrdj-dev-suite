@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { assetUrl } from "../assetUrl";
 import { motion, AnimatePresence, useAnimationControls } from "motion/react";
 import {
@@ -45,6 +45,8 @@ import {
 } from "./FloatingPrimitives";
 import { useInfieDance } from "./infieDanceAnimation";
 import { StylistPreview } from "./StylistPreview";
+import { RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "../widgets/infiePreferencesContext";
+import { PreferenceSlidersPreview } from "../widgets/InfiePreferencesWidget";
 import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
 import { chatScale } from "../widgets/chatScale";
 import {
@@ -160,18 +162,6 @@ const B10_MODEL_PROVIDERS: ReadonlyArray<{
   { id: "cline", label: "Cline", kind: "cloud", summary: "Autonomous tool-use agent runner" },
   { id: "local", label: "Use local models", kind: "local", summary: "Ollama / LM Studio local weights on your machine" },
 ];
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener?.("change", handler);
-    return () => mq.removeEventListener?.("change", handler);
-  }, []);
-  return reduced;
-}
 
 /** Widths below 1280px shift the early chat left so the right-margin card stays clear. */
 function useNarrowStage(): boolean {
@@ -337,7 +327,7 @@ export function OnboardingStage({
     completeOnboarding,
   } = useOnboarding();
 
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = usePrefersReducedMotion();
   const narrowStage = useNarrowStage();
   const viewportWidth = useViewportWidth();
 
@@ -368,6 +358,7 @@ export function OnboardingStage({
   // latches for the rest of the beat and falls back to still PNGs with the reading dwell.
   const [b06VideoPhase, setB06VideoPhase] = useState<B06VideoPhase>("idle");
   const [b06Recentering, setB06Recentering] = useState(false);
+  const [b06PendingAdvance, setB06PendingAdvance] = useState(false);
   const b06VideoRef = useRef<HTMLVideoElement | null>(null);
   // True once the chain video actually reported playback (start watchdog checks it)
   const b06VideoStartedRef = useRef(false);
@@ -380,454 +371,7 @@ export function OnboardingStage({
     summary: string;
   } | null>(null);
 
-  // Reset chat dock state when starting or returning to early beats
-  useEffect(() => {
-    if (currentBeat === "B00" || currentBeat === "B01") {
-      setChatDocked(false);
-      setActiveModelModal(null);
-      setMessageStack([]);
-      setB06VideoPhase("idle");
-      setB06Recentering(false);
-    }
-  }, [currentBeat]);
-
-  // B06 chain video lifecycle on turns 1, 2, 3. "failed" is sticky until the beat is left,
-  // so a failure never restarts the video from 0s.
-  useEffect(() => {
-    if (currentBeat !== "B06") {
-      setB06VideoPhase("idle");
-      setB06Recentering(false);
-      return;
-    }
-    if (turnIndex === 0 || turnIndex === 4 || reducedMotion) {
-      // Reduced motion: no videos; the cue effect advances after a reading dwell.
-      setB06VideoPhase("idle");
-      setB06Recentering(false);
-      return;
-    }
-    retireGroup("continue_button");
-    setB06VideoPhase((p) => (p === "failed" ? p : canPlayControlsChainVideo() ? "playing" : "failed"));
-  }, [currentBeat, turnIndex, reducedMotion, retireGroup]);
-
-  // B06 watchdogs while the chain video plays (one run for the whole chain, not per turn):
-  // no playback by the start watchdog → still PNG fallback; media time frozen while the tab
-  // is visible → still PNG fallback, so the tutorial never stalls.
-  useEffect(() => {
-    if (currentBeat !== "B06" || b06VideoPhase !== "playing") return;
-    b06VideoStartedRef.current = false;
-    const startedAt = Date.now();
-    let lastTime = -1;
-    let lastChange = startedAt;
-    const tick = window.setInterval(() => {
-      const now = Date.now();
-      const v = b06VideoRef.current;
-      if (!b06VideoStartedRef.current) {
-        if (now - startedAt >= B06_VIDEO_START_WATCHDOG_MS) setB06VideoPhase("failed");
-        return;
-      }
-      if (!v || document.visibilityState !== "visible" || v.ended) {
-        lastChange = now;
-        return;
-      }
-      if (v.currentTime !== lastTime) {
-        lastTime = v.currentTime;
-        lastChange = now;
-      } else if (now - lastChange >= B06_VIDEO_STALL_WATCHDOG_MS) {
-        setB06VideoPhase("failed");
-      }
-    }, 500);
-    return () => window.clearInterval(tick);
-  }, [currentBeat, b06VideoPhase]);
-
-  // B06 video-time cues: turn follows the video's media time, never goes backwards.
-  useEffect(() => {
-    if (currentBeat !== "B06" || b06VideoPhase !== "playing") return;
-    const v = b06VideoRef.current as
-      | (HTMLVideoElement & {
-          requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
-          cancelVideoFrameCallback?: (id: number) => void;
-        })
-      | null;
-    if (!v) return;
-    const sync = (mediaTime: number) => {
-      const turn = b06TurnForMediaTime(mediaTime);
-      setTurnIndex((t) => (t >= 1 && t < 4 ? Math.max(t, turn) : t));
-    };
-    const onTimeUpdate = () => sync(v.currentTime);
-    v.addEventListener("timeupdate", onTimeUpdate);
-    v.addEventListener("seeked", onTimeUpdate);
-    let stopped = false;
-    let frameId = 0;
-    const onFrame = (_now: number, meta: { mediaTime: number }) => {
-      if (stopped) return;
-      sync(meta.mediaTime);
-      frameId = v.requestVideoFrameCallback!(onFrame);
-    };
-    if (typeof v.requestVideoFrameCallback === "function") frameId = v.requestVideoFrameCallback(onFrame);
-    return () => {
-      stopped = true;
-      v.removeEventListener("timeupdate", onTimeUpdate);
-      v.removeEventListener("seeked", onTimeUpdate);
-      if (frameId) v.cancelVideoFrameCallback?.(frameId);
-    };
-  }, [currentBeat, b06VideoPhase, setTurnIndex]);
-
-  // B06 failed video: show the still PNG beside Infie, then move on after a reading dwell
-  // (per turn, so turns 1-3 each get their still).
-  useEffect(() => {
-    if (currentBeat !== "B06" || b06VideoPhase !== "failed") return;
-    if (turnIndex < 1 || turnIndex > 3) return;
-    const line = B06_DEVICE_LINES[turnIndex] ?? "";
-    const t = window.setTimeout(() => {
-      setTurnIndex((ti) => (ti === turnIndex ? Math.min(ti + 1, 4) : ti));
-    }, Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)));
-    return () => window.clearTimeout(t);
-  }, [currentBeat, turnIndex, b06VideoPhase, setTurnIndex]);
-
-  // B01 arrival sequence timer -> B02 (preserves Infinite Intelligence and i², fading cleanly before real Infie fades in at B02)
-  useEffect(() => {
-    if (currentBeat !== "B01") return;
-    b02CompletedRef.current = false;
-    setB01Stage("lettering");
-    if (reducedMotion) {
-      const t1 = window.setTimeout(() => setB01Stage("mark"), 650);
-      const t2 = window.setTimeout(() => setB01Stage("outro"), 1350);
-      const t3 = window.setTimeout(() => advanceBeat("B02"), 1600);
-      return () => {
-        window.clearTimeout(t1);
-        window.clearTimeout(t2);
-        window.clearTimeout(t3);
-      };
-    }
-    const t1 = window.setTimeout(() => setB01Stage("mark"), 900);
-    const t2 = window.setTimeout(() => setB01Stage("outro"), 2150);
-    const t3 = window.setTimeout(() => advanceBeat("B02"), 2600);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-    };
-  }, [currentBeat, reducedMotion, advanceBeat]);
-
-  // B02: Let Infie fade into her normal position first, then greet, then reveal the identity form
-  useEffect(() => {
-    if (currentBeat !== "B02") return;
-    b02CompletedRef.current = false;
-    retireGroup("identity_controls");
-    const delay = reducedMotion ? 950 : 1950;
-    const timer = window.setTimeout(() => {
-      revealGroup("identity_controls");
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [currentBeat, reducedMotion, revealGroup, retireGroup]);
-
-  // Cue-timed reveals across B03–B21. Each element appears AFTER the line that
-  // introduces it. Continue is per-turn: retired on every turn change, then
-  // introduced again by that turn's line. Reduced motion keeps the same order
-  // and reading dwell, but with a short reveal delay and fade only.
-  useEffect(() => {
-    if (currentBeat === "B00" || currentBeat === "COMPLETE") return;
-    retireGroup("continue_button");
-    const timers: number[] = [];
-    const at = (ms: number, fn: () => void, compress = true) =>
-      timers.push(window.setTimeout(fn, compress && reducedMotion ? Math.min(ms, 150) : ms));
-
-    if (currentBeat === "B03") {
-      if (turnIndex === 0) {
-        at(450, () => revealGroup(["level_indicator", "continue_button"]));
-      } else if (turnIndex === 1) {
-        // "What a noob." appears as its own message and holds for a full second before the next message
-        at(B03_NOOB_TIMER_MS, () => setTurnIndex(2), false);
-      } else {
-        at(450, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B04") {
-      if (turnIndex === 0) at(500, () => revealGroup("project_interest_reply"));
-      else at(500, () => revealGroup("continue_button"));
-    } else if (currentBeat === "B05") {
-      if (turnIndex === 0) at(600, () => revealGroup(["music_play_only", "continue_button"]));
-      else {
-        at(120, () => revealGroup(["music_play_only", "music_full_player"]));
-        at(1050, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B06") {
-      if (turnIndex === 0) {
-        at(350, () => revealGroup("controls_mic_prompt"));
-      } else if (turnIndex === 4) {
-        revealGroup("controls_illustrations");
-        at(450, () => revealGroup("continue_button"));
-      } else {
-        revealGroup("controls_illustrations");
-        // No gate: in normal motion the video's `ended` advances; reduced motion shows the
-        // still PNG and moves on after a reading dwell.
-        if (reducedMotion) {
-          const line = B06_DEVICE_LINES[turnIndex] ?? "";
-          at(
-            Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)),
-            () => setTurnIndex((t) => (t === turnIndex ? Math.min(t + 1, 4) : t)),
-            false
-          );
-        }
-      }
-    } else if (currentBeat === "B07") {
-      at(400, () => revealGroup("continue_button"));
-    } else if (currentBeat === "B08") {
-      if (turnIndex === 0) {
-        at(300, () => revealGroup("workspace_tree"));
-        at(500, () => revealGroup("continue_button"));
-      } else if (turnIndex === 1) {
-        // Simultaneously with Turn 2 message, reveal i2 / Project / Session nav group while tree stays
-        revealGroup(["workspace_tree", "header_breadcrumbs"]);
-        at(500, () => revealGroup("continue_button"));
-      } else {
-        retireGroup("workspace_tree");
-        revealGroup(["project_folder_only", "folder_illustration", "header_breadcrumbs"]);
-        at(450, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B09") {
-      retireGroup("workspace_tree");
-      revealGroup(["project_folder_only", "folder_illustration"]);
-      if (turnIndex === 2) {
-        at(250, () => revealGroup("stylist_preview"));
-      } else {
-        retireGroup("stylist_preview");
-      }
-      at(450, () => revealGroup("continue_button"));
-    } else if (currentBeat === "B10") {
-      retireGroup(["workspace_tree", "project_folder_only", "folder_illustration", "stylist_preview"]);
-      if (turnIndex === 0) {
-        retireGroup("model_signin_buttons");
-        at(450, () => revealGroup("continue_button"));
-      } else {
-        revealGroup("model_signin_buttons");
-        if (connectedModels.length >= 1) {
-          at(200, () => revealGroup("continue_button"));
-        } else {
-          retireGroup("continue_button");
-        }
-      }
-    } else if (currentBeat === "B11") {
-      retireGroup("model_signin_buttons");
-      if (turnIndex === 0) {
-        revealGroup(["header_tutorials_widgets_games", "tutorials_entry"]);
-        at(450, () => revealGroup("continue_button"));
-      } else if (turnIndex === 1) {
-        revealGroup([
-          "header_tutorials_widgets_games",
-          "tutorials_entry",
-          "header_notifications_settings",
-        ]);
-        at(450, () => revealGroup("continue_button"));
-      } else {
-        // Turn 2: Notification/Settings pill glides to its top-right Header dock before B12 begins
-        revealGroup([
-          "header_tutorials_widgets_games",
-          "tutorials_entry",
-          "header_notifications_settings",
-        ]);
-        at(600, () => advanceBeat("B12"));
-      }
-    } else if (currentBeat === "B12") {
-      revealGroup([
-        "header_breadcrumbs",
-        "header_tutorials_widgets_games",
-        "header_notifications_settings",
-        "home_header_controls",
-        "tutorials_entry",
-        "home_conversation_entry",
-        "home_projects_and_actions",
-      ]);
-      if (turnIndex === 0) {
-        // Bridge line → conversation slides left and lands → dwell → Active Projects (Turn 1).
-        at(
-          reducedMotion ? 1000 : B12_BRIDGE_READ_MS + B12_SLIDE_MS + B12_LANDED_DWELL_MS,
-          () => setTurnIndex(1),
-          false
-        );
-      } else if (turnIndex === 1) {
-        revealGroup("home_resume_projects");
-        // Continue only after Active Projects finish their entrance
-        // (not compressed in reduced motion: the fade still runs, order must hold).
-        at(B12_PROJECTS_FADE_MS + 120, () => revealGroup("continue_button"), false);
-      } else if (turnIndex === 2) {
-        revealGroup(["home_resume_projects", "home_new_import_buttons"]);
-        at(450, () => revealGroup("continue_button"), false);
-      } else if (turnIndex === 3 || turnIndex === 4) {
-        revealGroup(["home_resume_projects", "home_new_import_buttons"]);
-        at(400, () => revealGroup("continue_button"));
-      } else if (turnIndex === 5) {
-        revealGroup(["home_resume_projects", "home_new_import_buttons", "home_action_buttons"]);
-        at(400, () => revealGroup("continue_button"));
-      } else {
-        // Turn 6: two project choices glow teal/cyan; no Continue button
-        revealGroup([
-          "home_resume_projects",
-          "home_new_import_buttons",
-          "home_action_buttons",
-          "tutorial_demo_project",
-        ]);
-      }
-    } else if (currentBeat === "B13") {
-      if (turnIndex === 0) {
-        // Infie speaks first; then the side and bottom panels slide in toward the chat
-        // (~0.7s); Continue is offered only once they have landed.
-        revealGroup("project_navigation");
-        at(900, () => revealGroup("project_roadmap_sessions"));
-        at(1900, () => revealGroup("continue_button"));
-      } else {
-        revealGroup(["project_navigation", "project_roadmap_sessions"]);
-        at(450, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B14") {
-      revealGroup([
-        "project_navigation",
-        "project_roadmap_sessions",
-        "demo_session_and_question",
-      ]);
-      if (turnIndex === 0) {
-        at(450, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B15") {
-      if (turnIndex < B15_TASKS_TURN) {
-        revealGroup("session_agent_controls");
-        at(450, () => revealGroup("continue_button"));
-      } else {
-        revealGroup(["session_agent_controls", "session_task_groups"]);
-      }
-    } else if (currentBeat === "B16") {
-      revealGroup(["session_agent_controls", "session_task_groups", "session_pr_status"]);
-      at(450, () => revealGroup("continue_button"));
-    } else if (currentBeat === "B17") {
-      const lastExplanationIdx = B17_EXPLANATIONS.length - 1;
-      if (turnIndex <= lastExplanationIdx) {
-        revealGroup("session_completion_form");
-        if (turnIndex < lastExplanationIdx) {
-          at(350, () => revealGroup("continue_button"));
-        }
-      } else if (turnIndex === lastExplanationIdx + 1) {
-        // After Submit: the session is closed (Continue).
-        retireGroup("session_completion_form");
-        at(400, () => revealGroup("continue_button"));
-      } else {
-        // Segue to the rest of the UI: no gate (dwell halved per B17 timing rule).
-        retireGroup("session_completion_form");
-        at(segueDwellMs(B17_TO_UI_SEGUE, 0.5), () => advanceBeat("B18"), false);
-      }
-    } else if (currentBeat === "B18") {
-      retireGroup("session_completion_form");
-      if (turnIndex === B18_MOVE_TURN) {
-        retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-      } else if (turnIndex === B18_PANELS_TURN) {
-        retireGroup("library_entry_and_example");
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-        at(450, () => revealGroup("continue_button"));
-      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
-        retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-      } else if (turnIndex === B18_LIBRARY_TURN) {
-        // Gallery is opened by clicking Widgets in Turn 2; reveal Library callout Continue.
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize", "library_entry_and_example"]);
-        at(350, () => revealGroup("continue_button"));
-      } else {
-        // Segue from widgets to the other surfaces of iSquared: no gate.
-        retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-        at(segueDwellMs(B18_TO_SURFACES_SEGUE), () => advanceBeat("B19"), false);
-      }
-    } else if (currentBeat === "B19") {
-      retireGroup("library_entry_and_example");
-      if (turnIndex < B19_HOME_TURN) {
-        at(450, () => revealGroup("continue_button"));
-      }
-    } else if (currentBeat === "B20") {
-      revealGroup("tutorials_entry");
-      at(450, () => revealGroup("continue_button"));
-    } else if (currentBeat === "B21") {
-      revealGroup("tutorials_entry");
-      at(600, () => revealGroup("continue_button"));
-    }
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [
-    currentBeat,
-    turnIndex,
-    maxEnabledBeat,
-    connectedModels.length,
-    reducedMotion,
-    revealGroup,
-    retireGroup,
-    setTurnIndex,
-  ]);
-
-  // Shared B02 completion path (used by both Submit and Sign in with GitHub)
-  // Guarded by b02CompletedRef so duplicate advancement can never occur.
-  // NOTE: all hooks must run before any early return (rules of hooks).
-  const completeB02Identity = useCallback(
-    (profile: UserProfile) => {
-      if (b02CompletedRef.current || currentBeat !== "B02") {
-        return;
-      }
-      b02CompletedRef.current = true;
-      setNameError(null);
-      setEmailError(null);
-      setUserProfile(profile);
-      retireGroup("identity_controls");
-      advanceBeat("B03");
-    },
-    [currentBeat, setUserProfile, retireGroup, advanceBeat]
-  );
-
   const displayName = userProfile?.name || "Null";
-
-  // B02 Identity Handlers
-  const validateAndSubmitIdentity = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (b02CompletedRef.current || currentBeat !== "B02") return;
-
-    const trimmedName = nameDraft.trim();
-    const trimmedEmail = emailDraft.trim();
-    let valid = true;
-
-    if (!trimmedName) {
-      setNameError("Enter your name");
-      valid = false;
-    } else {
-      setNameError(null);
-    }
-
-    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setEmailError("Enter a valid email");
-      valid = false;
-    } else {
-      setEmailError(null);
-    }
-
-    if (!valid) {
-      if (!trimmedName) {
-        nameInputRef.current?.focus();
-      } else {
-        emailInputRef.current?.focus();
-      }
-      return;
-    }
-
-    completeB02Identity({
-      name: trimmedName,
-      email: trimmedEmail,
-      authMethod: "form",
-    });
-  };
-
-  const handleGitHubSignIn = () => {
-    const trimmedEmail = emailDraft.trim();
-    const hasValidTypedEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
-
-    completeB02Identity({
-      name: "Null",
-      email: hasValidTypedEmail ? trimmedEmail : "you@e.mail",
-      authMethod: "github",
-    });
-  };
 
   // Determine current spoken line & Continue handler
   let currentLine = "";
@@ -977,7 +521,7 @@ export function OnboardingStage({
         currentLine =
           "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
         onContinue = () => setTurnIndex(1);
-      } else {
+      } else if (turnIndex === 1) {
         currentLine =
           "You can use any combination of models for your Session Agents, those are the ones to whom I pass off your requests to get the coding work done. I manage them as a team but more on that later. For now just configure your choices and you can always adjust later in settings.";
         onContinue =
@@ -985,9 +529,13 @@ export function OnboardingStage({
             ? () => {
                 setActiveModelModal(null);
                 retireGroup("model_signin_buttons");
-                advanceBeat("B11");
+                setTurnIndex(2);
               }
             : undefined;
+      } else {
+        currentLine =
+          "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider below—even while I'm talking.";
+        onContinue = () => advanceBeat("B11");
       }
       break;
     case "B11":
@@ -1094,7 +642,7 @@ export function OnboardingStage({
         currentLine = B17_SESSION_CLOSED_LINE;
         onContinue = () => setTurnIndex(lastExplanationIdx + 2);
       } else {
-        // Segue (no gate): the cue effect advances to B18 after a short dwell.
+        // Segue (no gate): the cue effect advances to B18 after dwell + text completion.
         currentLine = B17_TO_UI_SEGUE;
         onContinue = undefined;
       }
@@ -1115,7 +663,7 @@ export function OnboardingStage({
         // The shell closes the tutorial-opened Widgets gallery when the turn changes.
         onContinue = () => setTurnIndex(B18_SEGUE_TURN);
       } else {
-        // Segue (no gate): the cue effect advances to B19 after a short dwell.
+        // Segue (no gate): the cue effect advances to B19 after dwell + text completion.
         currentLine = B18_TO_SURFACES_SEGUE;
         onContinue = undefined;
       }
@@ -1165,7 +713,43 @@ export function OnboardingStage({
     currentBeat === "B10" ||
     currentBeat === "B11";
 
-  const showContinueNow = isRevealed("continue_button") && Boolean(onContinue);
+  const { isComplete: textComplete, onComplete: handleTextComplete } = useTextRevealGate(
+    currentLine,
+    currentLine ? currentMessageId : undefined
+  );
+  const textCompleteRef = useRef(textComplete);
+  textCompleteRef.current = textComplete;
+
+  const currentMessageIdRef = useRef(currentMessageId);
+  currentMessageIdRef.current = currentMessageId;
+
+  const handleDockedTextComplete = useCallback(
+    (completedId: string) => {
+      if (completedId === currentMessageIdRef.current) {
+        handleTextComplete();
+      }
+    },
+    [handleTextComplete]
+  );
+
+  const [pendingTimedTransition, setPendingTimedTransition] = useState<{
+    messageId: string;
+    run: () => void;
+  } | null>(null);
+
+  useEffect(() => {
+    if (
+      pendingTimedTransition &&
+      textComplete &&
+      pendingTimedTransition.messageId === currentMessageId
+    ) {
+      const { run } = pendingTimedTransition;
+      setPendingTimedTransition(null);
+      run();
+    }
+  }, [pendingTimedTransition, textComplete, currentMessageId]);
+
+  const showContinueNow = isRevealed("continue_button") && Boolean(onContinue) && textComplete;
 
   // Maintain stable ref for onContinue so setDockedChat never triggers an infinite render loop
   const onContinueRef = useRef<(() => void) | undefined>(undefined);
@@ -1173,6 +757,498 @@ export function OnboardingStage({
   const triggerDockedContinue = useCallback(() => {
     onContinueRef.current?.();
   }, []);
+
+  // Reset chat dock state when starting or returning to early beats
+  useEffect(() => {
+    if (currentBeat === "B00" || currentBeat === "B01") {
+      setChatDocked(false);
+      setActiveModelModal(null);
+      setMessageStack([]);
+      setB06VideoPhase("idle");
+      setB06Recentering(false);
+    }
+  }, [currentBeat]);
+
+  // B06 chain video lifecycle on turns 1, 2, 3. "failed" is sticky until the beat is left,
+  // so a failure never restarts the video from 0s.
+  useEffect(() => {
+    if (currentBeat !== "B06") {
+      setB06VideoPhase("idle");
+      setB06Recentering(false);
+      return;
+    }
+    if (turnIndex === 0 || turnIndex === 4 || reducedMotion) {
+      // Reduced motion: no videos; the cue effect advances after a reading dwell.
+      setB06VideoPhase("idle");
+      setB06Recentering(false);
+      return;
+    }
+    retireGroup("continue_button");
+    setB06VideoPhase((p) => (p === "failed" ? p : canPlayControlsChainVideo() ? "playing" : "failed"));
+  }, [currentBeat, turnIndex, reducedMotion, retireGroup]);
+
+  // B06 watchdogs while the chain video plays (one run for the whole chain, not per turn):
+  // no playback by the start watchdog → still PNG fallback; media time frozen while the tab
+  // is visible → still PNG fallback, so the tutorial never stalls.
+  useEffect(() => {
+    if (currentBeat !== "B06" || b06VideoPhase !== "playing") return;
+    b06VideoStartedRef.current = false;
+    const startedAt = Date.now();
+    let lastTime = -1;
+    let lastChange = startedAt;
+    const tick = window.setInterval(() => {
+      const now = Date.now();
+      const v = b06VideoRef.current;
+      if (!b06VideoStartedRef.current) {
+        if (now - startedAt >= B06_VIDEO_START_WATCHDOG_MS) setB06VideoPhase("failed");
+        return;
+      }
+      if (!v || document.visibilityState !== "visible" || v.ended) {
+        lastChange = now;
+        return;
+      }
+      if (v.currentTime !== lastTime) {
+        lastTime = v.currentTime;
+        lastChange = now;
+      } else if (now - lastChange >= B06_VIDEO_STALL_WATCHDOG_MS) {
+        setB06VideoPhase("failed");
+      }
+    }, 500);
+    return () => window.clearInterval(tick);
+  }, [currentBeat, b06VideoPhase]);
+
+  // B06 video-time cues: turn follows the video's media time, never goes backwards.
+  useEffect(() => {
+    if (currentBeat !== "B06" || b06VideoPhase !== "playing") return;
+    const v = b06VideoRef.current as
+      | (HTMLVideoElement & {
+          requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
+          cancelVideoFrameCallback?: (id: number) => void;
+        })
+      | null;
+    if (!v) return;
+    const sync = (mediaTime: number) => {
+      const turn = b06TurnForMediaTime(mediaTime);
+      setTurnIndex((t) => (t >= 1 && t < 4 ? Math.max(t, turn) : t));
+    };
+    const onTimeUpdate = () => sync(v.currentTime);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("seeked", onTimeUpdate);
+    let stopped = false;
+    let frameId = 0;
+    const onFrame = (_now: number, meta: { mediaTime: number }) => {
+      if (stopped) return;
+      sync(meta.mediaTime);
+      frameId = v.requestVideoFrameCallback!(onFrame);
+    };
+    if (typeof v.requestVideoFrameCallback === "function") frameId = v.requestVideoFrameCallback(onFrame);
+    return () => {
+      stopped = true;
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("seeked", onTimeUpdate);
+      if (frameId) v.cancelVideoFrameCallback?.(frameId);
+    };
+  }, [currentBeat, b06VideoPhase, setTurnIndex]);
+
+  // B06 failed video: show the still PNG beside Infie, then move on after a reading dwell
+  // (per turn, so turns 1-3 each get their still). Gate on text complete so we never advance before text is readable.
+  useEffect(() => {
+    if (currentBeat !== "B06" || b06VideoPhase !== "failed") return;
+    if (turnIndex < 1 || turnIndex > 3) return;
+    const line = B06_DEVICE_LINES[turnIndex] ?? "";
+    const t = window.setTimeout(() => {
+      if (textCompleteRef.current) {
+        setTurnIndex((ti) => (ti === turnIndex ? Math.min(ti + 1, 4) : ti));
+      } else {
+        setB06PendingAdvance(true);
+      }
+    }, Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)));
+    return () => window.clearTimeout(t);
+  }, [currentBeat, turnIndex, b06VideoPhase, setTurnIndex]);
+
+  // When pending advance is waiting for B06 device text to complete, advance immediately upon completion
+  useEffect(() => {
+    if (currentBeat === "B06" && b06PendingAdvance && textComplete) {
+      setB06PendingAdvance(false);
+      setTurnIndex((t) => (t >= 1 && t < 4 ? t + 1 : t));
+    }
+  }, [currentBeat, b06PendingAdvance, textComplete, setTurnIndex]);
+
+  useEffect(() => {
+    setB06PendingAdvance(false);
+  }, [turnIndex]);
+
+  // B01 arrival sequence timer -> B02 (preserves Infinite Intelligence and i², fading cleanly before real Infie fades in at B02)
+  useEffect(() => {
+    if (currentBeat !== "B01") return;
+    b02CompletedRef.current = false;
+    setB01Stage("lettering");
+    if (reducedMotion) {
+      const t1 = window.setTimeout(() => setB01Stage("mark"), 650);
+      const t2 = window.setTimeout(() => setB01Stage("outro"), 1350);
+      const t3 = window.setTimeout(() => advanceBeat("B02"), 1600);
+      return () => {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+        window.clearTimeout(t3);
+      };
+    }
+    const t1 = window.setTimeout(() => setB01Stage("mark"), 900);
+    const t2 = window.setTimeout(() => setB01Stage("outro"), 2150);
+    const t3 = window.setTimeout(() => advanceBeat("B02"), 2600);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+    };
+  }, [currentBeat, reducedMotion, advanceBeat]);
+
+  // B02: Let Infie fade into her normal position first, then greet, then reveal the identity form
+  useEffect(() => {
+    if (currentBeat !== "B02") return;
+    b02CompletedRef.current = false;
+    retireGroup("identity_controls");
+    const delay = reducedMotion ? 950 : 1950;
+    const timer = window.setTimeout(() => {
+      revealGroup("identity_controls");
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [currentBeat, reducedMotion, revealGroup, retireGroup]);
+
+  // Cue-timed reveals across B03–B21. Each element appears AFTER the line that
+  // introduces it. Continue is per-turn: retired on every turn change, then
+  // introduced again by that turn's line. Reduced motion keeps the same order
+  // and reading dwell, but with a short reveal delay and fade only.
+  useEffect(() => {
+    if (currentBeat === "B00" || currentBeat === "COMPLETE") {
+      setPendingTimedTransition(null);
+      return;
+    }
+    setPendingTimedTransition(null);
+    retireGroup("continue_button");
+    const timers: number[] = [];
+    const at = (ms: number, fn: () => void, compress = true) =>
+      timers.push(window.setTimeout(fn, compress && reducedMotion ? Math.min(ms, 150) : ms));
+    const afterDwellAndText = (ms: number, fn: () => void, compress = true) => {
+      const scheduledId = currentMessageId;
+      at(
+        ms,
+        () => {
+          if (textCompleteRef.current) {
+            fn();
+          } else {
+            setPendingTimedTransition({ messageId: scheduledId, run: fn });
+          }
+        },
+        compress
+      );
+    };
+
+    if (currentBeat === "B03") {
+      if (turnIndex === 0) {
+        at(450, () => revealGroup(["level_indicator", "continue_button"]));
+      } else if (turnIndex === 1) {
+        // "What a noob." appears as its own message and holds for a full second before the next message
+        afterDwellAndText(B03_NOOB_TIMER_MS, () => setTurnIndex(2), false);
+      } else {
+        at(450, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B04") {
+      if (turnIndex === 0) at(500, () => revealGroup("project_interest_reply"));
+      else at(500, () => revealGroup("continue_button"));
+    } else if (currentBeat === "B05") {
+      if (turnIndex === 0) at(600, () => revealGroup(["music_play_only", "continue_button"]));
+      else {
+        at(120, () => revealGroup(["music_play_only", "music_full_player"]));
+        at(1050, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B06") {
+      if (turnIndex === 0) {
+        at(350, () => revealGroup("controls_mic_prompt"));
+      } else if (turnIndex === 4) {
+        revealGroup("controls_illustrations");
+        at(450, () => revealGroup("continue_button"));
+      } else {
+        revealGroup("controls_illustrations");
+        // No gate: in normal motion the video's `ended` advances; reduced motion shows the
+        // still PNG and moves on after a reading dwell.
+        if (reducedMotion) {
+          const line = B06_DEVICE_LINES[turnIndex] ?? "";
+          at(
+            Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)),
+            () => {
+              if (textCompleteRef.current) {
+                setTurnIndex((t) => (t === turnIndex ? Math.min(t + 1, 4) : t));
+              } else {
+                setB06PendingAdvance(true);
+              }
+            },
+            false
+          );
+        }
+      }
+    } else if (currentBeat === "B07") {
+      at(400, () => revealGroup("continue_button"));
+    } else if (currentBeat === "B08") {
+      if (turnIndex === 0) {
+        at(300, () => revealGroup("workspace_tree"));
+        at(500, () => revealGroup("continue_button"));
+      } else if (turnIndex === 1) {
+        // Simultaneously with Turn 2 message, reveal i2 / Project / Session nav group while tree stays
+        revealGroup(["workspace_tree", "header_breadcrumbs"]);
+        at(500, () => revealGroup("continue_button"));
+      } else {
+        retireGroup("workspace_tree");
+        revealGroup(["project_folder_only", "folder_illustration", "header_breadcrumbs"]);
+        at(450, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B09") {
+      retireGroup("workspace_tree");
+      revealGroup(["project_folder_only", "folder_illustration"]);
+      if (turnIndex === 2) {
+        at(250, () => revealGroup("stylist_preview"));
+      } else {
+        retireGroup("stylist_preview");
+      }
+      at(450, () => revealGroup("continue_button"));
+    } else if (currentBeat === "B10") {
+      retireGroup(["workspace_tree", "project_folder_only", "folder_illustration", "stylist_preview"]);
+      if (turnIndex === 0) {
+        retireGroup("model_signin_buttons");
+        at(450, () => revealGroup("continue_button"));
+      } else if (turnIndex === 1) {
+        revealGroup("model_signin_buttons");
+        if (connectedModels.length >= 1) {
+          at(200, () => revealGroup("continue_button"));
+        } else {
+          retireGroup("continue_button");
+        }
+      } else {
+        retireGroup("model_signin_buttons");
+        at(200, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B11") {
+      retireGroup("model_signin_buttons");
+      if (turnIndex === 0) {
+        revealGroup(["header_tutorials_widgets_games", "tutorials_entry"]);
+        at(450, () => revealGroup("continue_button"));
+      } else if (turnIndex === 1) {
+        revealGroup([
+          "header_tutorials_widgets_games",
+          "tutorials_entry",
+          "header_notifications_settings",
+        ]);
+        at(450, () => revealGroup("continue_button"));
+      } else {
+        // Turn 2: Notification/Settings pill glides to its top-right Header dock before B12 begins
+        revealGroup([
+          "header_tutorials_widgets_games",
+          "tutorials_entry",
+          "header_notifications_settings",
+        ]);
+        afterDwellAndText(600, () => advanceBeat("B12"));
+      }
+    } else if (currentBeat === "B12") {
+      revealGroup([
+        "header_breadcrumbs",
+        "header_tutorials_widgets_games",
+        "header_notifications_settings",
+        "home_header_controls",
+        "tutorials_entry",
+        "home_conversation_entry",
+        "home_projects_and_actions",
+      ]);
+      if (turnIndex === 0) {
+        // Bridge line → conversation slides left and lands → dwell → Active Projects (Turn 1).
+        afterDwellAndText(
+          reducedMotion ? 1000 : B12_BRIDGE_READ_MS + B12_SLIDE_MS + B12_LANDED_DWELL_MS,
+          () => setTurnIndex(1),
+          false
+        );
+      } else if (turnIndex === 1) {
+        revealGroup("home_resume_projects");
+        // Continue only after Active Projects finish their entrance
+        // (not compressed in reduced motion: the fade still runs, order must hold).
+        at(B12_PROJECTS_FADE_MS + 120, () => revealGroup("continue_button"), false);
+      } else if (turnIndex === 2) {
+        revealGroup(["home_resume_projects", "home_new_import_buttons"]);
+        at(450, () => revealGroup("continue_button"), false);
+      } else if (turnIndex === 3 || turnIndex === 4) {
+        revealGroup(["home_resume_projects", "home_new_import_buttons"]);
+        at(400, () => revealGroup("continue_button"));
+      } else if (turnIndex === 5) {
+        revealGroup(["home_resume_projects", "home_new_import_buttons", "home_action_buttons"]);
+        at(400, () => revealGroup("continue_button"));
+      } else {
+        // Turn 6: two project choices glow teal/cyan; no Continue button
+        revealGroup([
+          "home_resume_projects",
+          "home_new_import_buttons",
+          "home_action_buttons",
+          "tutorial_demo_project",
+        ]);
+      }
+    } else if (currentBeat === "B13") {
+      if (turnIndex === 0) {
+        // Infie speaks first; then the side and bottom panels slide in toward the chat
+        // (~0.7s); Continue is offered only once they have landed.
+        revealGroup("project_navigation");
+        at(900, () => revealGroup("project_roadmap_sessions"));
+        at(1900, () => revealGroup("continue_button"));
+      } else {
+        revealGroup(["project_navigation", "project_roadmap_sessions"]);
+        at(450, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B14") {
+      revealGroup([
+        "project_navigation",
+        "project_roadmap_sessions",
+        "demo_session_and_question",
+      ]);
+      if (turnIndex === 0) {
+        at(450, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B15") {
+      if (turnIndex < B15_TASKS_TURN) {
+        revealGroup("session_agent_controls");
+        at(450, () => revealGroup("continue_button"));
+      } else {
+        revealGroup(["session_agent_controls", "session_task_groups"]);
+      }
+    } else if (currentBeat === "B16") {
+      revealGroup(["session_agent_controls", "session_task_groups", "session_pr_status"]);
+      at(450, () => revealGroup("continue_button"));
+    } else if (currentBeat === "B17") {
+      const lastExplanationIdx = B17_EXPLANATIONS.length - 1;
+      if (turnIndex <= lastExplanationIdx) {
+        revealGroup("session_completion_form");
+        if (turnIndex < lastExplanationIdx) {
+          at(350, () => revealGroup("continue_button"));
+        }
+      } else if (turnIndex === lastExplanationIdx + 1) {
+        // After Submit: the session is closed (Continue).
+        retireGroup("session_completion_form");
+        at(400, () => revealGroup("continue_button"));
+      } else {
+        // Segue to the rest of the UI: require both dwell (halved per B17 timing rule) and text completion.
+        retireGroup("session_completion_form");
+        afterDwellAndText(segueDwellMs(B17_TO_UI_SEGUE, 0.5), () => advanceBeat("B18"), false);
+      }
+    } else if (currentBeat === "B18") {
+      retireGroup("session_completion_form");
+      if (turnIndex === B18_MOVE_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_PANELS_TURN) {
+        retireGroup("library_entry_and_example");
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+        at(450, () => revealGroup("continue_button"));
+      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      } else if (turnIndex === B18_LIBRARY_TURN) {
+        // Gallery is opened by clicking Widgets in Turn 2; reveal Library callout Continue.
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize", "library_entry_and_example"]);
+        at(350, () => revealGroup("continue_button"));
+      } else {
+        // Segue from widgets to the other surfaces of iSquared: require both dwell and text completion.
+        retireGroup(["library_entry_and_example", "continue_button"]);
+        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+        afterDwellAndText(segueDwellMs(B18_TO_SURFACES_SEGUE), () => advanceBeat("B19"), false);
+      }
+    } else if (currentBeat === "B19") {
+      retireGroup("library_entry_and_example");
+      if (turnIndex < B19_HOME_TURN) {
+        at(450, () => revealGroup("continue_button"));
+      }
+    } else if (currentBeat === "B20") {
+      revealGroup("tutorials_entry");
+      at(450, () => revealGroup("continue_button"));
+    } else if (currentBeat === "B21") {
+      revealGroup("tutorials_entry");
+      at(600, () => revealGroup("continue_button"));
+    }
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [
+    currentBeat,
+    turnIndex,
+    currentMessageId,
+    maxEnabledBeat,
+    connectedModels.length,
+    reducedMotion,
+    revealGroup,
+    retireGroup,
+    setTurnIndex,
+    advanceBeat,
+  ]);
+
+  // Shared B02 completion path (used by both Submit and Sign in with GitHub)
+  // Guarded by b02CompletedRef so duplicate advancement can never occur.
+  // NOTE: all hooks must run before any early return (rules of hooks).
+  const completeB02Identity = useCallback(
+    (profile: UserProfile) => {
+      if (b02CompletedRef.current || currentBeat !== "B02") {
+        return;
+      }
+      b02CompletedRef.current = true;
+      setNameError(null);
+      setEmailError(null);
+      setUserProfile(profile);
+      retireGroup("identity_controls");
+      advanceBeat("B03");
+    },
+    [currentBeat, setUserProfile, retireGroup, advanceBeat]
+  );
+
+  // B02 Identity Handlers
+  const validateAndSubmitIdentity = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (b02CompletedRef.current || currentBeat !== "B02") return;
+
+    const trimmedName = nameDraft.trim();
+    const trimmedEmail = emailDraft.trim();
+    let valid = true;
+
+    if (!trimmedName) {
+      setNameError("Enter your name");
+      valid = false;
+    } else {
+      setNameError(null);
+    }
+
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError("Enter a valid email");
+      valid = false;
+    } else {
+      setEmailError(null);
+    }
+
+    if (!valid) {
+      if (!trimmedName) {
+        nameInputRef.current?.focus();
+      } else {
+        emailInputRef.current?.focus();
+      }
+      return;
+    }
+
+    completeB02Identity({
+      name: trimmedName,
+      email: trimmedEmail,
+      authMethod: "form",
+    });
+  };
+
+  const handleGitHubSignIn = () => {
+    const trimmedEmail = emailDraft.trim();
+    const hasValidTypedEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+
+    completeB02Identity({
+      name: "Null",
+      email: hasValidTypedEmail ? trimmedEmail : "you@e.mail",
+      authMethod: "github",
+    });
+  };
 
   // Accumulate 3-message rolling stack during early center-stage beats (B02–B11)
   useEffect(() => {
@@ -1192,24 +1268,29 @@ export function OnboardingStage({
   // Pre-dock: if the stage content is taller than the space above the action row, keep the
   // newest message in view (only this scroll container moves; nothing else).
   const stageScrollRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isEarlyCenterStage) return;
+    const el = stageScrollRef.current;
+    if (!el) return;
+    let frame = 0;
     const scrollToLatest = () => {
-      const el = stageScrollRef.current;
-      if (el && el.scrollHeight > el.clientHeight + 1) {
-        el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion ? "auto" : "smooth" });
-      }
+      // Follow layout, not a guessed delay: trees shrink the viewport and the
+      // typewriter keeps growing the message after it first mounts.
+      el.scrollTop = el.scrollHeight;
     };
-    const t = window.setTimeout(scrollToLatest, 280);
-    const tGrowth =
-      currentBeat === "B06" && b06VideoPhase === "playing" && !reducedMotion
-        ? window.setTimeout(scrollToLatest, 680)
-        : undefined;
+    const followLayout = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(scrollToLatest);
+    };
+    const observer = new ResizeObserver(followLayout);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    scrollToLatest();
     return () => {
-      window.clearTimeout(t);
-      if (tGrowth !== undefined) window.clearTimeout(tGrowth);
+      observer.disconnect();
+      cancelAnimationFrame(frame);
     };
-  }, [isEarlyCenterStage, messageStack, currentBeat, turnIndex, isRevealed, b06VideoPhase, reducedMotion]);
+  }, [isEarlyCenterStage, messageStack]);
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
   // B18 Turn 3 (Library) also renders a floating callout beneath the open Widgets gallery while
@@ -1222,6 +1303,7 @@ export function OnboardingStage({
     }
     const nextShowContinue = isFloatingCallout ? false : showContinueNow;
     const nextOnContinue = isFloatingCallout ? undefined : triggerDockedContinue;
+    const nextOnTextComplete = isFloatingCallout ? undefined : handleDockedTextComplete;
     setDockedChat((prev) => {
       const msgId = currentMessageId;
       const baseHistory: ReadonlyArray<DockedTutorialChatEntry> =
@@ -1235,9 +1317,11 @@ export function OnboardingStage({
       const exists = baseHistory.some((m) => m.id === msgId);
       if (
         exists &&
+        prev.currentMessageId === msgId &&
         prev.currentLine === currentLine &&
         prev.showContinue === nextShowContinue &&
         prev.onContinue === nextOnContinue &&
+        prev.onTextComplete === nextOnTextComplete &&
         prev.history.length > 0
       ) {
         return prev;
@@ -1260,10 +1344,12 @@ export function OnboardingStage({
         nextHistory = [...baseHistory, ...additions].slice(-3);
       }
       return {
+        currentMessageId: msgId,
         currentLine,
         history: nextHistory,
         showContinue: nextShowContinue,
         onContinue: nextOnContinue,
+        onTextComplete: nextOnTextComplete,
       };
     });
   }, [
@@ -1275,6 +1361,7 @@ export function OnboardingStage({
     isFloatingCallout,
     showContinueNow,
     triggerDockedContinue,
+    handleDockedTextComplete,
     setDockedChat,
   ]);
 
@@ -1533,8 +1620,12 @@ export function OnboardingStage({
                         onEnded={(e) => {
                           if (e.currentTarget !== b06VideoRef.current) return;
                           if (b06VideoPhase !== "playing") return;
-                          // The chain is over: all three devices (Turn 4).
-                          setTurnIndex(4);
+                          // The chain is over: all three devices (Turn 4). Gate on text completion so text is readable.
+                          if (textCompleteRef.current) {
+                            setTurnIndex(4);
+                          } else {
+                            setB06PendingAdvance(true);
+                          }
                         }}
                         onError={(e) => {
                           if (e.currentTarget !== b06VideoRef.current) return;
@@ -1621,10 +1712,10 @@ export function OnboardingStage({
           <div
             ref={stageScrollRef}
             data-name="OnboardingMessageScroller"
-            className="mt-auto shrink min-h-0 overflow-y-auto w-full max-w-[540px]"
+            className="i2-conversation-scroll shrink min-h-0 overflow-y-auto w-full max-w-[540px]"
           >
             <div className="flex flex-col items-center gap-1.5 w-full">
-              <AnimatePresence initial={currentBeat === "B02"}>
+              <AnimatePresence initial={currentBeat === "B02"} mode="popLayout">
                 {displayedMessages.map((msg, idx) => {
                   const isLatest = idx === displayedMessages.length - 1;
                   const isB02Greeting = msg.id === "B02-0";
@@ -1641,8 +1732,6 @@ export function OnboardingStage({
                         opacity: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
                         y: { duration: greetingDuration, delay: greetingDelay, ease: "easeOut" },
                       }}
-                      role={isLatest ? "status" : undefined}
-                      aria-live={isLatest ? "polite" : undefined}
                       className="px-3.5 py-2 rounded-[12px] w-full break-words shrink-0"
                       style={{
                         background: "transparent",
@@ -1658,7 +1747,15 @@ export function OnboardingStage({
                         lineHeight: 1.48,
                       }}
                     >
-                      {msg.text}
+                      {isLatest ? (
+                        <RevealingInfieText
+                          text={msg.text}
+                          live
+                          onComplete={handleTextComplete}
+                        />
+                      ) : (
+                        msg.text
+                      )}
                     </motion.div>
                   );
                 })}
@@ -1666,8 +1763,10 @@ export function OnboardingStage({
             </div>
           </div>
 
+          {currentBeat === "B10" && turnIndex === 2 && <PreferenceSlidersPreview />}
+
           {/* B02: Name and Email fields in center content flow */}
-          {currentBeat === "B02" && isRevealed("identity_controls") && (
+          {currentBeat === "B02" && isRevealed("identity_controls") && textComplete && (
             <motion.div
               initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1711,7 +1810,7 @@ export function OnboardingStage({
           )}
 
           {/* B04 Turn 0: Project interest field in center content flow */}
-          {currentBeat === "B04" && turnIndex === 0 && !chatDocked && isRevealed("project_interest_reply") && (
+          {currentBeat === "B04" && turnIndex === 0 && !chatDocked && isRevealed("project_interest_reply") && textComplete && (
             <motion.form
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2102,7 +2201,7 @@ export function OnboardingStage({
           data-name="DockedChatActionRow"
           className="min-h-[44px] w-full max-w-xl flex flex-wrap items-center justify-center gap-3 pointer-events-auto"
         >
-          {currentBeat === "B02" && isRevealed("identity_controls") ? (
+          {currentBeat === "B02" && isRevealed("identity_controls") && textComplete ? (
             <motion.div
               key="b02-actions"
               initial={{ opacity: 0, y: reducedMotion ? 0 : 6 }}
@@ -2118,7 +2217,7 @@ export function OnboardingStage({
                 <span>Sign in with GitHub</span>
               </FloatingButton>
             </motion.div>
-          ) : currentBeat === "B06" && turnIndex === 0 && isRevealed("controls_mic_prompt") ? (
+          ) : currentBeat === "B06" && turnIndex === 0 && isRevealed("controls_mic_prompt") && textComplete ? (
             // Simulated microphone prompt: both choices advance, no media API is ever called.
             <motion.div
               key="b06-mic-actions"
@@ -2151,7 +2250,7 @@ export function OnboardingStage({
                 <span>Not now</span>
               </FloatingButton>
             </motion.div>
-          ) : isRevealed("continue_button") && Boolean(onContinue) ? (
+          ) : showContinueNow ? (
             <motion.div
               key={`continue-${currentMessageId}`}
               initial={{ opacity: 0, y: 6 }}
@@ -2241,8 +2340,9 @@ export function OnboardingStage({
         />
         <FloatingInfieMessage
           message={currentLine}
-          showContinue={showContinueNow}
+          showContinue={isRevealed("continue_button") && Boolean(onContinue)}
           onContinue={onContinue}
+          onTextComplete={handleTextComplete}
         />
       </div>
     </motion.div>

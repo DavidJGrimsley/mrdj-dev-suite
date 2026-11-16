@@ -1,5 +1,14 @@
 /* Shared styles for the dockable widgets, the Infie callout glow and chat text scaling. */
 
+/* Keep rolling conversations scrollable without flashing scrollbars as messages exit. */
+.i2-conversation-scroll {
+  scrollbar-width: none;
+  overflow-anchor: none;
+}
+.i2-conversation-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Infie callout glow ──────────────────────────────────────────────────────
    One class for every "look here" highlight. The ring pulses in both reach and brightness;
    elements that also use Tailwind's animate-pulse keep their opacity pulse alongside it. */

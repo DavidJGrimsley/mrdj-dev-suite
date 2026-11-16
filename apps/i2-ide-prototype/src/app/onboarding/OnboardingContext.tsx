@@ -199,8 +199,10 @@ export function OnboardingProvider({
       retireGroup(["workspace_tree", "project_folder_only", "folder_illustration", "stylist_preview"]);
       if (turnIndex === 0) {
         retireGroup("model_signin_buttons");
-      } else {
+      } else if (turnIndex === 1) {
         revealGroup("model_signin_buttons");
+      } else {
+        retireGroup("model_signin_buttons");
       }
     } else if (currentBeat === "B11") {
       // B11 Header bar groups
