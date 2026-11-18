@@ -2,7 +2,8 @@
 //   node scripts/build-hosted.mjs [--base /iSquared/] [--out dist-hosted] [--archive]
 //     [--pet-v1 <dir>] [--pet-v2 <dir>] [--require-pet-previews] [--no-pet-previews] [--rollback-dir <dir>]
 // Output: <out>/web (static files, including web/preview/pet-show-and-tell/{v1,v2} when present),
-//   <out>/manifest.json, <out>/provenance.json, <out>/SHA256SUMS, optionally <out>/isquared-web.tgz.
+//   <out>/manifest.json, <out>/provenance.json, <out>/SHA256SUMS, optionally <out>/isquared-web.tgz
+//   plus <out>/isquared-web.tgz.sha256 (kept outside manifest.json so SHA256SUMS matches its final bytes).
 // The portfolio server serves <out>/web from a private directory behind its own authentication;
 // nothing in this repo implements access control.
 import { spawnSync } from 'node:child_process'
@@ -13,7 +14,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_HOSTED_BASE_PATH, normalizeBasePath } from './lib/base-path.mjs'
 import { verifyHostedOutput } from './lib/verify-hosted-output.mjs'
-import { outputFileHashes, validateHostedOutputLocation } from './lib/hosted-output-safety.mjs'
+import { ARCHIVE_NAME, ARCHIVE_SHA256_NAME, outputFileHashes, validateHostedOutputLocation } from './lib/hosted-output-safety.mjs'
 import { applyPetPreRouterPathShim, resolvePetPreviewDirs } from './lib/local-preview-servers.mjs'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -139,7 +140,7 @@ if (args.rollbackDir) {
     console.log(`[build-hosted] preserved verified pre-change baseline rollback at ${rollbackRoot}`)
   } else if (hasPrevious) {
     fs.mkdirSync(rollbackRoot, { recursive: true })
-    for (const name of ['manifest.json', 'provenance.json', 'SHA256SUMS', 'isquared-web.tgz']) {
+    for (const name of ['manifest.json', 'provenance.json', 'SHA256SUMS', ARCHIVE_NAME, ARCHIVE_SHA256_NAME]) {
       const src = path.join(outRoot, name)
       if (fs.existsSync(src) && fs.statSync(src).isFile()) {
         fs.copyFileSync(src, path.join(rollbackRoot, name))
@@ -158,7 +159,7 @@ const viteBin = path.join(
   'bin',
   'vite.js',
 )
-const previousManifest = validateHostedOutputLocation(appRoot, outRoot, args.archive)
+validateHostedOutputLocation(appRoot, outRoot, args.archive)
 fs.mkdirSync(outRoot, { recursive: true })
 console.log(`[build-hosted] base ${basePath} -> ${path.relative(appRoot, webDir)}`)
 const build = spawnSync(
@@ -215,7 +216,6 @@ const manifest = {
   indexHtmlSha256: sha256File(path.join(webDir, 'index.html')),
   fileHashes,
   ...(Object.keys(petPreviewsProvenance).length > 0 ? { petPreviews: petPreviewsProvenance } : {}),
-  ...(previousManifest?.archiveSha256 ? { archiveSha256: previousManifest.archiveSha256 } : {}),
 }
 fs.writeFileSync(path.join(outRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
@@ -250,13 +250,13 @@ fs.writeFileSync(path.join(outRoot, 'SHA256SUMS'), `${shaLines.join('\n')}\n`)
 
 if (args.archive) {
   // Relative names with cwd=outRoot: GNU tar reads "C:\..." as a remote host:path.
-  const archive = path.join(outRoot, 'isquared-web.tgz')
+  const archive = path.join(outRoot, ARCHIVE_NAME)
   const archiveItems = ['web', 'manifest.json', 'provenance.json', 'SHA256SUMS']
   if (extraArchiveEntries.size > 0) archiveItems.push('manifests')
-  const tar = spawnSync('tar', ['-czf', 'isquared-web.tgz', ...archiveItems], { cwd: outRoot, stdio: 'inherit' })
+  const tar = spawnSync('tar', ['-czf', ARCHIVE_NAME, ...archiveItems], { cwd: outRoot, stdio: 'inherit' })
   if (tar.status !== 0) throw new Error('tar failed; copy dist-hosted/web manually instead')
-  manifest.archiveSha256 = sha256File(archive)
-  fs.writeFileSync(path.join(outRoot, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
+  // Sidecar rather than manifest.json: rewriting the manifest here would invalidate SHA256SUMS.
+  fs.writeFileSync(path.join(outRoot, ARCHIVE_SHA256_NAME), `${sha256File(archive)}  ${ARCHIVE_NAME}\n`)
   console.log(`[build-hosted] archive ${path.relative(appRoot, archive)}`)
 }
 

@@ -265,3 +265,37 @@ So the test edits are validated against real app behavior, not just syntax.
 - `mds doctor --fast`
 - README "Widgets" section (round-1 only → add round-2/3 mechanics)
 - Commit on `ide-widgets-onboarding` (nothing committed yet)
+
+## Transfer into `pet-add-comments` — four fixes + tutorial copy — November 17, 2026 — COMPLETE (uncommitted)
+
+Owner: Anthropic Claude Opus 5.5 (claude-opus-5-5) High, sole writer. No OpenAI models or agents. No commit, push, merge, or deploy.
+
+- **Source:** worktree `mrdj-dev-suite-ide-widgets-onboarding`, branch `ide-widgets-onboarding`, HEAD 8e446ec. Its tree is identical to `pet-add-comments`'s 6b109f7 (#91). It was left untouched, including all dirty and untracked files and the helper scripts.
+- **Target:** this worktree, branch `pet-add-comments`, HEAD aad5740 (Pet comments replay). It was clean before the transfer.
+- **Method:** the source's uncommitted app diff was applied 3-way onto the target. Patch: `../generated/pet-comments-four-fixes-integration-2026-11-17/source-four-fixes.patch`. The changes were then unstaged; `git reset` only unstaged them and changed no files.
+- **Integrated:**
+  - App.tsx: Create widget footer, blank sign-in with demo validation, and the plan reward. Merged cleanly; reviewed against the Pet / What's Next code, with no shared state.
+  - OnboardingStage.tsx and tutorial-script.md: B03 "around 15 minutes", the B10 developer-environment line, the Effort left-margin/inline preview, and the removed "below" cue.
+  - leekBeatsPlaylist.ts (6-track alternating playlist), plus the Effort preference in infiePreferencesContext.tsx and InfiePreferencesWidget.tsx.
+  - tutorial-browser.test.mjs (6 sliders) and widget-sizing.test.mjs (music next track). These merged cleanly alongside the Pet edits to the same files.
+  - Copied and SHA-256 verified: the four music MP3s and four-fixes.test.mjs.
+- **Conflict:** B10 turn 0. Both branches added the deterministic-actions sentence with different wording. The target's committed wording was kept ("I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent."), consistently in OnboardingStage.tsx, tutorial-script.md, and the tutorial.test.mjs requiredCopy. tutorial.test.mjs therefore has no net diff. The source's alternate wording is recorded in the patch if the user prefers it.
+- **EOL:** `git apply --3way` rewrote App.tsx as CRLF. It was restored to its original LF working copy, and the other files keep CRLF. `git diff --check` is clean.
+- **Validation (combined target):**
+  - `build:hosted` OK: 131 files, 69.5 MiB, verification passed (includes the Pet v1/v2 previews).
+  - Full suite **121/121 pass**, including four-fixes, Pet replay, What's Next, the tutorial browser flow, and widget sizing.
+  - tsc: 313 diagnostics, all in unedited regions (App.tsx 578, 4709–4725).
+  - `mds doctor --fast`: 95/100, 0 errors, 1 existing animation warning.
+- **Preview:** source Vite PID 14040 (port 8443) was stopped. A single target Vite now serves `http://localhost:8443/iSquared/` (HTTP 200) on strict port 8443. A pre-existing `vite preview` on 127.0.0.1:4173 (PID 54428, started 2026-11-16, not by this session) was left running.
+- **Evidence:** `../generated/pet-comments-four-fixes-integration-2026-11-17/`. The earlier `../generated/ide-widgets-four-fixes-2026-11-16/` was preserved.
+
+## PR #92 wrap-up — review fixes and release — November 17, 2026
+
+Owner: Anthropic Claude Opus 5.5 High, sole writer. The user authorized merging PR #92 into `main` after checks and reviews pass.
+- Addressed the three P2 review threads on aad5740:
+  - The Pet archive browser test now skips when Chrome, playwright-core or the archive is missing.
+  - The archive hash moved to the `isquared-web.tgz.sha256` sidecar, so `SHA256SUMS` matches the final `manifest.json`. A legacy `manifest.archiveSha256` is still accepted.
+  - The Pet preview handler falls back to the root document for extensionless client routes, and missing assets still 404.
+  - Unit tests were added for the sidecar and the route fallback.
+- Feature-tree validation: `pnpm test` 122/122 (0 skipped); `build:hosted --archive` 131 files / 69.5 MiB; `mds doctor --ci` 0 errors, 2 existing warnings.
+- Rollback of the previous `dist-hosted` (the stale Nov 16 tgz `3890101f…`, based on 6b109f7) is at `../generated/isquared-final-release-2026-11-17/rollback-previous-dist-hosted/`. The final upload archive is built from the merged `main` commit; see `mds-release-result.md` in that folder.

@@ -3,6 +3,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const sha256 = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+export const ARCHIVE_NAME = 'isquared-web.tgz'
+export const ARCHIVE_SHA256_NAME = `${ARCHIVE_NAME}.sha256`
 const entryExists = (file) => { try { fs.lstatSync(file); return true } catch (error) { if (error.code === 'ENOENT') return false; throw error } }
 
 export function outputFileHashes(dir) {
@@ -23,6 +25,16 @@ export function outputFileHashes(dir) {
   return files
 }
 
+/** Archive hash from the `isquared-web.tgz.sha256` sidecar; older builds recorded it in manifest.json. */
+export function recordedArchiveSha256(outRoot, manifest) {
+  const sidecar = path.join(outRoot, ARCHIVE_SHA256_NAME)
+  if (fs.existsSync(sidecar)) {
+    const match = fs.readFileSync(sidecar, 'utf8').match(/^([0-9a-f]{64})\s/)
+    return match ? match[1] : null
+  }
+  return manifest?.archiveSha256 || null
+}
+
 /** Permit replacing only a verified earlier hosted build; preserve all other output-root files. */
 export function validateHostedOutputLocation(appRoot, outRoot, archive) {
   const relative = path.relative(appRoot, outRoot)
@@ -36,8 +48,8 @@ export function validateHostedOutputLocation(appRoot, outRoot, archive) {
   }
   const web = path.join(outRoot, 'web')
   const manifestPath = path.join(outRoot, 'manifest.json')
-  const archivePath = path.join(outRoot, 'isquared-web.tgz')
-  for (const file of [web, manifestPath, archivePath]) {
+  const archivePath = path.join(outRoot, ARCHIVE_NAME)
+  for (const file of [web, manifestPath, archivePath, path.join(outRoot, ARCHIVE_SHA256_NAME)]) {
     if (entryExists(file) && fs.lstatSync(file).isSymbolicLink()) throw new Error(`Output cannot be a symlink: ${file}`)
   }
   const webExists = fs.existsSync(web)
@@ -58,7 +70,8 @@ export function validateHostedOutputLocation(appRoot, outRoot, archive) {
   if (Object.keys(manifest.fileHashes).length !== Object.keys(hashes).length || Object.entries(hashes).some(([name, hash]) => manifest.fileHashes[name] !== hash)) {
     throw new Error('Refusing to replace output changed since the previous hosted build.')
   }
-  if (archive && fs.existsSync(archivePath) && (!manifest.archiveSha256 || sha256(archivePath) !== manifest.archiveSha256)) {
+  const archiveSha256 = recordedArchiveSha256(outRoot, manifest)
+  if (archive && fs.existsSync(archivePath) && (!archiveSha256 || sha256(archivePath) !== archiveSha256)) {
     throw new Error('Refusing to overwrite an archive not recorded by the previous hosted build.')
   }
   return manifest

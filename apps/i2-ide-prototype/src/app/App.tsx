@@ -9190,8 +9190,13 @@ function WidgetsGalleryModal({
    */
   tutorialMode?: boolean;
 }) {
+  const limit = usePrototypeLimit();
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector('[data-testid="prototype-limit-modal"]')) {
+        onClose();
+      }
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -9341,6 +9346,39 @@ function WidgetsGalleryModal({
                 <GalleryTile key={w.id} w={w} onOpenWidget={onOpenWidget} highlighted={w.id === highlightWidgetId} inert={tutorialMode} accent="#2dd4bf" />
               ))}
             </div>
+          </div>
+
+          {/* Footer action (non-tile, non-dockable) */}
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/8">
+            <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">
+              Build custom workspace widgets for your team or the community
+            </span>
+            <button
+              type="button"
+              data-testid="gallery-create-widget"
+              disabled={tutorialMode}
+              aria-disabled={tutorialMode || undefined}
+              onClick={
+                tutorialMode
+                  ? undefined
+                  : () =>
+                      limit({
+                        featureName: "Create widget",
+                        subtitle: "Custom widget builder",
+                        description:
+                          "Custom widget creation isn't wired into this prototype — nothing is actually created or stored here. In the full app you can build and share your own workspace widgets.",
+                        environmentNote: "Simulated prototype · nothing is actually created or stored",
+                      })
+              }
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] border text-[12px] font-['Space_Grotesk',sans-serif] font-semibold transition-colors shrink-0 ${
+                tutorialMode
+                  ? "bg-white/[0.03] border-white/10 text-[#666] cursor-default"
+                  : "bg-[#2dd4bf]/12 border-[#2dd4bf]/35 text-[#2dd4bf] hover:bg-[#2dd4bf]/20 hover:border-[#2dd4bf]/60 cursor-pointer"
+              }`}
+            >
+              <Plus size={13} />
+              <span>Create widget</span>
+            </button>
           </div>
         </div>
       </motion.div>
@@ -9739,6 +9777,21 @@ function I2Canvas({ children }: { children: React.ReactNode }) {
 // ─── Auth screen ────────────────────────────────────────────────────────────
 
 function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const errorId = "auth-signin-error";
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email.trim().toLowerCase() !== "dev@i2.app" || password !== "password") {
+      setError("Invalid email or password.");
+      return;
+    }
+    setError(null);
+    onSignIn();
+  };
+
   return (
     <div
       data-name="AuthScreen"
@@ -9753,7 +9806,9 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
           </p>
         </div>
 
-        <div
+        <form
+          onSubmit={handleSubmit}
+          noValidate
           className="w-full max-w-[380px] flex flex-col gap-4"
           style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: 28 }}
         >
@@ -9761,25 +9816,52 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
 
           <div className="flex flex-col gap-3 mt-1">
             <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="you@studio.dev"
-              defaultValue="dev@i2.app"
               aria-label="Email address"
-              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              aria-invalid={error ? "true" : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className={`w-full bg-white/[0.06] border rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none transition-colors ${
+                error ? "border-[#ef4444]/75 focus:border-[#ef4444]" : "border-white/15 focus:border-[#2dd4bf]/60"
+              }`}
               style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
             />
             <input
               type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="Password"
-              defaultValue="password"
               aria-label="Password"
-              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              aria-invalid={error ? "true" : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className={`w-full bg-white/[0.06] border rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none transition-colors ${
+                error ? "border-[#ef4444]/75 focus:border-[#ef4444]" : "border-white/15 focus:border-[#2dd4bf]/60"
+              }`}
               style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
             />
           </div>
 
+          {error && (
+            <p
+              id={errorId}
+              role="alert"
+              className="text-[12px] text-[#fca5a5] px-1"
+              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+            >
+              {error}
+            </p>
+          )}
+
           <button
-            type="button"
-            onClick={onSignIn}
+            type="submit"
             className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90 mt-1 cursor-pointer"
             style={{ padding: "12px", borderRadius: 10, background: "#2dd4bf", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: "#06201d" }}
           >
@@ -9800,7 +9882,7 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
           >
             Create an account
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
@@ -9868,10 +9950,14 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
 }
 
 function PricingOverlay({
+  selectedTier,
   onSelectTier,
+  onContinue,
   onDismiss,
 }: {
+  selectedTier: PricingTier | null;
   onSelectTier: (tier: PricingTier) => void;
+  onContinue: () => void;
   onDismiss: () => void;
 }) {
   const [audience, setAudience] = useState<"personal" | "business">("personal");
@@ -9879,8 +9965,17 @@ function PricingOverlay({
   const reducedMotion = usePrefersReducedMotion();
   const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const continueBtnRef = useRef<HTMLButtonElement>(null);
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
+  const canDismissRef = useRef(!selectedTier);
+  canDismissRef.current = !selectedTier;
+
+  useEffect(() => {
+    if (selectedTier) {
+      continueBtnRef.current?.focus({ preventScroll: true });
+    }
+  }, [selectedTier]);
 
   useEffect(() => {
     const backdrop = backdropRef.current;
@@ -9899,7 +9994,9 @@ function PricingOverlay({
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        dismissRef.current();
+        if (canDismissRef.current) {
+          dismissRef.current();
+        }
       }
     };
     backdrop.addEventListener("keydown", onKeyDown);
@@ -9922,7 +10019,7 @@ function PricingOverlay({
       animate={{ opacity: 1 }}
       transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onDismiss();
+        if (event.target === event.currentTarget && !selectedTier) onDismiss();
       }}
       className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-6"
       style={{ background: "rgba(0, 0, 0, 0.72)", backdropFilter: "blur(8px)" }}
@@ -9943,57 +10040,142 @@ function PricingOverlay({
           {/* Top chrome */}
           <div className="flex items-center px-4 sm:px-6 shrink-0" style={{ height: 54, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
             <I2Logo size={30} />
-            <button
-              type="button"
-              onClick={onDismiss}
-              aria-label="Back to Home"
-              className="ml-auto flex items-center gap-1.5 text-white/65 hover:text-white transition-colors cursor-pointer"
-              style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
+            {!selectedTier && (
+              <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Back to Home"
+                className="ml-auto flex items-center gap-1.5 text-white/65 hover:text-white transition-colors cursor-pointer"
+                style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}
+              >
+                <ChevronLeft size={15} /> Back
+              </button>
+            )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            <div className="max-w-5xl mx-auto w-full px-4 py-7 sm:px-8 sm:py-10 flex flex-col items-center">
-              <h2
-                id="choose-plan-heading"
-                style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}
+            {selectedTier ? (
+              <div
+                data-testid="choose-plan-credentials"
+                className="max-w-lg mx-auto w-full px-4 py-8 sm:px-8 sm:py-12 flex flex-col items-center text-center"
               >
-                Choose your plan
-              </h2>
-              <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.58)", marginTop: 8, textAlign: "center" }}>
-                Start free and scale your orchestration as you grow.
-              </p>
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold mb-4"
+                  style={{
+                    background: "rgba(45, 212, 191, 0.14)",
+                    border: "1px solid rgba(45, 212, 191, 0.4)",
+                    color: "#2dd4bf",
+                    fontFamily: "'Space Grotesk',sans-serif",
+                  }}
+                >
+                  <Check size={12} />
+                  <span>{selectedTier.name} plan selected</span>
+                </span>
+                <h2
+                  id="choose-plan-heading"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}
+                >
+                  You&apos;re all set
+                </h2>
+                <p
+                  className="mt-3 max-w-md"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.82)", lineHeight: 1.5 }}
+                >
+                  Write down this email and password so you can bypass the tutorial in the future.
+                </p>
 
-              {/* Audience toggle */}
-              <div className="flex items-center gap-0.5 mt-6 sm:mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100 }}>
-                {(["personal", "business"] as const).map(a => (
-                  <button
-                    key={a}
-                    type="button"
-                    aria-pressed={audience === a}
-                    onClick={() => setAudience(a)}
-                    className="cursor-pointer"
-                    style={{
-                      padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
-                      textTransform: "capitalize", transition: "all 0.15s",
-                      background: audience === a ? "#2dd4bf" : "transparent",
-                      color: audience === a ? "#06201d" : "rgba(255,255,255,0.68)",
-                    }}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
+                <div
+                  className="w-full mt-6 rounded-[16px] p-5 flex flex-col gap-3 text-left"
+                  style={{
+                    background: "rgba(4, 0, 28, 0.72)",
+                    border: "1px solid rgba(45, 212, 191, 0.35)",
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3 py-1.5 border-b border-white/10">
+                    <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.58)" }}>
+                      Email
+                    </span>
+                    <code
+                      data-testid="reward-email"
+                      style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#abefa3" }}
+                    >
+                      dev@i2.app
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-1.5">
+                    <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.58)" }}>
+                      Password
+                    </span>
+                    <code
+                      data-testid="reward-password"
+                      style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#abefa3" }}
+                    >
+                      password
+                    </code>
+                  </div>
+                </div>
 
-              {/* Tier cards */}
-              <div className="flex gap-5 items-stretch justify-center flex-wrap mt-8 sm:mt-10 w-full">
-                {tiers.map(t => (
-                  <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
-                ))}
+                <button
+                  ref={continueBtnRef}
+                  type="button"
+                  data-testid="choose-plan-continue"
+                  onClick={onContinue}
+                  className="mt-7 w-full max-w-[240px] flex items-center justify-center gap-2 transition-opacity hover:opacity-90 cursor-pointer"
+                  style={{
+                    padding: "12px 20px",
+                    borderRadius: 10,
+                    background: "#2dd4bf",
+                    fontFamily: "'Space Grotesk',sans-serif",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#06201d",
+                  }}
+                >
+                  Continue <ArrowRight size={15} />
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="max-w-5xl mx-auto w-full px-4 py-7 sm:px-8 sm:py-10 flex flex-col items-center">
+                <h2
+                  id="choose-plan-heading"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}
+                >
+                  Choose your plan
+                </h2>
+                <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.58)", marginTop: 8, textAlign: "center" }}>
+                  Start free and scale your orchestration as you grow.
+                </p>
+
+                {/* Audience toggle */}
+                <div className="flex items-center gap-0.5 mt-6 sm:mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100 }}>
+                  {(["personal", "business"] as const).map(a => (
+                    <button
+                      key={a}
+                      type="button"
+                      aria-pressed={audience === a}
+                      onClick={() => setAudience(a)}
+                      className="cursor-pointer"
+                      style={{
+                        padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
+                        textTransform: "capitalize", transition: "all 0.15s",
+                        background: audience === a ? "#2dd4bf" : "transparent",
+                        color: audience === a ? "#06201d" : "rgba(255,255,255,0.68)",
+                      }}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tier cards */}
+                <div className="flex gap-5 items-stretch justify-center flex-wrap mt-8 sm:mt-10 w-full">
+                  {tiers.map(t => (
+                    <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </I2Canvas>
       </motion.div>
@@ -10581,6 +10763,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
             setWsState("none");
             setActiveProjectId(null);
             setActiveSessionId(null);
+            setSelectedPlan(null);
             planEligibleRef.current = true;
             shownPlanForRunRef.current = null;
             setPlanOverlayOpen(false);
@@ -10688,10 +10871,11 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       )}
       {planOverlayOpen && (
         <PricingOverlay
+          selectedTier={selectedPlan}
           onSelectTier={(tier) => {
             setSelectedPlan(tier);
-            setPlanOverlayOpen(false);
           }}
+          onContinue={() => setPlanOverlayOpen(false)}
           onDismiss={() => setPlanOverlayOpen(false)}
         />
       )}

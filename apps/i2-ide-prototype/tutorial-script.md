@@ -73,7 +73,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Reveal on “level zero”:** The actual level indicator, showing 0, spotlighted near Infie's message and, after a brief hold, automatically glides to its final top-right Home header anchor (shared Experience guidelines rule). The rest of the header remains absent.
 
-**Infie:** “This onboarding tutorial may take 15 to twenty minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.”
+**Infie:** “This onboarding tutorial may take around 15 minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.”
 
 **Reveal:** A temporary Continue button beside the message. Reuse this pattern for later reading gates.
 
@@ -243,9 +243,13 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 **Gate:** At least one completed choice is required before Continue is enabled; the user may complete more. Never initiate real OAuth or collect real credentials.
 
-**Final quick turn — Preference Sliders:** After connecting a model and clicking Continue, retire the provider choices and show a small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed. These are shared by every model and conversation.
+**After the first completed choice:** The instruction line above is replaced in place by the developer environment message while the provider choices stay visible and Continue becomes enabled. This is copy only; no environment updates actually run.
 
-**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider below—even while I'm talking.”
+**Infie:** “Checking your developer environment... Node.js and Python could use updates. I can update them and all your agent skills now, and keep them updated nightly if you'd like.”
+
+**Final quick turn — Preference Sliders:** After connecting a model and clicking Continue, retire the provider choices and show a small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed, Effort. These are shared by every model and conversation.
+
+**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.”
 
 **Gate:** Speed changes apply immediately, including to the current line; Continue advances to B11. Keep this preview compact. Reduced motion still shows text immediately.
 

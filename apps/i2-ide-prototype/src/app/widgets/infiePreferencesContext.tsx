@@ -160,6 +160,39 @@ export const TEXT_SPEED_STOPS: PreferenceStop[] = [
   },
 ];
 
+export const EFFORT_STOPS: PreferenceStop[] = [
+  {
+    index: 0,
+    value: 1,
+    label: "1",
+    description: "Fewest tokens, economical models, and minimal reasoning effort",
+  },
+  {
+    index: 1,
+    value: 2,
+    label: "2",
+    description: "Economical model bias with light reasoning for straightforward tasks",
+  },
+  {
+    index: 2,
+    value: 3,
+    label: "3",
+    description: "Balanced mix of capable models and moderate reasoning effort (default)",
+  },
+  {
+    index: 3,
+    value: 4,
+    label: "4",
+    description: "Stronger models and deeper reasoning for complex multi-step work",
+  },
+  {
+    index: 4,
+    value: 5,
+    label: "5",
+    description: "Best available models and maximum reasoning effort",
+  },
+];
+
 export interface InfiePreferencesState {
   /** Guidance stop index (0..4). Default is 3 (value: 80, Autonomous). */
   guidanceStopIndex: number;
@@ -171,6 +204,8 @@ export interface InfiePreferencesState {
   technicalLevelStopIndex: number;
   /** Text Speed stop index (0..2). Default is 1 (Normal, provisional middle). */
   textSpeedStopIndex: number;
+  /** Effort stop index (0..4). Default is 2 (value: 3, balanced mix). */
+  effortStopIndex: number;
 }
 
 export interface InfiePreferencesContextValue {
@@ -180,11 +215,13 @@ export interface InfiePreferencesContextValue {
   verbosityStop: PreferenceStop;
   technicalLevelStop: PreferenceStop;
   textSpeedStop: PreferenceStop;
+  effortStop: PreferenceStop;
   setGuidanceStopIndex: (index: number) => void;
   setSassinessStopIndex: (index: number) => void;
   setVerbosityStopIndex: (index: number) => void;
   setTechnicalLevelStopIndex: (index: number) => void;
   setTextSpeedStopIndex: (index: number) => void;
+  setEffortStopIndex: (index: number) => void;
   resetDefaults: () => void;
 }
 
@@ -194,6 +231,7 @@ const DEFAULT_PREFERENCES: InfiePreferencesState = {
   verbosityStopIndex: 0, // Default 0 (Natural short-and-sweet)
   technicalLevelStopIndex: 2, // Default middle level (Experienced, provisional)
   textSpeedStopIndex: 1, // Default middle level (Normal, provisional)
+  effortStopIndex: 2, // Default 3 (middle of 1-5)
 };
 
 const InfiePreferencesContext = createContext<InfiePreferencesContextValue | null>(null);
@@ -206,6 +244,7 @@ export function InfiePreferencesProvider({ children }: { children: React.ReactNo
   const verbosityStop = VERBOSITY_STOPS[preferences.verbosityStopIndex] ?? VERBOSITY_STOPS[0];
   const technicalLevelStop = TECHNICAL_LEVEL_STOPS[preferences.technicalLevelStopIndex] ?? TECHNICAL_LEVEL_STOPS[2];
   const textSpeedStop = TEXT_SPEED_STOPS[preferences.textSpeedStopIndex] ?? TEXT_SPEED_STOPS[1];
+  const effortStop = EFFORT_STOPS[preferences.effortStopIndex] ?? EFFORT_STOPS[2];
 
   const setGuidanceStopIndex = (index: number) => {
     setPreferences((prev) => ({ ...prev, guidanceStopIndex: Math.max(0, Math.min(GUIDANCE_STOPS.length - 1, index)) }));
@@ -227,6 +266,10 @@ export function InfiePreferencesProvider({ children }: { children: React.ReactNo
     setPreferences((prev) => ({ ...prev, textSpeedStopIndex: Math.max(0, Math.min(TEXT_SPEED_STOPS.length - 1, index)) }));
   };
 
+  const setEffortStopIndex = (index: number) => {
+    setPreferences((prev) => ({ ...prev, effortStopIndex: Math.max(0, Math.min(EFFORT_STOPS.length - 1, index)) }));
+  };
+
   const resetDefaults = () => {
     setPreferences(DEFAULT_PREFERENCES);
   };
@@ -239,14 +282,16 @@ export function InfiePreferencesProvider({ children }: { children: React.ReactNo
       verbosityStop,
       technicalLevelStop,
       textSpeedStop,
+      effortStop,
       setGuidanceStopIndex,
       setSassinessStopIndex,
       setVerbosityStopIndex,
       setTechnicalLevelStopIndex,
       setTextSpeedStopIndex,
+      setEffortStopIndex,
       resetDefaults,
     }),
-    [preferences, guidanceStop, sassinessStop, verbosityStop, technicalLevelStop, textSpeedStop]
+    [preferences, guidanceStop, sassinessStop, verbosityStop, technicalLevelStop, textSpeedStop, effortStop]
   );
 
   return (
@@ -265,6 +310,7 @@ export function useInfiePreferences(): InfiePreferencesContextValue {
     const defVerbosity = VERBOSITY_STOPS[0];
     const defTech = TECHNICAL_LEVEL_STOPS[2];
     const defSpeed = TEXT_SPEED_STOPS[1];
+    const defEffort = EFFORT_STOPS[2];
     return {
       preferences: DEFAULT_PREFERENCES,
       guidanceStop: defGuidance,
@@ -272,11 +318,13 @@ export function useInfiePreferences(): InfiePreferencesContextValue {
       verbosityStop: defVerbosity,
       technicalLevelStop: defTech,
       textSpeedStop: defSpeed,
+      effortStop: defEffort,
       setGuidanceStopIndex: () => {},
       setSassinessStopIndex: () => {},
       setVerbosityStopIndex: () => {},
       setTechnicalLevelStopIndex: () => {},
       setTextSpeedStopIndex: () => {},
+      setEffortStopIndex: () => {},
       resetDefaults: () => {},
     };
   }

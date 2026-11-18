@@ -35,6 +35,7 @@ const {
   PET_PREVIEW_V2_MOUNT,
   PET_PRE_ROUTER_SHIM_MARKER,
   applyPetPreRouterPathShim,
+  createPetStaticRequestHandler,
 } = localServers
 
 const { verifyHostedOutput } = hostedVerify
@@ -359,6 +360,36 @@ test('nested preview mounts, pre-router index.html shim, and verifyHostedOutput 
     assert.ok(bad.errors.some((msg) => msg.includes('shim')))
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true })
+  }
+})
+
+test('Pet preview handler falls back to the root document for client routes but 404s missing assets', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'i2-pet-handler-'))
+  try {
+    fs.writeFileSync(path.join(root, 'index.html'), '<!DOCTYPE html><html><head></head><body>root</body></html>')
+    fs.mkdirSync(path.join(root, '_expo'))
+    fs.writeFileSync(path.join(root, '_expo', 'app.js'), 'console.log(1)')
+    const handler = createPetStaticRequestHandler(root)
+    const request = (url) =>
+      new Promise((resolve) => {
+        const res = {
+          status: 0,
+          headers: {},
+          writeHead(status, headers) { this.status = status; this.headers = headers },
+          end(body) { resolve({ status: this.status, headers: this.headers, body: body == null ? '' : String(body) }) },
+        }
+        void handler({ method: 'GET', url }, res)
+      })
+
+    const route = await request('/post/abc123')
+    assert.equal(route.status, 200)
+    assert.match(route.body, /root/)
+    assert.ok(route.body.includes(PET_PRE_ROUTER_SHIM_MARKER), 'fallback document is shimmed')
+    assert.equal((await request('/_expo/app.js')).status, 200)
+    assert.equal((await request('/_expo/missing.js')).status, 404)
+    assert.equal((await request('/assets/missing.png')).status, 404)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
   }
 })
 

@@ -177,11 +177,11 @@ test('browser: compact music artist/title, tall restored Web Preview, and top/bo
     assert.equal(title.trim(), 'Night Market', 'compact music title line shows song title')
     assert.doesNotMatch(primary, /Curated/, 'compact dock music does not show playlist title as artist')
 
-    // Switch track and confirm artist stays Leek Beats & title updates to Costco Dates
+    // Switch track and confirm artist & title advance to Lofi Midnight Club / alex-morgan
     await page.locator('[data-dock-item="music"] button[aria-label="Next track"]').click()
     await page.waitForTimeout(150)
-    assert.equal((await page.locator('[data-dock-item="music"] [data-testid="music-track-primary"]').innerText()).trim(), 'Leek Beats')
-    assert.equal((await page.locator('[data-dock-item="music"] [data-testid="music-track-title"]').innerText()).trim(), 'Costco Dates')
+    assert.equal((await page.locator('[data-dock-item="music"] [data-testid="music-track-primary"]').innerText()).trim(), 'alex-morgan')
+    assert.equal((await page.locator('[data-dock-item="music"] [data-testid="music-track-title"]').innerText()).trim(), 'Lofi Midnight Club')
 
     await page.screenshot({ path: path.join(screenshotDir, '01-compact-music.png') })
 

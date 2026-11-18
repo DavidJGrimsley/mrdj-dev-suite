@@ -387,8 +387,9 @@ export function resolvePetPreviewDir(options = {}) {
 }
 
 /**
- * Exact-file static request handler for nested Pet preview mounts (no SPA fallback for missing
- * files) that applies the narrow pre-router path normalization shim to `index.html`.
+ * Exact-file static request handler for nested Pet preview mounts that applies the narrow
+ * pre-router path normalization shim to `index.html`. Missing extensionless paths fall back to the
+ * root document for client-side routes; missing files with an extension return 404.
  */
 export function createPetStaticRequestHandler(rootDir) {
   const resolvedRoot = path.resolve(rootDir)
@@ -422,9 +423,16 @@ export function createPetStaticRequestHandler(rootDir) {
         await fsp.stat(candidate)
       }
     } catch {
-      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-      res.end('Not Found')
-      return
+      // Pet exports with `web.output: "single"`, so extensionless client routes such as
+      // /post/<id> load the root document; missing assets (anything with an extension) stay 404.
+      const rootIndex = path.join(resolvedRoot, 'index.html')
+      if (path.extname(rel) === '' && fs.existsSync(rootIndex)) {
+        candidate = rootIndex
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+        res.end('Not Found')
+        return
+      }
     }
     try {
       const ext = path.extname(candidate).toLowerCase()

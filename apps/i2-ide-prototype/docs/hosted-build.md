@@ -41,7 +41,10 @@ dist-hosted/
 │   ├── robots.txt            <-- Disallow: /
 │   └── (public assets)       <-- Static media loaded via assetUrl()
 ├── manifest.json             <-- Build metadata: git commit, dirty status, file count, sha256
-└── isquared-web.tgz          <-- Optional tarball (produced with --archive)
+├── provenance.json           <-- Source branch/commit and Pet preview provenance
+├── SHA256SUMS                <-- Hashes of web/ and the metadata files (matches their final bytes)
+├── isquared-web.tgz          <-- Optional tarball (produced with --archive)
+└── isquared-web.tgz.sha256   <-- Archive hash, kept outside manifest.json so SHA256SUMS stays valid
 ```
 
 ---
