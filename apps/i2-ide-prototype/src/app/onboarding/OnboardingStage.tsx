@@ -176,17 +176,19 @@ function useNarrowStage(): boolean {
   return narrow;
 }
 
-function useViewportWidth(): number {
-  const [width, setWidth] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth : 1280
+function useViewportSize(): { width: number; height: number } {
+  const [size, setSize] = useState(() =>
+    typeof window !== "undefined"
+      ? { width: window.innerWidth, height: window.innerHeight }
+      : { width: 1280, height: 800 }
   );
   useEffect(() => {
-    const onResize = () => setWidth(window.innerWidth);
+    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  return width;
+  return size;
 }
 
 // Living Infie Hero Artwork: uses the supplied 2048x2048 transparent form stills
@@ -329,7 +331,7 @@ export function OnboardingStage({
 
   const reducedMotion = usePrefersReducedMotion();
   const narrowStage = useNarrowStage();
-  const viewportWidth = useViewportWidth();
+  const { width: viewportWidth, height: viewportHeight } = useViewportSize();
 
   // B01 arrival choreography state: "lettering" -> "mark" -> "outro" (fade to black before Infie fades into B02)
   const [b01Stage, setB01Stage] = useState<"lettering" | "mark" | "outro">("lettering");
@@ -391,7 +393,7 @@ export function OnboardingStage({
         onContinue = undefined;
       } else {
         currentLine =
-          "This onboarding tutorial may take 15 to twenty minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.";
+          "This onboarding tutorial may take around 15 minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.";
         onContinue = () => advanceBeat("B04");
       }
       break;
@@ -519,11 +521,13 @@ export function OnboardingStage({
     case "B10":
       if (turnIndex === 0) {
         currentLine =
-          "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
+          "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "You can use any combination of models for your Session Agents, those are the ones to whom I pass off your requests to get the coding work done. I manage them as a team but more on that later. For now just configure your choices and you can always adjust later in settings.";
+          connectedModels.length >= 1
+            ? "Checking your developer environment... Node.js and Python could use updates. I can update them and all your agent skills now, and keep them updated nightly if you'd like."
+            : "You can use any combination of models for your Session Agents, those are the ones to whom I pass off your requests to get the coding work done. I manage them as a team but more on that later. For now just configure your choices and you can always adjust later in settings.";
         onContinue =
           connectedModels.length >= 1
             ? () => {
@@ -534,7 +538,7 @@ export function OnboardingStage({
             : undefined;
       } else {
         currentLine =
-          "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider below—even while I'm talking.";
+          "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.";
         onContinue = () => advanceBeat("B11");
       }
       break;
@@ -1506,7 +1510,12 @@ export function OnboardingStage({
     const padRight = chatShift ? Math.min(280, viewportWidth * 0.36) : 24;
     const chatCenterX = (padLeft + viewportWidth - padRight) / 2;
     const chatVisualWidth = Math.min(540 * chatScale(), Math.max(0, viewportWidth - padLeft - padRight));
+    const chatLeftEdge = Math.round(chatCenterX - chatVisualWidth / 2);
     const rightMarginLeft = Math.round(chatCenterX + chatVisualWidth / 2);
+    const leftMarginAvailableWidth = chatLeftEdge - 24;
+    const leftMarginAvailableHeight = viewportHeight - 72 - 84;
+    const isB10Turn2 = currentBeat === "B10" && turnIndex === 2;
+    const showLeftPrefMargin = isB10Turn2 && leftMarginAvailableWidth >= 300 && leftMarginAvailableHeight >= 300;
     const b06ScaleDuration = reducedMotion ? 0 : isB06VideoActive ? 0.65 : B06_RECENTER_MS / 1000;
 
     return (
@@ -1763,7 +1772,7 @@ export function OnboardingStage({
             </div>
           </div>
 
-          {currentBeat === "B10" && turnIndex === 2 && <PreferenceSlidersPreview />}
+          {isB10Turn2 && !showLeftPrefMargin && <PreferenceSlidersPreview />}
 
           {/* B02: Name and Email fields in center content flow */}
           {currentBeat === "B02" && isRevealed("identity_controls") && textComplete && (
@@ -2071,6 +2080,17 @@ export function OnboardingStage({
           )}
 
         </div>
+        {showLeftPrefMargin && (
+          <div
+            data-name="OnboardingLeftMargin"
+            className="fixed flex items-center justify-center pointer-events-none z-20"
+            style={{ left: 12, top: 72, bottom: 84, width: leftMarginAvailableWidth }}
+          >
+            <div className="w-full max-w-[320px] max-h-full overflow-y-auto flex justify-center pointer-events-auto">
+              <PreferenceSlidersPreview />
+            </div>
+          </div>
+        )}
         {showRightMargin && (
           <div
             data-name="OnboardingRightMargin"

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback, createContext, useContext } from "react";
+import { lazy, Suspense, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, createContext, useContext } from "react";
 import { assetUrl } from "./assetUrl";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -98,6 +98,8 @@ import { PrototypeLimitProvider, usePrototypeLimit, useRegisterPrototypeLimitNav
 import { HOME_PRICING_REPLY, PERSONAL_TIERS, BUSINESS_TIERS, type PricingTier } from "./home/pricing";
 import { ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS, HOME_BOTTOM_PADDING_CLASS, WIDGET_HEADER_CLICK_MS, activeProjectsFit, headerClickAction } from "./home/homeLayout";
 import { ImportProjectFlow, ImportedExplorer } from "./home/ImportProjectFlow";
+import { scanOpenProjects, type WhatsNextDestination, type WhatsNextScan } from "./home/whatsNext";
+import { WhatsNextProposals, WhatsNextScanning, useWhatsNextDiscovery, whatsNextDissolve } from "./home/HomeWhatsNext";
 import {
   IMPORT_FOLDER_LABEL,
   IMPORT_PROJECT_ID,
@@ -109,7 +111,31 @@ import {
 } from "./home/importedProject";
 import { SessionsPanel, type SessionCardData } from "./widgets/SessionsPanel";
 import { chatScale } from "./widgets/chatScale";
-import { SimulatorTargetProvider, SimulatorTargetPicker, useSimulatorTargets, PET_WEB_PREVIEW, type SimOption } from "./widgets/simulator";
+import {
+  SimulatorTargetProvider,
+  SimulatorTargetPicker,
+  useSimulatorTargets,
+  PET_WEB_PREVIEW,
+  PET_WEB_PREVIEW_V1,
+  PET_WEB_PREVIEW_V2,
+  type SimOption,
+} from "./widgets/simulator";
+import { PetSessionProvider, usePetSession } from "./pet/PetSessionContext";
+import { PetWrapUpChecks } from "./pet/PetWrapUpChecks";
+import {
+  PET_AGENT_TASKS_DONE,
+  PET_BLANK_REPORT_NOTICE,
+  PET_AGENT_TASKS_PENDING,
+  PET_DIFF_SUMMARY,
+  PET_PLAN_MD_TEXT,
+  PET_REPLAY_BRANCH,
+  PET_REPLAY_GOAL,
+  PET_REPLAY_PROJECT_ID,
+  PET_REPLAY_SESSION_ID,
+  PET_REPLAY_SESSION_NAME,
+  PET_REPLAY_TODO_TEXT,
+  PET_SOURCE_DIFFS,
+} from "./pet/petSessionData";
 
 const ClosingOverlay = lazy(() => import("./closing/ClosingOverlay").then(module => ({ default: module.ClosingOverlay })));
 
@@ -192,59 +218,39 @@ const ALL_WIDGETS: WidgetDef[] = [
 ];
 
 const INIT_MESSAGES: Message[] = [
-  { id: "1", role: "assistant", content: "Session started. Project: `expo-photo-share` · Goal: Add photo-sharing feature. `mds doctor` passed all checks. Ready." },
+  { id: "1", role: "assistant", content: "Session ready. Project: `pet-show-and-tell` · Goal: Add comments with Like/Love on comments." },
 ];
 const INIT_AGENT_TASKS: CheckItem[] = [
-  { id: "a1", text: "Implement PhotoPicker component", done: true },
-  { id: "a2", text: "Wire up usePhotoShare hook", done: true },
-  { id: "a3", text: "Add friend list query to Supabase", done: false },
-  { id: "a4", text: "Handle photo library permissions", done: false },
-  { id: "a5", text: "Compress images before upload", done: false },
+  { id: "a1", text: PET_REPLAY_TODO_TEXT, done: false },
 ];
 const INIT_HUMAN_TESTS: CheckItem[] = [
-  { id: "h1", text: "Photo picker opens on iOS and Android", done: false },
-  { id: "h2", text: "Dark mode renders correctly on iOS", done: false },
-  { id: "h3", text: "Send button disabled with no photo selected", done: true },
-  { id: "h4", text: "Friend list loads from Supabase", done: false },
+  { id: "h1", text: "Post a comment on a pet post", done: false },
+  { id: "h2", text: "Toggle Like/Love reaction off on a comment", done: false },
+  { id: "h3", text: "Verify comment and reaction persist after reopening the post", done: false },
+  { id: "h4", text: "Verify blank and 181-character comments are rejected", done: false },
 ];
-const INIT_DIFFS: DiffFile[] = [
-  { name: "camera.tsx",       path: "src/app/(tabs)/camera.tsx",      additions: 84,  deletions: 12, status: "modified" },
-  { name: "PhotoPicker.tsx",  path: "src/components/PhotoPicker.tsx", additions: 142, deletions: 0,  status: "added" },
-  { name: "FriendList.tsx",   path: "src/components/FriendList.tsx",  additions: 67,  deletions: 5,  status: "modified" },
-  { name: "usePhotoShare.ts", path: "src/hooks/usePhotoShare.ts",     additions: 38,  deletions: 0,  status: "added" },
-  { name: "package.json",     path: "package.json",                   additions: 3,   deletions: 1,  status: "modified" },
-];
-const BRANCH_DIFFS: DiffFile[] = [
-  { name: "camera.tsx",       path: "src/app/(tabs)/camera.tsx",      additions: 84,  deletions: 12, status: "modified" },
-  { name: "PhotoPicker.tsx",  path: "src/components/PhotoPicker.tsx", additions: 142, deletions: 0,  status: "added" },
-  { name: "FriendList.tsx",   path: "src/components/FriendList.tsx",  additions: 67,  deletions: 5,  status: "modified" },
-  { name: "usePhotoShare.ts", path: "src/hooks/usePhotoShare.ts",     additions: 38,  deletions: 0,  status: "added" },
-  { name: "package.json",     path: "package.json",                   additions: 3,   deletions: 1,  status: "modified" },
-  { name: "app.json",         path: "app.json",                       additions: 2,   deletions: 0,  status: "modified" },
-  { name: "Guidelines.md",    path: "project/Guidelines.md",          additions: 18,  deletions: 4,  status: "modified" },
-];
+const INIT_DIFFS: DiffFile[] = [];
+const BRANCH_DIFFS: DiffFile[] = [];
 const WORKSPACE_TREE: FileNode[] = [
-  { name: "expo-photo-share", kind: "folder", expanded: true, children: [
+  { name: "pet-show-and-tell", kind: "folder", expanded: true, children: [
     { name: "src", kind: "folder", expanded: true, children: [
       { name: "app", kind: "folder", expanded: true, children: [
-        { name: "(tabs)", kind: "folder", expanded: false, children: [
-          { name: "index.tsx", kind: "file" },
-          { name: "camera.tsx", kind: "file", active: true },
-          { name: "profile.tsx", kind: "file" },
-        ]},
+        { name: "index.tsx", kind: "file", active: true },
         { name: "_layout.tsx", kind: "file" },
       ]},
-      { name: "components", kind: "folder", expanded: false, children: [
-        { name: "PhotoPicker.tsx", kind: "file" },
-        { name: "FriendList.tsx", kind: "file" },
+      { name: "features", kind: "folder", expanded: false, children: [
+        { name: "pets", kind: "folder", expanded: false, children: [
+          { name: "pet-store.ts", kind: "file" },
+          { name: "post-detail-screen.tsx", kind: "file" },
+        ]},
       ]},
-      { name: "hooks", kind: "folder", expanded: false, children: [
-        { name: "usePhotoShare.ts", kind: "file" },
+      { name: "storage", kind: "folder", expanded: false, children: [
+        { name: "pet-database.ts", kind: "file" },
       ]},
     ]},
     { name: "project", kind: "folder", expanded: false, children: [
-      { name: "Info.md", kind: "file" }, { name: "Todo.md", kind: "file" },
-      { name: "Style.md", kind: "file" }, { name: "Guidelines.md", kind: "file" },
+      { name: "info.md", kind: "file" }, { name: "todo.md", kind: "file" },
+      { name: "style.md", kind: "file" }, { name: "guidelines.md", kind: "file" },
     ]},
     { name: "package.json", kind: "file" },
     { name: "app.json", kind: "file" },
@@ -270,21 +276,16 @@ interface GlobalTodoItem {
 }
 
 const INIT_GLOBAL_TODOS: GlobalTodoItem[] = [
-  // Active Projects: Pet Show and Tell
-  { id: "gt-1", text: "Implement PhotoPicker component", done: true, category: "project", projectId: "pet", projectName: "Pet Show and Tell", sessionId: "add-comments" },
-  { id: "gt-2", text: "Add friend list query to Supabase", done: false, category: "project", projectId: "pet", projectName: "Pet Show and Tell", sessionId: "add-comments" },
-  { id: "gt-3", text: "Handle photo library permissions", done: false, category: "project", projectId: "pet", projectName: "Pet Show and Tell", sessionId: "add-comments" },
-  { id: "gt-4", text: "Compress images before upload", done: false, category: "project", projectId: "pet", projectName: "Pet Show and Tell", sessionId: "add-comments" },
-
-  // Active Projects: Not Hotdog
-  { id: "gt-5", text: "Add edge-case image examples to test set", done: false, category: "project", projectId: "nothotdog", projectName: "Not Hotdog", sessionId: "not-hotdog" },
-  { id: "gt-6", text: "Retrain confidence score classifier", done: false, category: "project", projectId: "nothotdog", projectName: "Not Hotdog", sessionId: "not-hotdog" },
-
-  // General / Ecosystem & Dev Ops
-  { id: "gt-7", text: "Update SSL certificates on MyWebsite.com", done: false, category: "general" },
-  { id: "gt-8", text: "Renew Apple Developer distribution certificates", done: false, category: "general" },
-  { id: "gt-9", text: "Configure Sentry alerts for production crashes", done: false, category: "general" },
-  { id: "gt-10", text: "Audit Supabase row level security policies", done: true, category: "general" },
+  // Active Projects: Pet Show and Tell (single unguided TODO)
+  {
+    id: "gt-1",
+    text: PET_REPLAY_TODO_TEXT,
+    done: false,
+    category: "project",
+    projectId: PET_REPLAY_PROJECT_ID,
+    projectName: "Pet Show and Tell",
+    sessionId: PET_REPLAY_SESSION_ID,
+  },
 ];
 
 const INFIE_HERO_SRC = assetUrl("/assets/infie-form-mist.png");
@@ -413,12 +414,12 @@ const INIT_PALETTE: Record<StylistPaletteKey, string> = {
 };
 
 const FONT_ROLES = [
-  { key: "display",  label: "Display",  sample: "Photo Share",                         size: 22, weight: 800 },
-  { key: "title",    label: "Title",    sample: "Add photos to friends",                size: 17, weight: 700 },
+  { key: "display",  label: "Display",  sample: "Pet Show and Tell",                   size: 22, weight: 800 },
+  { key: "title",    label: "Title",    sample: "Share moments with your pets",         size: 17, weight: 700 },
   { key: "subtitle", label: "Subtitle", sample: "Subtitle for cards and hero text",     size: 14, weight: 600 },
   { key: "body",     label: "Body",     sample: "Readable body copy for product screens.", size: 13, weight: 400 },
   { key: "caption",  label: "Caption",  sample: "Caption and metadata text",            size: 11, weight: 400 },
-  { key: "mono",     label: "Mono",     sample: "usePhotoShare · camera.tsx:42",        size: 11, weight: 400, mono: true },
+  { key: "mono",     label: "Mono",     sample: "pet-store.ts · post-detail-screen.tsx", size: 11, weight: 400, mono: true },
 ] as const;
 
 function contrastFor(hex: string): string {
@@ -661,16 +662,9 @@ function ExtensionsContent() {
 
 function TimelineContent() {
   const entries = [
-    { time: "2 min ago",  kind: "save",   label: "camera.tsx saved",           detail: "84 lines changed" },
-    { time: "4 min ago",  kind: "save",   label: "PhotoPicker.tsx saved",       detail: "142 lines added" },
-    { time: "6 min ago",  kind: "save",   label: "usePhotoShare.ts saved",      detail: "38 lines added" },
-    { time: "11 min ago", kind: "git",    label: "feat: scaffold photo hook",   detail: "git commit" },
-    { time: "18 min ago", kind: "save",   label: "FriendList.tsx saved",        detail: "67 lines changed" },
-    { time: "22 min ago", kind: "git",    label: "feat: add FriendList",        detail: "git commit" },
-    { time: "31 min ago", kind: "save",   label: "package.json saved",          detail: "expo-image-picker added" },
-    { time: "35 min ago", kind: "git",    label: "chore: add expo-image-picker","detail": "git commit" },
-    { time: "1h ago",     kind: "git",    label: "feat: start photo-share branch", detail: "git commit" },
-    { time: "1h ago",     kind: "session",label: "Session started",             detail: "mds doctor passed" },
+    { time: "now",        kind: "session", label: "Session ready: Add Comments",   detail: "branch add-comments from 6e17795" },
+    { time: "earlier",    kind: "git",     label: "chore: replace seed photos",    detail: "git commit" },
+    { time: "earlier",    kind: "git",     label: "feat: pet feed & reactions",    detail: "git commit" },
   ];
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] overflow-auto">
@@ -691,12 +685,11 @@ function TimelineContent() {
 }
 
 function SearchContent() {
-  const [query, setQuery] = useState("usePhotoShare");
+  const [query, setQuery] = useState("pet-store");
   const results = [
-    { file: "usePhotoShare.ts", line: 1,  preview: "export function usePhotoShare() {" },
-    { file: "camera.tsx",       line: 8,  preview: "import { usePhotoShare } from '../hooks/usePhotoShare';" },
-    { file: "camera.tsx",       line: 42, preview: "  const { pickPhoto, sharePhoto } = usePhotoShare();" },
-    { file: "FriendList.tsx",   line: 23, preview: "  // usePhotoShare handles upload state" },
+    { file: "pet-store.ts",          line: 1,  preview: "export const usePetStore = create<PetStoreState>((set, get) => ({" },
+    { file: "post-detail-screen.tsx", line: 12, preview: "import { usePetStore } from './pet-store';" },
+    { file: "pet-database.ts",       line: 18, preview: "export async function initPetDatabase(): Promise<void> {" },
   ];
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a]">
@@ -737,41 +730,21 @@ function SearchContent() {
 function TerminalContent() {
   const [activeTab, setActiveTab] = useState(0);
   const tabs = [
-    { label: "(Agent)", path: "~/expo-photo-share", isAgent: true },
-    { label: "", path: "~/expo-photo-share", isAgent: false },
-    { label: "", path: "~/expo-photo-share", isAgent: false },
+    { label: "(Agent)", path: "~/pet-show-and-tell", isAgent: true },
+    { label: "", path: "~/pet-show-and-tell", isAgent: false },
   ];
   const outputs: Record<number, { text: string; color?: string }[]> = {
     0: [
-      { text: "$ npx expo start --clear", color: "#abefa3" },
-      { text: "Starting Metro Bundler..." },
-      { text: "Metro waiting on exp://192.168.1.10:8081" },
-      { text: "› Press a │ open Android" },
-      { text: "› Press i │ open iOS simulator" },
-      { text: "› Press w │ open web", color: "#666" },
-      { text: "" },
-      { text: "$ mds doctor", color: "#abefa3" },
+      { text: "$ mds doctor --fast", color: "#abefa3" },
       { text: "✓ Project memory files present", color: "#abefa3" },
       { text: "✓ package.json scripts valid", color: "#abefa3" },
-      { text: "✗ Missing expo.scheme in app.json", color: "#f87171" },
+      { text: "✓ Expo config valid", color: "#abefa3" },
       { text: "▌", color: "#abefa3" },
     ],
     1: [
       { text: "$ git status", color: "#abefa3" },
-      { text: "On branch feature/photo-share" },
-      { text: "Changes not staged for commit:" },
-      { text: "  modified:   src/app/(tabs)/camera.tsx", color: "#fbbf24" },
-      { text: "  modified:   src/components/FriendList.tsx", color: "#fbbf24" },
-      { text: "Untracked files:" },
-      { text: "  src/components/PhotoPicker.tsx", color: "#abefa3" },
-      { text: "  src/hooks/usePhotoShare.ts", color: "#abefa3" },
-      { text: "▌", color: "#abefa3" },
-    ],
-    2: [
-      { text: "$ npx expo start", color: "#abefa3" },
-      { text: "Starting Metro Bundler on port 8081..." },
-      { text: "iOS Bundling complete 1842ms" },
-      { text: "Android Bundling complete 2104ms" },
+      { text: "On branch add-comments" },
+      { text: "nothing to commit, working tree clean" },
       { text: "▌", color: "#abefa3" },
     ],
   };
@@ -810,7 +783,7 @@ function GitContent({ commitDiffs, branchDiffs }: { commitDiffs: DiffFile[]; bra
       {/* Branch context */}
       <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2 shrink-0">
         <GitBranch size={12} className="text-[#abefa3]" />
-        <span className="font-mono text-[11px] text-[#777]">feature/photo-share</span>
+        <span className="font-mono text-[11px] text-[#777]">{PET_REPLAY_BRANCH}</span>
         <span className="ml-auto text-[10px] font-['Rounded_Mplus_1c',sans-serif] text-[#444]">↑ main</span>
       </div>
 
@@ -863,7 +836,7 @@ function GlobalTodoContent({
   const [filter, setFilter] = useState<"all" | "projects" | "general">("all");
   const [openOnly, setOpenOnly] = useState(false);
   const [draft, setDraft] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<"general" | "pet" | "nothotdog">("general");
+  const [selectedCategory, setSelectedCategory] = useState<"general" | "pet">("pet");
 
   const openItems = items.filter(i => !i.done);
   const doneItems = items.filter(i => i.done);
@@ -877,7 +850,6 @@ function GlobalTodoContent({
   });
 
   const petItems = filtered.filter(i => i.projectId === "pet");
-  const nothotdogItems = filtered.filter(i => i.projectId === "nothotdog");
   const generalItems = filtered.filter(i => i.category === "general");
 
   const handleAdd = () => {
@@ -885,8 +857,6 @@ function GlobalTodoContent({
     if (!text) return;
     if (selectedCategory === "pet") {
       onAdd(text, "project", "pet", "Pet Show and Tell", "add-comments");
-    } else if (selectedCategory === "nothotdog") {
-      onAdd(text, "project", "nothotdog", "Not Hotdog", "not-hotdog");
     } else {
       onAdd(text, "general");
     }
@@ -986,43 +956,8 @@ function GlobalTodoContent({
           </div>
         )}
 
-        {/* Project Section: Not Hotdog */}
-        {(filter === "all" || filter === "projects") && (nothotdogItems.length > 0 || !openOnly) && (
-          <div className="rounded-[10px] bg-[#1d1b20] border border-white/6 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-[5px] bg-[#2dd4bf]/15 flex items-center justify-center text-[#2dd4bf]">
-                  <ProjectGlyph size={12} />
-                </div>
-                <span className="font-['Space_Grotesk',sans-serif] text-[12px] font-semibold text-white">Not Hotdog</span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono text-[#2dd4bf] bg-[#2dd4bf]/10 border border-[#2dd4bf]/20">Expo</span>
-                <span className="text-[10px] font-['Rounded_Mplus_1c',sans-serif] text-[#666]">
-                  {nothotdogItems.filter(i => !i.done).length} open
-                </span>
-              </div>
-              {onNavigateProject && (
-                <button
-                  onClick={() => onNavigateProject("nothotdog")}
-                  className="flex items-center gap-1 text-[10.5px] font-['Rounded_Mplus_1c',sans-serif] text-[#2dd4bf] hover:text-[#abefa3] hover:underline transition-colors cursor-pointer"
-                >
-                  <span>Open Project</span>
-                  <ArrowRight size={11} />
-                </button>
-              )}
-            </div>
-            <div className="divide-y divide-white/4">
-              {nothotdogItems.map(item => (
-                <TodoItemRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} />
-              ))}
-              {nothotdogItems.length === 0 && (
-                <p className="px-3 py-2 text-[11px] font-['Rounded_Mplus_1c',sans-serif] text-[#555] italic">No tasks in this category.</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* General / Infrastructure Section */}
-        {(filter === "all" || filter === "general") && (
+        {/* General / Infrastructure Section (shown when general items exist) */}
+        {(filter === "all" || filter === "general") && generalItems.length > 0 && (
           <div className="rounded-[10px] bg-[#1d1b20] border border-white/6 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03] border-b border-white/5">
               <div className="flex items-center gap-2">
@@ -1040,9 +975,6 @@ function GlobalTodoContent({
               {generalItems.map(item => (
                 <TodoItemRow key={item.id} item={item} onToggle={onToggle} onDelete={onDelete} />
               ))}
-              {generalItems.length === 0 && (
-                <p className="px-3 py-2 text-[11px] font-['Rounded_Mplus_1c',sans-serif] text-[#555] italic">No tasks in this category.</p>
-              )}
             </div>
           </div>
         )}
@@ -1054,9 +986,8 @@ function GlobalTodoContent({
           <span className="text-[10px] font-['Rounded_Mplus_1c',sans-serif] text-[#666] uppercase tracking-wider">Assign to:</span>
           {(
             [
-              { id: "general", label: "General / Ops" },
               { id: "pet", label: "Pet Show and Tell" },
-              { id: "nothotdog", label: "Not Hotdog" },
+              { id: "general", label: "General / Ops" },
             ] as const
           ).map(cat => (
             <button
@@ -1163,7 +1094,7 @@ function WidgetContent({ id, ctx, expanded }: { id: WidgetId; ctx: AppContext; e
   if (id === "search") return <SearchContent />;
   if (id === "doctor") return (
     <div className="flex flex-col h-full bg-[#1a1a1a] font-mono text-[11px] p-4 gap-2 overflow-auto">
-      {[{ ok: true, msg: "Project memory files present" }, { ok: true, msg: "package.json scripts valid" }, { ok: true, msg: "Expo config valid" }, { ok: false, msg: "Missing expo.scheme in app.json" }, { ok: true, msg: "TypeScript compiles (0 errors)" }, { ok: true, msg: "ESLint passed" }].map((r, i) => (
+      {[{ ok: true, msg: "Project memory files present" }, { ok: true, msg: "package.json scripts valid" }, { ok: true, msg: "Expo config valid" }, { ok: true, msg: "TypeScript compiles (0 errors)" }, { ok: true, msg: "ESLint passed" }].map((r, i) => (
         <div key={i} className={`flex items-center gap-2 ${r.ok ? "text-[#abefa3]" : "text-red-400"}`}><span>{r.ok ? "✓" : "✗"}</span><span>{r.msg}</span></div>
       ))}
     </div>
@@ -1171,15 +1102,7 @@ function WidgetContent({ id, ctx, expanded }: { id: WidgetId; ctx: AppContext; e
   if (id === "eas") return <EasContent ctx={ctx} />;
   if (id === "problems") return (
     <div className="flex flex-col h-full bg-[#1a1a1a] overflow-auto">
-      {[{ kind: "error", file: "app.json", msg: "Missing required field: expo.scheme", line: 8 }, { kind: "warning", file: "camera.tsx", msg: "React Hook useEffect has missing dependency", line: 42 }, { kind: "warning", file: "FriendList.tsx", msg: "Unnecessary 'any' type annotation", line: 17 }].map((p, i) => (
-        <div key={i} className="flex items-start gap-2 px-3 py-2 border-b border-white/5 hover:bg-white/3 transition-colors cursor-pointer">
-          <AlertTriangle size={12} className={`mt-0.5 shrink-0 ${p.kind === "error" ? "text-red-400" : "text-yellow-400"}`} />
-          <div className="flex-1 min-w-0">
-            <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] leading-snug">{p.msg}</p>
-            <p className="font-mono text-[10px] text-[#555] mt-0.5">{p.file}:{p.line}</p>
-          </div>
-        </div>
-      ))}
+      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#666] px-4 py-6 text-center">No errors or warnings reported.</p>
     </div>
   );
   if (id === "emuWeb" || id === "emuAndroid" || id === "emuIos") {
@@ -1199,19 +1122,12 @@ function WidgetContent({ id, ctx, expanded }: { id: WidgetId; ctx: AppContext; e
 // ─── Sessions content ───────────────────────────────────────────────────────
 
 const ALL_SESSIONS = [
-  { id: "s1", title: "Sending photos feature",    workspace: "expo-photo-share",         branch: "feature/photo-share", phase: "active" as SessionPhase, ago: "now",    date: "Today, 2:14 PM",        snippet: "PhotoPicker component implemented. Working on Supabase friend list query next." },
-  { id: "s2", title: "Fix dark mode on iOS",      workspace: "expo-photo-share",         branch: "fix/dark-mode",       phase: "active" as SessionPhase, ago: "2h ago", date: "Today, 12:03 PM",       snippet: "Dark mode tokens look correct on web. iOS simulator still showing light background on TabBar." },
-  { id: "s4", title: "EAS build pipeline setup",  workspace: "expo-photo-share",         branch: "chore/eas-setup",     phase: "wrapup" as SessionPhase, ago: "2d ago", date: "Jun 28, 4:45 PM",       snippet: "eas.json configured for preview and production profiles. CI secrets added." },
-  { id: "s3", title: "Supabase schema design",    workspace: "portfolio.code-workspace", branch: "main",                phase: "wrapup" as SessionPhase, ago: "1d ago", date: "Jun 29, 10:22 AM",      snippet: "RLS policies set for photos table. Storage bucket public read, authenticated write." },
-  { id: "s5", title: "Auth flow refactor",        workspace: "portfolio.code-workspace", branch: "feature/auth",        phase: "start"  as SessionPhase, ago: "3d ago", date: "Jun 27, 9:00 AM",       snippet: "Migrating from custom JWT to Supabase Auth. Session persistence via AsyncStorage." },
-  { id: "s6", title: "Navigation stack review",   workspace: "DJsPortfolio",             branch: "main",                phase: "wrapup" as SessionPhase, ago: "5d ago", date: "Jun 25, 3:30 PM",       snippet: "Expo Router file-based routing refactor complete. Nested layouts cleaned up." },
-  { id: "s7", title: "Onboard new app",           workspace: "not-hot-dog",              branch: "main",                phase: "start"  as SessionPhase, ago: "1w ago", date: "Jun 23, 11:15 AM",      snippet: "mds onboard run. project/ folder created. Stack: Expo Router, Zustand, NativeWind." },
-  { id: "s8", title: "SDK upgrade 50→51",         workspace: "PokePages",                branch: "chore/sdk-51",        phase: "wrapup" as SessionPhase, ago: "2w ago", date: "Jun 16, 2:00 PM",       snippet: "expo-modules-core and react-native upgraded. Metro config updated for new resolver." },
+  { id: "add-comments", title: "Add Comments", workspace: "pet-show-and-tell", branch: PET_REPLAY_BRANCH, phase: "start" as SessionPhase, ago: "now", date: "Today", snippet: PET_REPLAY_GOAL },
 ];
 
 // ─── Sessions content ──────────────────────────────────────────────────────
 
-const CURRENT_PROJECT = "expo-photo-share";
+const CURRENT_PROJECT = "pet-show-and-tell";
 
 type SessionPromptState = { session: typeof ALL_SESSIONS[0] } | null;
 
@@ -4118,7 +4034,7 @@ function infieHomeReply(text: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 
 type SessionStatus =
-  | "READY" | "CODING" | "WAITING ON TEST" | "NEEDS YOU"
+  | "PLAN REVIEW" | "READY" | "CODING" | "WAITING ON TEST" | "NEEDS YOU"
   | "REVIEW FIXES" | "FIXING" | "VERIFIED" | "PR OPEN"
   | "MERGED" | "COMPLETE" | "BLOCKED" | "PAUSED";
 
@@ -4143,7 +4059,7 @@ function glassStyle(preset: ActionPreset): React.CSSProperties {
 }
 
 const STATUS_PRESET: Record<SessionStatus, ActionPreset> = {
-  READY: "teal", CODING: "blue", "WAITING ON TEST": "amber", "NEEDS YOU": "amber",
+  "PLAN REVIEW": "teal", READY: "teal", CODING: "blue", "WAITING ON TEST": "amber", "NEEDS YOU": "amber",
   "REVIEW FIXES": "red", FIXING: "blue", VERIFIED: "teal", "PR OPEN": "blue",
   MERGED: "purple", COMPLETE: "teal", BLOCKED: "red", PAUSED: "gray",
 };
@@ -4154,6 +4070,7 @@ interface FlowStep { label: string; preset: ActionPreset; icon: IconCmp; next: S
 
 // Status → primary action (label / preset / icon / next status)
 const SESSION_FLOW: Record<SessionStatus, FlowStep> = {
+  "PLAN REVIEW":     { label: "Approve Plan",   preset: "teal",   icon: CheckCircle2,  next: "CODING" },
   READY:             { label: "Start Session",  preset: "teal",   icon: Play,          next: "CODING" },
   CODING:            { label: "Continue",       preset: "blue",   icon: ArrowRight,    next: "WAITING ON TEST" },
   "WAITING ON TEST": { label: "Test App",       preset: "amber",  icon: FlaskConical,  next: "NEEDS YOU" },
@@ -4205,8 +4122,8 @@ export const EXPERIMEMO_SESSION: ProtoSession = {
 };
 
 const PROTOTYPE_PROJECTS: ProtoProject[] = [
-  { id: "pet",       name: "Pet Show and Tell", desc: "Pet photo sharing social app",     framework: "Expo",      sessions: 2, ago: "Now",   active: true,  wired: true  },
-  { id: "nothotdog", name: "Not Hotdog",        desc: "Image classification app",         framework: "Expo",      sessions: 1, ago: "1w ago", wired: true  },
+  { id: "pet",       name: "Pet Show and Tell", desc: "Pet photo sharing social app",     framework: "Expo",      sessions: 1, ago: "Now",   active: true,  wired: true  },
+  { id: "nothotdog", name: "Not Hotdog",        desc: "Image classification app",         framework: "Expo",      sessions: 0, ago: "1w ago", wired: true  },
 ];
 
 interface ProtoSession {
@@ -4239,50 +4156,56 @@ function importedLiveSessions(): ProtoSession[] {
   }));
 }
 
+// Unguided prototype starts with exactly one active session globally: Add Comments (PLAN REVIEW).
 const PROTOTYPE_SESSIONS: ProtoSession[] = [
-  { id: "add-comments",     projectId: "pet",       name: "Add Comments",                 branch: "feat/add-comments",      model: "Claude Sonnet", agents: 3, tasksTotal: 12, tasksDone: 4, initial: "WAITING ON TEST", wired: true  },
-  { id: "fix-reaction-bug", projectId: "pet",       name: "Fix Reactions Bug",            branch: "chore/fix-reaction-bug", model: "GPT-5.6 Terra", agents: 2, tasksTotal: 8,  tasksDone: 6, initial: "MERGED",          wired: false },
-  { id: "not-hotdog",       projectId: "nothotdog", name: "Improve Not Hotdog Classifier", branch: "feat/edge-cases",       model: "Claude Sonnet", agents: 1, tasksTotal: 7,  tasksDone: 0, initial: "READY",           wired: true, desc: "Make the classifier better at edge cases." },
+  {
+    id: PET_REPLAY_SESSION_ID,
+    projectId: PET_REPLAY_PROJECT_ID,
+    name: PET_REPLAY_SESSION_NAME,
+    branch: PET_REPLAY_BRANCH,
+    model: "Infie",
+    agents: 3,
+    tasksTotal: PET_AGENT_TASKS_PENDING.length,
+    tasksDone: 0,
+    initial: "PLAN REVIEW",
+    wired: true,
+    desc: PET_REPLAY_GOAL,
+  },
+];
+
+// Explicit frozen tutorial fixture for B13-B19 (isolated from unguided i2 Home & Pet replay).
+const FROZEN_TUTORIAL_SESSIONS: ProtoSession[] = [
+  { id: "add-comments",     projectId: "tutorial-demo", name: "Add Comments",      branch: "feat/add-comments",      model: "Claude Sonnet", agents: 3, tasksTotal: 5, tasksDone: 2, initial: "WAITING ON TEST", wired: true  },
+  { id: "fix-reaction-bug", projectId: "tutorial-demo", name: "Fix Reactions Bug", branch: "chore/fix-reaction-bug", model: "GPT-5.6 Terra", agents: 2, tasksTotal: 4, tasksDone: 4, initial: "MERGED",          wired: false },
 ];
 
 // Per-session Infie messages, keyed by status
 const SESSION_MESSAGES: Record<string, Partial<Record<SessionStatus, string>>> = {
   "add-comments": {
-    "WAITING ON TEST": "Test the changes and add one more comment if you find an edge case.",
-    "NEEDS YOU":       "Show and Tell: run the checklist below and record what you see. I'll verify once the required items pass.",
+    "PLAN REVIEW":     "Plan ready for Add Comments. Review Plan.md and click Approve Plan.",
+    CODING:            "Agents are implementing Add Comments on branch add-comments.",
+    "WAITING ON TEST": "Review the source diff in Current Diffs, then click Test App to mount the updated build.",
+    "NEEDS YOU":       "Show and Tell: run the 4 Human Testing checks below and record what you see.",
     VERIFIED:          "Verification passed. The comment changes are ready for a pull request.",
     "PR OPEN":         "The pull request is open. Review the diff before merging.",
-    MERGED:            "The comments feature merged. Run one final project check.",
-    COMPLETE:          "Add Comments session complete. What would you like to build next?",
+    MERGED:            "The comments feature merged to test. Run one final project check.",
+    COMPLETE:          "Add Comments session complete. Both test and main now serve the updated build.",
     "REVIEW FIXES":    "Review flagged a couple of issues. Want me to fix them?",
     FIXING:            "Applying the review fixes now — I'll hand back once they're in.",
-  },
-  "not-hotdog": {
-    READY:             "Ready to start improving the classifier.",
-    CODING:            "I'm adding edge-case image examples and updating the evaluation set.",
-    "WAITING ON TEST": "Test the classifier with a few images that are clearly not hot dogs.",
-    "NEEDS YOU":       "Show and Tell: try three edge cases and record what the app predicts.",
-    VERIFIED:          "Verification passed. The classifier changes are ready for a pull request.",
-    "PR OPEN":         "The pull request is open. Review the evaluation results before merging.",
-    MERGED:            "The classifier update merged. Run one final project check.",
-    COMPLETE:          "Not Hotdog classifier session complete. What would you like to improve next?",
-    "REVIEW FIXES":    "The evaluation flagged a regression. Want me to fix it?",
-    FIXING:            "Retraining on the edge cases and re-running the eval set.",
   },
 };
 
 // Human-testing checklist seeds per session (all required)
-// Demo task rows shared by Project Home's Agent Tasks / Human Testing widgets and the session
-// cards, so the x/y counts on a card are the same rows those widgets list.
-const DEMO_SESSION_TASKS: Record<string, { label: string; agent: { text: string; done: boolean }[]; human: { text: string; done: boolean }[] }> = {
+// Frozen tutorial fixture task rows (used ONLY when isTutorialActive during B13-B19).
+const FROZEN_TUTORIAL_SESSION_TASKS: Record<string, { label: string; agent: { text: string; done: boolean }[]; human: { text: string; done: boolean }[] }> = {
   "add-comments": {
     label: "add comments",
     agent: [
       { text: "Implement PhotoPicker component", done: true },
       { text: "Wire up usePhotoShare hook", done: true },
-      { text: "Add friend list query to Supabase", done: false },
-      { text: "Handle photo library permissions", done: false },
-      { text: "Compress images before upload", done: false },
+      { text: "Add friend list query to Supabase", done: true },
+      { text: "Handle photo library permissions", done: true },
+      { text: "Compress images before upload", done: true },
     ],
     human: [
       { text: "Send button disabled with no photo selected", done: true },
@@ -4305,13 +4228,15 @@ const DEMO_SESSION_TASKS: Record<string, { label: string; agent: { text: string;
   },
 };
 
-function demoTaskCounts(s: ProtoSession): { agent: { done: number; total: number }; human: { done: number; total: number } } {
-  const rows = DEMO_SESSION_TASKS[s.id];
-  if (rows) {
-    return {
-      agent: { done: rows.agent.filter(r => r.done).length, total: rows.agent.length },
-      human: { done: rows.human.filter(r => r.done).length, total: rows.human.length },
-    };
+function demoTaskCounts(s: ProtoSession, useFrozenTutorial = false): { agent: { done: number; total: number }; human: { done: number; total: number } } {
+  if (useFrozenTutorial) {
+    const rows = FROZEN_TUTORIAL_SESSION_TASKS[s.id];
+    if (rows) {
+      return {
+        agent: { done: rows.agent.filter(r => r.done).length, total: rows.agent.length },
+        human: { done: rows.human.filter(r => r.done).length, total: rows.human.length },
+      };
+    }
   }
   if (s.counts) {
     return {
@@ -4325,16 +4250,18 @@ function demoTaskCounts(s: ProtoSession): { agent: { done: number; total: number
 
 const SESSION_HUMAN_TESTS: Record<string, string[]> = {
   "add-comments": [
-    "Send button disabled with no photo selected",
-    "Photo picker opens on iOS and Android",
-    "Attempt to add a comment and react to it",
-  ],
-  "not-hotdog": [
-    "Photo of a hot dog is classified correctly",
-    "Photo of a taco is classified NOT hotdog",
-    "Blurry edge-case image returns a confidence score",
+    "Post a comment on a pet post",
+    "Toggle Like/Love reaction off on a comment",
+    "Verify comment and reaction persist after reopening the post",
+    "Verify blank and 181-character comments are rejected",
   ],
 };
+
+const FROZEN_TUTORIAL_HUMAN_TESTS: readonly string[] = [
+  "Send button disabled with no photo selected",
+  "Photo picker opens on iOS and Android",
+  "Attempt to add a comment and react to it",
+];
 
 function infieMessageFor(sessionId: string, status: SessionStatus): string {
   return SESSION_MESSAGES[sessionId]?.[status]
@@ -4476,7 +4403,7 @@ function MetaCell({ label, value }: { label: string; value: React.ReactNode }) {
 
 // Rough progress heuristic driven by how far the status has advanced
 function statusProgress(session: ProtoSession, status: SessionStatus): number {
-  const order: SessionStatus[] = ["READY", "CODING", "WAITING ON TEST", "NEEDS YOU", "REVIEW FIXES", "FIXING", "VERIFIED", "PR OPEN", "MERGED", "COMPLETE"];
+  const order: SessionStatus[] = ["PLAN REVIEW", "READY", "CODING", "WAITING ON TEST", "NEEDS YOU", "REVIEW FIXES", "FIXING", "VERIFIED", "PR OPEN", "MERGED", "COMPLETE"];
   const idx = Math.max(0, order.indexOf(status));
   return Math.min(session.tasksTotal, Math.round((idx / (order.length - 1)) * session.tasksTotal));
 }
@@ -5081,10 +5008,13 @@ function useSimPreview(projectId: string | null, lockedSessionId?: string): {
   setTarget: (t: string) => void;
   web: SimWeb;
   note: string | null;
+  petVersion?: "v1" | "v2";
 } {
   const tutorial = useTutorial();
+  const petSession = usePetSession();
   const { targets, setTarget } = useSimulatorTargets();
-  const dataProjectId = projectId === "tutorial-demo" ? "pet" : projectId;
+  const isFrozenTutorial = projectId === "tutorial-demo";
+  const dataProjectId = isFrozenTutorial ? "pet" : projectId;
   const isExperimemo = dataProjectId === EXPERIMEMO_PROJECT_ID;
   const sessions: { id: string; name: string }[] = !dataProjectId
     ? []
@@ -5092,7 +5022,9 @@ function useSimPreview(projectId: string | null, lockedSessionId?: string): {
       ? (tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : [])
       : dataProjectId === IMPORT_PROJECT_ID
         ? IMPORTED_SESSIONS.map(s => ({ id: s.id, name: s.name }))
-        : PROTOTYPE_SESSIONS.filter(s => s.projectId === dataProjectId);
+        : isFrozenTutorial
+          ? FROZEN_TUTORIAL_SESSIONS
+          : PROTOTYPE_SESSIONS.filter(s => s.projectId === dataProjectId);
   const options: SimOption[] = dataProjectId
     ? [
         { id: "main", label: "main", kind: "branch" },
@@ -5100,21 +5032,40 @@ function useSimPreview(projectId: string | null, lockedSessionId?: string): {
         ...sessions.map(s => ({ id: s.id, label: s.name, kind: "session" as const })),
       ]
     : [];
-  const stored = projectId ? targets[projectId] : undefined;
+  const stored = !isFrozenTutorial && dataProjectId === "pet"
+    ? petSession.state.branchPreviewSelection
+    : projectId ? targets[projectId] : undefined;
   const target = lockedSessionId && options.some(o => o.id === lockedSessionId)
     ? lockedSessionId
     : stored && options.some(o => o.id === stored) ? stored : "main";
   let web: SimWeb = { kind: "mock" };
   let note: string | null = null;
+  let petVersion: "v1" | "v2" | undefined;
   if (isExperimemo) {
     web = { kind: "exact", version: target === "main" && tutorial.session ? "v1" : tutorial.previewVersion };
-  } else if (dataProjectId === "pet") {
-    web = { kind: "source", source: PET_WEB_PREVIEW };
+  } else if (isFrozenTutorial) {
+    petVersion = "v1";
+    web = { kind: "source", source: PET_WEB_PREVIEW_V1 };
     if (target !== "main") note = `The ${target === "test" ? "test branch" : "session"} build isn't snapshotted in this prototype, so this is main.`;
+  } else if (dataProjectId === "pet") {
+    petVersion = petSession.previewVersionFor(target);
+    web = { kind: "source", source: petVersion === "v2" ? PET_WEB_PREVIEW_V2 : PET_WEB_PREVIEW_V1 };
   } else if (dataProjectId) {
     web = { kind: "none" };
   }
-  return { options, target, setTarget: (t) => { if (projectId) setTarget(projectId, t); }, web, note };
+  return {
+    options,
+    target,
+    setTarget: (t) => {
+      if (!isFrozenTutorial && dataProjectId === "pet") {
+        petSession.selectBranchPreview(t);
+      }
+      if (projectId) setTarget(projectId, t);
+    },
+    web,
+    note,
+    petVersion,
+  };
 }
 
 /** Gallery and widget-modal simulators: the same live frame and target pickers as the screens. */
@@ -5135,6 +5086,7 @@ function LiveSimulatorBody({ kind, targetH = 420 }: { kind: "emuWeb" | "emuAndro
       data-testid="library-simulator"
       data-sim-kind={kind}
       data-project={simProjectId ?? ""}
+      data-pet-preview-version={sim.petVersion}
       className={`flex flex-col flex-1 ${fillsContainer ? "h-full" : ""} min-h-0 bg-[#111] overflow-hidden`}
     >
       <div className="px-2 py-1.5 shrink-0 bg-[#1d1b20]">
@@ -5235,6 +5187,7 @@ function WebPreviewWidget({ projectId, lockedSessionId, onEnlarge, glow = false 
     <div
       data-testid="inline-web-preview"
       data-web-preview-glow={glow ? "true" : "false"}
+      data-pet-preview-version={sim.petVersion}
       className={`flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip w-full transition-all ${
         glow
           ? "infie-glow border border-[#2dd4bf]"
@@ -5308,7 +5261,7 @@ function EmulatorScreen({ projectId, lockedSessionId, projects, onEnlarge }: {
   const sim = useSimPreview(simProjectId, lockedSessionId);
   const real = sim.web.kind === "exact" || sim.web.kind === "source";
   return (
-    <div data-testid="emulator-screen" className="flex-1 flex flex-col overflow-hidden min-h-0 relative z-10">
+    <div data-testid="emulator-screen" data-pet-preview-version={sim.petVersion} className="flex-1 flex flex-col overflow-hidden min-h-0 relative z-10">
       <div className="min-h-9 bg-[#252323] border-b border-white/5 flex flex-wrap items-center px-4 py-1 gap-x-3 gap-y-1.5 shrink-0">
         <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#666] uppercase tracking-wider">Emulator Canvas</span>
         {simProjectId && (
@@ -5676,11 +5629,30 @@ function ProjectHomeScreen({
   /** Tutorial: the side and bottom panels slide in toward the chat when they first appear. */
   animatePanelsIn?: boolean;
 }) {
-  const sessionSource = allSessions && allSessions.length > 0 ? allSessions : PROTOTYPE_SESSIONS;
+  const {
+    isTutorialActive,
+    currentBeat,
+    turnIndex,
+    setTurnIndex,
+    dockedChat,
+    agentQuestionReplied,
+    agentQuestionReplyText,
+    submitAgentQuestionReply,
+  } = useOnboarding();
+  const petSession = usePetSession();
+  const isUnguidedPetProject = !isTutorialActive && project.id === PET_REPLAY_PROJECT_ID;
+  const isUnguidedEmptyProject = !isTutorialActive && project.id === "nothotdog";
+  const petAgentTasks =
+    petSession.state.status === "PLAN REVIEW" || petSession.state.status === "CODING"
+      ? [{ id: "pet-task-1", label: petSession.taskLabel, done: false }]
+      : [{ id: "pet-task-1", label: petSession.taskLabel, done: true }];
+  const sessionSource = isTutorialActive
+    ? FROZEN_TUTORIAL_SESSIONS
+    : (allSessions && allSessions.length > 0 ? allSessions : PROTOTYPE_SESSIONS);
   const sessions = sessionSource.filter(
     s => s.projectId === project.id || (project.id === "tutorial-demo" && s.projectId === "pet")
   );
-  const fixReaction = sessions.find(s => s.id === "fix-reaction-bug");
+  const fixReaction = isTutorialActive ? sessions.find(s => s.id === "fix-reaction-bug") : undefined;
   const addComments = sessions.find(s => s.id === "add-comments") ?? sessions[0];
   const tutorial = useTutorial();
   const importedHome = isImportedProject(project.id);
@@ -5692,16 +5664,6 @@ function ProjectHomeScreen({
     }
     s.wired ? onOpenSession(s) : onScopeNotice("This session is not wired into this prototype yet.");
   };
-  const {
-    isTutorialActive,
-    currentBeat,
-    turnIndex,
-    setTurnIndex,
-    dockedChat,
-    agentQuestionReplied,
-    agentQuestionReplyText,
-    submitAgentQuestionReply,
-  } = useOnboarding();
   const [inlineAgentReplyDraft, setInlineAgentReplyDraft] = useState(B14_AGENT_REPLY_DEFAULT);
   const highlightDemoSessionCard =
     isTutorialActive && currentBeat === "B14" && turnIndex === 2;
@@ -5757,7 +5719,57 @@ function ProjectHomeScreen({
           }]
         : [])
     : sessions.map((s): SessionCardData => {
-        const counts = demoTaskCounts(s);
+        if (isUnguidedPetProject && s.id === PET_REPLAY_SESSION_ID) {
+          const liveStatus = petSession.state.status;
+          const liveHuman = {
+            done: petSession.state.checklist.filter((c) => c.done).length,
+            total: petSession.state.checklist.length,
+          };
+          const liveAgent = {
+            done: petAgentTasks.filter((t) => t.done).length,
+            total: petAgentTasks.length,
+          };
+          const action: SessionCardData["action"] =
+            liveStatus === "PLAN REVIEW"
+              ? { label: "Approve Plan", tone: "teal" }
+              : liveStatus === "CODING"
+                ? { label: `Coding (${petSession.remainingSeconds}s)`, tone: "teal" }
+                : liveStatus === "WAITING ON TEST"
+                  ? { label: "Test App", tone: "amber" }
+                  : liveStatus === "NEEDS YOU"
+                    ? { label: "Checklist", tone: "amber" }
+                    : liveStatus === "VERIFIED"
+                      ? { label: "Open PR", tone: "teal" }
+                      : liveStatus === "PR OPEN"
+                        ? {
+                            label:
+                              petSession.state.wrapUpPhase === "green"
+                                ? "Merge"
+                                : petSession.state.wrapUpPhase === "polling"
+                                  ? "Wrapping up…"
+                                  : "Wrap up",
+                            tone: "teal",
+                          }
+                        : liveStatus === "MERGED"
+                          ? { label: "Completion Report", tone: "teal" }
+                          : { label: "Complete", tone: "teal" };
+          return {
+            id: s.id,
+            name: s.name,
+            branch: s.branch,
+            status: <StatusChip status={liveStatus} size="sm" />,
+            agents: s.agents,
+            humanTasks: liveHuman,
+            agentTasks: liveAgent,
+            action,
+            onOpen: () => openSession({ ...s, initial: liveStatus }),
+            highlight: highlightDemoSessionCard,
+            dataName: "DemoSessionCard",
+            testId: "pet-session-card",
+            statusTestId: "pet-session-status",
+          };
+        }
+        const counts = demoTaskCounts(s, isTutorialActive);
         const isDemo = s.id === (addComments?.id ?? "add-comments");
         return {
           id: s.id,
@@ -5773,7 +5785,20 @@ function ProjectHomeScreen({
           dataName: isDemo ? "DemoSessionCard" : undefined,
         };
       });
-  const demoTaskGroups = sessions.map(s => ({ s, rows: DEMO_SESSION_TASKS[s.id] })).filter(g => g.rows);
+  const demoTaskGroups = isUnguidedPetProject
+    ? (addComments
+        ? [{
+            s: addComments,
+            rows: {
+              label: PET_REPLAY_SESSION_NAME,
+              agent: petAgentTasks.map((t) => ({ text: t.label, done: t.done })),
+              human: petSession.state.checklist.map((c) => ({ text: c.text, done: c.done })),
+            },
+          }]
+        : [])
+    : isTutorialActive
+      ? sessions.map(s => ({ s, rows: FROZEN_TUTORIAL_SESSION_TASKS[s.id] })).filter(g => g.rows)
+      : [];
   const demoHumanRows = demoTaskGroups.flatMap(g => g.rows.human);
   const taskGroupHeader = (label: string, first = false) => (
     <div className={`bg-[rgba(29,27,32,0.5)] border-b border-[rgba(255,255,255,0.05)] ${first ? "" : "border-t"} flex items-center gap-[8px] px-[12px] py-[7px] shrink-0 w-full`}>
@@ -5856,10 +5881,18 @@ function ProjectHomeScreen({
                     <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">Infie</p>
                   </div>
                   <div className="bg-[#252323] flex flex-col w-full">
-                    {sessions.map(s => (
-                      <OP4CheckRow key={s.id} done={true} text={`Create ${s.name} session`} />
-                    ))}
-                    <OP4CheckRow done={false} text="Open PR for Project folder" />
+                    {isUnguidedPetProject ? (
+                      <OP4CheckRow done={petSession.state.status === "COMPLETE"} text={PET_REPLAY_TODO_TEXT} />
+                    ) : isUnguidedEmptyProject ? (
+                      <OP4CheckRow done={false} text="No active tasks for Not Hotdog" />
+                    ) : (
+                      <>
+                        {sessions.map(s => (
+                          <OP4CheckRow key={s.id} done={true} text={`Create ${s.name} session`} />
+                        ))}
+                        <OP4CheckRow done={false} text="Open PR for Project folder" />
+                      </>
+                    )}
                     <OP4AddItemRow />
                   </div>
                   {demoTaskGroups.map(g => (
@@ -6158,12 +6191,53 @@ function ProjectHomeScreen({
                     );
                   })}
                 </>
-              ) : (
+              ) : isUnguidedEmptyProject ? (
                 [
-                  "Session initialised. Scanning `expo-photo-share/project/Todo.md`… found 3 open tasks, 2 completed.",
-                  "Worktree `feature/photo-share` is active. Claude is working on `PhotoPicker.tsx` and `usePhotoShare.ts`. No conflicts between worktrees detected.",
-                  "Emulator connected on port 8081. Doctor passed all checks. Handing control to session agent.",
+                  "Not Hotdog is synced with its clean workspace snapshot.",
+                  "No seeded sessions or pending human tests exist on Not Hotdog — only Add Comments on Pet Show and Tell is active.",
                 ].map((msg, i, arr) => (
+                  <div key={i} className="flex gap-[10px] items-start w-full">
+                    <OP4InfieAvatar />
+                    <div className="bg-[rgba(45,212,191,0.05)] border border-[rgba(45,212,191,0.13)] flex flex-col items-start px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] flex-1">
+                      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#c5c5c5] text-[12px] leading-[19.5px]">
+                        {i === arr.length - 1 ? <RevealingInfieText text={msg} /> : msg}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                (isUnguidedPetProject
+                  ? [
+                      `Session Add Comments (${petSession.state.status}) is tracking \`${PET_REPLAY_TODO_TEXT}\` across the \`main\` baseline and \`add-comments\` worktree.`,
+                      petSession.state.status === "PLAN REVIEW"
+                        ? "Review the implementation plan and click Approve Plan when you are ready to start the 30-second agent coding run."
+                        : petSession.state.status === "CODING"
+                          ? `Agents are implementing comments with Like/Love reactions (${petSession.remainingSeconds}s remaining). Feel free to explore i² Home or Project Folder — route navigation keeps the countdown running.`
+                          : petSession.state.status === "WAITING ON TEST"
+                            ? "The 30-second coding run finished. Preview remains on v1 until you inspect the source diff and click Test App to mount v2."
+                            : petSession.state.status === "NEEDS YOU"
+                              ? "v2 is mounted in the preview. Complete the 4 human checklist checks inside Add Comments to record testing."
+                              : petSession.state.status === "VERIFIED"
+                                ? "Human testing is verified. Open the Add Comments session to raise the pull request."
+                                : petSession.state.status === "PR OPEN"
+                                  ? petSession.state.wrapUpPhase === "green"
+                                    ? "Wrap up is green on add-comments. Open the session and click Merge to simulate merging into test."
+                                    : "Pull request is open on add-comments. Open the session and run Wrap up (simulated Doctor, CI, and review checks)."
+                                  : petSession.state.status === "MERGED"
+                                    ? "Changes merged to test (now running v2). Submit the blank completion report in Add Comments to finish the session."
+                                    : petSession.state.mainUpdated
+                                      ? "Add Comments is complete and main is updated — main and test both reflect the v2 build. Reconcile anytime to re-check project state."
+                                      : "Add Comments is complete and merged to test (v2); main is still on the baseline (v1). Choose Update Main to promote the build, or Reconcile to compare main with test. Both are simulated.",
+                      // Results of project-level choices (Update Main / Reconcile), oldest first.
+                      ...petSession.state.messages
+                        .filter((m) => m.id === "pet-update-main" || m.id.startsWith("pet-reconcile-"))
+                        .map((m) => m.content),
+                    ]
+                  : [
+                      "Workspace snapshot loaded cleanly with tracked main and project documentation folders.",
+                      "Open Add Comments from Pet Show and Tell to inspect the plan, source diff, and preview.",
+                    ]
+                ).map((msg, i, arr) => (
                   <div key={i} className="flex gap-[10px] items-start w-full">
                     <OP4InfieAvatar />
                     <div className="bg-[rgba(45,212,191,0.05)] border border-[rgba(45,212,191,0.13)] flex flex-col items-start px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] flex-1">
@@ -6209,14 +6283,14 @@ function ProjectHomeScreen({
                       />
                     )}
                   </>
-                ) : (
+                ) : isTutorialActive ? (
                   <>
                     {showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
                     {/* Teal: Wrap up */}
                     <div
-                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                      aria-disabled={isTutorialActive || undefined}
+                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${TUTORIAL_DISABLED_ACTION_CLS}`}
+                      data-tutorial-disabled="true"
+                      aria-disabled={true}
                     >
                       <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
                       <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
@@ -6235,9 +6309,9 @@ function ProjectHomeScreen({
                     </div>
                     {/* Amber: Test changes */}
                     <div
-                      className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                      aria-disabled={isTutorialActive || undefined}
+                      className={`drop-shadow-[0px_0px_6px_rgba(251,191,36,0.35)] relative rounded-[999px] shrink-0 ${TUTORIAL_DISABLED_ACTION_CLS}`}
+                      data-tutorial-disabled="true"
+                      aria-disabled={true}
                     >
                       <div className="absolute bg-[rgba(45,37,15,0.75)] inset-0 pointer-events-none rounded-[999px]" />
                       <div className="absolute border border-[rgba(251,191,36,0.5)] inset-0 pointer-events-none rounded-[999px]" />
@@ -6256,9 +6330,9 @@ function ProjectHomeScreen({
                     </div>
                     {/* Compact teal */}
                     <div
-                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : ""}`}
-                      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                      aria-disabled={isTutorialActive || undefined}
+                      className={`drop-shadow-[0px_0px_6px_rgba(45,212,191,0.35)] relative rounded-[999px] shrink-0 ${TUTORIAL_DISABLED_ACTION_CLS}`}
+                      data-tutorial-disabled="true"
+                      aria-disabled={true}
                     >
                       <div className="absolute bg-[rgba(17,40,37,0.75)] inset-0 pointer-events-none rounded-[999px]" />
                       <div className="absolute border border-[rgba(45,212,191,0.5)] inset-0 pointer-events-none rounded-[999px]" />
@@ -6269,6 +6343,78 @@ function ProjectHomeScreen({
                       <div className="absolute inset-0 pointer-events-none rounded-[inherit] shadow-[inset_0px_0px_25px_0px_rgba(45,212,191,0.25)]" />
                     </div>
                   </>
+                ) : isUnguidedPetProject ? (
+                  <>
+                    {petSession.state.status === "PLAN REVIEW" && (
+                      <InfieFlowPill
+                        testId="home-approve-plan-button"
+                        label="Approve Plan"
+                        preset="teal"
+                        onClick={() => {
+                          petSession.approvePlan();
+                          if (addComments) openSession({ ...addComments, initial: "CODING" });
+                        }}
+                      />
+                    )}
+                    {petSession.state.status === "CODING" && (
+                      <span
+                        data-testid="pet-coding-countdown"
+                        className="inline-flex items-center gap-[6px] rounded-[999px] border border-[rgba(45,212,191,0.35)] bg-[rgba(17,40,37,0.75)] px-[14px] py-[8px] font-['Inter',sans-serif] text-[12px] font-semibold text-[#2dd4bf]"
+                      >
+                        ✦ Coding… {petSession.remainingSeconds}s
+                      </span>
+                    )}
+                    {petSession.state.status === "WAITING ON TEST" && (
+                      <InfieFlowPill
+                        testId="home-test-app-button"
+                        label="Test App"
+                        preset="amber"
+                        icon={AlertTriangle}
+                        onClick={() => {
+                          petSession.testApp();
+                          if (addComments) openSession({ ...addComments, initial: "NEEDS YOU" });
+                        }}
+                      />
+                    )}
+                    {petSession.state.status === "COMPLETE" && !petSession.state.mainUpdated && (
+                      <InfieFlowPill
+                        testId="project-update-main-button"
+                        label="Update Main"
+                        preset="teal"
+                        icon={GitMerge}
+                        onClick={() => petSession.updateMain()}
+                      />
+                    )}
+                    {petSession.state.status === "COMPLETE" && (
+                      <InfieFlowPill
+                        testId="project-reconcile-button"
+                        label="Reconcile"
+                        preset="blue"
+                        icon={RotateCcw}
+                        onClick={() => petSession.reconcile()}
+                      />
+                    )}
+                    {addComments && (
+                      <InfieFlowPill
+                        testId="open-add-comments-button"
+                        label={petSession.state.status === "PLAN REVIEW" ? "Review Plan in Session" : "Open Add Comments"}
+                        preset="purple"
+                        onClick={() => openSession({ ...addComments, initial: petSession.state.status })}
+                      />
+                    )}
+                    {petSession.state.acceptedAt !== null && (
+                      <button
+                        type="button"
+                        data-testid="pet-reset-button"
+                        onClick={() => petSession.resetReplay()}
+                        className="rounded-[999px] border border-white/15 bg-white/5 px-[12px] py-[7px] font-['Inter',sans-serif] text-[12px] text-[#c5c5c5] hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        Reset Replay
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">No active sessions</span>
                 )}
               </div>
             </div>
@@ -6620,15 +6766,33 @@ function OSPanel({
 }
 
 // Diff row for the diffs panel
-function OS1DiffRow({ status: s, name, add, del: d }: { status: "M" | "A"; name: string; add?: string; del?: string }) {
-  const statusColor = s === "M" ? "#ff8904" : "#abefa3";
-  return (
-    <div className="border-b border-[rgba(255,255,255,0.04)] flex gap-2 items-center px-3 py-[6px] w-full">
+function OS1DiffRow({ status: s, name, add, del: d, title, onClick, testId }: { status: "M" | "A" | "D"; name: string; add?: string; del?: string; title?: string; onClick?: () => void; testId?: string }) {
+  const statusColor = s === "D" ? "#ff6467" : s === "M" ? "#ff8904" : "#abefa3";
+  const body = (
+    <>
       <span className="w-3 shrink-0 font-['Consolas',monospace] text-[9px]" style={{ color: statusColor }}>{s}</span>
       <OS1TsxDiffIcon />
       <span className="flex-1 min-w-0 font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] truncate">{name}</span>
       {add && <span className="font-['Consolas',monospace] text-[9px] text-[#abefa3] shrink-0">{add}</span>}
       {d && <span className="font-['Consolas',monospace] text-[9px] text-[#ff6467] shrink-0">{d}</span>}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        data-testid={testId}
+        title={title ?? name}
+        onClick={onClick}
+        className="border-b border-[rgba(255,255,255,0.04)] flex gap-2 items-center px-3 py-[6px] w-full text-left hover:bg-white/[0.04] transition-colors cursor-pointer"
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <div data-testid={testId} title={title ?? name} className="border-b border-[rgba(255,255,255,0.04)] flex gap-2 items-center px-3 py-[6px] w-full">
+      {body}
     </div>
   );
 }
@@ -6684,19 +6848,7 @@ function SessionScreen({
 }) {
   const isExperimemo = project.id === EXPERIMEMO_PROJECT_ID;
   const tutorial = useTutorial();
-  const dockApi = useDockApi();
-  const openFile = useFileViewer();
-  const limit = usePrototypeLimit();
-  const explorerSpec = workspaceSpecFor(project.id, { sessionBranch: project.id === EXPERIMEMO_PROJECT_ID ? session.branch : null });
-  const openProjectFile = useOpenProjectFile(explorerSpec);
-  const sizes = useDockSizes("session", { left: 236, right: 336, bottom: 240 });
-  const dockDragging = useDockDragging();
-  const [screenTab, setScreenTab] = useState<"Workspace" | "Emulators">("Workspace");
-  const xs: SessionFlowState | null = isExperimemo ? tutorial.session : null;
-  const activeAgentTab = tutorial.activeSessionTab;
-  const agentTabOrder = SESSION_TAB_ORDER;
-  const agentTabRefs = useRef<Partial<Record<SessionTabId, HTMLButtonElement | null>>>({});
-
+  const petSession = usePetSession();
   const {
     onboardingRunId,
     isTutorialActive,
@@ -6708,6 +6860,26 @@ function SessionScreen({
     demoSessionCompleted,
     setTurnIndex,
   } = useOnboarding();
+  const isPetReplay =
+    !isExperimemo &&
+    !isTutorialActive &&
+    project.id === PET_REPLAY_PROJECT_ID &&
+    session.id === PET_REPLAY_SESSION_ID;
+  const dockApi = useDockApi();
+  const openFile = useFileViewer();
+  const limit = usePrototypeLimit();
+  const explorerSpec = workspaceSpecFor(project.id, {
+    sessionBranch: project.id === EXPERIMEMO_PROJECT_ID ? session.branch : (isPetReplay ? PET_REPLAY_BRANCH : null),
+  });
+  const openProjectFile = useOpenProjectFile(explorerSpec);
+  const sizes = useDockSizes("session", { left: 236, right: 336, bottom: 240 });
+  const dockDragging = useDockDragging();
+  const [screenTab, setScreenTab] = useState<"Workspace" | "Emulators">("Workspace");
+  const xs: SessionFlowState | null = isExperimemo ? tutorial.session : null;
+  const activeAgentTab = tutorial.activeSessionTab;
+  const agentTabOrder = SESSION_TAB_ORDER;
+  const agentTabRefs = useRef<Partial<Record<SessionTabId, HTMLButtonElement | null>>>({});
+
   const { isComplete: sessionDockedTextComplete, onComplete: handleSessionDockedComplete } = useTextRevealGate(
     dockedChat.currentLine,
     dockedChat.currentMessageId
@@ -6730,16 +6902,19 @@ function SessionScreen({
   }, [isTutorialActive, isExperimemo, dockedChat.history, showCompletionForm, activeAgentTab, xs]);
   const [status, setStatus] = useState<SessionStatus>(session.initial);
   const [messages, setMessages] = useState<Message[]>([
-    { id: "s0", role: "assistant", content: "Session initialised. Scanning `expo-photo-share/project/Todo.md`… found 3 open tasks, 2 completed." },
-    { id: "s1", role: "assistant", content: "Worktree `feature/photo-share` is active. Claude is working on `PhotoPicker.tsx` and `usePhotoShare.ts`. No conflicts between worktrees detected." },
-    { id: "s2", role: "assistant", content: "Emulator connected on port 8081. Doctor passed all checks. Handing control to session agent." },
+    { id: "s0", role: "assistant", content: "Session initialised. Scanning `pet-show-and-tell-add-comments/project/todo.md`… active task: `Add comments with Like/Love on comments`." },
+    { id: "s1", role: "assistant", content: "Worktree `add-comments` branched from `main` at `6e17795`. Agents are ready for plan review and implementation." },
+    { id: "s2", role: "assistant", content: "Preview server connected. Doctor passed baseline checks." },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [tests, setTests] = useState<CheckItem[]>(
     isExperimemo
       ? []
-      : (SESSION_HUMAN_TESTS[session.id] ?? SESSION_HUMAN_TESTS["add-comments"]).map((t, i) => ({ id: `${session.id}-t${i}`, text: t, done: i === 0 }))
+      : (isTutorialActive
+          ? FROZEN_TUTORIAL_HUMAN_TESTS
+          : (SESSION_HUMAN_TESTS[session.id] ?? SESSION_HUMAN_TESTS["add-comments"])
+        ).map((t, i) => ({ id: `${session.id}-t${i}`, text: t, done: isTutorialActive ? i === 0 : false }))
   );
   const [commitOpen, setCommitOpen] = useState(true);
   const [branchOpen, setBranchOpen] = useState(true);
@@ -6748,7 +6923,9 @@ function SessionScreen({
     if (!isExperimemo) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isExperimemo]);
+  }, [messages, petSession.state.messages.length, isExperimemo]);
+
+  const activeStatus: SessionStatus = isPetReplay ? petSession.state.status : status;
 
   const pushInfie = (content: string) => setMessages(ms => [...ms, { id: uid(), role: "assistant", content }]);
 
@@ -6757,7 +6934,7 @@ function SessionScreen({
     pushInfie(infieMessageFor(session.id, next));
   };
 
-  const flow = SESSION_FLOW[status];
+  const flow = SESSION_FLOW[activeStatus];
 
   const handleSend = () => {
     if (isExperimemo) return;
@@ -6767,6 +6944,11 @@ function SessionScreen({
       // Infie's side of the tutorial is scripted: free-form messages stop at the prototype limit.
       setInput("");
       limit(TUTORIAL_CHAT_LIMIT);
+      return;
+    }
+    if (isPetReplay) {
+      petSession.sendUserMessage(text);
+      setInput("");
       return;
     }
     setMessages(ms => [...ms, { id: uid(), role: "user", content: text }]);
@@ -6810,32 +6992,41 @@ function SessionScreen({
     }
   };
 
-  // Current Diffs data. Experimemo rows come only from reported work (no counts are invented).
-  type DiffRowData = { status: "M" | "A"; name: string; add?: string; del?: string };
-  const petDiffs: DiffRowData[] = [
-    { status: "M", name: "camera.tsx", add: "+84", del: "-12" },
-    { status: "A", name: "PhotoPicker.tsx", add: "+142" },
-    { status: "M", name: "FriendList.tsx", add: "+67", del: "-5" },
-    { status: "A", name: "usePhotoShare.ts", add: "+38" },
-    { status: "M", name: "package.json", add: "+3", del: "-1" },
-  ];
+  // Current Diffs data. Experimemo rows come only from reported work; Pet replay rows unlock at deadline.
+  type DiffRowData = { status: "M" | "A" | "D"; name: string; add?: string; del?: string; path?: string; hunk?: string };
+  const petReplayDiffsReady =
+    isPetReplay && activeStatus !== "PLAN REVIEW" && activeStatus !== "CODING";
+  const petDiffs: DiffRowData[] = isPetReplay
+    ? (petReplayDiffsReady
+        ? petSession.sourceDiffs.map((d) => ({ status: d.status, name: d.path || d.name, add: d.add, del: d.del, path: d.path, hunk: d.hunk }))
+        : [])
+    : [
+        { status: "M", name: "app/(tabs)/index.tsx", add: "+42", del: "-6" },
+        { status: "A", name: "components/CommentsModal.tsx", add: "+128" },
+      ];
   const experimemoDiffs: DiffRowData[] = (xs?.diffs ?? []).map(d => ({ status: d.status, name: d.name }));
   const commitDiffs: DiffRowData[] = isExperimemo ? experimemoDiffs : petDiffs;
   const branchDiffs: DiffRowData[] = isExperimemo
     ? experimemoDiffs
-    : [
-        ...petDiffs,
-        { status: "M", name: "app.json", add: "+2" },
-        { status: "M", name: "Guidelines.md", add: "+18", del: "-4" },
-      ];
+    : isPetReplay
+      ? (petReplayDiffsReady ? petDiffs : [])
+      : petDiffs;
 
   const fileCount = (n: number) => `${n} file${n === 1 ? "" : "s"}`;
   const commitDiffSummary: { files: string; add?: string; del?: string } = isExperimemo
     ? { files: fileCount(experimemoDiffs.length) }
-    : { files: "5 files", add: "+334", del: "-18" };
+    : isPetReplay
+      ? (petReplayDiffsReady
+          ? { files: petSession.diffSummary.commitFiles, add: petSession.diffSummary.add, del: petSession.diffSummary.del }
+          : { files: "0 files" })
+      : { files: fileCount(petDiffs.length) };
   const branchDiffSummary: { files: string; add?: string; del?: string } = isExperimemo
     ? { files: fileCount(experimemoDiffs.length) }
-    : { files: "7 files", add: "+354", del: "-22" };
+    : isPetReplay
+      ? (petReplayDiffsReady
+          ? { files: petSession.diffSummary.branchFiles, add: petSession.diffSummary.add, del: petSession.diffSummary.del }
+          : { files: "0 files" })
+      : { files: fileCount(petDiffs.length) };
 
   const agentTasks: Array<{ id: string; done: boolean; glowing: boolean; statusLabel: string; label: string; provider?: ProviderId }> = isExperimemo
     ? (xs?.tasks ?? []).map(t => ({
@@ -6846,22 +7037,41 @@ function SessionScreen({
         label: t.label,
         provider: t.provider,
       }))
-    : [
-        { id: "photo-t1", done: true, glowing: false, statusLabel: "completed", label: "Implement PhotoPicker component" },
-        { id: "photo-t2", done: true, glowing: false, statusLabel: "completed", label: "Wire up usePhotoShare hook" },
-        { id: "photo-t3", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Add friend list query to Supabase" },
-        { id: "photo-t4", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Handle photo library permissions" },
-        { id: "photo-t5", done: isTutorialActive ? true : false, glowing: false, statusLabel: isTutorialActive ? "completed" : "pending", label: "Compress images before upload" },
-      ];
-  const anyTaskGlowing = Boolean(isExperimemo && agentTasks.some(t => t.glowing));
+    : isPetReplay
+      ? [{
+          id: "pet-task-1",
+          done: activeStatus !== "PLAN REVIEW" && activeStatus !== "CODING",
+          glowing: activeStatus === "CODING",
+          statusLabel: activeStatus !== "PLAN REVIEW" && activeStatus !== "CODING" ? "completed" : activeStatus === "CODING" ? "in progress" : "pending",
+          label: petSession.taskLabel,
+        }]
+      : (FROZEN_TUTORIAL_SESSION_TASKS[session.id]?.agent ?? [
+          { text: "Wire comment composer and feed drawer", done: true },
+          { text: "Add Like/Love reactions on comments", done: false },
+        ]).map((t, idx) => ({
+          id: `frozen-t-${idx}`,
+          done: t.done,
+          glowing: false,
+          statusLabel: t.done ? "completed" : "pending",
+          label: t.text,
+        }));
+  const anyTaskGlowing = Boolean(
+    (isExperimemo && agentTasks.some(t => t.glowing)) ||
+      (isPetReplay && activeStatus === "CODING")
+  );
   const needsHumanVerificationGlow = Boolean(
-    isExperimemo &&
+    (isExperimemo &&
       xs &&
       ((xs.status === "NEEDS YOU" && areAllAgentTasksDone(xs)) ||
-        (xs.status === "PR OPEN" && xs.wrapUpPhase === "sanity-check"))
+        (xs.status === "PR OPEN" && xs.wrapUpPhase === "sanity-check"))) ||
+      (isPetReplay && activeStatus === "NEEDS YOU")
   );
 
-  const humanRows: CheckItem[] = isExperimemo ? (xs?.humanTests ?? []) : tests;
+  const humanRows: CheckItem[] = isExperimemo
+    ? (xs?.humanTests ?? [])
+    : isPetReplay
+      ? petSession.state.checklist.map((c) => ({ id: c.id, text: c.text, done: c.done }))
+      : tests;
 
   const explorerTree = isExperimemo
     ? [
@@ -6874,18 +7084,9 @@ function SessionScreen({
       ]
     : [
         { depth: 0, open: true, isFolder: true, name: "pet-show-and-tell-i2Workspace" },
-        { depth: 1, open: true, isFolder: true, name: "main" },
-        { depth: 2, open: true, isFolder: true, name: "src" },
-        { depth: 3, open: true, isFolder: true, name: "app" },
-        { depth: 4, open: false, isFolder: true, name: "(tabs)" },
-        { depth: 4, open: false, isFolder: false, name: "_layout.tsx" },
-        { depth: 3, open: false, isFolder: true, name: "components" },
-        { depth: 3, open: false, isFolder: true, name: "hooks" },
-        { depth: 1, open: false, isFolder: true, name: "feature/add-comments" },
-        { depth: 1, open: false, isFolder: true, name: "chore/fix-reaction-bug" },
+        { depth: 1, open: false, isFolder: true, name: "main" },
+        { depth: 1, open: false, isFolder: true, name: PET_REPLAY_BRANCH },
         { depth: 1, open: false, isFolder: true, name: "project" },
-        { depth: 1, open: false, isFolder: true, name: "temp" },
-        { depth: 1, open: false, isFolder: true, name: "generated" },
       ];
 
   const experimemoTabMeta: Record<SessionTabId, { label: string; accessibleLabel: string; accent: string }> = {
@@ -6915,11 +7116,20 @@ function SessionScreen({
     </div>
   );
 
-  // Plan.md opens the plan this session is actually working from. Experimemo's is the plan
-  // synthesized on Project Home (the same data the Plan widget shows); the static demo
-  // sessions have no plan file among the uploaded sources.
+  // Plan.md opens the plan this session is actually working from.
   const openPlanFile = () => {
-    const planPath = `${session.branch}/Plan.md`;
+    const planPath = `${isPetReplay ? PET_REPLAY_BRANCH : session.branch}/Plan.md`;
+    if (isPetReplay) {
+      openFile(
+        {
+          path: planPath,
+          content: petSession.planMd,
+          note: "Approved implementation plan from verified Pet artifacts (plan.md).",
+        },
+        explorerSpec,
+      );
+      return;
+    }
     if (!isExperimemo) {
       if (project.id === "nothotdog") limit(notHotdogLimit(planPath));
       else openFile({ path: planPath, content: null, note: "Plan.md for this demo session isn't in the sources uploaded to this prototype yet, so there is nothing real to open." }, explorerSpec);
@@ -6981,7 +7191,7 @@ function SessionScreen({
             <div className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-center px-3 py-2 w-full">
               <OS1BranchIcon />
               <span className="font-['Consolas',monospace] text-[11px] text-[#777] flex-1 truncate">
-                {isExperimemo ? session.branch : "feature/add-comments"}
+                {isExperimemo ? session.branch : isPetReplay ? PET_REPLAY_BRANCH : session.branch}
               </span>
               <span className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#444]">↑ main</span>
             </div>
@@ -6994,11 +7204,33 @@ function SessionScreen({
                 {commitDiffSummary.files}{commitDiffSummary.add && <> · <span className="text-[#abefa3]">{commitDiffSummary.add}</span> <span className="text-[#ff6467]">{commitDiffSummary.del}</span></>}
               </span>
             </button>
-            {commitOpen && isExperimemo && commitDiffs.length === 0 && (
-              <p data-testid="diffs-empty" className="px-3 py-2 font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-[#555]">No changes yet</p>
+            {commitOpen && (isExperimemo || isPetReplay) && commitDiffs.length === 0 && (
+              <p data-testid="diffs-empty" className="px-3 py-2 font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-[#555]">
+                {isPetReplay ? "Waiting on coding deadline — source diffs appear at WAITING ON TEST." : "No changes yet"}
+              </p>
             )}
             {commitOpen && commitDiffs.map((d, i) => (
-              <OS1DiffRow key={i} status={d.status} name={d.name} add={d.add} del={d.del} />
+              <OS1DiffRow
+                key={i}
+                status={d.status}
+                name={d.name}
+                add={d.add}
+                del={d.del}
+                title={d.path}
+                testId={isPetReplay ? "pet-diff-row" : undefined}
+                onClick={
+                  isPetReplay && d.path
+                    ? () => openFile(
+                        {
+                          path: `${PET_REPLAY_BRANCH}/${d.path}.diff`,
+                          content: d.hunk ?? null,
+                          note: "Actual unified git diff against baseline 6e17795.",
+                        },
+                        explorerSpec,
+                      )
+                    : undefined
+                }
+              />
             ))}
             {/* Branch/PR collapsible */}
             <button onClick={() => setBranchOpen(v => !v)} className="bg-[rgba(37,35,35,0.6)] border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-center px-3 py-2 w-full text-left">
@@ -7010,7 +7242,26 @@ function SessionScreen({
               </span>
             </button>
             {branchOpen && branchDiffs.map((d, i) => (
-              <OS1DiffRow key={i} status={d.status} name={d.name} add={d.add} del={d.del} />
+              <OS1DiffRow
+                key={i}
+                status={d.status}
+                name={d.name}
+                add={d.add}
+                del={d.del}
+                title={d.path}
+                onClick={
+                  isPetReplay && d.path
+                    ? () => openFile(
+                        {
+                          path: `${PET_REPLAY_BRANCH}/${d.path}.diff`,
+                          content: d.hunk ?? null,
+                          note: "Actual unified git diff against baseline 6e17795.",
+                        },
+                        explorerSpec,
+                      )
+                    : undefined
+                }
+              />
             ))}
           </div>
         </div>
@@ -7023,7 +7274,7 @@ function SessionScreen({
           <div className="bg-[#252323] px-3 py-[10px] flex flex-col gap-1.5">
             <div className="flex gap-2 items-start">
               <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#c5c5c5] flex-1 leading-[17.875px]">
-                {isExperimemo ? (session.desc ?? session.name) : "Add feature: ability to send photos to friends"}
+                {isExperimemo ? (session.desc ?? session.name) : isPetReplay ? PET_REPLAY_GOAL : (session.desc ?? PET_REPLAY_GOAL)}
               </span>
               <div className="pt-[2px] shrink-0"><OS1PencilIcon /></div>
             </div>
@@ -7111,6 +7362,11 @@ function SessionScreen({
                     tutorial.dispatchFlow({ type: "TOGGLE_HUMAN_TEST", id: t.id });
                     return;
                   }
+                  if (isPetReplay) {
+                    if (activeStatus !== "NEEDS YOU") return;
+                    petSession.toggleChecklistItem(t.id);
+                    return;
+                  }
                   const becomingDone = !t.done;
                   const nextTests = tests.map(x => x.id === t.id ? { ...x, done: !x.done } : x);
                   setTests(nextTests);
@@ -7118,7 +7374,10 @@ function SessionScreen({
                     onHumanTaskVerified?.();
                   }
                 }}
-                className="border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full text-left hover:bg-white/[0.02] transition-colors"
+                disabled={isPetReplay && activeStatus !== "NEEDS YOU"}
+                className={`border-b border-[rgba(255,255,255,0.05)] flex gap-2 items-start px-3 py-2 w-full text-left transition-colors ${
+                  isPetReplay && activeStatus !== "NEEDS YOU" ? "opacity-60 cursor-not-allowed" : "hover:bg-white/[0.02] cursor-pointer"
+                }`}
               >
                 {t.done ? <OS1CheckDoneIcon /> : <OS1CheckPendingIcon />}
                 <span className={`font-['Rounded_Mplus_1c',sans-serif] text-[11px] leading-[17.875px] ${t.done ? "line-through text-[#555]" : "text-[#c5c5c5]"}`}>{t.text}</span>
@@ -7196,7 +7455,7 @@ function SessionScreen({
     <div
       data-testid="session-screen"
       data-active-tab={isExperimemo ? activeAgentTab : undefined}
-      data-session-status={xs?.status}
+      data-session-status={isExperimemo ? xs?.status : activeStatus}
       className="size-full flex flex-col relative overflow-hidden"
       style={{ background: "#0a0814" }}
     >
@@ -7268,7 +7527,21 @@ function SessionScreen({
                 COMPLETION PENDING
               </span>
             ) : (
-              <StatusChip status={status} />
+              <div className="flex items-center gap-2">
+                <div data-testid="session-status-badge">
+                  <StatusChip status={activeStatus} />
+                </div>
+                {isPetReplay && petSession.state.acceptedAt !== null && (
+                  <button
+                    type="button"
+                    data-testid="pet-reset-button"
+                    onClick={() => petSession.resetReplay()}
+                    className="hidden sm:inline-flex text-white/60 hover:text-white transition-colors text-[11px] font-['Space_Grotesk',sans-serif] px-2.5 py-1 rounded-lg border border-white/15 hover:bg-white/5 cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             )}
             <button onClick={onPlayground} className="hidden sm:inline-flex text-white/30 hover:text-white/70 transition-colors text-[12px] font-['Space_Grotesk',sans-serif] px-3 py-1.5 rounded-lg border border-white/8">Playground</button>
           </div>
@@ -7357,6 +7630,31 @@ function SessionScreen({
                 );
               })}
               <div className="flex-1 min-w-0" />
+            </div>
+          ) : isPetReplay ? (
+            <div
+              data-testid="session-tab-strip"
+              onDoubleClick={() => sizes.toggleAll()}
+              className="bg-[#1d1b20] border-b border-[rgba(255,255,255,0.05)] flex h-[37px] items-stretch overflow-hidden px-1 shrink-0"
+            >
+              {/* Infie Chat Tab */}
+              <div className="bg-[rgba(45,212,191,0.02)] border-b border-[rgba(45,212,191,0.09)] flex gap-[10px] items-center px-4 shrink-0">
+                <OS1InfieAvatar maskId="os1-av-tab" />
+                <span className="font-['Rounded_Mplus_1c',sans-serif] font-extrabold text-[16px] text-[#2dd4bf] leading-none">Infie</span>
+                <StatusChip status={activeStatus} size="sm" />
+              </div>
+              <div className="h-full py-2 shrink-0"><div className="bg-[rgba(255,255,255,0.06)] h-full w-px" /></div>
+              <div className="flex gap-[6px] h-full items-center border-b-2 border-[#2dd4bf] px-3 shrink-0">
+                <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#d4d4d8] whitespace-nowrap">{PET_REPLAY_SESSION_NAME}</span>
+                <span className="font-mono text-[10px] text-[#777] whitespace-nowrap">{PET_REPLAY_BRANCH}</span>
+              </div>
+              <div className="flex-1 flex items-center justify-end px-2">
+                {activeStatus === "CODING" && (
+                  <span data-testid="pet-tab-countdown" className="font-mono text-[11px] text-[#2dd4bf]">
+                    {petSession.remainingSeconds}s
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <div
@@ -7507,7 +7805,7 @@ function SessionScreen({
                 })}
               </>
             ) : (
-              messages.map((m, idx) => (
+              (isPetReplay ? petSession.state.messages : messages).map((m, idx, arr) => (
                 <div key={m.id} className={`flex gap-[10px] items-start ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   {m.role === "assistant" && <OS1InfieAvatar maskId={`os1-av-msg-${idx}`} />}
                   <div style={{
@@ -7520,7 +7818,7 @@ function SessionScreen({
                     color: m.role === "user" ? "#06201d" : "#c5c5c5",
                     border: m.role === "user" ? "none" : "0.667px solid rgba(45,212,191,0.13)",
                     maxWidth: "85%",
-                  }}>{m.role === "assistant" ? <RevealingInfieText text={m.content} /> : m.content}</div>
+                  }}>{m.role === "assistant" && idx === arr.length - 1 ? <RevealingInfieText text={m.content} /> : m.content}</div>
                 </div>
               ))
             )}
@@ -7564,6 +7862,23 @@ function SessionScreen({
                     correctedAction: values.correctedAction,
                   })
                 }
+              />
+            </div>
+          )}
+
+          {/* Pet: simulated Wrap up checks after Open PR, then the blank completion report after Merge. */}
+          {isPetReplay && activeStatus === "PR OPEN" && <PetWrapUpChecks state={petSession.state} />}
+          {isPetReplay && activeStatus === "MERGED" && !petSession.state.reportSubmitted && (
+            <div className="shrink-0 bg-[#0a0814]">
+              <SessionCompletionForm
+                testId="pet-completion-report"
+                submitEnabled
+                blankNotice={PET_BLANK_REPORT_NOTICE}
+                submitLabel="Submit Blank Report"
+                onSubmit={() => {
+                  petSession.submitBlankReport();
+                  onOpenProject();
+                }}
               />
             </div>
           )}
@@ -7636,6 +7951,123 @@ function SessionScreen({
                       />
                     );
                   })}
+                </>
+              ) : isPetReplay ? (
+                <>
+                  {activeStatus === "PLAN REVIEW" && (
+                    <>
+                      <InfieFlowPill
+                        testId="pet-approve-plan-button"
+                        label="Approve Plan"
+                        preset="teal"
+                        icon={ArrowRight}
+                        onClick={() => petSession.approvePlan()}
+                      />
+                      <button
+                        type="button"
+                        data-testid="pet-view-plan-button"
+                        onClick={openPlanFile}
+                        className="rounded-[999px] border border-white/15 bg-white/5 px-[12px] py-[7px] font-['Inter',sans-serif] text-[12px] text-[#c5c5c5] hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        View Plan.md
+                      </button>
+                    </>
+                  )}
+                  {activeStatus === "CODING" && (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <span
+                        data-testid="pet-coding-countdown"
+                        className="inline-flex items-center gap-2 rounded-[999px] border border-[rgba(45,212,191,0.4)] bg-[rgba(17,40,37,0.75)] px-3.5 py-[7px] font-['Inter',sans-serif] text-[13px] font-semibold text-[#2dd4bf]"
+                      >
+                        ✦ Coding… {petSession.remainingSeconds}s
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="pet-explore-home-button"
+                        onClick={onHome}
+                        className="rounded-[999px] border border-white/15 bg-white/5 px-3 py-[7px] font-['Inter',sans-serif] text-[12px] text-[#c5c5c5] hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        Optional: Explore i² Home
+                      </button>
+                    </div>
+                  )}
+                  {activeStatus === "WAITING ON TEST" && (
+                    <InfieFlowPill
+                      testId="pet-test-app-button"
+                      label="Test App"
+                      preset="amber"
+                      icon={AlertTriangle}
+                      onClick={() => petSession.testApp()}
+                    />
+                  )}
+                  {activeStatus === "NEEDS YOU" && (
+                    <InfieFlowPill
+                      testId="pet-verify-testing-button"
+                      label={`Verify Testing (${petSession.state.checklist.filter((c) => c.done).length}/${petSession.state.checklist.length})`}
+                      preset="teal"
+                      icon={CheckCircle2}
+                      disabled={!petSession.state.checklist.every((c) => c.done)}
+                      onClick={
+                        petSession.state.checklist.every((c) => c.done)
+                          ? () => petSession.verifyTesting()
+                          : undefined
+                      }
+                    />
+                  )}
+                  {activeStatus === "VERIFIED" && (
+                    <InfieFlowPill
+                      testId="pet-open-pr-button"
+                      label="Open PR"
+                      preset="purple"
+                      icon={GitPullRequest}
+                      onClick={() => petSession.openPr()}
+                    />
+                  )}
+                  {activeStatus === "PR OPEN" && petSession.state.wrapUpPhase === "none" && (
+                    <InfieFlowPill
+                      testId="pet-wrap-up-button"
+                      label="Wrap up"
+                      preset="purple"
+                      icon={Stethoscope}
+                      onClick={() => petSession.startWrapUp()}
+                    />
+                  )}
+                  {activeStatus === "PR OPEN" && petSession.state.wrapUpPhase === "polling" && (
+                    <span
+                      data-testid="pet-wrapup-polling"
+                      className="inline-flex items-center gap-2 rounded-[999px] border border-[rgba(45,212,191,0.4)] bg-[rgba(17,40,37,0.75)] px-3.5 py-[7px] font-['Inter',sans-serif] text-[13px] font-semibold text-[#2dd4bf]"
+                    >
+                      ✦ Wrapping up…
+                    </span>
+                  )}
+                  {activeStatus === "PR OPEN" && petSession.state.wrapUpPhase === "green" && (
+                    <InfieFlowPill
+                      testId="pet-merge-pr-button"
+                      label="Merge"
+                      preset="teal"
+                      icon={GitMerge}
+                      onClick={() => petSession.mergePr()}
+                    />
+                  )}
+                  {activeStatus === "COMPLETE" && (
+                    <>
+                      <span
+                        data-testid="pet-complete-badge"
+                        className="inline-flex items-center gap-2 rounded-[999px] border border-[rgba(74,222,128,0.4)] bg-[rgba(20,45,30,0.7)] px-3.5 py-[7px] font-['Inter',sans-serif] text-[12px] font-semibold text-[#4ade80]"
+                      >
+                        {petSession.state.mainUpdated
+                          ? "✓ Complete · main updated"
+                          : "✓ Complete · merged to test"}
+                      </span>
+                      <InfieFlowPill
+                        testId="pet-go-project-button"
+                        label="Project Home"
+                        preset="blue"
+                        icon={ArrowRight}
+                        onClick={onOpenProject}
+                      />
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -7912,6 +8344,8 @@ function I2HomeScreen({
   highlightWidgetsNav = false,
   disabled,
   danceNonce = 0,
+  whatsNextScan,
+  onOpenRecommendation,
 }: {
   onOpenProject: () => void; onSuperStack: () => void;
   projectType: ProjectType; onProjectTypeChange: (v: ProjectType) => void;
@@ -7957,8 +8391,12 @@ function I2HomeScreen({
   highlightWidgetsNav?: boolean;
   disabled?: boolean;
   danceNonce?: number;
+  /** Infie's live scan of the open projects (Pet, imported Field Notes, generated Experimemo). */
+  whatsNextScan?: WhatsNextScan;
+  onOpenRecommendation?: (destination: WhatsNextDestination) => void;
 }) {
   const { isTutorialActive, currentFormAsset, dockedChat, currentBeat, turnIndex } = useOnboarding();
+  const petSession = usePetSession();
   const homeReducedMotion = useReducedMotion();
   // B12 Turn 0 is the only time the conversation entry mounts sliding in from center
   // (HomeConversationSlide latches this at mount); later mounts render in place.
@@ -7998,10 +8436,12 @@ function I2HomeScreen({
     setInput("");
     setTimeout(() => setMessages(ms => [...ms, { id: uid(), role: "assistant", content: infieHomeReply(text) }]), 550);
   };
-  const send2 = (text: string) => {
-    setMessages(ms => [...ms, { id: uid(), role: "user", content: text }]);
-    setTimeout(() => setMessages(ms => [...ms, { id: uid(), role: "assistant", content: infieHomeReply(text) }]), 550);
-  };
+  const whatsNext = useWhatsNextDiscovery({
+    scan: whatsNextScan ?? { lines: [], recommendations: [] },
+    enabled: !isTutorialActive && showHomeActionButtons && Boolean(whatsNextScan),
+    reducedMotion: homeReducedMotion,
+    append: (role, content) => setMessages(ms => [...ms, { id: uid(), role, content }]),
+  });
 
   // Canonical B12 rule: show only the two existing seeded projects ("Pet Show and Tell" and "Not Hotdog");
   // no extra enclosing tutorial demo project card.
@@ -8019,6 +8459,113 @@ function I2HomeScreen({
       else if (action === "fullscreen") setProjectsMode("fullscreen");
     }, WIDGET_HEADER_CLICK_MS);
   };
+
+  // Idle Home actions: What's Next plus the current Add Comments step. During the tutorial they stay
+  // greyed out in place; afterwards What's Next dissolves them and Infie proposes up to three actions.
+  const homeIdleActions = (
+    <>
+    <button
+      type="button"
+      disabled={isTutorialActive}
+      aria-disabled={isTutorialActive || undefined}
+      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+      data-testid={isTutorialActive ? undefined : "home-whats-next-button"}
+      onClick={isTutorialActive ? undefined : whatsNext.start}
+      className={isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : "contents"}
+    >
+      <FigmaInfieActionButton
+        preset="Recommendation"
+        density="Compact"
+        actionLabel="What's Next"
+        showProject={false}
+      />
+    </button>
+    <button
+      type="button"
+      disabled={isTutorialActive}
+      aria-disabled={isTutorialActive || undefined}
+      data-tutorial-disabled={isTutorialActive ? "true" : undefined}
+      data-testid={isTutorialActive ? undefined : "home-pet-action-button"}
+      onClick={
+        isTutorialActive
+          ? undefined
+          : () => {
+              if (petSession.state.status === "PLAN REVIEW") {
+                petSession.approvePlan();
+              } else if (petSession.state.status === "WAITING ON TEST") {
+                petSession.testApp();
+              }
+              onOpenSessionShortcut(PET_REPLAY_SESSION_ID);
+            }
+      }
+      className={isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : "contents"}
+    >
+      {isTutorialActive ? (
+        <FigmaInfieActionButton
+          preset="Attention"
+          density="Expanded"
+          actionLabel="Test changes in"
+          session="Add comments"
+          project="Pet Show and Tell"
+          message="Attempt to add comment and react to it."
+          showProject={true}
+        />
+      ) : (
+        <FigmaInfieActionButton
+          preset={
+            petSession.state.status === "WAITING ON TEST" || petSession.state.status === "NEEDS YOU"
+              ? "Attention"
+              : "Recommendation"
+          }
+          density="Expanded"
+          actionLabel={
+            petSession.state.status === "PLAN REVIEW"
+              ? "Approve Plan"
+              : petSession.state.status === "CODING"
+                ? `Coding (${petSession.remainingSeconds}s)`
+                : petSession.state.status === "WAITING ON TEST"
+                  ? "Test App"
+                  : petSession.state.status === "NEEDS YOU"
+                    ? "Checklist in"
+                    : petSession.state.status === "VERIFIED"
+                      ? "Open PR"
+                      : petSession.state.status === "PR OPEN"
+                        ? petSession.state.wrapUpPhase === "green"
+                          ? "Merge"
+                          : petSession.state.wrapUpPhase === "polling"
+                            ? "Wrapping up"
+                            : "Wrap up"
+                        : petSession.state.status === "MERGED"
+                          ? "Completion Report"
+                          : "Completed"
+          }
+          session={PET_REPLAY_SESSION_NAME}
+          project="Pet Show and Tell"
+          message={
+            petSession.state.status === "PLAN REVIEW"
+              ? `PLAN REVIEW · ${PET_REPLAY_TODO_TEXT}`
+              : petSession.state.status === "CODING"
+                ? "Agents working (~30s) — explore i² Home freely"
+                : petSession.state.status === "WAITING ON TEST"
+                  ? "Diffs ready (v1 active) · Click Test App for v2"
+                  : petSession.state.status === "NEEDS YOU"
+                    ? "v2 mounted · Complete 4 human verification checks"
+                    : petSession.state.status === "MERGED"
+                      ? "Merged to test · Submit the blank completion report"
+                      : petSession.state.status === "COMPLETE"
+                        ? petSession.state.mainUpdated
+                          ? "Main updated (v2) · Reset inside session"
+                          : "Merged to test · Update Main or Reconcile on Project Home"
+                        : PET_REPLAY_TODO_TEXT
+          }
+          showProject={true}
+        />
+      )}
+    </button>
+    </>
+  );
+  const homeDissolve = whatsNextDissolve(homeReducedMotion);
+  const proposedRecommendations = whatsNextScan?.recommendations ?? [];
 
   return (
     <div
@@ -8200,43 +8747,37 @@ function I2HomeScreen({
                           {showDockedContinue && (
                             <FloatingContinueButton onClick={dockedChat.onContinue!} />
                           )}
-                          {showHomeActionButtons && (
-                          <>
-                          <button
-                            type="button"
-                            disabled={isTutorialActive}
-                            aria-disabled={isTutorialActive || undefined}
-                            data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                            onClick={isTutorialActive ? undefined : () => send2("What should I work on next?")}
-                            className={isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : "contents"}
-                          >
-                            <FigmaInfieActionButton
-                              preset="Recommendation"
-                              density="Compact"
-                              actionLabel="What's Next"
-                              showProject={false}
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isTutorialActive}
-                            aria-disabled={isTutorialActive || undefined}
-                            data-tutorial-disabled={isTutorialActive ? "true" : undefined}
-                            onClick={isTutorialActive ? undefined : () => onOpenSessionShortcut("add-comments")}
-                            className={isTutorialActive ? TUTORIAL_DISABLED_ACTION_CLS : "contents"}
-                          >
-                            <FigmaInfieActionButton
-                              preset="Attention"
-                              density="Expanded"
-                              actionLabel="Test changes in"
-                              session="Add comments"
-                              project="Pet Show and Tell"
-                              message="Attempt to add comment and react to it."
-                              showProject={true}
-                            />
-                          </button>
-                          </>
-                          )}
+                          {showHomeActionButtons && (isTutorialActive ? homeIdleActions : (
+                            <AnimatePresence initial={false} mode="wait">
+                              {whatsNext.phase === "idle" ? (
+                                <motion.div
+                                  key="home-idle-actions"
+                                  data-testid="home-idle-actions"
+                                  exit={homeDissolve.exit}
+                                  transition={homeDissolve.transition}
+                                  className="flex gap-[8px] items-center justify-center"
+                                >
+                                  {homeIdleActions}
+                                </motion.div>
+                              ) : whatsNext.phase === "proposed" && proposedRecommendations.length > 0 ? (
+                                <WhatsNextProposals
+                                  key="home-whats-next-proposals"
+                                  recommendations={proposedRecommendations}
+                                  reducedMotion={homeReducedMotion}
+                                  onOpen={(d) => onOpenRecommendation?.(d)}
+                                />
+                              ) : whatsNext.phase === "proposed" ? (
+                                // Nothing pending anywhere: offer a fresh scan instead of an empty row.
+                                <motion.div key="home-whats-next-rescan" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center">
+                                  <button type="button" data-testid="home-whats-next-button" onClick={whatsNext.start} className="contents">
+                                    <FigmaInfieActionButton preset="Recommendation" density="Compact" actionLabel="What's Next" showProject={false} />
+                                  </button>
+                                </motion.div>
+                              ) : (
+                                <WhatsNextScanning key="home-whats-next-scanning" reducedMotion={homeReducedMotion} />
+                              )}
+                            </AnimatePresence>
+                          ))}
                         </div>
                       </div>
                     </motion.div>
@@ -8649,8 +9190,13 @@ function WidgetsGalleryModal({
    */
   tutorialMode?: boolean;
 }) {
+  const limit = usePrototypeLimit();
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector('[data-testid="prototype-limit-modal"]')) {
+        onClose();
+      }
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -8800,6 +9346,39 @@ function WidgetsGalleryModal({
                 <GalleryTile key={w.id} w={w} onOpenWidget={onOpenWidget} highlighted={w.id === highlightWidgetId} inert={tutorialMode} accent="#2dd4bf" />
               ))}
             </div>
+          </div>
+
+          {/* Footer action (non-tile, non-dockable) */}
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/8">
+            <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">
+              Build custom workspace widgets for your team or the community
+            </span>
+            <button
+              type="button"
+              data-testid="gallery-create-widget"
+              disabled={tutorialMode}
+              aria-disabled={tutorialMode || undefined}
+              onClick={
+                tutorialMode
+                  ? undefined
+                  : () =>
+                      limit({
+                        featureName: "Create widget",
+                        subtitle: "Custom widget builder",
+                        description:
+                          "Custom widget creation isn't wired into this prototype — nothing is actually created or stored here. In the full app you can build and share your own workspace widgets.",
+                        environmentNote: "Simulated prototype · nothing is actually created or stored",
+                      })
+              }
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] border text-[12px] font-['Space_Grotesk',sans-serif] font-semibold transition-colors shrink-0 ${
+                tutorialMode
+                  ? "bg-white/[0.03] border-white/10 text-[#666] cursor-default"
+                  : "bg-[#2dd4bf]/12 border-[#2dd4bf]/35 text-[#2dd4bf] hover:bg-[#2dd4bf]/20 hover:border-[#2dd4bf]/60 cursor-pointer"
+              }`}
+            >
+              <Plus size={13} />
+              <span>Create widget</span>
+            </button>
           </div>
         </div>
       </motion.div>
@@ -9198,6 +9777,21 @@ function I2Canvas({ children }: { children: React.ReactNode }) {
 // ─── Auth screen ────────────────────────────────────────────────────────────
 
 function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const errorId = "auth-signin-error";
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email.trim().toLowerCase() !== "dev@i2.app" || password !== "password") {
+      setError("Invalid email or password.");
+      return;
+    }
+    setError(null);
+    onSignIn();
+  };
+
   return (
     <div
       data-name="AuthScreen"
@@ -9212,7 +9806,9 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
           </p>
         </div>
 
-        <div
+        <form
+          onSubmit={handleSubmit}
+          noValidate
           className="w-full max-w-[380px] flex flex-col gap-4"
           style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: 28 }}
         >
@@ -9220,25 +9816,52 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
 
           <div className="flex flex-col gap-3 mt-1">
             <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="you@studio.dev"
-              defaultValue="dev@i2.app"
               aria-label="Email address"
-              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              aria-invalid={error ? "true" : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className={`w-full bg-white/[0.06] border rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none transition-colors ${
+                error ? "border-[#ef4444]/75 focus:border-[#ef4444]" : "border-white/15 focus:border-[#2dd4bf]/60"
+              }`}
               style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
             />
             <input
               type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder="Password"
-              defaultValue="password"
               aria-label="Password"
-              className="w-full bg-white/[0.06] border border-white/15 rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none focus:border-[#2dd4bf]/60 transition-colors"
+              aria-invalid={error ? "true" : undefined}
+              aria-describedby={error ? errorId : undefined}
+              className={`w-full bg-white/[0.06] border rounded-[10px] px-3.5 py-2.5 text-[13px] text-white placeholder-white/45 focus:outline-none transition-colors ${
+                error ? "border-[#ef4444]/75 focus:border-[#ef4444]" : "border-white/15 focus:border-[#2dd4bf]/60"
+              }`}
               style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
             />
           </div>
 
+          {error && (
+            <p
+              id={errorId}
+              role="alert"
+              className="text-[12px] text-[#fca5a5] px-1"
+              style={{ fontFamily: "'Rounded Mplus 1c',sans-serif" }}
+            >
+              {error}
+            </p>
+          )}
+
           <button
-            type="button"
-            onClick={onSignIn}
+            type="submit"
             className="w-full flex items-center justify-center gap-2 transition-opacity hover:opacity-90 mt-1 cursor-pointer"
             style={{ padding: "12px", borderRadius: 10, background: "#2dd4bf", fontFamily: "'Space Grotesk',sans-serif", fontSize: 14, fontWeight: 600, color: "#06201d" }}
           >
@@ -9259,7 +9882,7 @@ function AuthScreen({ onSignIn, onSignUp }: { onSignIn: () => void; onSignUp: ()
           >
             Create an account
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
@@ -9327,10 +9950,14 @@ function PricingCard({ tier, onSelect }: { tier: PricingTier; onSelect: () => vo
 }
 
 function PricingOverlay({
+  selectedTier,
   onSelectTier,
+  onContinue,
   onDismiss,
 }: {
+  selectedTier: PricingTier | null;
   onSelectTier: (tier: PricingTier) => void;
+  onContinue: () => void;
   onDismiss: () => void;
 }) {
   const [audience, setAudience] = useState<"personal" | "business">("personal");
@@ -9338,8 +9965,17 @@ function PricingOverlay({
   const reducedMotion = usePrefersReducedMotion();
   const backdropRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const continueBtnRef = useRef<HTMLButtonElement>(null);
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
+  const canDismissRef = useRef(!selectedTier);
+  canDismissRef.current = !selectedTier;
+
+  useEffect(() => {
+    if (selectedTier) {
+      continueBtnRef.current?.focus({ preventScroll: true });
+    }
+  }, [selectedTier]);
 
   useEffect(() => {
     const backdrop = backdropRef.current;
@@ -9358,7 +9994,9 @@ function PricingOverlay({
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        dismissRef.current();
+        if (canDismissRef.current) {
+          dismissRef.current();
+        }
       }
     };
     backdrop.addEventListener("keydown", onKeyDown);
@@ -9381,7 +10019,7 @@ function PricingOverlay({
       animate={{ opacity: 1 }}
       transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onDismiss();
+        if (event.target === event.currentTarget && !selectedTier) onDismiss();
       }}
       className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-6"
       style={{ background: "rgba(0, 0, 0, 0.72)", backdropFilter: "blur(8px)" }}
@@ -9402,57 +10040,142 @@ function PricingOverlay({
           {/* Top chrome */}
           <div className="flex items-center px-4 sm:px-6 shrink-0" style={{ height: 54, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
             <I2Logo size={30} />
-            <button
-              type="button"
-              onClick={onDismiss}
-              aria-label="Back to Home"
-              className="ml-auto flex items-center gap-1.5 text-white/65 hover:text-white transition-colors cursor-pointer"
-              style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}
-            >
-              <ChevronLeft size={15} /> Back
-            </button>
+            {!selectedTier && (
+              <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Back to Home"
+                className="ml-auto flex items-center gap-1.5 text-white/65 hover:text-white transition-colors cursor-pointer"
+                style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 13 }}
+              >
+                <ChevronLeft size={15} /> Back
+              </button>
+            )}
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            <div className="max-w-5xl mx-auto w-full px-4 py-7 sm:px-8 sm:py-10 flex flex-col items-center">
-              <h2
-                id="choose-plan-heading"
-                style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}
+            {selectedTier ? (
+              <div
+                data-testid="choose-plan-credentials"
+                className="max-w-lg mx-auto w-full px-4 py-8 sm:px-8 sm:py-12 flex flex-col items-center text-center"
               >
-                Choose your plan
-              </h2>
-              <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.58)", marginTop: 8, textAlign: "center" }}>
-                Start free and scale your orchestration as you grow.
-              </p>
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold mb-4"
+                  style={{
+                    background: "rgba(45, 212, 191, 0.14)",
+                    border: "1px solid rgba(45, 212, 191, 0.4)",
+                    color: "#2dd4bf",
+                    fontFamily: "'Space Grotesk',sans-serif",
+                  }}
+                >
+                  <Check size={12} />
+                  <span>{selectedTier.name} plan selected</span>
+                </span>
+                <h2
+                  id="choose-plan-heading"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}
+                >
+                  You&apos;re all set
+                </h2>
+                <p
+                  className="mt-3 max-w-md"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.82)", lineHeight: 1.5 }}
+                >
+                  Write down this email and password so you can bypass the tutorial in the future.
+                </p>
 
-              {/* Audience toggle */}
-              <div className="flex items-center gap-0.5 mt-6 sm:mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100 }}>
-                {(["personal", "business"] as const).map(a => (
-                  <button
-                    key={a}
-                    type="button"
-                    aria-pressed={audience === a}
-                    onClick={() => setAudience(a)}
-                    className="cursor-pointer"
-                    style={{
-                      padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
-                      textTransform: "capitalize", transition: "all 0.15s",
-                      background: audience === a ? "#2dd4bf" : "transparent",
-                      color: audience === a ? "#06201d" : "rgba(255,255,255,0.68)",
-                    }}
-                  >
-                    {a}
-                  </button>
-                ))}
-              </div>
+                <div
+                  className="w-full mt-6 rounded-[16px] p-5 flex flex-col gap-3 text-left"
+                  style={{
+                    background: "rgba(4, 0, 28, 0.72)",
+                    border: "1px solid rgba(45, 212, 191, 0.35)",
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3 py-1.5 border-b border-white/10">
+                    <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.58)" }}>
+                      Email
+                    </span>
+                    <code
+                      data-testid="reward-email"
+                      style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#abefa3" }}
+                    >
+                      dev@i2.app
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-1.5">
+                    <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 12, color: "rgba(255,255,255,0.58)" }}>
+                      Password
+                    </span>
+                    <code
+                      data-testid="reward-password"
+                      style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#abefa3" }}
+                    >
+                      password
+                    </code>
+                  </div>
+                </div>
 
-              {/* Tier cards */}
-              <div className="flex gap-5 items-stretch justify-center flex-wrap mt-8 sm:mt-10 w-full">
-                {tiers.map(t => (
-                  <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
-                ))}
+                <button
+                  ref={continueBtnRef}
+                  type="button"
+                  data-testid="choose-plan-continue"
+                  onClick={onContinue}
+                  className="mt-7 w-full max-w-[240px] flex items-center justify-center gap-2 transition-opacity hover:opacity-90 cursor-pointer"
+                  style={{
+                    padding: "12px 20px",
+                    borderRadius: 10,
+                    background: "#2dd4bf",
+                    fontFamily: "'Space Grotesk',sans-serif",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#06201d",
+                  }}
+                >
+                  Continue <ArrowRight size={15} />
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="max-w-5xl mx-auto w-full px-4 py-7 sm:px-8 sm:py-10 flex flex-col items-center">
+                <h2
+                  id="choose-plan-heading"
+                  style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: "clamp(24px, 4vw, 32px)", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", textAlign: "center" }}
+                >
+                  Choose your plan
+                </h2>
+                <p style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 15, color: "rgba(255,255,255,0.58)", marginTop: 8, textAlign: "center" }}>
+                  Start free and scale your orchestration as you grow.
+                </p>
+
+                {/* Audience toggle */}
+                <div className="flex items-center gap-0.5 mt-6 sm:mt-7 p-0.5" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100 }}>
+                  {(["personal", "business"] as const).map(a => (
+                    <button
+                      key={a}
+                      type="button"
+                      aria-pressed={audience === a}
+                      onClick={() => setAudience(a)}
+                      className="cursor-pointer"
+                      style={{
+                        padding: "7px 22px", borderRadius: 100, fontFamily: "'Space Grotesk',sans-serif", fontSize: 13, fontWeight: 500,
+                        textTransform: "capitalize", transition: "all 0.15s",
+                        background: audience === a ? "#2dd4bf" : "transparent",
+                        color: audience === a ? "#06201d" : "rgba(255,255,255,0.68)",
+                      }}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tier cards */}
+                <div className="flex gap-5 items-stretch justify-center flex-wrap mt-8 sm:mt-10 w-full">
+                  {tiers.map(t => (
+                    <PricingCard key={t.name} tier={t} onSelect={() => onSelectTier(t)} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </I2Canvas>
       </motion.div>
@@ -9483,11 +10206,13 @@ export default function App() {
         <InfiePreferencesProvider>
           <PrototypeLimitProvider>
             <SimulatorTargetProvider>
-              <FileViewerProvider>
-                <WidgetDockProvider>
-                  <PersistentAppShell initialOpening={startWithOpening} />
-                </WidgetDockProvider>
-              </FileViewerProvider>
+              <PetSessionProvider>
+                <FileViewerProvider>
+                  <WidgetDockProvider>
+                    <PersistentAppShell initialOpening={startWithOpening} />
+                  </WidgetDockProvider>
+                </FileViewerProvider>
+              </PetSessionProvider>
             </SimulatorTargetProvider>
           </PrototypeLimitProvider>
         </InfiePreferencesProvider>
@@ -9516,6 +10241,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   } = useOnboarding();
 
   const tutorial = useTutorial();
+  const petSession = usePetSession();
   const { setOnJennyCompletedCallback, createProject } = tutorial;
   useEffect(() => {
     setOnJennyCompletedCallback(() => {
@@ -9589,11 +10315,19 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     : null;
   const baseProjects = experimemoProject ? [experimemoProject, ...PROTOTYPE_PROJECTS] : PROTOTYPE_PROJECTS;
   const allProjects = importedLive ? [...baseProjects, { ...IMPORTED_PROJECT }] : baseProjects;
-  const allSessions = [
-    ...(tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : []),
-    ...PROTOTYPE_SESSIONS,
-    ...(importedLive ? importedLiveSessions() : []),
-  ];
+  const allSessions = isTutorialActive
+    ? [
+        ...(tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : []),
+        ...FROZEN_TUTORIAL_SESSIONS,
+        ...(importedLive ? importedLiveSessions() : []),
+      ]
+    : [
+        ...(tutorial.sessionStarted ? [EXPERIMEMO_SESSION] : []),
+        ...PROTOTYPE_SESSIONS.map((s) =>
+          s.id === PET_REPLAY_SESSION_ID ? { ...s, initial: petSession.state.status } : s,
+        ),
+        ...(importedLive ? importedLiveSessions() : []),
+      ];
   const activeProject =
     (activeProjectId === TUTORIAL_DEMO_PROJECT.id
       ? TUTORIAL_DEMO_PROJECT
@@ -9649,6 +10383,29 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     }
   };
   const openSessionById = (id: string) => { const s = allSessions.find(x => x.id === id); if (s) openSession(s); };
+  // Home What's Next reads the live reducers; recommendations re-derive on every state change.
+  const whatsNextScan = useMemo(
+    () =>
+      scanOpenProjects({
+        pet: {
+          status: petSession.state.status,
+          wrapUpPhase: petSession.state.wrapUpPhase,
+          mainUpdated: petSession.state.mainUpdated,
+          remainingSeconds: petSession.remainingSeconds,
+        },
+        importedLive,
+        experimemo: tutorial.flow,
+      }),
+    [petSession.state.status, petSession.state.wrapUpPhase, petSession.state.mainUpdated, petSession.remainingSeconds, importedLive, tutorial.flow],
+  );
+  const openRecommendation = (d: WhatsNextDestination) => {
+    if (d.kind === "session") {
+      openSessionById(d.sessionId);
+      return;
+    }
+    const p = allProjects.find(x => x.id === d.projectId);
+    if (p) openProjectHome(p);
+  };
   const [openedLabel, setOpenedLabel] = useState("expo-photo-share");
   const [projectType, setProjectType] = useState<ProjectType>(() => {
     // v2 key: the default is now "no framework" (Generic / Other), not Expo.
@@ -9698,6 +10455,12 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
 
   // ── Global To-Do state ───────────────────────────────────────────────────
   const [globalTodos, setGlobalTodos] = useState<GlobalTodoItem[]>(INIT_GLOBAL_TODOS);
+  useEffect(() => {
+    const completed = petSession.state.status === "COMPLETE";
+    setGlobalTodos(items =>
+      items.map(i => (i.id === "gt-1" ? { ...i, done: completed } : i)),
+    );
+  }, [petSession.state.status]);
   const toggleGlobalTodo = useCallback((id: string) => {
     setGlobalTodos(items => items.map(i => i.id === id ? { ...i, done: !i.done } : i));
   }, []);
@@ -10000,6 +10763,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
             setWsState("none");
             setActiveProjectId(null);
             setActiveSessionId(null);
+            setSelectedPlan(null);
             planEligibleRef.current = true;
             shownPlanForRunRef.current = null;
             setPlanOverlayOpen(false);
@@ -10107,10 +10871,11 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       )}
       {planOverlayOpen && (
         <PricingOverlay
+          selectedTier={selectedPlan}
           onSelectTier={(tier) => {
             setSelectedPlan(tier);
-            setPlanOverlayOpen(false);
           }}
+          onContinue={() => setPlanOverlayOpen(false)}
           onDismiss={() => setPlanOverlayOpen(false)}
         />
       )}
@@ -10229,6 +10994,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               danceNonce={danceNonce}
+              whatsNextScan={whatsNextScan}
+              onOpenRecommendation={openRecommendation}
             />
           </motion.div>
         )}

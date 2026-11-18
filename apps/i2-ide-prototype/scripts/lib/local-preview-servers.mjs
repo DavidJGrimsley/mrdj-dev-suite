@@ -334,38 +334,154 @@ export function createPreviewServersVitePlugin(options = {}) {
   }
 }
 
-/** Path Pet Show and Tell's web export is built for (its `basePath`). */
+/** Paths Pet Show and Tell's v1 and v2 web exports are built for (`baseUrl`). */
 export const PET_PREVIEW_MOUNT = '/iSquared/preview/pet-show-and-tell'
+export const PET_PREVIEW_V1_MOUNT = '/iSquared/preview/pet-show-and-tell/v1'
+export const PET_PREVIEW_V2_MOUNT = '/iSquared/preview/pet-show-and-tell/v2'
 
 /**
- * Where the Pet Show and Tell web export lives on this machine: `ISQUARED_PET_PREVIEW_DIR`,
- * or the `pet-show-and-tell/dist-web/web` folder beside the i2 workspace.
+ * Narrow pre-router path normalization shim for Expo Router static web exports loaded via explicit
+ * `.../index.html` URLs (so Expo Router sees `.../` instead of `.../index.html` -> `+not-found`).
  */
-export function resolvePetPreviewDir(options = {}) {
-  if (options.dir) return path.resolve(options.dir)
-  if (process.env.ISQUARED_PET_PREVIEW_DIR) return path.resolve(process.env.ISQUARED_PET_PREVIEW_DIR)
-  const prototypeRoot = options.prototypeRoot ?? path.resolve(import.meta.dirname, '../..')
-  const workspaceRoot = options.workspaceRoot ?? path.resolve(prototypeRoot, '../../..')
-  return path.resolve(workspaceRoot, '..', 'pet-show-and-tell', 'dist-web', 'web')
+export const PET_PRE_ROUTER_SHIM_MARKER = 'data-i2-pet-index-shim="1"'
+export const PET_PRE_ROUTER_SHIM_SCRIPT =
+  `<script ${PET_PRE_ROUTER_SHIM_MARKER}>(function(){var p=location.pathname;if(/\\/index\\.html$/.test(p)){history.replaceState(null,"",p.replace(/\\/index\\.html$/,"/")+location.search+location.hash);}})();</script>`
+
+export function applyPetPreRouterPathShim(html) {
+  if (typeof html !== 'string' || html.includes(PET_PRE_ROUTER_SHIM_MARKER)) return html
+  if (html.includes('<head>')) {
+    return html.replace('<head>', `<head>\n    ${PET_PRE_ROUTER_SHIM_SCRIPT}`)
+  }
+  return `${PET_PRE_ROUTER_SHIM_SCRIPT}\n${html}`
 }
 
 /**
- * Dev-only Vite plugin: serves the Pet Show and Tell web export from its own folder at
- * `PET_PREVIEW_MOUNT` on the dev server (same origin, no copying), which is where the hosted
- * site serves it too. When the export is not on disk nothing is mounted and the preview frame
- * reports that it is unavailable.
+ * Resolve the Pet Show and Tell v1 and v2 web export directories on disk.
+ */
+export function resolvePetPreviewDirs(options = {}) {
+  const prototypeRoot = options.prototypeRoot ?? path.resolve(import.meta.dirname, '../..')
+  const workspaceRoot = options.workspaceRoot ?? path.resolve(prototypeRoot, '../../..')
+  const generatedPetRoot = path.resolve(workspaceRoot, 'generated', 'pet-add-comments-2026-11-16', 'pet')
+  const defaultV1 = path.join(generatedPetRoot, 'v1', 'web')
+  const fallbackV1 = path.resolve(workspaceRoot, '..', 'pet-show-and-tell', 'dist-web', 'web')
+  const v1Dir = options.v1Dir
+    ? path.resolve(options.v1Dir)
+    : process.env.ISQUARED_PET_V1_DIR
+      ? path.resolve(process.env.ISQUARED_PET_V1_DIR)
+      : process.env.ISQUARED_PET_PREVIEW_DIR
+        ? path.resolve(process.env.ISQUARED_PET_PREVIEW_DIR)
+        : fs.existsSync(path.join(defaultV1, 'index.html'))
+          ? defaultV1
+          : fallbackV1
+  const v2Dir = options.v2Dir
+    ? path.resolve(options.v2Dir)
+    : process.env.ISQUARED_PET_V2_DIR
+      ? path.resolve(process.env.ISQUARED_PET_V2_DIR)
+      : path.join(generatedPetRoot, 'v2', 'web')
+  return { v1Dir, v2Dir }
+}
+
+export function resolvePetPreviewDir(options = {}) {
+  if (options.dir) return path.resolve(options.dir)
+  return resolvePetPreviewDirs(options).v1Dir
+}
+
+/**
+ * Exact-file static request handler for nested Pet preview mounts that applies the narrow
+ * pre-router path normalization shim to `index.html`. Missing extensionless paths fall back to the
+ * root document for client-side routes; missing files with an extension return 404.
+ */
+export function createPetStaticRequestHandler(rootDir) {
+  const resolvedRoot = path.resolve(rootDir)
+  return async (req, res) => {
+    const method = (req.method || 'GET').toUpperCase()
+    if (method !== 'GET' && method !== 'HEAD') {
+      res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Method Not Allowed')
+      return
+    }
+    const rawUrl = (req.url || '/').split('?')[0].split('#')[0]
+    let decodedPath = '/'
+    try {
+      decodedPath = decodeURIComponent(rawUrl)
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Bad Request')
+      return
+    }
+    const rel = decodedPath.replace(/^\/+/, '')
+    let candidate = rel ? path.resolve(resolvedRoot, rel) : path.join(resolvedRoot, 'index.html')
+    if (candidate !== resolvedRoot && !candidate.startsWith(resolvedRoot + path.sep)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Forbidden')
+      return
+    }
+    try {
+      const stat = await fsp.stat(candidate)
+      if (stat.isDirectory()) {
+        candidate = path.join(candidate, 'index.html')
+        await fsp.stat(candidate)
+      }
+    } catch {
+      // Pet exports with `web.output: "single"`, so extensionless client routes such as
+      // /post/<id> load the root document; missing assets (anything with an extension) stay 404.
+      const rootIndex = path.join(resolvedRoot, 'index.html')
+      if (path.extname(rel) === '' && fs.existsSync(rootIndex)) {
+        candidate = rootIndex
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+        res.end('Not Found')
+        return
+      }
+    }
+    try {
+      const ext = path.extname(candidate).toLowerCase()
+      const contentType = MIME_TYPES[ext] ?? 'application/octet-stream'
+      if (path.basename(candidate) === 'index.html') {
+        const html = applyPetPreRouterPathShim(await fsp.readFile(candidate, 'utf8'))
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        })
+        res.end(method === 'HEAD' ? undefined : html)
+        return
+      }
+      const body = method === 'HEAD' ? null : await fsp.readFile(candidate)
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-store',
+      })
+      res.end(body ?? undefined)
+    } catch {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('Internal Server Error')
+    }
+  }
+}
+
+/**
+ * Dev-only Vite plugin: serves both Pet Show and Tell v1 and v2 web exports from their own
+ * directories at `PET_PREVIEW_V1_MOUNT` and `PET_PREVIEW_V2_MOUNT` on the dev server (same origin,
+ * no copying), matching the hosted site layout.
  */
 export function createPetPreviewVitePlugin(options = {}) {
   return {
     name: 'isquared-pet-web-preview',
     apply: 'serve',
     configureServer(server) {
-      const dir = resolvePetPreviewDir(options)
-      if (!fs.existsSync(path.join(dir, 'index.html'))) return
-      const handler = createStaticRequestHandler(dir)
-      server.middlewares.use(PET_PREVIEW_MOUNT, (req, res) => {
-        void handler(req, res)
-      })
+      const { v1Dir, v2Dir } = resolvePetPreviewDirs(options)
+      if (fs.existsSync(path.join(v1Dir, 'index.html'))) {
+        const v1Handler = createPetStaticRequestHandler(v1Dir)
+        server.middlewares.use(PET_PREVIEW_V1_MOUNT, (req, res) => {
+          void v1Handler(req, res)
+        })
+      }
+      if (fs.existsSync(path.join(v2Dir, 'index.html'))) {
+        const v2Handler = createPetStaticRequestHandler(v2Dir)
+        server.middlewares.use(PET_PREVIEW_V2_MOUNT, (req, res) => {
+          void v2Handler(req, res)
+        })
+      }
     },
   }
 }

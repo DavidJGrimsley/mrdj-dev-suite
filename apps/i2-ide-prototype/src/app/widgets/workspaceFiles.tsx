@@ -98,12 +98,20 @@ export function workspaceSpecFor(projectId: string, opts: { sessionBranch?: stri
     };
   }
   if (projectId === NOT_HOTDOG) {
-    return { projectId, rootName: "not-hotdog-i2Workspace", folders: ["main", "feat/edge-cases", "project", "temp", "generated"], defaultOpen: [] };
+    return { projectId, rootName: "not-hotdog-i2Workspace", folders: ["main", "project"], defaultOpen: [] };
+  }
+  if (projectId === "tutorial-demo") {
+    return {
+      projectId,
+      rootName: "pet-show-and-tell-i2Workspace",
+      folders: ["main", "feature/add-comments", "chore/fix-reaction-bug", "project", "temp", "generated"],
+      defaultOpen: ["main", "main/src", "main/src/app"],
+    };
   }
   return {
     projectId,
     rootName: "pet-show-and-tell-i2Workspace",
-    folders: ["main", "feature/add-comments", "chore/fix-reaction-bug", "project", "temp", "generated"],
+    folders: ["main", "add-comments", "project"],
     defaultOpen: ["main", "main/src", "main/src/app"],
   };
 }

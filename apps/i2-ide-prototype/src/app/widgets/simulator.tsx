@@ -33,12 +33,20 @@ export function useSimulatorTargets(): SimContextValue {
   return ctx;
 }
 
-/** Pet Show and Tell's web export is built for this path and served beside the prototype. */
-export const PET_WEB_PREVIEW = {
-  url: "/iSquared/preview/pet-show-and-tell/",
-  probe: "/iSquared/preview/pet-show-and-tell/metadata.json",
+/** Pet Show and Tell's web exports are built for these nested paths and served beside the prototype. */
+export const PET_WEB_PREVIEW_V1 = {
+  url: "/iSquared/preview/pet-show-and-tell/v1/index.html",
+  probe: "/iSquared/preview/pet-show-and-tell/v1/metadata.json",
   label: "Pet Show and Tell web preview",
 } as const;
+
+export const PET_WEB_PREVIEW_V2 = {
+  url: "/iSquared/preview/pet-show-and-tell/v2/index.html",
+  probe: "/iSquared/preview/pet-show-and-tell/v2/metadata.json",
+  label: "Pet Show and Tell web preview",
+} as const;
+
+export const PET_WEB_PREVIEW = PET_WEB_PREVIEW_V1;
 
 export interface SimOption {
   id: string;

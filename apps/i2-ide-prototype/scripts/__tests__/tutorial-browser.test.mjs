@@ -16,7 +16,7 @@ const workspaceRoot = path.resolve(appRoot, '../../..')
 const snapshotRoot = `${workspaceRoot}/generated/exact-jenny/tutorial`
 const V1_DIR = `${snapshotRoot}/v1-starter/extracted`
 const V2_DIR = `${snapshotRoot}/v2-merged/dist`
-const screenshotDir = path.join(appRoot, '.agents', 'verification', 'screenshots')
+const screenshotDir = path.join(workspaceRoot, 'generated', 'pet-add-comments-2026-11-16', 'i2', 'screenshots')
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -223,12 +223,14 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       const widget = page.locator('[data-testid="infie-preferences-widget"]')
       await widget.waitFor()
       const sliders = widget.getByRole('slider')
-      assert.equal(await sliders.count(), 5)
+      assert.equal(await sliders.count(), 6)
       assert.equal(await sliders.nth(0).getAttribute('aria-valuenow'), '3')
       assert.match(await sliders.nth(0).getAttribute('aria-valuetext'), /Autonomous/)
       assert.equal(await sliders.nth(1).getAttribute('aria-valuenow'), '4')
       assert.equal(await sliders.nth(2).getAttribute('aria-valuenow'), '0')
-      for (let i = 0; i < 5; i++) {
+      assert.equal(await sliders.nth(5).getAttribute('aria-valuenow'), '2')
+      assert.match(await sliders.nth(5).getAttribute('aria-valuetext'), /^3:/)
+      for (let i = 0; i < 6; i++) {
         assert.equal(await sliders.nth(i).getAttribute('aria-valuemax'), i === 4 ? '2' : '4')
       }
       await sliders.nth(0).focus()
@@ -240,14 +242,19 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
       await sliders.nth(4).focus()
       await page.keyboard.press('End')
       assert.match(await sliders.nth(4).getAttribute('aria-valuetext'), /Fast/)
+      await sliders.nth(5).focus()
+      await page.keyboard.press('End')
+      assert.match(await sliders.nth(5).getAttribute('aria-valuetext'), /^5:/)
       await page.keyboard.press('Escape')
       await widget.waitFor({ state: 'detached' })
       await page.locator('[data-name="HeaderWidgetsButton"]').click()
       await page.locator('[data-widget-entry="infiePreferences"]').click()
       await widget.waitFor()
       assert.equal(await widget.getByRole('slider').nth(4).getAttribute('aria-valuenow'), '2')
+      assert.equal(await widget.getByRole('slider').nth(5).getAttribute('aria-valuenow'), '4')
       await widget.getByRole('button', { name: 'Reset', exact: true }).click()
       assert.equal(await widget.getByRole('slider').nth(0).getAttribute('aria-valuenow'), '3')
+      assert.equal(await widget.getByRole('slider').nth(5).getAttribute('aria-valuenow'), '2')
       await page.keyboard.press('Escape')
       await widget.waitFor({ state: 'detached' })
     })
@@ -957,11 +964,11 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
         await other.goto(appUrl(), { waitUntil: 'domcontentloaded' })
         await other.waitForSelector('button[data-project-id="pet"]', { timeout: 15000 })
         await other.locator('button[data-project-id="pet"]').click()
-        await other.waitForFunction(() => /Human Testing 3\/5/i.test(document.body.innerText), null, { timeout: 10000 })
+        await other.waitForFunction(() => /Human Testing 0\/4/i.test(document.body.innerText), null, { timeout: 10000 })
         const homeText = await other.locator('body').innerText()
-        assert.match(homeText, /Human Testing 3\/5/i)
+        assert.match(homeText, /Human Testing 0\/4/i)
         assert.doesNotMatch(homeText, /Recent Activity/i)
-        assert.match(homeText, /Wrap up/i)
+        assert.match(homeText, /Approve Plan/i)
         assert.equal(/Experimemo/.test(homeText), false)
         assert.equal(await other.locator('[data-testid="inline-web-preview"]').count(), 1)
 
@@ -969,19 +976,16 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
         await other.waitForSelector('[data-testid="session-screen"]')
         const screen = other.locator('[data-testid="session-screen"]')
         const sessionText = await screen.innerText()
-        assert.match(sessionText, /Human Testing 1\/3/i)
+        assert.match(sessionText, /Human Testing 0\/4/i)
         assert.match(sessionText, /Explorer/i)
-        assert.match(sessionText, /What's Next/i)
+        assert.match(sessionText, /Approve Plan/i)
         assert.equal(await other.locator('[role="tab"]').count(), 0, 'original single-chat tab bar')
         assert.equal(/Experimemo|Gemini/.test(sessionText), false)
 
-        // Original behaviours still work: the composer talks to Infie; What's Next advances the status
+        // Interactive session composer works in Add Comments without affecting Experimemo
         await other.locator('input[placeholder^="Ask Infie"]').fill('Check the comment sheet')
         await other.keyboard.press('Enter')
-        await other.waitForFunction(() => document.body.textContent.includes("I've folded that into the current session context."))
-        const humanRow = other.locator('[data-human-task-id]').nth(1)
-        await humanRow.click()
-        assert.match(await screen.innerText(), /Human Testing 2\/3/i)
+        await other.waitForFunction(() => document.body.textContent.includes('Approve Plan to begin the 30-second'))
       } finally {
         await other.close()
       }
@@ -995,6 +999,16 @@ test('browser acceptance: Experimemo product flow from Jenny completion to appro
         await onboarding.keyboard.press('Escape')
         await onboarding.waitForSelector('[data-beat="B01"]', { timeout: 15000 })
         assert.equal(await onboarding.locator('button:has-text("Generate new")').count(), 0)
+
+        // B15 regression guard: frozen Add Comments demo session must show all 5 agent tasks completed (not pending)
+        await onboarding.goto(`http://127.0.0.1:${appPort}/iSquared/?beat=B15`, { waitUntil: 'domcontentloaded' })
+        await onboarding.waitForSelector('[data-testid="session-screen"]', { timeout: 15000 })
+        const b15Statuses = await onboarding.locator('[data-testid="session-screen"] [data-task-status]').evaluateAll((els) =>
+          els.map((el) => el.getAttribute('data-task-status')),
+        )
+        assert.equal(b15Statuses.length, 5)
+        assert.ok(b15Statuses.every((st) => st === 'completed'), `B15 agent tasks must all be completed, got ${JSON.stringify(b15Statuses)}`)
+        assert.match(await onboarding.locator('[data-testid="session-screen"]').innerText(), /Human Testing 1\/3/i)
       } finally {
         await onboarding.close()
       }

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
-import { Sparkles, RotateCcw, Bot, Zap } from "lucide-react";
+import { Sparkles, RotateCcw, Bot, Zap, Cpu } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import {
   useInfiePreferences,
@@ -9,6 +9,7 @@ import {
   VERBOSITY_STOPS,
   TECHNICAL_LEVEL_STOPS,
   TEXT_SPEED_STOPS,
+  EFFORT_STOPS,
   type PreferenceStop,
 } from "./infiePreferencesContext";
 
@@ -192,6 +193,7 @@ export function InfiePreferencesWidget({ expanded = false }: { expanded?: boolea
     setVerbosityStopIndex,
     setTechnicalLevelStopIndex,
     setTextSpeedStopIndex,
+    setEffortStopIndex,
     resetDefaults,
   } = useInfiePreferences();
 
@@ -215,7 +217,7 @@ export function InfiePreferencesWidget({ expanded = false }: { expanded?: boolea
                 </span>
               </h3>
               <p className="font-['Rounded_Mplus_1c',sans-serif] text-[10px] text-[#777]">
-                Configure assistance style, tone, compression, and text reveal pacing
+                Configure assistance style, tone, compression, text reveal pacing, and effort
               </p>
             </div>
           </div>
@@ -313,10 +315,32 @@ export function InfiePreferencesWidget({ expanded = false }: { expanded?: boolea
             </div>
           </div>
 
+          {/* Section: Effort */}
+          <div>
+            <div className="flex items-center gap-2 mb-2.5">
+              <Cpu size={13} className="text-[#fb7185]" />
+              <h4 className="font-['Space_Grotesk',sans-serif] text-[11px] font-bold uppercase tracking-wider text-[#777]">
+                Model Choice &amp; Reasoning
+              </h4>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              {/* 6. Effort (5 numeric stops 1-5, default 3) */}
+              <DiscretePreferenceSlider
+                id="pref-effort"
+                label="Effort"
+                description="Intended model-choice and reasoning-effort preference (1–5). This prototype does not invoke models or change a real reasoning budget."
+                stops={EFFORT_STOPS}
+                currentIndex={preferences.effortStopIndex}
+                onChange={setEffortStopIndex}
+                badgeAccent="#fb7185"
+              />
+            </div>
+          </div>
+
           {/* Context Footer / Disclaimer: does not claim all preferences affect generated AI output */}
           <div className="rounded-[8px] bg-white/3 border border-white/6 p-3 text-[11px] font-['Rounded_Mplus_1c',sans-serif] text-[#777] leading-relaxed">
             <p>
-              Applies to all models in all conversations. Settings reset when you refresh. Text speed respects reduced motion. Assistance and tone controls are previews in this prototype.
+              Applies to all models in all conversations. Settings reset when you refresh. Text speed respects reduced motion. Assistance, tone, and effort controls are previews in this prototype and do not invoke models or change a real reasoning budget.
             </p>
           </div>
         </div>
@@ -334,10 +358,20 @@ export function PreferenceSlidersPreview() {
     { label: "Verbosity", stops: VERBOSITY_STOPS, index: p.preferences.verbosityStopIndex, change: p.setVerbosityStopIndex },
     { label: "Technical Level", stops: TECHNICAL_LEVEL_STOPS, index: p.preferences.technicalLevelStopIndex, change: p.setTechnicalLevelStopIndex },
     { label: "Speed", stops: TEXT_SPEED_STOPS, index: p.preferences.textSpeedStopIndex, change: p.setTextSpeedStopIndex },
+    { label: "Effort", stops: EFFORT_STOPS, index: p.preferences.effortStopIndex, change: p.setEffortStopIndex },
   ];
   return (
     <TooltipProvider delayDuration={150}>
-      <div data-name="PreferenceSlidersPreview" aria-label="Preference Sliders" className="w-full max-w-[320px] shrink-0 space-y-1 px-3 py-2">
+      <div
+        data-name="PreferenceSlidersPreview"
+        aria-label="Preference Sliders"
+        className="w-full max-w-[320px] shrink-0 space-y-1 px-3.5 py-2.5 rounded-[12px]"
+        style={{
+          background: "transparent",
+          border: "1px solid rgba(45, 212, 191, 0.34)",
+          backdropFilter: "blur(6px)",
+        }}
+      >
         {rows.map((row) => <DiscretePreferenceSlider key={row.label} id={`tutorial-pref-${row.label}`} label={row.label} stops={row.stops} currentIndex={row.index} onChange={row.change} compact />)}
       </div>
     </TooltipProvider>

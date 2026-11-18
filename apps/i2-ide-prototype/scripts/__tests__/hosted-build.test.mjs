@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -59,6 +60,12 @@ test('hosted output protection preserves unrelated files and rejects changed bui
     fs.writeFileSync(path.join(out, 'isquared-web.tgz'), 'unrelated archive')
     assert.throws(() => validateHostedOutputLocation(root, out, true), /archive not recorded/)
     assert.equal(fs.readFileSync(path.join(out, 'isquared-web.tgz'), 'utf8'), 'unrelated archive')
+    const archiveHash = crypto.createHash('sha256').update('unrelated archive').digest('hex')
+    fs.writeFileSync(path.join(out, 'isquared-web.tgz.sha256'), `${archiveHash}  isquared-web.tgz\n`)
+    assert.doesNotThrow(() => validateHostedOutputLocation(root, out, true), 'sidecar records the archive')
+    fs.rmSync(path.join(out, 'isquared-web.tgz.sha256'))
+    fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ fileCount: 1, indexHtmlSha256: fileHashes['index.html'], fileHashes, archiveSha256: archiveHash }))
+    assert.doesNotThrow(() => validateHostedOutputLocation(root, out, true), 'legacy manifest.archiveSha256 still accepted')
     fs.writeFileSync(path.join(web, 'index.html'), 'user edits')
     assert.throws(() => validateHostedOutputLocation(root, out, false), /changed since/)
     assert.throws(() => validateHostedOutputLocation(root, path.resolve(root, '..'), false), /subdirectory/)
