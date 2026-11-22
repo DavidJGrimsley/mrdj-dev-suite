@@ -23,15 +23,13 @@ import {
   B17_SESSION_CLOSED_LINE,
   B15_LINES,
   B15_TASKS_TURN,
-  B17_TO_UI_SEGUE,
-  B18_TO_SURFACES_SEGUE,
   B18_MOVE_TURN,
   B18_PANELS_TURN,
+  B18_SLIDERS_TURN,
   B18_OPEN_WIDGETS_TURN,
   B18_LIBRARY_TURN,
-  B18_SEGUE_TURN,
   B18_LINES,
-  B19_HOME_TURN,
+  B19_FINAL_TURN,
   B19_LINES,
   B19_TURN2_LINE,
   INFIE_FORM_ASSETS,
@@ -45,6 +43,7 @@ import {
 } from "./FloatingPrimitives";
 import { useInfieDance } from "./infieDanceAnimation";
 import { StylistPreview } from "./StylistPreview";
+import { WidgetArrangeDemo } from "./WidgetArrangeDemo";
 import { RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "../widgets/infiePreferencesContext";
 import { PreferenceSlidersPreview } from "../widgets/InfiePreferencesWidget";
 import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
@@ -294,8 +293,15 @@ export function InfieHeroArtwork({
 
 export interface OnboardingStageProps {
   musicOutcome: "none" | "played" | "quiet";
-  onSelectContinueMusicQuiet: () => void;
+  /** Whether the music player is actually playing (a Meet Infie replay keeps the user's music). */
+  musicPlaying?: boolean;
+  /** B05 Continue: resolves the music gate from the real playback state. */
+  onContinueMusicGate: () => void;
   onOpenDemoSession?: () => void;
+  /** Ends the running tutorial (the shell also returns the user to where they were). */
+  onFinish: () => void;
+  /** Widgets & Whatnot skips "Click Widgets" when the gallery is already open. */
+  widgetsGalleryOpen?: boolean;
   /** Increments synchronously when the music Play button is pressed. */
   pressNonce?: number;
   /** Increments whenever music starts playing or changes track, triggering Infie's playful 5s dance. */
@@ -304,12 +310,17 @@ export interface OnboardingStageProps {
 
 export function OnboardingStage({
   musicOutcome,
-  onSelectContinueMusicQuiet,
+  musicPlaying = false,
+  onContinueMusicGate,
   onOpenDemoSession,
+  onFinish,
+  widgetsGalleryOpen = false,
   pressNonce = 0,
   danceNonce = 0,
 }: OnboardingStageProps) {
   const {
+    activeTutorial,
+    projectSessionPortion,
     currentBeat,
     turnIndex,
     setTurnIndex,
@@ -326,12 +337,14 @@ export function OnboardingStage({
     revealGroup,
     retireGroup,
     advanceBeat,
-    completeOnboarding,
   } = useOnboarding();
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+  const projectOnlyPortion = activeTutorial === "project-session" && projectSessionPortion === "project";
 
   const reducedMotion = usePrefersReducedMotion();
   const narrowStage = useNarrowStage();
-  const { width: viewportWidth, height: viewportHeight } = useViewportSize();
+  const { width: viewportWidth } = useViewportSize();
 
   // B01 arrival choreography state: "lettering" -> "mark" -> "outro" (fade to black before Infie fades into B02)
   const [b01Stage, setB01Stage] = useState<"lettering" | "mark" | "outro">("lettering");
@@ -388,32 +401,29 @@ export function OnboardingStage({
       if (turnIndex === 0) {
         currentLine = `Nice to meet you, ${displayName}. I can see you're level zero.`;
         onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
-        currentLine = "What a noob.";
-        onContinue = undefined;
       } else {
-        currentLine =
-          "This onboarding tutorial may take around 15 minutes, so make sure you're ready before we go much farther. The way you'll work in iSquared is a little different than other IDEs so we want to make sure you're fully prepared.";
+        currentLine = "What a noob.";
         onContinue = () => advanceBeat("B04");
       }
       break;
     case "B04":
       if (turnIndex === 0) {
-        currentLine =
-          "I'm going to help you build amazing projects. I hope you're ready. I'll learn a bit about you as we go, to better serve you. Tell me a little about what you like to build and why.";
+        currentLine = "Tell me a little about what you like to build and why.";
         onContinue = undefined;
       } else {
         currentLine =
-          "I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. I won't hide your files and make things hard to edit by hand, or even interact with, like some other agentic IDEs. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
+          "I don't do much coding myself. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
         onContinue = () => advanceBeat("B05");
       }
       break;
     case "B05":
       if (turnIndex === 0) {
-        currentLine =
-          "Btw… it's kinda quiet. Do you like music? Hit Play, or Continue and we'll keep it quiet.";
+        // On a replay the user's music may already be on; Infie reacts to what is really playing.
+        currentLine = musicPlaying
+          ? "Btw… you've already got music going. Nice. Continue when you're ready, or hit Pause if you'd rather keep it quiet."
+          : "Btw… it's kinda quiet. Do you like music? Hit Play, or Continue and we'll keep it quiet.";
         onContinue = () => {
-          onSelectContinueMusicQuiet();
+          onContinueMusicGate();
           setTurnIndex(1);
         };
       } else {
@@ -454,11 +464,11 @@ export function OnboardingStage({
     case "B07":
       if (turnIndex === 0) {
         currentLine =
-          "I'm your orchestrator, coordinator, middle-man, question-answerer, and maybe friend. I take the repetitive, mundane, boring stuff out of building. Focus is key. I'll show you what you need when you need it.";
+          "I'm your orchestrator, coordinator, question-answerer, and maybe friend. I take the boring stuff out of building and show you what you need when you need it.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "I'm an expert at version control like Git, Perforce, Diversion, and more. But you don't need any of those to use i²! I'm also packed with skills that make me a great agent team lead. Most importantly, I help you manage tasks and projects, even after weeks away or across multiple projects. Think of me as your double, your partner-in-crime, your right hand.";
+          "I help manage your tasks and projects, even after weeks away. I know version control like Git, Perforce and Diversion, but you don't need it to use i². Think of me as your partner-in-crime, your right hand.";
         onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
@@ -467,26 +477,27 @@ export function OnboardingStage({
       }
       break;
     case "B08":
-      if (turnIndex === 0) {
+      if (activeTutorial !== "project-session") {
+        // Meet Infie: the i² / Project / Session group docks in the header on Continue.
+        currentLine =
+          "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.";
+        onContinue = () => advanceBeat("B10");
+      } else if (turnIndex === 0) {
         currentLine =
           "Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.";
-        onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
-        currentLine =
-          "That's also how navigation works. Project changes to the name of your current project. A Session is a space dedicated to a feature, bug fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me. First...";
         onContinue = () => {
           retireGroup("workspace_tree");
           revealGroup(["project_folder_only", "folder_illustration"]);
-          setTurnIndex(2);
+          setTurnIndex(1);
         };
-      } else if (turnIndex === 2) {
+      } else if (turnIndex === 1) {
         currentLine =
           "The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.";
-        onContinue = () => setTurnIndex(3);
-      } else if (turnIndex === 3) {
+        onContinue = () => setTurnIndex(2);
+      } else if (turnIndex === 2) {
         currentLine =
           "It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.";
-        onContinue = () => setTurnIndex(4);
+        onContinue = () => setTurnIndex(3);
       } else {
         currentLine =
           "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!";
@@ -514,7 +525,7 @@ export function OnboardingStage({
           "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.";
         onContinue = () => {
           retireGroup(["project_folder_only", "folder_illustration", "stylist_preview"]);
-          advanceBeat("B10");
+          advanceBeat("B13");
         };
       }
       break;
@@ -523,7 +534,7 @@ export function OnboardingStage({
         currentLine =
           "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.";
         onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
+      } else {
         currentLine =
           connectedModels.length >= 1
             ? "Checking your developer environment... Node.js and Python could use updates. I can update them and all your agent skills now, and keep them updated nightly if you'd like."
@@ -533,24 +544,20 @@ export function OnboardingStage({
             ? () => {
                 setActiveModelModal(null);
                 retireGroup("model_signin_buttons");
-                setTurnIndex(2);
+                advanceBeat("B11");
               }
             : undefined;
-      } else {
-        currentLine =
-          "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.";
-        onContinue = () => advanceBeat("B11");
       }
       break;
     case "B11":
       if (turnIndex === 0) {
         currentLine =
-          "Whenever you want more tutorials and lessons, click Learn in the header. Your music player is a widget and there are tons more for you to customize your experience. Games take your iSquared level into account when playing and pause automatically when I have something for you to review. It's a great way to spend time while waiting for Session Agents. You are welcome to submit a tutorial, widget or game to the Infinite Intelligence and there will be tutorials on how to do just that!";
+          "Click Learn for tutorials and lessons, and Widgets to customize your workspace. Games unlock at level five, take your level into account and pause when I need you to review something. They're a fun way to wait for Session Agents. You can submit a tutorial, widget or game to the Infinite Intelligence too!";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentMessageId = "B11-1";
         currentLine =
-          "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.";
+          "Your alerts, notifications and settings live here. I'll also help you manage the Global To-Do list.";
         onContinue = () => {
           retireGroup("continue_button");
           setTurnIndex(2);
@@ -558,7 +565,7 @@ export function OnboardingStage({
       } else {
         currentMessageId = "B11-1";
         currentLine =
-          "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.";
+          "Your alerts, notifications and settings live here. I'll also help you manage the Global To-Do list.";
         onContinue = undefined;
       }
       break;
@@ -567,27 +574,24 @@ export function OnboardingStage({
         currentLine = B12_BRIDGE_LINE;
         onContinue = undefined;
       } else if (turnIndex === 1) {
-        currentLine = "You can resume projects that are already onboarded to iSquared.";
+        currentLine =
+          "This is i² Home. The Workspace and Emulators controls switch between your work and your previews.";
         onContinue = () => setTurnIndex(2);
       } else if (turnIndex === 2) {
-        currentLine =
-          "You can also start new projects or onboard existing ones to iSquared.";
+        currentLine = "You can resume projects that are already onboarded to iSquared.";
         onContinue = () => setTurnIndex(3);
       } else if (turnIndex === 3) {
-        currentLine = "We're now in i² Home.";
+        currentLine =
+          "You can also start new projects or onboard existing ones to iSquared.";
         onContinue = () => setTurnIndex(4);
       } else if (turnIndex === 4) {
         currentLine =
-          "Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our Global Todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'";
+          "Here you can talk with me about whatever you want, or use our conversation in a project. I can also help you manage our Global To-Do list: it includes open project tasks and reminders like ‘Update SSL certificates on MyWebsite.com.’";
         onContinue = () => setTurnIndex(5);
-      } else if (turnIndex === 5) {
-        currentLine =
-          "I'll present Action Buttons specific to the next steps of your projects to save you time typing.";
-        onContinue = () => setTurnIndex(6);
       } else {
         currentLine =
-          "I've filled in some dummy data for this tutorial. Let's open one.";
-        onContinue = undefined;
+          "I'll present Action Buttons specific to the next steps of your projects to save you time typing.";
+        onContinue = () => advanceBeat("B20");
       }
       break;
     case "B13":
@@ -610,7 +614,9 @@ export function OnboardingStage({
         currentLine =
           "A Session is a focused piece of work, usually with its own branch and worktree. Big feature, little fix—you get the idea. Sessions come from your todo. You can make one yourself, but I assure you I'll do a better job… just kidding.";
         onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
+      } else if (turnIndex === 1 || projectOnlyPortion) {
+        // The project/files portion alone ends on the reply (its session portion already ran).
+        currentMessageId = "B14-1";
         currentLine =
           "When a Session Agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.";
         onContinue = undefined;
@@ -642,68 +648,52 @@ export function OnboardingStage({
           turnIndex < lastExplanationIdx
             ? () => setTurnIndex((t) => Math.min(t + 1, lastExplanationIdx))
             : undefined;
-      } else if (turnIndex === lastExplanationIdx + 1) {
-        currentLine = B17_SESSION_CLOSED_LINE;
-        onContinue = () => setTurnIndex(lastExplanationIdx + 2);
       } else {
-        // Segue (no gate): the cue effect advances to B18 after dwell + text completion.
-        currentLine = B17_TO_UI_SEGUE;
-        onContinue = undefined;
+        currentLine = B17_SESSION_CLOSED_LINE;
+        onContinue = () => advanceBeat("B19");
       }
       break;
     }
     case "B18":
+      // Widgets & Whatnot: a floating callout over the live screens.
+      currentLine = B18_LINES[Math.min(Math.max(turnIndex, 0), B18_LIBRARY_TURN)];
       if (turnIndex === B18_MOVE_TURN) {
-        currentLine = B18_LINES[B18_MOVE_TURN];
-        onContinue = undefined;
+        onContinue = () => setTurnIndex(B18_PANELS_TURN);
       } else if (turnIndex === B18_PANELS_TURN) {
-        currentLine = B18_LINES[B18_PANELS_TURN];
-        onContinue = () => setTurnIndex(B18_OPEN_WIDGETS_TURN);
+        onContinue = () => setTurnIndex(B18_SLIDERS_TURN);
+      } else if (turnIndex === B18_SLIDERS_TURN) {
+        // Opened from the header, the gallery is already up: skip "Click Widgets".
+        onContinue = () => setTurnIndex(widgetsGalleryOpen ? B18_LIBRARY_TURN : B18_OPEN_WIDGETS_TURN);
       } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
-        currentLine = B18_LINES[B18_OPEN_WIDGETS_TURN];
         onContinue = undefined;
-      } else if (turnIndex === B18_LIBRARY_TURN) {
-        currentLine = B18_LINES[B18_LIBRARY_TURN];
-        // The shell closes the tutorial-opened Widgets gallery when the turn changes.
-        onContinue = () => setTurnIndex(B18_SEGUE_TURN);
       } else {
-        // Segue (no gate): the cue effect advances to B19 after dwell + text completion.
-        currentLine = B18_TO_SURFACES_SEGUE;
-        onContinue = undefined;
+        // The shell closes a tutorial-opened Widgets gallery when the tutorial ends.
+        onContinue = () => onFinish();
       }
       break;
     case "B19":
-      if (turnIndex < B19_HOME_TURN) {
+      if (turnIndex < B19_FINAL_TURN) {
         currentLine = B19_LINES[Math.max(turnIndex, 0)];
-        onContinue = () => setTurnIndex((t) => Math.min(t + 1, B19_HOME_TURN));
+        onContinue = () => setTurnIndex((t) => Math.min(t + 1, B19_FINAL_TURN));
       } else {
         currentLine = B19_TURN2_LINE;
-        onContinue = undefined;
+        onContinue = () => onFinish();
       }
       break;
     case "B20":
-      if (turnIndex === 0) {
-        currentLine =
-          "That's about it to get started. This prototype has one more tutorial, 'Generate a new project', which you can go through by clicking that button to the right. In the full experience, Learn in the header has tutorials for every aspect of iSquared, like 'Widgets, widgets, widgets', so you can continue to learn as you please or revisit old ones. You can also just ask me a question about how to do something at any time. I'm completely plugged into this IDE to make your life easy so you can concentrate on what you're here for: building cool shit.";
-        onContinue = () => setTurnIndex(1);
-      } else if (turnIndex === 1) {
-        currentLine =
-          "Games unlock at level five, so hop to it. Learn has computer science and game development lessons too. There's even a tutorial on how to increase your level, and completing it increases your level. How meta is that?";
-        onContinue = () => setTurnIndex(2);
-      } else {
-        currentLine =
-          "The number of open sessions without submitted Completion Reports will be limited based on your level and plan. I hope this gives you everything you could need but please submit feedback directly to me at any time and I'll make sure it goes to the proper channel and give you a ticket to follow-up.";
-        onContinue = () => advanceBeat("B21");
-      }
+      currentLine =
+        "Learn has the other tutorials whenever you're ready. You can also give me feedback, and I'll send it to the right place and give you a ticket to follow up. Now go build cool shit.";
+      onContinue = () => advanceBeat("B21");
       break;
     case "B21":
       currentLine =
         "Speaking of… there's your first level. I hope you enjoyed this tutorial, and if you didn't, I don't really care. I got paid either way. Toodles for now.";
-      onContinue = () => completeOnboarding();
+      onContinue = () => onFinish();
       break;
   }
 
-  // Determine whether Infie is in center-stage mode (B01–B11) or docked in Home/Project/Session chat (B12–B21)
+  // Determine whether Infie is in center-stage mode (B01–B11) or docked in Home/Project/Session chat
+  // (B12–B21). Widgets & Whatnot (B18) is a floating callout over the live screens.
   const isEarlyCenterStage =
     currentBeat === "B01" ||
     currentBeat === "B02" ||
@@ -951,11 +941,9 @@ export function OnboardingStage({
     if (currentBeat === "B03") {
       if (turnIndex === 0) {
         at(450, () => revealGroup(["level_indicator", "continue_button"]));
-      } else if (turnIndex === 1) {
-        // "What a noob." appears as its own message and holds for a full second before the next message
-        afterDwellAndText(B03_NOOB_TIMER_MS, () => setTurnIndex(2), false);
       } else {
-        at(450, () => revealGroup("continue_button"));
+        // "What a noob." appears as its own message and holds before its Continue appears.
+        at(B03_NOOB_TIMER_MS, () => revealGroup("continue_button"), false);
       }
     } else if (currentBeat === "B04") {
       if (turnIndex === 0) at(500, () => revealGroup("project_interest_reply"));
@@ -994,16 +982,16 @@ export function OnboardingStage({
     } else if (currentBeat === "B07") {
       at(400, () => revealGroup("continue_button"));
     } else if (currentBeat === "B08") {
-      if (turnIndex === 0) {
-        at(300, () => revealGroup("workspace_tree"));
+      if (activeTutorial !== "project-session") {
+        // Meet Infie: the i² / Project / Session group appears with the navigation line.
+        revealGroup("header_breadcrumbs");
         at(500, () => revealGroup("continue_button"));
-      } else if (turnIndex === 1) {
-        // Simultaneously with Turn 2 message, reveal i2 / Project / Session nav group while tree stays
-        revealGroup(["workspace_tree", "header_breadcrumbs"]);
+      } else if (turnIndex === 0) {
+        at(300, () => revealGroup("workspace_tree"));
         at(500, () => revealGroup("continue_button"));
       } else {
         retireGroup("workspace_tree");
-        revealGroup(["project_folder_only", "folder_illustration", "header_breadcrumbs"]);
+        revealGroup(["project_folder_only", "folder_illustration"]);
         at(450, () => revealGroup("continue_button"));
       }
     } else if (currentBeat === "B09") {
@@ -1016,20 +1004,16 @@ export function OnboardingStage({
       }
       at(450, () => revealGroup("continue_button"));
     } else if (currentBeat === "B10") {
-      retireGroup(["workspace_tree", "project_folder_only", "folder_illustration", "stylist_preview"]);
       if (turnIndex === 0) {
         retireGroup("model_signin_buttons");
         at(450, () => revealGroup("continue_button"));
-      } else if (turnIndex === 1) {
+      } else {
         revealGroup("model_signin_buttons");
         if (connectedModels.length >= 1) {
           at(200, () => revealGroup("continue_button"));
         } else {
           retireGroup("continue_button");
         }
-      } else {
-        retireGroup("model_signin_buttons");
-        at(200, () => revealGroup("continue_button"));
       }
     } else if (currentBeat === "B11") {
       retireGroup("model_signin_buttons");
@@ -1063,34 +1047,28 @@ export function OnboardingStage({
         "home_projects_and_actions",
       ]);
       if (turnIndex === 0) {
-        // Bridge line → conversation slides left and lands → dwell → Active Projects (Turn 1).
+        // Bridge line → conversation slides left and lands → dwell → i² Home (Turn 1).
         afterDwellAndText(
           reducedMotion ? 1000 : B12_BRIDGE_READ_MS + B12_SLIDE_MS + B12_LANDED_DWELL_MS,
           () => setTurnIndex(1),
           false
         );
       } else if (turnIndex === 1) {
+        at(450, () => revealGroup("continue_button"));
+      } else if (turnIndex === 2) {
         revealGroup("home_resume_projects");
         // Continue only after Active Projects finish their entrance
         // (not compressed in reduced motion: the fade still runs, order must hold).
         at(B12_PROJECTS_FADE_MS + 120, () => revealGroup("continue_button"), false);
-      } else if (turnIndex === 2) {
+      } else if (turnIndex === 3) {
         revealGroup(["home_resume_projects", "home_new_import_buttons"]);
         at(450, () => revealGroup("continue_button"), false);
-      } else if (turnIndex === 3 || turnIndex === 4) {
+      } else if (turnIndex === 4) {
         revealGroup(["home_resume_projects", "home_new_import_buttons"]);
         at(400, () => revealGroup("continue_button"));
-      } else if (turnIndex === 5) {
+      } else {
         revealGroup(["home_resume_projects", "home_new_import_buttons", "home_action_buttons"]);
         at(400, () => revealGroup("continue_button"));
-      } else {
-        // Turn 6: two project choices glow teal/cyan; no Continue button
-        revealGroup([
-          "home_resume_projects",
-          "home_new_import_buttons",
-          "home_action_buttons",
-          "tutorial_demo_project",
-        ]);
       }
     } else if (currentBeat === "B13") {
       if (turnIndex === 0) {
@@ -1111,6 +1089,9 @@ export function OnboardingStage({
       ]);
       if (turnIndex === 0) {
         at(450, () => revealGroup("continue_button"));
+      } else if (turnIndex === 2 && projectOnlyPortion) {
+        // Project/files portion alone: finish a moment after the reply lands.
+        at(900, () => onFinishRef.current());
       }
     } else if (currentBeat === "B15") {
       if (turnIndex < B15_TASKS_TURN) {
@@ -1129,42 +1110,26 @@ export function OnboardingStage({
         if (turnIndex < lastExplanationIdx) {
           at(350, () => revealGroup("continue_button"));
         }
-      } else if (turnIndex === lastExplanationIdx + 1) {
+      } else {
         // After Submit: the session is closed (Continue).
         retireGroup("session_completion_form");
         at(400, () => revealGroup("continue_button"));
-      } else {
-        // Segue to the rest of the UI: require both dwell (halved per B17 timing rule) and text completion.
-        retireGroup("session_completion_form");
-        afterDwellAndText(segueDwellMs(B17_TO_UI_SEGUE, 0.5), () => advanceBeat("B18"), false);
       }
     } else if (currentBeat === "B18") {
-      retireGroup("session_completion_form");
-      if (turnIndex === B18_MOVE_TURN) {
+      revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
+      if (turnIndex === B18_OPEN_WIDGETS_TURN) {
+        // Gated by clicking Widgets in the header (the shell advances to the Library turn).
         retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-      } else if (turnIndex === B18_PANELS_TURN) {
-        retireGroup("library_entry_and_example");
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-        at(450, () => revealGroup("continue_button"));
-      } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
-        retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
       } else if (turnIndex === B18_LIBRARY_TURN) {
-        // Gallery is opened by clicking Widgets in Turn 2; reveal Library callout Continue.
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize", "library_entry_and_example"]);
+        revealGroup("library_entry_and_example");
         at(350, () => revealGroup("continue_button"));
       } else {
-        // Segue from widgets to the other surfaces of iSquared: require both dwell and text completion.
-        retireGroup(["library_entry_and_example", "continue_button"]);
-        revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-        afterDwellAndText(segueDwellMs(B18_TO_SURFACES_SEGUE), () => advanceBeat("B19"), false);
-      }
-    } else if (currentBeat === "B19") {
-      retireGroup("library_entry_and_example");
-      if (turnIndex < B19_HOME_TURN) {
+        retireGroup("library_entry_and_example");
         at(450, () => revealGroup("continue_button"));
       }
+    } else if (currentBeat === "B19") {
+      retireGroup("session_completion_form");
+      at(450, () => revealGroup("continue_button"));
     } else if (currentBeat === "B20") {
       revealGroup("tutorials_entry");
       at(450, () => revealGroup("continue_button"));
@@ -1174,6 +1139,8 @@ export function OnboardingStage({
     }
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [
+    activeTutorial,
+    projectOnlyPortion,
     currentBeat,
     turnIndex,
     currentMessageId,
@@ -1297,17 +1264,22 @@ export function OnboardingStage({
   }, [isEarlyCenterStage, messageStack]);
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
-  // B18 Turn 3 (Library) also renders a floating callout beneath the open Widgets gallery while
-  // recording its message in the rolling 3-message docked chat feed (with a single Continue on the callout).
-  const isFloatingCallout = currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
+  // Widgets & Whatnot (B18) speaks from a floating callout instead, so the screens beneath stay live.
+  const isFloatingCallout = currentBeat === "B18";
 
   useEffect(() => {
-    if (isEarlyCenterStage || currentBeat === "B00" || currentBeat === "COMPLETE" || !currentLine) {
+    if (
+      isEarlyCenterStage ||
+      isFloatingCallout ||
+      currentBeat === "B00" ||
+      currentBeat === "COMPLETE" ||
+      !currentLine
+    ) {
       return;
     }
-    const nextShowContinue = isFloatingCallout ? false : showContinueNow;
-    const nextOnContinue = isFloatingCallout ? undefined : triggerDockedContinue;
-    const nextOnTextComplete = isFloatingCallout ? undefined : handleDockedTextComplete;
+    const nextShowContinue = showContinueNow;
+    const nextOnContinue = triggerDockedContinue;
+    const nextOnTextComplete = handleDockedTextComplete;
     setDockedChat((prev) => {
       const msgId = currentMessageId;
       const baseHistory: ReadonlyArray<DockedTutorialChatEntry> =
@@ -1510,16 +1482,24 @@ export function OnboardingStage({
     const padRight = chatShift ? Math.min(280, viewportWidth * 0.36) : 24;
     const chatCenterX = (padLeft + viewportWidth - padRight) / 2;
     const chatVisualWidth = Math.min(540 * chatScale(), Math.max(0, viewportWidth - padLeft - padRight));
-    const chatLeftEdge = Math.round(chatCenterX - chatVisualWidth / 2);
     const rightMarginLeft = Math.round(chatCenterX + chatVisualWidth / 2);
-    const leftMarginAvailableWidth = chatLeftEdge - 24;
-    const leftMarginAvailableHeight = viewportHeight - 72 - 84;
-    const isB10Turn2 = currentBeat === "B10" && turnIndex === 2;
-    const showLeftPrefMargin = isB10Turn2 && leftMarginAvailableWidth >= 300 && leftMarginAvailableHeight >= 300;
     const b06ScaleDuration = reducedMotion ? 0 : isB06VideoActive ? 0.65 : B06_RECENTER_MS / 1000;
 
     return (
       <>
+      {activeTutorial === "project-session" && (
+        // Project & Session Flow opens over the live shell: a scrim keeps the lesson legible
+        // and keeps the screens beneath out of reach until Project Home.
+        <motion.div
+          data-name="OnboardingStageScrim"
+          aria-hidden="true"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: reducedMotion ? 0.15 : 0.4 }}
+          className="fixed inset-0 z-[29] pointer-events-auto"
+          style={{ background: "rgba(10, 8, 20, 0.94)", backdropFilter: "blur(8px)" }}
+        />
+      )}
       <div
         data-name="OnboardingStageFrame"
         data-chat-shift={chatShift ? "true" : "false"}
@@ -1588,7 +1568,7 @@ export function OnboardingStage({
                 >
                   <InfieHeroArtwork
                     reducedMotion={reducedMotion}
-                    pointingToPlay={currentBeat === "B05" && turnIndex === 0}
+                    pointingToPlay={currentBeat === "B05" && turnIndex === 0 && !musicPlaying}
                     pressNonce={pressNonce}
                     danceNonce={danceNonce}
                     size="lg"
@@ -1772,8 +1752,6 @@ export function OnboardingStage({
             </div>
           </div>
 
-          {isB10Turn2 && !showLeftPrefMargin && <PreferenceSlidersPreview />}
-
           {/* B02: Name and Email fields in center content flow */}
           {currentBeat === "B02" && isRevealed("identity_controls") && textComplete && (
             <motion.div
@@ -1844,9 +1822,10 @@ export function OnboardingStage({
             </motion.form>
           )}
 
-          {/* B08 Turns 0–1: Animated, indented, VERTICAL folder tree built from native elements */}
+          {/* Project & Session Flow B08 Turn 0: Animated, indented, VERTICAL folder tree built from native elements */}
           {currentBeat === "B08" &&
-            (turnIndex === 0 || turnIndex === 1) &&
+            activeTutorial === "project-session" &&
+            turnIndex === 0 &&
             isRevealed("workspace_tree") && (
               <motion.div
                 data-name="WorkspaceVerticalTree"
@@ -1940,8 +1919,8 @@ export function OnboardingStage({
               </motion.div>
             )}
 
-          {/* B08 Turns 2–3 & B09 Turns 0–3: ONLY the green project/ folder (alone) + B09 indented vertical file list */}
-          {((currentBeat === "B08" && turnIndex >= 2) || currentBeat === "B09") &&
+          {/* B08 Turns 1–3 & B09 Turns 0–3: ONLY the green project/ folder (alone) + B09 indented vertical file list */}
+          {((currentBeat === "B08" && activeTutorial === "project-session" && turnIndex >= 1) || currentBeat === "B09") &&
             isRevealed("project_folder_only") && (
               <motion.div
                 data-name="GreenProjectFolderOnly"
@@ -2080,17 +2059,6 @@ export function OnboardingStage({
           )}
 
         </div>
-        {showLeftPrefMargin && (
-          <div
-            data-name="OnboardingLeftMargin"
-            className="fixed flex items-center justify-center pointer-events-none z-20"
-            style={{ left: 12, top: 72, bottom: 84, width: leftMarginAvailableWidth }}
-          >
-            <div className="w-full max-w-[320px] max-h-full overflow-y-auto flex justify-center pointer-events-auto">
-              <PreferenceSlidersPreview />
-            </div>
-          </div>
-        )}
         {showRightMargin && (
           <div
             data-name="OnboardingRightMargin"
@@ -2333,37 +2301,50 @@ export function OnboardingStage({
   }
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
-  // The only floating stage left is the B18 Turn 1 callout beneath the auto-opened Widgets gallery.
+  // The only floating stage left is Widgets & Whatnot's callout over the live screens (and over
+  // the Widgets gallery while its Library turn is up).
   if (!isFloatingCallout) {
     return null;
   }
 
   return (
     <motion.div
-      key="b18-library-callout"
+      key="widgets-callout"
       data-name="FloatingInfieCallout"
+      data-turn={turnIndex}
       initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay: 0.15, ease: "easeOut" }}
-      className="fixed inset-x-0 z-[60] flex justify-center px-6 pointer-events-none"
+      className="fixed inset-x-0 z-[60] flex justify-center px-3 sm:px-6 pointer-events-none"
       style={{ bottom: "5vh", background: "transparent" }}
     >
       <div
-        className="flex items-center gap-3 pointer-events-auto"
-        style={{ background: "transparent", border: "none" }}
+        className="i2-chat-scale flex flex-col items-center gap-3 px-3 sm:px-4 py-3 rounded-[16px] pointer-events-auto w-full max-w-[620px] min-w-0"
+        style={{
+          background: "rgba(10, 8, 20, 0.86)",
+          border: "1px solid rgba(45, 212, 191, 0.22)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+        }}
       >
-        <InfieHeroArtwork
-          reducedMotion={reducedMotion}
-          danceNonce={danceNonce}
-          size="sm"
-          formId={currentForm}
-        />
-        <FloatingInfieMessage
-          message={currentLine}
-          showContinue={isRevealed("continue_button") && Boolean(onContinue)}
-          onContinue={onContinue}
-          onTextComplete={handleTextComplete}
-        />
+        {turnIndex === B18_MOVE_TURN && <WidgetArrangeDemo reducedMotion={reducedMotion} />}
+        {turnIndex === B18_SLIDERS_TURN && <PreferenceSlidersPreview />}
+        <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0" style={{ background: "transparent", border: "none" }}>
+          <InfieHeroArtwork
+            reducedMotion={reducedMotion}
+            danceNonce={danceNonce}
+            size="sm"
+            formId={currentForm}
+          />
+          <FloatingInfieMessage
+            key={currentMessageId}
+            className="flex-1 min-w-0"
+            message={currentLine}
+            showContinue={isRevealed("continue_button") && Boolean(onContinue)}
+            onContinue={onContinue}
+            onTextComplete={handleTextComplete}
+          />
+        </div>
       </div>
     </motion.div>
   );

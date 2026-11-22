@@ -27,16 +27,16 @@ import { OnboardingStage } from "./onboarding/OnboardingStage";
 import {
   BEAT_ORDER,
   OnboardingBeat,
+  ProjectSessionPortion,
   B14_AGENT_QUESTION,
   B14_AGENT_REPLY_DEFAULT,
   B15_TASKS_TURN,
   B17_EXPLANATIONS,
-  B18_MOVE_TURN,
-  B18_PANELS_TURN,
   B18_OPEN_WIDGETS_TURN,
   B18_LIBRARY_TURN,
-  B19_HOME_TURN,
 } from "./onboarding/revealLedger";
+import { LearnModal, LearnProvider, useLearn, type LearnTutorialId } from "./learn/LearnModal";
+import { TutorialOfferCard, ExitTutorialButton } from "./learn/TutorialOfferCard";
 import {
   FloatingContinueButton,
   FloatingField,
@@ -3129,7 +3129,8 @@ function Header({
     };
   }, []);
 
-  const handleTutorials = onTutorials ?? (() => onScopeNotice?.("Tutorials and lessons are coming soon!"));
+  const learn = useLearn();
+  const handleTutorials = onTutorials ?? learn?.open ?? (() => onScopeNotice?.("Tutorials and lessons are coming soon!"));
   const handleWidgets = onWidgets ?? (() => onScopeNotice?.("Widgets gallery coming soon!"));
   const handleNotifications = onNotifications ?? (() => onScopeNotice?.("No unread notifications."));
   const handleSettings = onSettings ?? (() => onScopeNotice?.("Settings configured to defaults."));
@@ -3535,6 +3536,7 @@ function Header({
             type="button"
             onClick={disabled ? undefined : handleTutorials}
             disabled={disabled}
+            data-learn-trigger
             className={`content-stretch flex flex-col items-center justify-center px-[12px] py-[4px] relative rounded-[7px] shrink-0 transition-all ${
               highlightTutorialsNav
                 ? "infie-glow border border-[#2dd4bf] bg-[rgba(45,212,191,0.14)]"
@@ -6850,7 +6852,6 @@ function SessionScreen({
   const tutorial = useTutorial();
   const petSession = usePetSession();
   const {
-    onboardingRunId,
     isTutorialActive,
     currentBeat,
     turnIndex,
@@ -7404,37 +7405,13 @@ function SessionScreen({
   ].filter((widget) => showTaskGroups || (musicAsWidget && Boolean(widget) && (widget as DockWidget).id === "music")));
 
   // A panel with nothing in it gets out of the way; while a widget is being dragged, collapsed
-  // and empty panels open enough to be drop targets. During B18 Turn 0 the bottom panel stays open
-  // as the explicit drop target for the music player.
-  const isB18MoveTurn =
-    !isExperimemo && isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN;
-  const b18EntryNormalizedRef = useRef<number | null>(null);
-  const musicInBottom = dock.layout.bottom.includes("music");
+  // and empty panels open enough to be drop targets.
   if (moveMusicToBottomRef) {
     moveMusicToBottomRef.current = () => {
       dock.move("music", "bottom", 0, { stack: false, column: 0, row: 0 });
       if (sizes.get("bottom") === 0) sizes.set("bottom", sizes.defaults.bottom);
     };
   }
-  useEffect(() => {
-    if (!isB18MoveTurn) return;
-    if (b18EntryNormalizedRef.current !== onboardingRunId) {
-      b18EntryNormalizedRef.current = onboardingRunId;
-      const placed = (["left", "right", "bottom"] as const).some((zone) => dock.layout[zone]?.includes("music"));
-      if (!placed) {
-        dock.restore("music");
-        return;
-      }
-      if (musicInBottom) {
-        dock.move("music", "right", dock.layout.right.length);
-        return;
-      }
-    }
-    if (musicInBottom) {
-      setTurnIndex(B18_PANELS_TURN);
-    }
-  }, [isB18MoveTurn, musicInBottom, onboardingRunId, dock, setTurnIndex]);
-
   // The Experimemo session only exists after Start Session; never render a ghost.
   if (isExperimemo && !xs) return null;
 
@@ -7442,7 +7419,6 @@ function SessionScreen({
   const panelSize = (side: "left" | "right" | "bottom") => {
     const stored = sizes.get(side);
     const empty = zoneEmpty(side);
-    if (side === "bottom" && isB18MoveTurn && (stored === 0 || empty)) return 130;
     if (dockDragging && (stored === 0 || empty)) return side === "bottom" ? 130 : 180;
     return empty ? 0 : stored;
   };
@@ -8179,7 +8155,7 @@ function SessionScreen({
           <>
             <DockSplitter side="bottom" value={sizes.get("bottom")} onChange={(px) => sizes.set("bottom", px)} defaultSize={sizes.defaults.bottom} min={130} />
             <DockPanel side="bottom" size={panelSize("bottom")}>
-              <WidgetZone dock={dock} zone="bottom" layout="flow" showDropHint={isB18MoveTurn} onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
+              <WidgetZone dock={dock} zone="bottom" layout="flow" onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
             </DockPanel>
           </>
         )}
@@ -8888,7 +8864,6 @@ function I2HomeScreen({
                 onChange={onProjectTypeChange}
                 onGenerate={onSuperStack}
                 onSupportNewFramework={onSupportNewFramework}
-                glow={isTutorialActive && currentBeat === "B20" && turnIndex === 0}
               />
               <button onClick={onOpenProject}
                 className="bg-[rgba(255,255,255,0.04)] border-[0.667px] border-[rgba(255,255,255,0.08)] content-stretch flex gap-[8px] h-full items-center justify-center px-[20px] py-[14px] relative rounded-[12px] shrink-0 whitespace-nowrap hover:bg-white/[0.07] transition-colors"
@@ -10231,21 +10206,34 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     setB00GateHeld,
     isTutorialActive,
     isTutorialComplete,
+    activeTutorial,
+    projectSessionPortion,
+    isMeetInfieReplay,
+    firstRunComplete,
+    isWidgetsTourActive,
     level,
     levelUpFlourish,
     levelUpStage,
     isRevealed,
     advanceBeat,
     startOnboarding,
+    startTutorialTrack,
+    finishTutorial,
     completeOnboarding,
   } = useOnboarding();
+  const meetInfieActive = activeTutorial === "meet-infie";
+  const isFirstRunIntro = meetInfieActive && !isMeetInfieReplay;
 
   const tutorial = useTutorial();
   const petSession = usePetSession();
   const { setOnJennyCompletedCallback, createProject } = tutorial;
+  // Generate replayed over an existing Experimemo keeps it: Jenny's conversation replays, but
+  // completing it opens the generated project as it is instead of resetting its progress.
+  const projectCreatedRef = useRef(tutorial.projectCreated);
+  projectCreatedRef.current = tutorial.projectCreated;
   useEffect(() => {
     setOnJennyCompletedCallback(() => {
-      createProject();
+      if (!projectCreatedRef.current) createProject();
       setActiveProjectId(EXPERIMEMO_PROJECT_ID);
       setActiveSessionId(null);
       setRoute("project");
@@ -10264,6 +10252,14 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   // The first of {real playback outcome, Continue} resolves B05 exactly once.
   const b05ResolvedRef = useRef(false);
   useEffect(() => { b05ResolvedRef.current = false; }, [onboardingRunId]);
+  // The music player's real playing state. A Meet Infie replay keeps the user's playback, so
+  // B05 may begin with music already on: its line and its Continue follow the actual audio.
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const musicPlayingRef = useRef(false);
+  const handleMusicPlayingChange = useCallback((playing: boolean) => {
+    musicPlayingRef.current = playing;
+    setMusicPlaying(playing);
+  }, []);
 
   // ── App phase gate (auth → app, with post-tutorial Home choose-plan overlay) ─
   const [appPhase, setAppPhase] = useState<"auth" | "app">(() => {
@@ -10292,17 +10288,18 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const importedLimitRef = useRef<(what: string) => void>(() => {});
 
   // ── Prototype router (home → project → session) ──────────────────────────
+  // `?beat=` deep links into Project & Session Flow open its demo project (or demo session).
   const [route, setRoute] = useState<"home" | "project" | "session">(() => {
-    if (["B13", "B14"].includes(currentBeat)) return "project";
-    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "session";
+    if (["B09", "B13", "B14"].includes(currentBeat)) return "project";
+    if (["B15", "B16", "B17", "B19"].includes(currentBeat)) return "session";
     return "home";
   });
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-    if (["B13", "B14", "B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return TUTORIAL_DEMO_PROJECT.id;
+    if (["B09", "B13", "B14", "B15", "B16", "B17", "B19"].includes(currentBeat)) return TUTORIAL_DEMO_PROJECT.id;
     return null;
   });
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "add-comments";
+    if (["B15", "B16", "B17", "B19"].includes(currentBeat)) return "add-comments";
     return null;
   });
   const [scopeNotice, setScopeNotice] = useState<string | null>(null);
@@ -10346,29 +10343,153 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     }
   }, [activeProjectId, activeSessionId, tutorial.projectCreated, tutorial.sessionStarted]);
 
-  const goHome = () => {
-    setRoute("home");
-    if (currentBeat === "B19") {
-      // Leaving the tutorial's demo project: Home's breadcrumbs go back to the plain
-      // "Project" / "Session" labels (demo records are released at the end anyway).
-      setActiveProjectId(null);
-      setActiveSessionId(null);
-      advanceBeat("B20");
+  // ── Tutorials after Meet Infie: first-time offers, starts, and returning the user ──
+  // Project & Session Flow is offered on the first eligible project or session opening and
+  // Widgets & Whatnot on the first eligible header Widgets opening. Generate and Import (and
+  // the navigation they perform) never start or use up an offer; neither does any other
+  // tutorial. Starting or dismissing an offer uses it up; Learn replays everything.
+  type TourOffer = { kind: "project-session"; portion: ProjectSessionPortion } | { kind: "widgets" };
+  const [tourOffer, setTourOffer] = useState<TourOffer | null>(null);
+  // `?beat=` deep links land reviewers in an exact state, so they skip first-time offers
+  // unless `&tours=1` asks for them.
+  const offersRef = useRef(
+    (() => {
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const skip = Boolean(params?.get("beat")) && params?.get("tours") !== "1";
+      return { projectSession: skip, projectPortionPending: false, widgets: skip };
+    })()
+  );
+  // Project & Session Flow runs on isolated demo data, then returns the user to where they were.
+  const tourReturnRef = useRef<{ route: "home" | "project" | "session"; projectId: string | null; sessionId: string | null } | null>(null);
+  const generateOrImportActive =
+    tutorial.isJennyOpen ||
+    pickerOpen ||
+    importFlowOpen ||
+    (tutorial.projectCreated && tutorial.flow.stage !== "cleaned-up");
+  const canOfferTour = appPhase === "app" && firstRunComplete && !activeTutorial && !generateOrImportActive;
+  const isGeneratedOrImported = (projectId: string) =>
+    projectId === EXPERIMEMO_PROJECT_ID || isImportedProject(projectId);
+
+  const offerProjectTour = (projectId: string) => {
+    if (!canOfferTour || isGeneratedOrImported(projectId)) return;
+    if (!offersRef.current.projectSession) {
+      offersRef.current.projectSession = true;
+      setTourOffer({ kind: "project-session", portion: "full" });
+    } else if (offersRef.current.projectPortionPending) {
+      // The session portion ran on a direct session opening; offer the project/files portion now.
+      offersRef.current.projectPortionPending = false;
+      setTourOffer({ kind: "project-session", portion: "project" });
     }
   };
-  const openProjectHome = (p: ProtoProject) => {
+  const offerSessionTour = (s: ProtoSession) => {
+    if (!canOfferTour || isGeneratedOrImported(s.projectId) || offersRef.current.projectSession) return;
+    offersRef.current.projectSession = true;
+    setTourOffer({ kind: "project-session", portion: "session" });
+  };
+  const offerWidgetsTour = () => {
+    if (!canOfferTour || offersRef.current.widgets) return;
+    offersRef.current.widgets = true;
+    setTourOffer({ kind: "widgets" });
+  };
+  // An offer the user never answered (Generate or Import opened, or Learn started something
+  // else) is withdrawn without using it up, so the next eligible opening offers it again.
+  // It is never shown or accepted while another tutorial, Generate or Import is running.
+  const tourOfferBlocked = Boolean(activeTutorial) || generateOrImportActive;
+  const withdrawTourOffer = () => {
+    const offer = tourOffer;
+    if (!offer) return;
+    if (offer.kind === "widgets") offersRef.current.widgets = false;
+    else if (offer.portion === "project") offersRef.current.projectPortionPending = true;
+    else offersRef.current.projectSession = false;
+    setTourOffer(null);
+  };
+  useEffect(() => {
+    if (generateOrImportActive && tourOffer) withdrawTourOffer();
+  }, [generateOrImportActive, tourOffer]);
+  const tourOfferTitle = (offer: TourOffer) =>
+    offer.kind === "widgets"
+      ? "Widgets & Whatnot"
+      : offer.portion === "project"
+        ? "Project & Session Flow: the project and its files"
+        : "Project & Session Flow";
+
+  const closeShellOverlays = () => {
+    setModal(null);
+    setRootModal(null);
+    setWidgetsGalleryOpen(false);
+    setPickerOpen(false);
+    setScopeNotice(null);
+    setPlaygroundOpen(false);
+    setLearnOpen(false);
+    withdrawTourOffer();
+  };
+
+  const startProjectSessionTour = (portion: ProjectSessionPortion) => {
+    tourReturnRef.current = { route, projectId: activeProjectId, sessionId: activeSessionId };
+    closeShellOverlays();
+    offersRef.current.projectSession = true;
+    offersRef.current.projectPortionPending = portion === "session";
+    setWsState("none");
+    setActiveProjectId(TUTORIAL_DEMO_PROJECT.id);
+    if (portion === "session") {
+      setActiveSessionId("add-comments");
+      setRoute("session");
+    } else {
+      setActiveSessionId(null);
+      setRoute("project");
+    }
+    startTutorialTrack("project-session", { portion });
+  };
+  const startWidgetsTour = () => {
+    offersRef.current.widgets = true;
+    tutorialOpenedGalleryRef.current = false;
+    startTutorialTrack("widgets");
+  };
+  const acceptTourOffer = () => {
+    const offer = tourOffer;
+    if (!offer || tourOfferBlocked) return;
+    setTourOffer(null);
+    if (offer.kind === "widgets") startWidgetsTour();
+    else startProjectSessionTour(offer.portion);
+  };
+
+  // Ends the running tutorial in place (completion or Exit tutorial). Meet Infie finishes on
+  // i² Home; Project & Session Flow returns to the user's own project or session; a Widgets
+  // gallery the tour opened closes again.
+  const endTutorial = (reason: "completed" | "dismissed") => {
+    const track = activeTutorial;
+    finishTutorial(reason);
+    if (track === "project-session") {
+      const back = tourReturnRef.current;
+      tourReturnRef.current = null;
+      setRoute(back?.route ?? "home");
+      setActiveProjectId(back?.projectId ?? null);
+      setActiveSessionId(back?.sessionId ?? null);
+    } else if (track === "widgets" && tutorialOpenedGalleryRef.current) {
+      tutorialOpenedGalleryRef.current = false;
+      setWidgetsGalleryOpen(false);
+    }
+  };
+
+  const goHome = () => {
+    setRoute("home");
+  };
+  const openProjectHome = (p: ProtoProject, opts?: { suppressTour?: boolean }) => {
     setActiveProjectId(p.id);
     setRoute("project");
-    if (currentBeat === "B12") {
-      advanceBeat("B13");
-    }
+    if (!opts?.suppressTour) offerProjectTour(p.id);
   };
   const openSession = (s: ProtoSession, opts?: { justStarted?: boolean }) => {
     if (isImportedSession(s.id) || isImportedProject(s.projectId)) {
       importedLimitRef.current(s.name);
       return;
     }
-    if (currentBeat === "B12" || currentBeat === "B13") {
+    // The project/files portion alone ends on the agent reply; its session portion already ran.
+    if (
+      currentBeat === "B12" ||
+      currentBeat === "B13" ||
+      (currentBeat === "B14" && activeTutorial === "project-session" && projectSessionPortion === "project")
+    ) {
       return;
     }
     // The Experimemo session cannot be opened by any path until Start Session created it.
@@ -10381,6 +10502,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     if (currentBeat === "B14") {
       advanceBeat("B15");
     }
+    if (!opts?.justStarted) offerSessionTour(s);
   };
   const openSessionById = (id: string) => { const s = allSessions.find(x => x.id === id); if (s) openSession(s); };
   // Home What's Next reads the live reducers; recommendations re-derive on every state change.
@@ -10425,7 +10547,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const finishImport = () => {
     setImportedLive(true);
     setImportFlowOpen(false);
-    openProjectHome({ ...IMPORTED_PROJECT });
+    // Navigation performed by Import never starts (or uses up) Project & Session Flow.
+    openProjectHome({ ...IMPORTED_PROJECT }, { suppressTour: true });
   };
 
   const handleScenario = (id: ScenarioId) => {
@@ -10490,29 +10613,20 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     if (pet) openProjectHome(pet);
   });
 
-  // B18 Turn 2 prompts the user to click Widgets in the header; B18 Turn 3 highlights Library
-  // in the opened gallery and closes it again when advancing to Turn 4.
-  const isB18OpenWidgetsTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
-  const isTutorialGalleryTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
+  // Widgets & Whatnot: its "Click Widgets" turn waits for the header button, then the Library
+  // turn highlights Library in the gallery. A gallery the tour opened closes when it ends.
+  const isWidgetsOpenTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
+  const isWidgetsLibraryTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
   const tutorialOpenedGalleryRef = useRef(false);
-  useEffect(() => {
-    if (isTutorialGalleryTurn) {
-      tutorialOpenedGalleryRef.current = true;
-      setWidgetsGalleryOpen(true);
-      return;
-    }
-    if (tutorialOpenedGalleryRef.current) {
-      tutorialOpenedGalleryRef.current = false;
-      setWidgetsGalleryOpen(false);
-    }
-  }, [isTutorialGalleryTurn]);
-  const handleHeaderWidgetsClick = useCallback(() => {
+  const handleHeaderWidgetsClick = () => {
     setWidgetsGalleryOpen(true);
-    if (isB18OpenWidgetsTurn) {
+    if (isWidgetsOpenTurn) {
       tutorialOpenedGalleryRef.current = true;
       setTurnIndex(B18_LIBRARY_TURN);
+      return;
     }
-  }, [isB18OpenWidgetsTurn, setTurnIndex]);
+    offerWidgetsTour();
+  };
 
   const openRootWidget = useCallback((id: WidgetId, label: string) => {
     const emuIds: WidgetId[] = ["emuWeb", "emuAndroid", "emuIos"];
@@ -10744,6 +10858,45 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     reducedMotion,
   ]);
 
+  // ── Learn: start any tutorial at its beginning ────────────────────────────
+  const [learnOpen, setLearnOpen] = useState(false);
+  const learnContextValue = useMemo(() => ({ open: () => setLearnOpen(true) }), []);
+  const startFromLearn = (id: LearnTutorialId) => {
+    // Widgets & Whatnot leaves the header live; any tutorial started from Learn replaces it.
+    if (isWidgetsTourActive) endTutorial("dismissed");
+    closeShellOverlays();
+    if (id === "project-session") {
+      startProjectSessionTour("full");
+      return;
+    }
+    if (id === "widgets") {
+      startWidgetsTour();
+      return;
+    }
+    setWsState("none");
+    setRoute("home");
+    if (id === "meet-infie") {
+      // Replay: profile, level, models, projects, sessions, layout and music are kept.
+      setImportFlowOpen(false);
+      setMusicOutcome("none");
+      startOnboarding({ replay: true });
+    } else if (id === "generate") {
+      tutorial.openJenny();
+    } else if (importedLive) {
+      // Field Notes is already imported: replay the import conversation without re-importing.
+      setImportFlowOpen(true);
+    } else {
+      setPickerOpen(true);
+    }
+  };
+  const openEducation = () =>
+    limit({
+      featureName: "Education",
+      subtitle: "Learn",
+      description:
+        "Computer science, game development and level-increase lessons belong here. They aren't part of this prototype.",
+    });
+
   // ── App phase gate: auth screen before the workspace router ───────────────
   if (appPhase === "auth") {
     return (
@@ -10779,8 +10932,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
 
   const isB00Blackout = currentBeat === "B00";
   // Ambient i² background: pure black at B00, a little more of the normal background
-  // with every beat, fully normal from B12 (Home) on and outside the tutorial.
-  const ambientProgress = isTutorialActive ? ambientProgressForBeat(currentBeat) : 1;
+  // with every Meet Infie beat, fully normal from B12 (Home) on and outside Meet Infie.
+  const ambientProgress = meetInfieActive ? ambientProgressForBeat(currentBeat) : 1;
   const levelLabel = `Lvl. ${level}`;
   const showLevelIndicator = isRevealed("level_indicator");
   const showHeaderBreadcrumbs = isRevealed("header_breadcrumbs");
@@ -10793,7 +10946,6 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const showNewImportButtons = isRevealed("home_new_import_buttons") || isTutorialComplete;
   const showHomeActionButtons = isRevealed("home_action_buttons") || isTutorialComplete;
   const showProjectsAndActions = isRevealed("home_projects_and_actions");
-  const showTutorialDemoProject = isRevealed("tutorial_demo_project");
   const showMusicPlayOnly = isRevealed("music_play_only");
   const showMusicFullPlayer = isRevealed("music_full_player");
   const showWidgetMoveResize = isRevealed("widget_move_resize");
@@ -10817,29 +10969,29 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     showConversationEntry ||
     showProjectsAndActions;
 
-  // Experience guidelines:
+  // Experience guidelines (Meet Infie stages these; every other tutorial starts with them docked):
   // - Level (B03) spotlights, holds, and glides to its anchor automatically during its introduction.
-  // - Music player (B05) assembles and glides to its lower-left anchor automatically after its hold.
-  // - i2 / Project / Session nav group (B08 Turn 2) docks when the user clicks Continue.
+  // - Music player (B05) assembles and glides to its lower-left anchor automatically after its hold
+  //   (a replay leaves the player where the user put it).
+  // - i2 / Project / Session nav group (B08) docks when the user clicks Continue.
   // - B11 header groups glide when the user clicks Continue.
   const levelPillDocked =
-    isTutorialComplete || currentBeat !== "B03" || turnIndex >= 1 ? true : undefined;
-  const breadcrumbsDocked =
-    isTutorialComplete || currentBeat !== "B08" || turnIndex >= 2;
+    !meetInfieActive || currentBeat !== "B03" || turnIndex >= 1 ? true : undefined;
+  const breadcrumbsDocked = !meetInfieActive || currentBeat !== "B08";
   const tutorialsWidgetsGamesDocked =
-    isTutorialComplete || currentBeat !== "B11" || turnIndex >= 1;
+    !meetInfieActive || currentBeat !== "B11" || turnIndex >= 1;
   const notificationsSettingsDocked =
-    isTutorialComplete ||
+    !meetInfieActive ||
     BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B11") ||
     (currentBeat === "B11" && turnIndex >= 2);
   const musicWidgetDocked =
-    isTutorialComplete || BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B05")
+    !isFirstRunIntro || BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B05")
       ? true
       : undefined;
   const isHeaderDisabled = !isTutorialComplete;
-  const highlightHomeNav = isTutorialActive && currentBeat === "B19" && turnIndex === B19_HOME_TURN;
-  const highlightTutorialsNav = isTutorialActive && currentBeat === "B20" && turnIndex === 0;
-  const highlightWidgetsNav = isB18OpenWidgetsTurn;
+  const highlightTutorialsNav = meetInfieActive && currentBeat === "B20";
+  const highlightWidgetsNav = isWidgetsOpenTurn;
+  const canExitTutorial = Boolean(activeTutorial) && !isFirstRunIntro;
 
   // ── Workspace state machine router ───────────────────────────────────────
   return (
@@ -10851,6 +11003,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         projects: allProjects.map((project) => ({ id: project.id, name: project.name })),
       }}
     >
+    <LearnProvider value={learnContextValue}>
     <div
       className="size-full overflow-hidden relative"
       style={{ backgroundColor: "#000000", isolation: "isolate" }}
@@ -10894,14 +11047,20 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       >
         <AnimatedGlows />
       </div>
-      {/* Floating Infie Onboarding Stage (B01 -> B18) */}
+      {/* Floating Infie tutorial stage: Meet Infie, Project & Session Flow, Widgets & Whatnot */}
       <OnboardingStage
         key={onboardingRunId}
         musicOutcome={musicOutcome}
-        onSelectContinueMusicQuiet={() => { b05ResolvedRef.current = true; setMusicOutcome("quiet"); }}
+        musicPlaying={musicPlaying}
+        onContinueMusicGate={() => {
+          b05ResolvedRef.current = true;
+          setMusicOutcome(musicPlayingRef.current ? "played" : "quiet");
+        }}
         pressNonce={playPressNonce}
         danceNonce={danceNonce}
         onOpenDemoSession={() => openSessionById("add-comments")}
+        onFinish={() => endTutorial("completed")}
+        widgetsGalleryOpen={widgetsGalleryOpen}
       />
 
       {/* Persistent lower-left Home music player widget (absent from DOM until B05) */}
@@ -10909,8 +11068,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         playButtonRevealed={showMusicPlayOnly}
         fullPlayerRevealed={showMusicFullPlayer}
         moveResizeRevealed={showWidgetMoveResize && (isTutorialActive || route === "home")}
-        calloutGlow={isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN}
-        animateIntro={!isTutorialComplete}
+        animateIntro={isFirstRunIntro}
         docked={musicWidgetDocked}
         placement={
           wsState === "none" && (route === "project" || route === "session") ? "panel" : "floating"
@@ -10929,6 +11087,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         }
         onPressStart={() => setPlayPressNonce((n) => n + 1)}
         onMusicPlay={triggerInfieDance}
+        onPlayingChange={handleMusicPlayingChange}
         onPlayAttempt={(result) => {
           if (currentBeat === "B05" && turnIndex === 0 && !b05ResolvedRef.current && result !== "paused") {
             b05ResolvedRef.current = true;
@@ -10964,13 +11123,12 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               showNotificationsSettings={showHeaderNotificationsSettings}
               showLevelIndicator={showLevelIndicator}
               showTutorialsEntry={showTutorialsEntry}
-              animateHeaderIntro={!isTutorialComplete}
+              animateHeaderIntro={meetInfieActive}
               showConversationEntry={showConversationEntry}
               showProjectsAndActions={showProjectsAndActions}
               showResumeProjects={showResumeProjects}
               showNewImportButtons={showNewImportButtons}
               showHomeActionButtons={showHomeActionButtons}
-              showTutorialDemoProject={showTutorialDemoProject}
               showAmbientBackdrop={false}
               levelUpFlourish={levelUpFlourish}
               levelUpStage={levelUpStage}
@@ -11074,7 +11232,6 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
                   : allSessions
               }
               onSelectSession={openSession}
-              highlightHomeNav={highlightHomeNav}
               highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               musicSlotRef={setMusicSlotEl}
@@ -11151,8 +11308,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         {widgetsGalleryOpen && (
           <WidgetsGalleryModal
             key="widgets-gallery"
-            highlightWidgetId={isTutorialGalleryTurn ? "library" : undefined}
-            tutorialMode={isTutorialActive}
+            highlightWidgetId={isWidgetsLibraryTurn ? "library" : undefined}
+            tutorialMode={isTutorialActive || isWidgetsTourActive}
             dockScreen={
               route === "session" && activeSessionId ? `session:${activeSessionId}`
                 : route === "project" && activeProjectId ? `project:${activeProjectId}`
@@ -11197,7 +11354,33 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       {/* Experimemo Interactive Tutorial Overlay */}
       <TutorialOverlay />
 
+      {/* Learn: every tutorial, replayable; Education is a prototype limit */}
+      <AnimatePresence>
+        {learnOpen && (
+          <LearnModal
+            key="learn"
+            onClose={() => setLearnOpen(false)}
+            onStartTutorial={startFromLearn}
+            onOpenEducation={openEducation}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* First-time tutorial offers, and leaving a replay or later tutorial */}
+      <AnimatePresence>
+        {tourOffer && !tourOfferBlocked && (
+          <TutorialOfferCard
+            key={tourOffer.kind === "widgets" ? "offer-widgets" : `offer-${tourOffer.portion}`}
+            title={tourOfferTitle(tourOffer)}
+            onStart={acceptTourOffer}
+            onDismiss={() => setTourOffer(null)}
+          />
+        )}
+      </AnimatePresence>
+      {canExitTutorial && <ExitTutorialButton onExit={() => endTutorial("dismissed")} />}
+
     </div>
+    </LearnProvider>
     </SimulatorSurfaceContext.Provider>
   );
 }

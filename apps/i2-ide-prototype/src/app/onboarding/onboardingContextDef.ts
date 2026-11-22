@@ -1,5 +1,11 @@
 import React, { createContext, useContext } from "react";
-import { OnboardingBeat, RevealGroupId, InfieFormId } from "./revealLedger";
+import {
+  OnboardingBeat,
+  RevealGroupId,
+  InfieFormId,
+  TutorialTrackId,
+  ProjectSessionPortion,
+} from "./revealLedger";
 
 export interface UserProfile {
   name: string;
@@ -38,14 +44,36 @@ export interface DockedTutorialChatState {
   onTextComplete?: (messageId: string) => void;
 }
 
+export type TutorialFinishReason = "completed" | "dismissed";
+
+export interface StartOnboardingOptions {
+  /** Replays Meet Infie from Learn: real state is snapshotted and restored, no level is awarded. */
+  replay?: boolean;
+}
+
+export interface StartTrackOptions {
+  /** Project & Session Flow only: run both portions, or start at one of them. */
+  portion?: ProjectSessionPortion;
+}
+
 export interface OnboardingContextValue {
   onboardingRunId: number;
+  /** The scripted tutorial running now; null outside every tutorial. */
+  activeTutorial: TutorialTrackId | null;
+  projectSessionPortion: ProjectSessionPortion;
+  /** True while Meet Infie is being replayed from Learn. */
+  isMeetInfieReplay: boolean;
+  /** Meet Infie has finished at least once (first level awarded, Learn enabled). */
+  firstRunComplete: boolean;
+  /** Widgets & Whatnot runs as a floating overlay; the screens beneath stay live. */
+  isWidgetsTourActive: boolean;
   currentBeat: OnboardingBeat;
   turnIndex: number;
   b00GateCompleted: boolean;
   b00GateHeld: boolean;
   setB00GateHeld: React.Dispatch<React.SetStateAction<boolean>>;
   maxEnabledBeat: OnboardingBeat;
+  /** Meet Infie or Project & Session Flow is running: screens show the scripted chat and demo data. */
   isTutorialActive: boolean;
   isTutorialComplete: boolean;
   level: number;
@@ -72,7 +100,10 @@ export interface OnboardingContextValue {
   setUserProfile: (profile: UserProfile) => void;
   setProjectInterestReply: (reply: string) => void;
   setLevel: React.Dispatch<React.SetStateAction<number>>;
-  startOnboarding: () => void;
+  startOnboarding: (options?: StartOnboardingOptions) => void;
+  startTutorialTrack: (track: Exclude<TutorialTrackId, "meet-infie">, options?: StartTrackOptions) => void;
+  /** Ends the active tutorial in place; real state is kept and demo records are released. */
+  finishTutorial: (reason?: TutorialFinishReason) => void;
   completeOnboarding: () => void;
   levelUpFlourish: boolean;
   levelUpStage: LevelUpAnimationStage;
