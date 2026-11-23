@@ -647,7 +647,7 @@ class HomeProofSpatialActivity : AppSystemActivity() {
     val aim = controllerAim(controllerEntity) ?: return null
     val origin = aim.first
     val direction = aim.second
-    val hit = scene.lineSegmentIntersect(origin, origin + direction * RAY_LENGTH_M)
+    val hit = scene.lineSegmentIntersect(origin, origin + direction * RAY_LENGTH_M) ?: return null
     val hitEntity = hit.entity ?: return null
     if (hitEntity == Entity.nullEntity()) return null
     if (hit.distance <= 0.02f || hit.distance > RAY_LENGTH_M) return null
