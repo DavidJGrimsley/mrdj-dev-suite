@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>i² Home Proof</title>
+  <style>
+    @font-face {
+      font-family: 'Space Grotesk';
+      src: url('../fonts/SpaceGrotesk-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Space Grotesk';
+      src: url('../fonts/SpaceGrotesk-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Space Grotesk';
+      src: url('../fonts/SpaceGrotesk-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Rounded Mplus 1c';
+      src: url('../fonts/MPLUSRounded1c-Regular.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Rounded Mplus 1c';
+      src: url('../fonts/MPLUSRounded1c-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Rounded Mplus 1c';
+      src: url('../fonts/MPLUSRounded1c-Bold.ttf') format('truetype');
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0B131D !important;
+      background-color: #0B131D !important;
+      color: #f8fafc;
+      font-family: 'Rounded Mplus 1c', sans-serif;
+    }
+
+    .proof-surface {
+      width: 100%;
+      height: 100%;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #0B131D;
+      border: 1.5px solid rgba(45, 212, 191, 0.52);
+      border-radius: 24px;
+      box-shadow: 0 12px 32px rgba(2, 6, 23, 0.65);
+    }
+
+    .proof-inner {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 16px;
+      height: 100%;
+      justify-content: space-between;
+    }
+
+    .proof-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .proof-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .proof-eyebrow {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #2dd4bf;
+    }
+
+    .proof-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      line-height: 1.15;
+      color: #f8fafc;
+      margin: 0;
+    }
+
+    .proof-status-pill {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(45, 212, 191, 0.14);
+      border: 1px solid rgba(45, 212, 191, 0.45);
+      color: #abefa3;
+      white-space: nowrap;
+    }
+
+    .proof-action-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .proof-btn {
+      appearance: none;
+      border: 1.5px solid rgba(45, 212, 191, 0.72);
+      background: linear-gradient(135deg, rgba(13, 148, 136, 0.92), rgba(15, 118, 110, 0.92));
+      color: #f8fafc;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 16px;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: transform 0.08s ease, background 0.12s ease, border-color 0.12s ease;
+      user-select: none;
+    }
+
+    .proof-btn:hover {
+      border-color: #abefa3;
+      background: linear-gradient(135deg, rgba(20, 184, 166, 0.98), rgba(13, 148, 136, 0.98));
+    }
+
+    .proof-btn:active,
+    .proof-btn.is-active {
+      transform: scale(0.97);
+      border-color: #ffffff;
+    }
+
+    .proof-btn-secondary {
+      background: rgba(30, 41, 59, 0.92);
+      border-color: rgba(148, 163, 184, 0.45);
+      font-size: 13px;
+      padding: 10px 13px;
+    }
+
+    .proof-counter-card {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 14px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      font-size: 13px;
+    }
+
+    .proof-counter-value {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 17px;
+      color: #abefa3;
+    }
+
+    .proof-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .proof-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proof-text-input {
+      flex: 1;
+      height: 40px;
+      padding: 0 13px;
+      border-radius: 13px;
+      border: 1.5px solid rgba(45, 212, 191, 0.45);
+      background: rgba(2, 6, 23, 0.86);
+      color: #f8fafc;
+      font-family: 'Rounded Mplus 1c', sans-serif;
+      font-weight: 500;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .proof-text-input:focus {
+      border-color: #abefa3;
+      box-shadow: 0 0 0 2px rgba(171, 239, 163, 0.25);
+    }
+
+    .proof-text-input::placeholder {
+      color: rgba(148, 163, 184, 0.72);
+    }
+
+    .proof-keybar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .proof-key {
+      appearance: none;
+      border: 1px solid rgba(45, 212, 191, 0.36);
+      background: rgba(15, 23, 42, 0.92);
+      color: #e2e8f0;
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 5px 9px;
+      border-radius: 9px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .proof-key:hover {
+      border-color: #2dd4bf;
+      background: rgba(13, 148, 136, 0.32);
+    }
+
+    .proof-key:active {
+      background: rgba(45, 212, 191, 0.45);
+      color: #ffffff;
+    }
+
+    .proof-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #94a3b8;
+      padding-top: 2px;
+      border-top: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    .proof-echo {
+      color: #e2e8f0;
+      font-weight: 500;
+      max-width: 65%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="proof-surface" id="proof-surface">
+    <div class="proof-inner">
+      <div class="proof-header">
+        <div class="proof-title-group">
+          <div class="proof-eyebrow">Meta Spatial SDK 0.15.0 • Layer WebView</div>
+          <h1 class="proof-title">i² Spatial Home Proof</h1>
+        </div>
+        <div class="proof-status-pill" id="font-status">Fonts: Loading…</div>
+      </div>
+
+      <div class="proof-action-row">
+        <button type="button" class="proof-btn" id="proof-action-btn">
+          Test DOM Button
+        </button>
+        <div class="proof-counter-card">
+          <span id="last-event-label">Click with L / R controller</span>
+          <span class="proof-counter-value" id="click-count">0 clicks</span>
+        </div>
+      </div>
+
+      <div class="proof-input-group">
+        <div class="proof-input-row">
+          <input
+            id="proof-text-input"
+            class="proof-text-input"
+            type="text"
+            value=""
+            placeholder="Tap to edit text (IME or keys below)…"
+            autocomplete="off"
+            autocorrect="off"
+            spellcheck="false"
+          />
+          <button type="button" class="proof-btn" id="proof-send-btn">Send</button>
+          <button type="button" class="proof-btn proof-btn-secondary" id="proof-clear-btn">Clear</button>
+        </div>
+
+        <div class="proof-keybar" id="proof-keybar" aria-label="Spatial Quick Input Keys">
+          <button type="button" class="proof-key" data-insert="Hello Infie ">Hello Infie</button>
+          <button type="button" class="proof-key" data-insert="i² ">i²</button>
+          <button type="button" class="proof-key" data-insert="Quest 3S ">Quest 3S</button>
+          <button type="button" class="proof-key" data-insert="A">A</button>
+          <button type="button" class="proof-key" data-insert="B">B</button>
+          <button type="button" class="proof-key" data-insert="C">C</button>
+          <button type="button" class="proof-key" data-insert="1">1</button>
+          <button type="button" class="proof-key" data-insert="2">2</button>
+          <button type="button" class="proof-key" data-insert="3">3</button>
+          <button type="button" class="proof-key" data-action="backspace">⌫</button>
+          <button type="button" class="proof-key" data-action="ime">IME</button>
+        </div>
+      </div>
+
+      <div class="proof-footer">
+        <span class="proof-echo" id="submitted-echo">Submitted: (none yet)</span>
+        <span id="pointer-telemetry">Pointer: ready</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var clickCount = 0;
+      var actionBtn = document.getElementById('proof-action-btn');
+      var clickCountEl = document.getElementById('click-count');
+      var lastEventLabelEl = document.getElementById('last-event-label');
+      var textInput = document.getElementById('proof-text-input');
+      var sendBtn = document.getElementById('proof-send-btn');
+      var clearBtn = document.getElementById('proof-clear-btn');
+      var submittedEcho = document.getElementById('submitted-echo');
+      var pointerTelemetry = document.getElementById('pointer-telemetry');
+      var fontStatus = document.getElementById('font-status');
+      var keybar = document.getElementById('proof-keybar');
+
+      function notifyBridge(method, payload) {
+        try {
+          if (window.I2HomeProofBridge && typeof window.I2HomeProofBridge[method] === 'function') {
+            window.I2HomeProofBridge[method](JSON.stringify(payload));
+          }
+        } catch (err) {
+          console.warn('Bridge call failed:', method, err);
+        }
+      }
+
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+          var sgLoaded = document.fonts.check('700 16px "Space Grotesk"');
+          var rmLoaded = document.fonts.check('500 14px "Rounded Mplus 1c"');
+          fontStatus.textContent = (sgLoaded && rmLoaded)
+            ? 'Fonts: Space Grotesk + Mplus ✓'
+            : 'Fonts: Ready ✓';
+          notifyBridge('onDomReady', {
+            spaceGroteskLoaded: sgLoaded,
+            roundedMplusLoaded: rmLoaded,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight
+          });
+        });
+      } else {
+        fontStatus.textContent = 'Fonts: Loaded ✓';
+        notifyBridge('onDomReady', {
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight
+        });
+      }
+
+      document.addEventListener('pointerdown', function (e) {
+        pointerTelemetry.textContent =
+          'Down (' + Math.round(e.clientX) + ',' + Math.round(e.clientY) + ') btn=' + e.button;
+      });
+
+      actionBtn.addEventListener('click', function (e) {
+        clickCount += 1;
+        clickCountEl.textContent = clickCount + (clickCount === 1 ? ' click' : ' clicks');
+        lastEventLabelEl.textContent =
+          'Last click @ (' + Math.round(e.clientX) + ', ' + Math.round(e.clientY) + ')';
+        notifyBridge('onButtonClick', {
+          count: clickCount,
+          clientX: Math.round(e.clientX),
+          clientY: Math.round(e.clientY),
+          timestamp: Date.now()
+        });
+      });
+
+      textInput.addEventListener('focus', function () {
+        notifyBridge('onInputFocus', {
+          value: textInput.value,
+          timestamp: Date.now()
+        });
+      });
+
+      textInput.addEventListener('click', function () {
+        textInput.focus();
+        notifyBridge('onInputFocus', {
+          value: textInput.value,
+          timestamp: Date.now()
+        });
+      });
+
+      textInput.addEventListener('input', function () {
+        notifyBridge('onTextChange', {
+          value: textInput.value,
+          source: 'input-event',
+          timestamp: Date.now()
+        });
+      });
+
+      textInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitCurrentText('enter-key');
+        }
+      });
+
+      function submitCurrentText(trigger) {
+        var val = textInput.value.trim();
+        submittedEcho.textContent = 'Submitted: ' + (val || '(empty)');
+        lastEventLabelEl.textContent = 'Sent "' + (val || '(empty)') + '"';
+        notifyBridge('onTextSubmit', {
+          value: val,
+          trigger: trigger,
+          timestamp: Date.now()
+        });
+      }
+
+      sendBtn.addEventListener('click', function () {
+        submitCurrentText('send-button');
+      });
+
+      clearBtn.addEventListener('click', function () {
+        textInput.value = '';
+        textInput.focus();
+        submittedEcho.textContent = 'Submitted: (cleared)';
+        notifyBridge('onTextChange', {
+          value: '',
+          source: 'clear-button',
+          timestamp: Date.now()
+        });
+      });
+
+      keybar.addEventListener('click', function (e) {
+        var btn = e.target.closest('.proof-key');
+        if (!btn) return;
+        var insertText = btn.getAttribute('data-insert');
+        var action = btn.getAttribute('data-action');
+        textInput.focus();
+        if (insertText) {
+          textInput.value = textInput.value + insertText;
+          notifyBridge('onTextChange', {
+            value: textInput.value,
+            source: 'spatial-key:' + insertText.trim(),
+            timestamp: Date.now()
+          });
+        } else if (action === 'backspace') {
+          textInput.value = textInput.value.slice(0, -1);
+          notifyBridge('onTextChange', {
+            value: textInput.value,
+            source: 'spatial-key:backspace',
+            timestamp: Date.now()
+          });
+        } else if (action === 'ime') {
+          notifyBridge('onRequestSoftKeyboard', {
+            value: textInput.value,
+            timestamp: Date.now()
+          });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "generatedBy": "tools/quest/build-viro-renderer.mjs",
+  "viroCore": {
+    "repository": "https://github.com/ReactVision/virocore.git",
+    "tag": "v3.0.3",
+    "revision": "23710240d2cab5d4e866f3dba44ef568d8e563b4"
+  },
+  "patches": [
+    {
+      "file": "0001-openxr-pointer-depth-origin-reticle.patch",
+      "sha256": "68135af44bf38ab883e9ed30732d761f58637595ecebcbe9b4f78c41e5642415"
+    },
+    {
+      "file": "0002-openxr-quest-panel-layer.patch",
+      "sha256": "30430e662a1d5a12b82cb1db8638a7129483977ec1fc428215743056e7880771"
+    },
+    {
+      "file": "0003-openxr-quest-input-sampler.patch",
+      "sha256": "518bf2ce1e188d59f11778ff2e2c540bb267f6aef410a2d9926bd9f066d93841"
+    },
+    {
+      "file": "0004-openxr-quest-cockpit-slots.patch",
+      "sha256": "1a3cc3e9185695781b61a0d09fb18912f65075b8797197a27dfc663f0ab699e3"
+    }
+  ],
+  "stockAarSha256": "cd654a19066b50c2b408c64c3ae2a6d1529ebd1c5dd3238a026bf4720727bdc7",
+  "stockRendererSha256": "2b3280493c4a788cc14319e263f1c2769bf3e54b22c9e4cc7673319967ccacd4",
+  "rendererSha256": "9525b86c422b9b3e691708d6f9b1ad7c42d942b47af72e8bb9c604e77cdb5325",
+  "rendererBuildId": "897de6fa9d529927640250591e224f0d06a942ae",
+  "aarSha256": "ed3f0cc1ac4a91cb7273bb7fa7168a7c377e5e807d12ab871c44239eb7f83b53",
+  "abis": [
+    "arm64-v8a"
+  ]
+}

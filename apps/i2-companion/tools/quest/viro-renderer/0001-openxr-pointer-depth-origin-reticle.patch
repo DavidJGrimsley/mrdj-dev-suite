@@ -1,0 +1,257 @@
+From: David Grimsley <DavidJGrimsley@gmail.com>
+Subject: [PATCH] OpenXR: depth-tested aim rays with origin and hit markers;
+ reticle follows the controller instead of head gaze
+
+The OpenXR input presenter draws each aim ray without a depth test, so
+the beam paints over panels and models in front of it. Apps draw no
+controller model, so the beam also starts in mid-air. The reticle is
+moved by every hover source, and head gaze (ViroOculus::EyeGaze) is
+processed after both controllers each frame, so on headsets without eye
+tracking the reticle ends every frame where the head points rather than
+where the controller points.
+
+- Rays, plus new origin and hit markers, read the depth buffer and draw
+  after scene content (rendering order 100000), so nearer geometry hides
+  them. The ray is 4 mm instead of 3 mm.
+- A white sphere marks each ray's aim-pose origin. A cyan dot marks the
+  hit when the ray meets scene geometry, pulled 8 mm back toward the
+  origin so it does not z-fight the surface. Background hits (the 8 m
+  placeholder) use the fixed 4 m beam with no dot.
+- The reticle follows the controller whose trigger was pressed last
+  (right until then), falls back to any tracked ray, and follows head
+  gaze only while no controller or hand ray is tracked.
+
+No JNI, Java or JavaScript API changes.
+
+diff --git a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
+index f53684a..61d8f0f 100644
+--- a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
++++ b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
+@@ -999,19 +999,23 @@ void VROInputControllerOpenXR::updateLaserViz(int source,
+     // where they're aiming.
+     constexpr float kNoHitRange = 4.0f;  // meters
+     VROVector3f hitPoint;
++    bool surfaceHit = false;
+     auto hit = getHitResultForSource(source);
+     // While this source drags, its hit is frozen on purpose (it anchors the drag), so ending
+     // the laser there pinned it to where the drag began while the hand moved on. Follow the
+     // dragged node instead.
+     auto drag = getDraggedObject(source);
++    // A background hit is the scene's 8 m placeholder, not a surface: it gets
++    // the fixed-length beam and no hit dot.
+     if (drag && drag->_draggedNode) {
+         hitPoint = drag->_draggedNode->getWorldPosition();
+     } else if (drag) {
+         hitPoint = origin + forward.scale(drag->_draggedDistanceFromController);
+-    } else if (hit) {
++    } else if (hit && !hit->isBackgroundHit()) {
+         hitPoint = hit->getLocation();
++        surfaceHit = true;
+     } else {
+         hitPoint = origin + forward.scale(kNoHitRange);
+     }
+-    presenter->updateAimRay(source, origin, hitPoint, true /* visible */);
++    presenter->updateAimRay(source, origin, hitPoint, true /* visible */, surfaceHit);
+ }
+diff --git a/android/sharedCode/src/main/cpp/VROInputPresenterOpenXR.h b/android/sharedCode/src/main/cpp/VROInputPresenterOpenXR.h
+index e36aa74..f0d2a9b 100644
+--- a/android/sharedCode/src/main/cpp/VROInputPresenterOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VROInputPresenterOpenXR.h
+@@ -8,6 +8,18 @@
+ //   2. Two laser lines, one per hand, drawn from the aim origin to the hit
+ //      (or a fixed forward distance when nothing is hit). Each laser is
+ //      independent so apps can show both controllers / both hands at once.
++//   3. Per hand, a marker at the aim origin and a dot where the ray meets a
++//      surface. OpenXR apps draw no controller model, so without the origin
++//      marker the beam appears to start in mid-air.
++//
++// The beam, origin marker and hit dot are depth tested and drawn after the
++// scene, so geometry in front of a ray hides it instead of the ray painting
++// over panels and models.
++//
++// The reticle follows one controller ray: the one whose trigger was pressed
++// last, or the right one until then. Head gaze (ViroOculus::EyeGaze) feeds
++// onHover every frame after both controllers; it moves the reticle only while
++// no controller or hand ray is tracked.
+ //
+ // All laser nodes are children of the presenter's _rootNode, which VROScene
+ // attaches to the scene root via attachInputController(). The reticle position
+@@ -28,6 +40,7 @@
+ #include "VROReticle.h"
+ #include "VRONode.h"
+ #include "VROPolyline.h"
++#include "VROSphere.h"
+ #include "VROMaterial.h"
+ 
+ class VROInputPresenterOpenXR : public VROInputPresenter {
+@@ -47,6 +60,11 @@ public:
+      * forward to onReticleGazeHit() which moves the reticle to hit world pos.
+      */
+     void onGazeHit(int source, std::shared_ptr<VRONode> node, const VROHitTestResult &hit) override {
++        if (source == ViroOculus::EyeGaze) {
++            if (anyRayVisible()) return;
++        } else if (source != reticleSource()) {
++            return;
++        }
+         VROInputPresenter::onReticleGazeHit(hit);
+     }
+ 
+@@ -55,6 +73,10 @@ public:
+      */
+     void onClick(int source, std::shared_ptr<VRONode> node, ClickState clickState,
+                  std::vector<float> position) override {
++        if (clickState == ClickState::ClickDown &&
++            (source == ViroOculus::Controller || source == ViroOculus::LeftController)) {
++            _reticleSource = source;
++        }
+         VROInputPresenter::onClick(source, node, clickState, position);
+         if (clickState == ClickState::ClickUp && getReticle()) {
+             getReticle()->trigger();
+@@ -70,37 +92,100 @@ public:
+      * swaps the geometry pointer and the new mesh hasn't been uploaded to
+      * the GPU yet.
+      *
+-     * @param source     Source ID (e.g. ViroOculus::Controller, LeftController)
+-     * @param origin     World-space origin of the ray
+-     * @param hitPoint   World-space endpoint
+-     * @param visible    True to show, false to hide (no input active)
++     * @param source      Source ID (e.g. ViroOculus::Controller, LeftController)
++     * @param origin      World-space origin of the ray
++     * @param hitPoint    World-space endpoint
++     * @param visible     True to show, false to hide (no input active)
++     * @param surfaceHit  True when hitPoint lies on scene geometry rather than
++     *                    the background; shows the hit dot there
+      */
+     void updateAimRay(int source, const VROVector3f &origin,
+-                      const VROVector3f &hitPoint, bool visible) {
++                      const VROVector3f &hitPoint, bool visible,
++                      bool surfaceHit = false) {
+         Laser &laser = getOrCreateLaser(source);
+-        if (!visible) {
+-            laser.node->setHidden(true);
+-            return;
+-        }
+         // Defensive: a zero-length segment (origin == hitPoint, e.g. degenerate
+         // forward direction or a hit reported exactly at the controller pose)
+         // produces an invisible polyline. Treat as "no aim available".
+-        VROVector3f delta = hitPoint - origin;
+-        if (delta.magnitude() < 0.001f) {
++        if (!visible || (hitPoint - origin).magnitude() < 0.001f) {
++            laser.visible = false;
+             laser.node->setHidden(true);
++            laser.origin->setHidden(true);
++            laser.hit->setHidden(true);
+             return;
+         }
++        laser.visible = true;
+         laser.node->setHidden(false);
+         std::vector<std::vector<VROVector3f>> paths = { { origin, hitPoint } };
+         laser.geom->setPaths(paths);
++        laser.origin->setPosition(origin);
++        laser.origin->setHidden(false);
++        // 8 mm toward the aim origin keeps the dot in front of the surface.
++        if (surfaceHit && (origin - hitPoint).magnitude() > 0.02f) {
++            VROVector3f towardOrigin = (origin - hitPoint).normalize();
++            laser.hit->setPosition(hitPoint + towardOrigin.scale(kHitSurfaceBias));
++        } else {
++            laser.hit->setPosition(hitPoint);
++        }
++        laser.hit->setHidden(!surfaceHit);
+     }
+ 
+ private:
++    // Drawn after scene content so the depth test sees everything in front.
++    static constexpr int   kPointerRenderingOrder = 100000;
++    static constexpr float kLaserThickness        = 0.004f;  // meters
++    static constexpr float kOriginRadius          = 0.007f;
++    static constexpr float kHitRadius             = 0.006f;
++    static constexpr float kHitSurfaceBias        = 0.008f;
++
+     struct Laser {
+         std::shared_ptr<VRONode>     node;
+         std::shared_ptr<VROPolyline> geom;
++        std::shared_ptr<VRONode>     origin;
++        std::shared_ptr<VRONode>     hit;
++        bool                         visible = false;
+     };
+ 
++    static void configurePointerMaterial(const std::shared_ptr<VROMaterial> &material,
++                                         VROVector4f color) {
++        material->setLightingModel(VROLightingModel::Constant);
++        material->getDiffuse().setColor(color);
++        material->setWritesToDepthBuffer(false);
++        material->setReadsFromDepthBuffer(true);
++        material->setReceivesShadows(false);
++    }
++
++    std::shared_ptr<VRONode> createMarker(const std::string &name, float radius,
++                                          VROVector4f color) {
++        auto sphere = VROSphere::createSphere(radius, 12, 12, true);
++        configurePointerMaterial(sphere->getMaterials().front(), color);
++        auto node = std::make_shared<VRONode>();
++        node->setName(name);
++        node->setGeometry(sphere);
++        node->setHidden(true);
++        node->setRenderingOrder(kPointerRenderingOrder);
++        node->setSelectable(false);
++        node->setIgnoreEventHandling(true);
++        _rootNode->addChildNode(node);
++        return node;
++    }
++
++    bool anyRayVisible() const {
++        for (const auto &entry : _lasers) {
++            if (entry.second.visible) return true;
++        }
++        return false;
++    }
++
++    // The last trigger wins; fall back to whichever ray is still tracked.
++    int reticleSource() const {
++        auto it = _lasers.find(_reticleSource);
++        if (it != _lasers.end() && it->second.visible) return _reticleSource;
++        for (const auto &entry : _lasers) {
++            if (entry.second.visible) return entry.first;
++        }
++        return _reticleSource;
++    }
++
+     Laser &getOrCreateLaser(int source) {
+         auto it = _lasers.find(source);
+         if (it != _lasers.end()) {
+@@ -109,28 +194,29 @@ private:
+ 
+         Laser laser;
+         std::vector<VROVector3f> initialPath = { {0, 0, 0}, {0, 0, -1} };
+-        laser.geom = VROPolyline::createPolyline(initialPath, 0.003f /* thickness */);
++        laser.geom = VROPolyline::createPolyline(initialPath, kLaserThickness);
+         laser.geom->setName("AimLaserGeom");
+-        auto material = laser.geom->getMaterials().front();
+-        material->getDiffuse().setColor({ 0.33f, 0.976f, 0.968f, 1.0f }); // cyan
+-        material->setWritesToDepthBuffer(false);
+-        material->setReadsFromDepthBuffer(false);
+-        material->setReceivesShadows(false);
++        const VROVector4f cyan = { 0.33f, 0.976f, 0.968f, 1.0f };
++        configurePointerMaterial(laser.geom->getMaterials().front(), cyan);
+ 
+         laser.node = std::make_shared<VRONode>();
+         laser.node->setName("AimLaser");
+         laser.node->setGeometry(laser.geom);
+         laser.node->setHidden(true);  // hidden until first updateAimRay()
++        laser.node->setRenderingOrder(kPointerRenderingOrder);
+         // The beam's AABB spans controller to hit point, so its own ray runs
+         // through it corner to corner and would out-sort the aimed node.
+         laser.node->setSelectable(false);
+         laser.node->setIgnoreEventHandling(true);
+         _rootNode->addChildNode(laser.node);
++        laser.origin = createMarker("AimOrigin", kOriginRadius, { 1.0f, 1.0f, 1.0f, 1.0f });
++        laser.hit    = createMarker("AimHit", kHitRadius, cyan);
+ 
+         return _lasers.emplace(source, std::move(laser)).first->second;
+     }
+ 
+     std::unordered_map<int, Laser> _lasers;
++    int _reticleSource = ViroOculus::Controller;
+ };
+ 
+ #endif // ANDROID_VROINPUTPRESENTEROPENXR_H

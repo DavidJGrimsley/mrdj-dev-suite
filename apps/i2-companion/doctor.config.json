@@ -1,0 +1,18 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "files": [
+      "**/node_modules/**",
+      "**/.expo/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/coverage/**",
+      "**/android/**",
+      "**/ios/**",
+      "**/.turbo/**",
+      "**/temp/**"
+    ]
+  },
+  "warnings": true,
+  "blocking": "none"
+}

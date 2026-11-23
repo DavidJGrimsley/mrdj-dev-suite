@@ -1,0 +1,7 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "path": "native",
+    "modules": ["expo.modules.questinput.QuestInputModule"]
+  }
+}
