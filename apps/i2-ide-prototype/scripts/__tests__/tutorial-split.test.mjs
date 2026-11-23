@@ -114,6 +114,10 @@ test('Learn modal: five tutorials, Education limit, widget-modal fullscreen and 
   assert.match(learn, /aria-label="Fullscreen"/)
   assert.match(learn, /aria-label="Close Learn"/)
   assert.match(learn, /e\.key === "Escape"/)
+  // Replay uses the app green; Start stays Infie cyan, including hover and focus.
+  assert.match(learn, /isReplay \? "focus-visible:ring-\[#abefa3\]" : "focus-visible:ring-\[#2dd4bf\]\/60"/)
+  assert.match(learn, /border-\[#abefa3\]\/30 bg-\[#abefa3\]\/15 text-\[#abefa3\] group-hover:bg-\[#abefa3\]\/25 group-focus-visible:bg-\[#abefa3\]\/25/)
+  assert.match(learn, /border-\[#2dd4bf\]\/35 text-\[#2dd4bf\] group-hover:bg-\[#2dd4bf\]\/10 group-focus-visible:bg-\[#2dd4bf\]\/10/)
   const app = read('src/app/App.tsx')
   assert.match(app, /const learn = useLearn\(\);\s*const handleTutorials = onTutorials \?\? learn\?\.open/)
   assert.match(app, /Computer science, game development and level-increase lessons belong here\./)

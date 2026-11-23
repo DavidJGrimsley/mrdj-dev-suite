@@ -208,7 +208,9 @@ export function LearnModal({
                     data-testid={`learn-tutorial-${tutorial.id}`}
                     data-tutorial-action={actionLabel.toLowerCase()}
                     onClick={() => onStartTutorial(tutorial.id)}
-                    className="group w-full flex items-center gap-3 p-3.5 rounded-[8px] bg-[#252323] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#2a2828] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2dd4bf]/60 transition-all text-left"
+                    className={`group w-full flex items-center gap-3 p-3.5 rounded-[8px] bg-[#252323] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#2a2828] focus-visible:outline-none focus-visible:ring-2 transition-all text-left ${
+                      isReplay ? "focus-visible:ring-[#abefa3]" : "focus-visible:ring-[#2dd4bf]/60"
+                    }`}
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-['Space_Grotesk',sans-serif] text-[13.5px] font-semibold text-white">
@@ -218,7 +220,13 @@ export function LearnModal({
                         {tutorial.summary}
                       </p>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-[7px] border border-[#2dd4bf]/35 text-[#2dd4bf] font-['Space_Grotesk',sans-serif] text-[11.5px] font-semibold group-hover:bg-[#2dd4bf]/10 transition-colors">
+                    <span
+                      className={`inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-[7px] border font-['Space_Grotesk',sans-serif] text-[11.5px] font-semibold transition-colors ${
+                        isReplay
+                          ? "border-[#abefa3]/30 bg-[#abefa3]/15 text-[#abefa3] group-hover:bg-[#abefa3]/25 group-focus-visible:bg-[#abefa3]/25"
+                          : "border-[#2dd4bf]/35 text-[#2dd4bf] group-hover:bg-[#2dd4bf]/10 group-focus-visible:bg-[#2dd4bf]/10"
+                      }`}
+                    >
                       {isReplay ? <RotateCcw size={11} /> : <Play size={11} />}
                       {actionLabel}
                     </span>
