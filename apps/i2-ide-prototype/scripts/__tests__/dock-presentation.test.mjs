@@ -55,6 +55,62 @@ test('a second header click expands immediately and a later third click reaches 
   assert.equal(third.customCall, false)
 })
 
+test('a third click on the overlay continues the gesture, and later clicks restore', () => {
+  const anchor = { left: 100, top: 40, right: 280, bottom: 68 }
+  assert.equal(behavior.pointInHeaderAnchor(anchor, 140, 50), true)
+  assert.equal(behavior.pointInHeaderAnchor(anchor, 90, 50), false)
+  assert.equal(behavior.pointInHeaderAnchor(anchor, 96, 50), true)
+  const open = { onInteractive: false, onOwnedHeader: false, gestureOpen: true, inAnchor: true, onForeignHeader: false, onOwnOverlay: true }
+  assert.equal(behavior.classifyHeaderGestureClick(open), 'continue')
+  assert.equal(behavior.classifyHeaderGestureClick({ ...open, onInteractive: true }), null)
+  assert.equal(behavior.classifyHeaderGestureClick({ ...open, onOwnOverlay: false }), null)
+  assert.equal(behavior.classifyHeaderGestureClick({ ...open, onForeignHeader: true }), null)
+  assert.equal(behavior.classifyHeaderGestureClick({ ...open, gestureOpen: false }), null)
+  assert.equal(behavior.classifyHeaderGestureClick({ ...open, inAnchor: false, onOwnedHeader: true }), 'header')
+
+  const step = (g, kind) => {
+    const decision = behavior.classifyHeaderGestureClick({
+      onInteractive: kind === 'button',
+      onOwnedHeader: kind === 'header',
+      gestureOpen: g.count > 0,
+      inAnchor: kind !== 'outside',
+      onForeignHeader: kind === 'foreign',
+      onOwnOverlay: kind === 'continue' || kind === 'outside',
+    })
+    if (!decision) return g
+    return behavior.applyHeaderClick(g, false)
+  }
+  let g = { count: 0, mode: 'normal', pendingToggle: false }
+  g = step(g, 'header')
+  g = step(g, 'header')
+  assert.equal(g.mode, 'expanded')
+  assert.equal(g.pendingToggle, false)
+  g = step(g, 'button')
+  assert.equal(g.mode, 'expanded')
+  assert.equal(g.count, 2)
+  g = step(g, 'continue')
+  assert.equal(g.mode, 'fullscreen')
+  assert.equal(g.count, 0)
+
+  g = { count: 0, mode: 'fullscreen', pendingToggle: false }
+  g = step(g, 'header')
+  g = step(g, 'header')
+  assert.equal(g.mode, 'fullscreen')
+  assert.equal(g.pendingToggle, true)
+  assert.equal(behavior.expireHeaderGesture(g).mode, 'expanded')
+  g = step(g, 'header')
+  assert.equal(g.mode, 'normal')
+
+  g = { count: 0, mode: 'expanded', pendingToggle: false }
+  g = step(g, 'header')
+  g = step(g, 'header')
+  assert.equal(behavior.expireHeaderGesture(g).mode, 'normal')
+  g = step({ count: 0, mode: 'expanded', pendingToggle: false }, 'header')
+  g = step(g, 'header')
+  g = step(g, 'continue')
+  assert.equal(g.mode, 'fullscreen')
+})
+
 test('session cards use width, music stacks with Current Goal, and popovers stay inside the viewport', () => {
   assert.equal(behavior.sessionsUseFullCards(false, 500, 2), false)
   assert.equal(behavior.sessionsUseFullCards(true, 120, 9), true)

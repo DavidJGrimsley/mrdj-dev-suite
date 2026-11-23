@@ -30,7 +30,7 @@ This file drives the Figma Make prototype. The spoken lines below are the copy. 
 - Introduced elements (level, music widget, the i² / Project / Session navigation group (B08), and the header groups) first appear spotlighted and slightly larger near Infie's message as she introduces them, hold briefly, then dock at their real position, using the cue and timing given in their own beat or the already-built animation (reduced motion: fade straight to the docked position). The level spotlights, holds and glides to its anchor automatically during its introduction (B03). The music player assembles and then glides to its lower-left anchor after its hold (B05). The i² / Project / Session navigation group is revealed with its message and docks when the user continues, as B08 states. The B11 header groups glide when the user continues, as that beat states. The B12 Home reveals appear in their existing Home positions as Infie cues them and finish animating before the next required interaction. Individual beats do not repeat this rule; keep the already-built intro motions.
 - Floating means unboxed. Messages and fields have thin borders and transparent interiors. Buttons have a background and border. No new enclosing tutorial card, form card, tutorial panel, message list, or outer border/background around a group; once docked at Home, Infie's own existing chat is the app's normal chat, not a tutorial panel. Keep text steady. Use negative space instead of adding a backplate. Until Infie's conversation docks at Home (B12), her single current message floats unboxed. From B12 on, ordinary messages go in the existing Infie chat—Home, Project and Session alike. A floating message is allowed only when specifically calling out something far from the chat. When a specific callout points at an element, glow that target teal/cyan; the glow is used the same whether the message is in chat or floating; normal first introductions do not glow. The completion form maintains unboxed floating styling without an outer form card.
 - Before Infie's conversation docks (B12), show one current Infie message; it is also her caption; do not duplicate it in a subtitle bar. Keep longer passages in separate turns. Narration is optional; the text always works by itself. After docking, messages continue in the existing Infie chat.
-- After identity, Infie introduces a small temporary Continue button. It belongs to the current message and disappears when used. Do not add a standing toolbar or progress tracker. Interaction gates require the named action. The first-run Meet Infie has no Skip; replays and later tutorials have only the small Exit tutorial control described above.
+- In Meet Infie, informational lines of up to 96 characters advance after the full text is visible for at least 1.2 seconds or 220 ms per word, whichever is longer. The personalized B03 greeting always qualifies. Count across beat boundaries, including the Home bridge. After two consecutive automatic advances, the next message waits for the user. A hidden tab pauses advancement and returning gives the reader a fresh dwell. Required actions and docking cues keep their gates. For a reading gate, Infie shows a small temporary Continue button. It belongs to the current message and disappears when used. Do not add a standing toolbar or progress tracker. Interaction gates require the named action. The first-run Meet Infie has no Skip; replays and later tutorials have only the small Exit tutorial control described above.
 - Use natural keyboard focus and button activation. Do not intercept typing, Enter in an email field, or Space on a focused control with a global advance handler. Unrevealed controls cannot receive focus or appear to assistive technology. No first-frame UI flash.
 - Respect reduced motion with gentle fades and the same content/order. Voice is shown with a simulated microphone prompt only; both choices advance and no microphone is ever accessed. If audio is unavailable or playback is blocked, continue normally with a paused player and readable dialogue.
 - Project/session/form data is local tutorial demo data. Simulate authentication, model provider sign-ins, agent work, PR status and form submission. Simulated sign-in modals are clearly fake (no real OAuth, no network, no real credentials collected, no password fields that submit anywhere). Do not initiate OAuth, send email, publish feedback or touch real projects.
@@ -90,11 +90,11 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Infie:** “Nice to meet you, {name}. I can see you're level zero.”
 
-**Reveal on “level zero”:** The actual level indicator, showing 0, spotlighted near Infie's message and, after a brief hold, automatically glides to its final top-right Home header anchor (shared Experience guidelines rule). The rest of the header remains absent. A temporary Continue button appears beside the message. Reuse this pattern for later reading gates.
+**Reveal on “level zero”:** The actual level indicator, showing 0, spotlighted near Infie's message and, after a brief hold, automatically glides to its final top-right Home header anchor (shared Experience guidelines rule). The rest of the header remains absent.
 
 **Infie:** “What a noob.”
 
-**Gate:** The level indicator automatically glides to its top-right anchor during the greeting. “What a noob.” is shown alone as its own current message and holds briefly; Continue on it is required before advancing to B04 (no auto-advance, not merged into the greeting). The old 15-minute warning is removed.
+**Gate:** The level indicator automatically glides to its top-right anchor during the greeting. The greeting and “What a noob.” each finish revealing and hold for reading, then advance automatically without Continue. The next message waits for the user's reply and Send.
 
 ### B04 — What do you want to build?
 
@@ -102,7 +102,7 @@ Infie's form changes silently (no caption, announcement, or labeling; soft cross
 
 **Reveal:** One short conversational reply field and Send. Keep this separate from the account form. The reply is required and nonempty, followed by Send only.
 
-**Infie:** “I don't do much coding myself. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.”
+**Infie:** “I don't do much coding myself. I'll bet you don't either, or we wouldn't be talking. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.”
 
 **Gate:** A nonempty reply and **Send** only; after Send the next message appears with its own Continue. No Skip and no Continue bypass; Send is the only way forward. Store a submitted reply locally for the prototype. Make already has this gate wired; preserve it.
 
@@ -140,28 +140,28 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 **Gate:** Simulated microphone choice: either “Allow microphone” or “Not now” advances to the next line. It is simulation only: the prototype never calls `getUserMedia` or any microphone/permission API and never accesses a microphone.
 
-**Stage — one continuous transparent chain:** A single muted video, `infie-controls-chain-alpha.webm` (VP9 with true alpha, 1080×1080, 30 fps, 16.000 s, no audio), plays once at Infie's position with no black box, card, panel or backplate; the stage background shows through it. When the video starts, Infie grows to 2x while the three messages appear and the chat animates sliding down to make room, then returns to normal size as the video ends. It replaces the live Infie while it plays: Infie (Mist) transforms into the keyboard and mouse, then into the gamepad, then into the upright joystick and separate number pad, and the final devices hold until the video ends. There is no Mist between devices and the video is not restarted between messages. Video time: 0–1 s Mist, 1–4 s Infie → keyboard and mouse, 4–6 s hold, 6–9 s → gamepad, 9–11 s hold, 11–14 s → joystick and number pad, 14–16 s hold.
+**Stage — one continuous transparent chain:** A single muted video, `infie-controls-chain-alpha.webm` (VP9 with true alpha, 1080×1080, 100/3 fps, 14.400 s, no audio), plays once at Infie's position with no black box, card, panel or backplate; the stage background shows through it. When the video starts, Infie grows to 2x while the three messages appear and the chat animates sliding down to make room, then returns to normal size as the video ends. It replaces the live Infie while it plays: Infie (Mist) transforms into the keyboard and mouse, then into the gamepad, then into the upright joystick and separate number pad, and the final devices hold until the video ends. There is no Mist between devices and the video is not restarted between messages. Video time: 0–0.9 s Mist, 0.9–3.6 s Infie → keyboard and mouse, 3.6–5.4 s hold, 5.4–8.1 s → gamepad, 8.1–9.9 s hold, 9.9–12.6 s → joystick and number pad, 12.6–14.4 s hold.
 
-**Message cues (tied to video time, not wall-clock timers; each message appears when the video's current time reaches its cue and none is a Continue gate):**
+**Message cues (tied to video time, not wall-clock timers; each cue makes the next caption eligible once the preceding caption has fully revealed and held for reading):**
 
 | Video time | Message shown |
 |---|---|
 | 0 s (video start) | Keyboard and mouse |
-| 6 s | Gamepad |
-| 11 s | Joystick and programmable keypad |
-| 16 s (video ends) | Closing message, with all three illustrations |
+| 5.4 s | Gamepad |
+| 9.9 s | Joystick and programmable keypad |
+| 14.4 s (video ends) | Final caption can offer Continue to the closing message |
 
 **Infie (at 0 s):** “You can control this IDE in a number of ways. Of course you can use the keyboard and mouse.”
 
-**Infie (at 6 s):** “Or pick up a gamepad if that's more your groove.”
+**Infie (at 5.4 s):** “Or pick up a gamepad if that's more your groove.”
 
-**Infie (at 11 s):** “Prefer a joystick and programmable keypad? You can do that too.”
+**Infie (at 9.9 s):** “Prefer a joystick and programmable keypad? You can do that too.”
 
-**Gate:** None between these three messages: each follows the video's clock. The messages stack as the existing rolling message stack does.
+**Gate:** The keyboard and gamepad captions advance automatically. The joystick caption offers Continue after its reading dwell and the end of the video. Slower text can finish after a media cue without pausing or restarting playback. The same two-advance limit applies to the stills.
 
-**Infie (when the video ends):** “Since navigating the UI and executing common actions are mapped to a controller, you can set up any kind of custom scenario you want in settings later. Some games may require a specific input device.”
+**Infie (after Continue on the final caption):** “Since navigating the UI and executing common actions are mapped to a controller, you can set up any kind of custom scenario you want in settings later. Some games may require a specific input device.”
 
-**Stage:** The video fades out as it ends and the live Infie returns. All three transparent floating illustrations (`infie-controls-keyboard-mouse.png`, `infie-controls-gamepad.png`, `infie-controls-joystick-numpad.png`) appear together beside Infie (no card, panel, border, or backplate), then retire when Continue is pressed.
+**Stage:** The video fades out as it ends and the live Infie returns. With the closing message, all three transparent floating illustrations (`infie-controls-keyboard-mouse.png`, `infie-controls-gamepad.png`, `infie-controls-joystick-numpad.png`) appear together beside Infie (no card, panel, border, or backplate), then retire when Continue is pressed.
 
 **Gate:** Continue.
 
@@ -169,7 +169,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 - Persistent elements (level indicator at top right and music widget at its Home position) remain steady and visible.
 - Audio: The video has no sound; leave the music widget playing or paused exactly as it was.
 - Transformation staging: While the chain plays it replaces the live Infie at her position; the live Infie returns when it ends and the illustrations float beside her. The video fades in and out with a slight overlap so there is no visible seam. It is composited by the browser from its own alpha channel (no keying).
-- Reduced motion: Do not play the video. Show gentle fades of the three still PNGs, one beside Infie per message, with the exact same spoken lines and presentation order; each still stays up for a reading dwell (at least 2.6 s) before the next message, then the closing message and all three illustrations follow as above.
+- Reduced motion: Do not play the video. Show gentle fades of the three still PNGs, one beside Infie per message, with the exact same spoken lines and presentation order; each still stays up for a reading dwell (at least 2.6 s) after the caption finishes revealing. Continue on the final caption opens the closing message and all three illustrations.
 - Failure fallback: If the video errors, does not start within 3 s, stalls for 4 s while the tab is visible, or the browser cannot decode VP9, use the reduced-motion still presentation for the rest of the beat (the video is not retried or restarted). If it fails midway, the still for the message currently showing takes over and the remaining messages follow after their reading dwell.
 - Scope: Keyboard, mouse, gamepad, joystick, number pad, and voice describe the product vision; the prototype presents illustrations and the one controls video only. Voice is shown with a simulated microphone prompt only; both choices advance and no microphone is accessed.
 
@@ -231,7 +231,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 **Infie:** “Let me scoot over and make some room.”
 
-**Infie:** “This is i² Home. The Workspace and Emulators controls switch between your work and your previews.”
+**Infie:** “This is i² Home.”
 
 **Reveal:** The Active Projects area. These cards are not clickable during Meet Infie.
 
@@ -247,7 +247,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 **Infie:** “I'll present Action Buttons specific to the next steps of your projects to save you time typing.”
 
-**Gate:** Continue per turn. Meet Infie does not ask the user to open a demo project.
+**Gate:** The bridge and “This is i² Home.” advance automatically once the chat has landed and each line has had its reading dwell. The resume-projects line waits for Continue after Active Projects appears. The new/import line advances automatically, the Global To-Do line waits for Continue, and the Action Buttons line advances automatically to B20.
 
 ### B20 — Learn, feedback and level-up
 
@@ -274,7 +274,7 @@ Runs on the Tutorial demo project and its Add Comments session, then returns the
 ### B08 — i2 Workspace and project folder
 
 **Turn 1 — workspace tree:**
-**Infie:** “Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.”
+**Infie:** “Here you'll work in an i² Workspace. It keeps your project, Sessions, and files organized and light on disk. Version control or not, I've got you covered.”
 
 **Reveal:** An animated, indented, VERTICAL folder tree built from native elements (no raster art, no file-explorer UI, no card/panel), modeled on a real workspace folder listing but renamed:
 
@@ -299,19 +299,19 @@ Exactly these six children; no environment-file folder. The tree animates in and
 **Turn 2 — the project folder:**
 **Stage:** After the tree has faded, show ONLY the green `project/` folder (alone — no i2Workspace root and no main/worktree chips or labels).
 
-**Infie:** “The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.”
+**Infie:** “The key to working with i² is the project folder. It holds what we're building, our plans, design choices, and guidelines, so every Session Agent sees the whole application, not just their task.”
 
 **Gate:** Continue.
 
 **Turn 3 — canonical files:**
-**Infie:** “It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.”
+**Infie:** “It's my job to keep these canonical files updated, in sync, and free of contradictions. They're separate from your Sessions, so nothing gets lost.”
 
 **Stage:** The same green `project/` folder remains visible alone.
 
 **Gate:** Continue.
 
 **Turn 4 — i² Core & i² Sync:**
-**Infie:** “Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!”
+**Infie:** “Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. Optional i² Sync lets your team use the website without Git or the IDE. You control what gets shared.”
 
 **Stage:** The same green `project/` folder remains visible alone.
 
@@ -323,31 +323,35 @@ Exactly these six children; no environment-file folder. The tree animates in and
 
 Introduce each file separately. The four file labels (info.md, todo.md, style.md, guidelines.md) appear as an indented vertical list under the green `project/` folder only as each line starts (no i2Workspace root, no main chip, no horizontal chips). No full document editors, tab bars or technical settings.
 
-**Infie:** “info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website. This is used by me to keep the Session Agents in check to make sure your vision is always in mind.”
+**Infie:** “info.md holds the project's name, purpose, and important details. An agent can ask, or you can start from a template. Teammates can chat with me about it on the website, and I use it to keep your vision in mind.”
 
-**Infie:** “todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself. When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.”
+**Reveal:** A small info.md preview in the same right-margin slot as the Stylist, showing a plan checked against the project's purpose.
+
+**Infie:** “todo.md is what we want to build, change, or fix. Tell me an idea, or add it yourself. GitHub issues come in too, and when anyone edits Info I add todos so the app follows the design. You can audit me.”
+
+**Reveal:** A small todo.md preview in that same slot: ideas, GitHub issues, and info.md edits land as todos. It retires when style.md begins.
 
 **Reveal:** A static preview of the Stylist centered in the empty area to the right of the chat, outside the scrolling message stack.
 
-**Infie:** “style.md is the colors, typography, and look we're going for and The Stylist is an interactive theme setter that helps you preview it. Your designer can use it on the website too.”
+**Infie:** “style.md is the colors, typography, and look. The Stylist previews it, and your designer can use it on the website too.”
 
 **Stage:** Fade/retire the static preview of the Stylist before guidelines.md.
 
-**Infie:** “guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.”
+**Infie:** “guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical file you edit. I'll handle the extra handoff files, silly human.”
 
 **Gate:** Continue per turn. Retire the green `project/` folder and its file list after this explanation; Project Home (B13) follows.
 
 ### B13 — Project Home
 
-**Infie:** “This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.”
+**Infie:** “This is Project Home. Click the project name to switch, or head back to i² Home. Right-click a project to open it in a new window. Work keeps going while you switch. Don't overload your brain. That's what I'm here for.”
 
 **Reveal:** Existing project title/switcher and Home navigation, introduced together. The new view occupies the normal project content area; the persistent player and level stay mounted.
 
-**Infie:** “I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.”
+**Infie:** “I can work with multiple projects at once. If Project A needs something new in Project B, I'll make a worktree for each, a master plan, a plan per project, and a shared session so we can catch errors before you test.”
 
 **Gate:** Continue.
 
-**Infie:** “I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.”
+**Infie:** “Your roadmap and Sessions live here. I help with planning, version control, branches, worktrees, the next step, and research so the plan stays current.”
 
 **Reveal:** The demo project's existing roadmap/session groups. Do not add every possible widget.
 
@@ -371,13 +375,13 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B15 — Agents and tasks
 
-**Infie:** “Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.”
+**Infie:** “Each Session has Session Agents working on it. Pick the model: ready-made agents, your own, or imported ones. i² is where they work together.”
 
 **Reveal:** Existing Session identity/switcher and compact agent/model control when named; no model catalogue or extra-agent lecture.
 
-**Infie:** “Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.”
+**Infie:** “Me, the Session Agents, and any other agents you bring in work through the iSquared MCP and tools. We block dangerous mistakes, steer around pitfalls, and put best practices to work.”
 
-**Infie:** “Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.”
+**Infie:** “Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it yourself.”
 
 **Stage note:** These two turns add explanation only (Continue per turn). No MCP settings, tool list or simulator is opened during this beat.
 
@@ -397,13 +401,13 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B17 — Session completion and Infinite Intelligence
 
-**Infie:** “Here's the Session Completion Form. I've filled in most of it; check the corrections, add feedback, and hit Submit. Free-plan users need to submit one; paid users are welcome to contribute too. You can turn on auto-submit on merge in Settings, and that still counts.”
+**Infie:** “Here's the Session Completion Form. I've filled in most of it. Check the corrections, add feedback, and hit Submit. Free plans need one; paid users can contribute too. Auto-submit on merge in Settings still counts.”
 
 **Reveal:** A short floating form: Infie-prefilled summary, a corrected-action example, a simple rating, optional feedback, and Submit. Fields have borders and transparent interiors; buttons have fill and borders. No outer form card. Example corrected action: “Check the platform before choosing a command.” No codebase content in the example.
 
-**Infie:** “These forms boost your level while you work. The corrected actions are sent back to improve iSquared—not your codebase—so we can avoid the same mistakes. The number of open Sessions without submitted forms depends on your level and plan.”
+**Infie:** “These forms boost your level while you work. Corrections go back to iSquared, not your codebase. How many open Sessions you can leave unsubmitted depends on your level and plan.”
 
-**Infie:** “We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Completion forms, donors and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities that made it possible.”
+**Infie:** “We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Forms, donors, and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities.”
 
 **Gate:** Continue between every explanation turn but the last (two Continues for the three turns above); Submit appears and enables only after the final explanation turn. Implementations must derive the number of turns from the explanation list, not hard-coded constants. Keep the form visible throughout without revealing new fields. Auto-submit-on-merge is mentioned only: no settings walkthrough, no new toggle, and no UI is added in the tutorial. The tutorial demonstrates manual Submit and must not bypass Submit or auto-submit this demo session on its already-completed (demo) merge; auto-submit satisfies required completion forms for future sessions only. Submission is local demo behavior and marks the demo Session complete. Do not add sharing opt-outs, a consent pitch, account-closure threats or broader data promises.
 
@@ -413,7 +417,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ### B19 — Away from the desk; older projects
 
-**Infie:** “The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away. You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.”
+**Infie:** “The website lets even your non-technical teammates join in too, without the desktop app or the codebase. The mobile app brings notifications, updates, and chat, and you can open your environments on mobile, the website, or in VR.”
 
 **Gate:** Continue.
 
@@ -425,7 +429,7 @@ Introduce each file separately. The four file labels (info.md, todo.md, style.md
 
 ## Widgets & Whatnot
 
-A floating Infie callout (small Infie and her current message, lifted off the bottom edge) over the live screen. The screens beneath keep the user's real projects, sessions and layout; nothing asks the user to move their music player.
+The arrange demo is a floating Infie callout over the live screen. The first Continue opens the first active usable project (active, wired, not the tutorial demo, not an imported project) and the panel and slider lines continue in that project's real Infie chat, with its real resizable panels. The Library line floats above the gallery while that gallery is open, with one Continue control. That Continue closes the gallery, and the closing invitation is the next line in the project Infie chat. Nothing asks the user to move their music player. Dock sizes, playback, and the originating project, session, chat drafts, and gallery are restored when the tour ends. If no usable project exists, the callout stays where it is for the whole tour. The tour does not start Project & Session Flow.
 
 ### B18 — Widgets, Preference Sliders and Library
 
@@ -433,13 +437,13 @@ A floating Infie callout (small Infie and her current message, lifted off the bo
 
 **Reveal:** A small sample layout above the message in which a sample Explorer widget moves from the right column to the bottom panel and back (reduced motion: both placements side by side). The user's own widgets and music player do not move.
 
-**Gate:** Continue.
+**Gate:** Continue. This opens the hosted project when one exists. A gallery that was open closes for the project view and is restored at the end.
 
 **Infie:** “You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.”
 
-**Gate:** Continue.
+**Gate:** Continue. In the hosted project this line is in the real Infie chat.
 
-**Reveal:** A small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed, Effort. These are shared by every model and conversation.
+**Reveal:** A small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed, Effort. These are shared by every model and conversation. In the hosted project the preview sits in the chat column.
 
 **Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.”
 
@@ -447,13 +451,17 @@ A floating Infie callout (small Infie and her current message, lifted off the bo
 
 **Infie:** “Click Widgets in the header to see everything else you can add to your workspace.”
 
-**Reveal:** Highlight `Widgets` in the header. No Continue button; clicking `Widgets` opens the Widgets gallery and advances to the Library callout. Skipped when the tour started from the Widgets button and the gallery is already open.
+**Reveal:** Highlight `Widgets` in the header. No Continue button; clicking `Widgets` opens the Widgets gallery and advances to the Library line. Skipped when the user already had the gallery open, including when the tour closed it to show the project.
 
 **Infie:** “One of my favorites is the Library: screens, flows, components, and packages that fit your project.”
 
-**Reveal:** The existing Library entry highlighted in the open Widgets gallery, with the callout below the gallery. Show a single Continue control.
+**Reveal:** The existing Library entry highlighted in the Widgets gallery. If the user had the gallery open, it opens again for this line. The line and its single Continue control float above the open gallery.
 
-**Gate:** Continue ends the tutorial. A gallery the tour opened closes; a gallery the user opened stays open.
+**Gate:** Continue closes the gallery after the Library cue has been shown. It does not open a second Continue.
+
+**Infie:** “Explore the rest of the widgets on your own!”
+
+**Gate:** This line is in the hosted project's Infie chat (or the callout when no usable project was opened). Continue ends the tutorial and returns to the screen, project, session, drafts, music, layout, and gallery the user had. A gallery the tour opened on its own stays closed. A gallery the user had open is restored, including after Exit.
 
 ## Implementation and asset notes — not spoken
 

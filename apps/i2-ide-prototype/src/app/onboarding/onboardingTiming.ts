@@ -3,8 +3,27 @@
 // ambient background) so the sequenced motions stay in lockstep.
 import { BEAT_ORDER, OnboardingBeat } from "./revealLedger";
 
-/** B03: 220ms entrance + a full 1000ms hold before "What a noob." auto-follows. */
-export const B03_NOOB_TIMER_MS = 1220;
+/**
+ * Inclusive character limit for informational Meet Infie turns.
+ * A line of exactly 96 characters qualifies. The Action Buttons line is that length.
+ */
+export const MEET_INFIE_SHORT_LINE_CHARS = 96;
+
+/** Meet Infie reading turns auto-advance at most twice in a row. B03 ignores the length limit. */
+export function meetInfieAutoAdvance(input: {
+  activeTutorial: string | null;
+  beat: string;
+  readingTurn: boolean;
+  consecutiveAutos: number;
+  line: string;
+}): boolean {
+  return (
+    input.activeTutorial === "meet-infie" &&
+    input.readingTurn &&
+    input.consecutiveAutos < 2 &&
+    (input.beat === "B03" || input.line.length <= MEET_INFIE_SHORT_LINE_CHARS)
+  );
+}
 
 /** B06: no playback progress by then → fall back to the still PNG presentation. */
 export const B06_VIDEO_START_WATCHDOG_MS = 3000;
@@ -34,13 +53,10 @@ export const B18_GALLERY_OPEN_DELAY_MS = 400;
 /** Before the chat docks, the action row + chat input float this far above the bottom edge. */
 export const PREDOCK_BOTTOM_OFFSET = "var(--i2-predock-bottom, 14vh)";
 
-/**
- * Segue lines have no gate: they show for at least 0.5s, longer for longer lines
- * (~220ms per word, a comfortable reading pace).
- */
-export function segueDwellMs(text: string, factor = 1): number {
+/** Visible reading time after the last character has appeared, independent of text speed. */
+export function readingDwellMs(text: string, minimum = 1200): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(500, Math.round(words * 220 * factor));
+  return Math.max(minimum, words * 220);
 }
 
 /**

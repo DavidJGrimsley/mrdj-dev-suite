@@ -28,6 +28,7 @@ import {
   B18_SLIDERS_TURN,
   B18_OPEN_WIDGETS_TURN,
   B18_LIBRARY_TURN,
+  B18_EXPLORE_TURN,
   B18_LINES,
   B19_FINAL_TURN,
   B19_LINES,
@@ -43,13 +44,13 @@ import {
 } from "./FloatingPrimitives";
 import { useInfieDance } from "./infieDanceAnimation";
 import { StylistPreview } from "./StylistPreview";
+import { ProjectFilePreview } from "./ProjectFilePreview";
 import { WidgetArrangeDemo } from "./WidgetArrangeDemo";
 import { RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "../widgets/infiePreferencesContext";
 import { PreferenceSlidersPreview } from "../widgets/InfiePreferencesWidget";
 import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
 import { chatScale } from "../widgets/chatScale";
 import {
-  B03_NOOB_TIMER_MS,
   B06_VIDEO_START_WATCHDOG_MS,
   B06_VIDEO_STALL_WATCHDOG_MS,
   B06_STILL_MIN_DWELL_MS,
@@ -60,7 +61,8 @@ import {
   B12_LANDED_DWELL_MS,
   B12_PROJECTS_FADE_MS,
   PREDOCK_BOTTOM_OFFSET,
-  segueDwellMs,
+  readingDwellMs,
+  meetInfieAutoAdvance,
 } from "./onboardingTiming";
 
 // Infie and her message live at one fixed vertical anchor for B01–B11, so
@@ -74,7 +76,7 @@ const B06_ARRAY_PNG_PX = 88;
 const B06_ARRAY_GAP_PX = 16;
 const B06_ARRAY_WIDTH_PX = B06_ARRAY_PNG_PX * 3 + B06_ARRAY_GAP_PX * 2;
 
-type B06VideoPhase = "idle" | "playing" | "failed";
+type B06VideoPhase = "idle" | "playing" | "ended" | "failed";
 
 // B06 device lines (turns 1–3), each spoken while its transformation video plays.
 const B06_DEVICE_LINES: Record<number, string> = {
@@ -89,21 +91,21 @@ interface ControlsTurnMedia {
   pngSrc: string;
 }
 
-// One continuous transparent recording (VP9 + alpha, 1080x1080, 30 fps, 16 s, no audio):
-// Mist 0-1s, Infie -> keyboard+mouse 1-4s (hold to 6s), -> gamepad 6-9s (hold to 11s),
-// -> joystick + keypad 11-14s (hold to 16s). It is a plain <video> (no canvas keying)
+// One continuous transparent recording (VP9 + alpha, 1080x1080, 100/3 fps, 14.4 s, no audio):
+// Mist 0-0.9s, Infie -> keyboard+mouse 0.9-3.6s (hold to 5.4s), -> gamepad 5.4-8.1s (hold to 9.9s),
+// -> joystick + keypad 9.9-12.6s (hold to 14.4s). It is a plain <video> (no canvas keying)
 // so the browser's own alpha compositing is used.
 const B06_CONTROLS_CHAIN_VIDEO_SRC = assetUrl("/assets/infie-controls-chain-alpha.webm");
 
 // Device turns follow the video's own media time, not wall-clock timers: each turn starts
-// when the video reaches `t` seconds (keyboard at the start, gamepad at 6s, joystick at 11s).
-const B06_CONTROLS_CHAIN_CUES: ReadonlyArray<{ t: number; turn: 1 | 2 | 3 }> = [
+// when the video reaches `t` seconds (keyboard at the start, gamepad at 5.4s, joystick at 9.9s).
+export const B06_CONTROLS_CHAIN_CUES: ReadonlyArray<{ t: number; turn: 1 | 2 | 3 }> = [
   { t: 0, turn: 1 },
-  { t: 6, turn: 2 },
-  { t: 11, turn: 3 },
+  { t: 5.4, turn: 2 },
+  { t: 9.9, turn: 3 },
 ];
 
-function b06TurnForMediaTime(mediaTime: number): number {
+export function b06TurnForMediaTime(mediaTime: number): number {
   let turn = 1;
   for (const cue of B06_CONTROLS_CHAIN_CUES) if (mediaTime >= cue.t) turn = cue.turn;
   return turn;
@@ -161,6 +163,31 @@ const B10_MODEL_PROVIDERS: ReadonlyArray<{
   { id: "cline", label: "Cline", kind: "cloud", summary: "Autonomous tool-use agent runner" },
   { id: "local", label: "Use local models", kind: "local", summary: "Ollama / LM Studio local weights on your machine" },
 ];
+
+// A hidden tab earns no reading time. Returning to it gives the reader a fresh dwell.
+function useVisibleDwell(key: string, delay: number | null) {
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (delay === null) return;
+    let timer: number;
+    const restart = () => {
+      window.clearTimeout(timer);
+      setReadyKey(null);
+      if (!document.hidden) {
+        timer = window.setTimeout(() => {
+          if (!document.hidden) setReadyKey(key);
+        }, delay);
+      }
+    };
+    restart();
+    document.addEventListener("visibilitychange", restart);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", restart);
+    };
+  }, [key, delay]);
+  return delay !== null && readyKey === key;
+}
 
 /** Widths below 1280px shift the early chat left so the right-margin card stays clear. */
 function useNarrowStage(): boolean {
@@ -300,8 +327,16 @@ export interface OnboardingStageProps {
   onOpenDemoSession?: () => void;
   /** Ends the running tutorial (the shell also returns the user to where they were). */
   onFinish: () => void;
-  /** Widgets & Whatnot skips "Click Widgets" when the gallery is already open. */
+  /** Widgets & Whatnot skips "Click Widgets" when the user already had the gallery open. */
   widgetsGalleryOpen?: boolean;
+  /** The gallery modal is actually open. The Library line then floats above it. */
+  widgetsGalleryLive?: boolean;
+  /** After the arrange demo, later B18 lines are in a real project chat instead of the callout. */
+  widgetsTourInProject?: boolean;
+  /** First Continue of Widgets & Whatnot: open the first active usable project, or stay put. */
+  onEnterWidgetsProject?: () => void;
+  /** Library Continue closes the live gallery. The saved open/closed choice stays for the end. */
+  onDismissWidgetsGallery?: () => void;
   /** Increments synchronously when the music Play button is pressed. */
   pressNonce?: number;
   /** Increments whenever music starts playing or changes track, triggering Infie's playful 5s dance. */
@@ -315,6 +350,10 @@ export function OnboardingStage({
   onOpenDemoSession,
   onFinish,
   widgetsGalleryOpen = false,
+  widgetsGalleryLive = false,
+  widgetsTourInProject = false,
+  onEnterWidgetsProject,
+  onDismissWidgetsGallery,
   pressNonce = 0,
   danceNonce = 0,
 }: OnboardingStageProps) {
@@ -368,12 +407,12 @@ export function OnboardingStage({
   messageStackRef.current = messageStack;
 
   // B06 Controls video: ONE continuous transparent recording plays across turns 1-3. The
-  // device turns follow its media time (keyboard at 0s, gamepad at 6s, joystick at 11s) and
-  // its `ended` event opens Turn 4 (all three devices), which keeps its Continue. A failure
+  // device turns follow its media time (keyboard at 0s, gamepad at 5.4s, joystick at 9.9s) and
+  // its `ended` event releases the final caption’s Continue before the summary. A failure
   // latches for the rest of the beat and falls back to still PNGs with the reading dwell.
   const [b06VideoPhase, setB06VideoPhase] = useState<B06VideoPhase>("idle");
   const [b06Recentering, setB06Recentering] = useState(false);
-  const [b06PendingAdvance, setB06PendingAdvance] = useState(false);
+  const [b06MediaTurn, setB06MediaTurn] = useState(1);
   const b06VideoRef = useRef<HTMLVideoElement | null>(null);
   // True once the chain video actually reported playback (start watchdog checks it)
   const b06VideoStartedRef = useRef(false);
@@ -386,6 +425,8 @@ export function OnboardingStage({
     summary: string;
   } | null>(null);
 
+  const [consecutiveAutos, setConsecutiveAutos] = useState(0);
+  const deviceCaption = currentBeat === "B06" && turnIndex >= 1 && turnIndex <= 3;
   const displayName = userProfile?.name || "Null";
 
   // Determine current spoken line & Continue handler
@@ -412,7 +453,7 @@ export function OnboardingStage({
         onContinue = undefined;
       } else {
         currentLine =
-          "I don't do much coding myself. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
+          "I don't do much coding myself. I'll bet you don't either, or we wouldn't be talking. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.";
         onContinue = () => advanceBeat("B05");
       }
       break;
@@ -439,10 +480,9 @@ export function OnboardingStage({
         currentLine =
           "I'm all ears if you want to speak conversationally. The built-in music will automatically turn down while either of us is talking, but you can configure push-to-talk later in settings.";
         onContinue = undefined;
-      } else if (turnIndex >= 1 && turnIndex <= 3) {
-        // Each device line plays with its transformation video, back to back: no gate.
+      } else if (deviceCaption) {
         currentLine = B06_DEVICE_LINES[turnIndex];
-        onContinue = undefined;
+        onContinue = () => setTurnIndex(turnIndex + 1);
       } else {
         currentLine =
           "Since navigating the UI and executing common actions are mapped to a controller, you can set up any kind of custom scenario you want in settings later. Some games may require a specific input device.";
@@ -456,7 +496,6 @@ export function OnboardingStage({
               // The device array fades while Infie's group glides back to center;
               // B07 begins only after the glide has finished.
               setB06Recentering(true);
-              window.setTimeout(() => advanceBeat("B07"), B06_RECENTER_MS + 50);
             }
           : undefined;
       }
@@ -484,7 +523,7 @@ export function OnboardingStage({
         onContinue = () => advanceBeat("B10");
       } else if (turnIndex === 0) {
         currentLine =
-          "Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.";
+          "Here you'll work in an i² Workspace. It keeps your project, Sessions, and files organized and light on disk. Version control or not, I've got you covered.";
         onContinue = () => {
           retireGroup("workspace_tree");
           revealGroup(["project_folder_only", "folder_illustration"]);
@@ -492,37 +531,37 @@ export function OnboardingStage({
         };
       } else if (turnIndex === 1) {
         currentLine =
-          "The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.";
+          "The key to working with i² is the project folder. It holds what we're building, our plans, design choices, and guidelines, so every Session Agent sees the whole application, not just their task.";
         onContinue = () => setTurnIndex(2);
       } else if (turnIndex === 2) {
         currentLine =
-          "It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.";
+          "It's my job to keep these canonical files updated, in sync, and free of contradictions. They're separate from your Sessions, so nothing gets lost.";
         onContinue = () => setTurnIndex(3);
       } else {
         currentLine =
-          "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!";
+          "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. Optional i² Sync lets your team use the website without Git or the IDE. You control what gets shared.";
         onContinue = () => advanceBeat("B09");
       }
       break;
     case "B09":
       if (turnIndex === 0) {
         currentLine =
-          "info.md holds the project's name, purpose, and important details. An agent asks the questions when we start something new or you can start with a basic rundown of the idea or fill out the template. Teammates can even chat with me about it on the i² website. This is used by me to keep the Session Agents in check to make sure your vision is always in mind.";
+          "info.md holds the project's name, purpose, and important details. An agent can ask, or you can start from a template. Teammates can chat with me about it on the website, and I use it to keep your vision in mind.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "todo.md is what we want to build, change, or fix. Got an idea? Tell me and we'll add it. We'll pull in GitHub issues too. You can add to it yourself. When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.";
+          "todo.md is what we want to build, change, or fix. Tell me an idea, or add it yourself. GitHub issues come in too, and when anyone edits Info I add todos so the app follows the design. You can audit me.";
         onContinue = () => setTurnIndex(2);
       } else if (turnIndex === 2) {
         currentLine =
-          "style.md is the colors, typography, and look we're going for and The Stylist is an interactive theme setter that helps you preview it. Your designer can use it on the website too.";
+          "style.md is the colors, typography, and look. The Stylist previews it, and your designer can use it on the website too.";
         onContinue = () => {
           retireGroup("stylist_preview");
           setTurnIndex(3);
         };
       } else {
         currentLine =
-          "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.";
+          "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical file you edit. I'll handle the extra handoff files, silly human.";
         onContinue = () => {
           retireGroup(["project_folder_only", "folder_illustration", "stylist_preview"]);
           advanceBeat("B13");
@@ -572,10 +611,9 @@ export function OnboardingStage({
     case "B12":
       if (turnIndex === 0) {
         currentLine = B12_BRIDGE_LINE;
-        onContinue = undefined;
+        onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
-        currentLine =
-          "This is i² Home. The Workspace and Emulators controls switch between your work and your previews.";
+        currentLine = "This is i² Home.";
         onContinue = () => setTurnIndex(2);
       } else if (turnIndex === 2) {
         currentLine = "You can resume projects that are already onboarded to iSquared.";
@@ -597,15 +635,15 @@ export function OnboardingStage({
     case "B13":
       if (turnIndex === 0) {
         currentLine =
-          "This is Project Home. Click the project name to switch projects, or head back to i² Home. Right-click a project in that dropdown to open it in a new window, so different projects can live on different screens. You can switch while work carries on. Don't overload your brain. That's what I'm here for.";
+          "This is Project Home. Click the project name to switch, or head back to i² Home. Right-click a project to open it in a new window. Work keeps going while you switch. Don't overload your brain. That's what I'm here for.";
         onContinue = () => setTurnIndex(1);
       } else if (turnIndex === 1) {
         currentLine =
-          "I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.";
+          "I can work with multiple projects at once. If Project A needs something new in Project B, I'll make a worktree for each, a master plan, a plan per project, and a shared session so we can catch errors before you test.";
         onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
-          "I help handle long-term planning, version control, branches and worktrees, and what to do next. I also help with research to make sure you are getting the most up to date and in-depth plan when you need it. Your roadmap and Sessions live here.";
+          "Your roadmap and Sessions live here. I help with planning, version control, branches, worktrees, the next step, and research so the plan stays current.";
         onContinue = () => advanceBeat("B14");
       }
       break;
@@ -655,19 +693,27 @@ export function OnboardingStage({
       break;
     }
     case "B18":
-      // Widgets & Whatnot: a floating callout over the live screens.
-      currentLine = B18_LINES[Math.min(Math.max(turnIndex, 0), B18_LIBRARY_TURN)];
+      // Widgets & Whatnot: the arrange demo is a floating callout. Later turns use the
+      // hosted project's Infie chat when one was opened, and the callout otherwise.
+      currentLine = B18_LINES[Math.min(Math.max(turnIndex, 0), B18_EXPLORE_TURN)];
       if (turnIndex === B18_MOVE_TURN) {
-        onContinue = () => setTurnIndex(B18_PANELS_TURN);
+        onContinue = () => {
+          onEnterWidgetsProject?.();
+          setTurnIndex(B18_PANELS_TURN);
+        };
       } else if (turnIndex === B18_PANELS_TURN) {
         onContinue = () => setTurnIndex(B18_SLIDERS_TURN);
       } else if (turnIndex === B18_SLIDERS_TURN) {
-        // Opened from the header, the gallery is already up: skip "Click Widgets".
+        // The user already had the gallery open: skip "Click Widgets".
         onContinue = () => setTurnIndex(widgetsGalleryOpen ? B18_LIBRARY_TURN : B18_OPEN_WIDGETS_TURN);
       } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
         onContinue = undefined;
+      } else if (turnIndex === B18_LIBRARY_TURN) {
+        onContinue = () => {
+          onDismissWidgetsGallery?.();
+          setTurnIndex(B18_EXPLORE_TURN);
+        };
       } else {
-        // The shell closes a tutorial-opened Widgets gallery when the tutorial ends.
         onContinue = () => onFinish();
       }
       break;
@@ -711,13 +757,11 @@ export function OnboardingStage({
     currentLine,
     currentLine ? currentMessageId : undefined
   );
-  const textCompleteRef = useRef(textComplete);
-  textCompleteRef.current = textComplete;
 
   const currentMessageIdRef = useRef(currentMessageId);
   currentMessageIdRef.current = currentMessageId;
 
-  const handleDockedTextComplete = useCallback(
+  const handleMessageTextComplete = useCallback(
     (completedId: string) => {
       if (completedId === currentMessageIdRef.current) {
         handleTextComplete();
@@ -726,31 +770,69 @@ export function OnboardingStage({
     [handleTextComplete]
   );
 
-  const [pendingTimedTransition, setPendingTimedTransition] = useState<{
-    messageId: string;
-    run: () => void;
-  } | null>(null);
+  // Only reading gates participate. Identity, Send, music, mic, model setup, header
+  // docking and the final acknowledgement retain their original actions.
+  const readingTurn =
+    currentBeat === "B03" ||
+    (currentBeat === "B04" && turnIndex === 1) ||
+    deviceCaption ||
+    currentBeat === "B07" ||
+    (currentBeat === "B10" && turnIndex === 0) ||
+    currentBeat === "B12" ||
+    currentBeat === "B20";
+  const autoAdvance = meetInfieAutoAdvance({
+    activeTutorial,
+    beat: currentBeat,
+    readingTurn,
+    consecutiveAutos,
+    line: currentLine,
+  });
+  const stillCaption = deviceCaption && (reducedMotion || b06VideoPhase === "failed");
+  const dwellKey = currentMessageId + (stillCaption ? "-still" : "");
+  const dwellMs = readingDwellMs(currentLine, stillCaption ? B06_STILL_MIN_DWELL_MS : undefined);
+  const dwellComplete = useVisibleDwell(dwellKey, textComplete && (autoAdvance || deviceCaption) ? dwellMs : null);
+  const [finishedCue, setFinishedCue] = useState("");
+  const turnKey = `${currentBeat}-${turnIndex}`;
+  const captionReady = stillCaption || b06VideoPhase === "ended" || b06MediaTurn > turnIndex;
+  const cueReady = deviceCaption ? captionReady && dwellComplete
+    : currentBeat === "B12" || currentBeat === "B03" ? finishedCue === turnKey
+    : isRevealed("continue_button");
+  const showContinueNow = !autoAdvance && cueReady && Boolean(onContinue) && textComplete;
+  const advanceRef = useRef(onContinue);
+  advanceRef.current = onContinue;
+  // Strict Mode runs effects twice. Each message auto-advances once, and a hidden
+  // tab must not consume that chance before the fresh visible dwell completes.
+  const autoAdvancedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (
-      pendingTimedTransition &&
-      textComplete &&
-      pendingTimedTransition.messageId === currentMessageId
-    ) {
-      const { run } = pendingTimedTransition;
-      setPendingTimedTransition(null);
-      run();
-    }
-  }, [pendingTimedTransition, textComplete, currentMessageId]);
+    if (!autoAdvance || !dwellComplete || !cueReady || document.hidden) return;
+    if (autoAdvancedFor.current === currentMessageId) return;
+    autoAdvancedFor.current = currentMessageId;
+    setConsecutiveAutos((count) => count + 1);
+    advanceRef.current?.();
+  }, [currentMessageId, autoAdvance, dwellComplete, cueReady]);
 
-  const showContinueNow = isRevealed("continue_button") && Boolean(onContinue) && textComplete;
-
-  // Maintain stable ref for onContinue so setDockedChat never triggers an infinite render loop
+  // Stable callback for the docked chat. A click can only advance its visible gate.
   const onContinueRef = useRef<(() => void) | undefined>(undefined);
-  onContinueRef.current = onContinue;
-  const triggerDockedContinue = useCallback(() => {
-    onContinueRef.current?.();
+  onContinueRef.current = showContinueNow ? onContinue : undefined;
+  const triggerContinue = useCallback(() => {
+    if (!onContinueRef.current) return;
+    setConsecutiveAutos(0);
+    onContinueRef.current();
   }, []);
+
+  // B11 turn 2 finishes the docking animation initiated by the previous click.
+  const dockingHeader = currentBeat === "B11" && turnIndex === 2;
+  const settlingDelay = dockingHeader ? (reducedMotion ? 150 : 600)
+    : b06Recentering ? B06_RECENTER_MS + 50 : null;
+  const settled = useVisibleDwell(turnKey, settlingDelay);
+  const settledAdvancedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!(settled && textComplete && !document.hidden)) return;
+    if (settledAdvancedFor.current === turnKey) return;
+    settledAdvancedFor.current = turnKey;
+    advanceBeat(dockingHeader ? "B12" : "B07");
+  }, [settled, textComplete, dockingHeader, advanceBeat, turnKey]);
 
   // Reset chat dock state when starting or returning to early beats
   useEffect(() => {
@@ -771,14 +853,17 @@ export function OnboardingStage({
       setB06Recentering(false);
       return;
     }
-    if (turnIndex === 0 || turnIndex === 4 || reducedMotion) {
-      // Reduced motion: no videos; the cue effect advances after a reading dwell.
+    if (turnIndex === 0 || turnIndex === 4) {
+      setB06MediaTurn(1);
       setB06VideoPhase("idle");
       setB06Recentering(false);
       return;
     }
     retireGroup("continue_button");
-    setB06VideoPhase((p) => (p === "failed" ? p : canPlayControlsChainVideo() ? "playing" : "failed"));
+    setB06VideoPhase((phase) => {
+      if (phase === "failed" || phase === "ended") return phase;
+      return !reducedMotion && canPlayControlsChainVideo() ? "playing" : "failed";
+    });
   }, [currentBeat, turnIndex, reducedMotion, retireGroup]);
 
   // B06 watchdogs while the chain video plays (one run for the whole chain, not per turn):
@@ -787,17 +872,29 @@ export function OnboardingStage({
   useEffect(() => {
     if (currentBeat !== "B06" || b06VideoPhase !== "playing") return;
     b06VideoStartedRef.current = false;
-    const startedAt = Date.now();
+    let startedAt = Date.now();
     let lastTime = -1;
     let lastChange = startedAt;
+    const video = b06VideoRef.current;
+    let disposed = false;
+    const syncVisibility = () => {
+      startedAt = lastChange = Date.now();
+      if (document.hidden) video?.pause();
+      else if (video && !video.ended) video.play().catch(() => {
+        if (!disposed && !document.hidden) setB06VideoPhase("failed");
+      });
+    };
+    if (document.hidden) syncVisibility();
+    document.addEventListener("visibilitychange", syncVisibility);
     const tick = window.setInterval(() => {
       const now = Date.now();
       const v = b06VideoRef.current;
+      if (document.hidden) return;
       if (!b06VideoStartedRef.current) {
         if (now - startedAt >= B06_VIDEO_START_WATCHDOG_MS) setB06VideoPhase("failed");
         return;
       }
-      if (!v || document.visibilityState !== "visible" || v.ended) {
+      if (!v || v.ended) {
         lastChange = now;
         return;
       }
@@ -808,7 +905,11 @@ export function OnboardingStage({
         setB06VideoPhase("failed");
       }
     }, 500);
-    return () => window.clearInterval(tick);
+    return () => {
+      disposed = true;
+      window.clearInterval(tick);
+      document.removeEventListener("visibilitychange", syncVisibility);
+    };
   }, [currentBeat, b06VideoPhase]);
 
   // B06 video-time cues: turn follows the video's media time, never goes backwards.
@@ -823,7 +924,7 @@ export function OnboardingStage({
     if (!v) return;
     const sync = (mediaTime: number) => {
       const turn = b06TurnForMediaTime(mediaTime);
-      setTurnIndex((t) => (t >= 1 && t < 4 ? Math.max(t, turn) : t));
+      setB06MediaTurn((previous) => Math.max(previous, turn));
     };
     const onTimeUpdate = () => sync(v.currentTime);
     v.addEventListener("timeupdate", onTimeUpdate);
@@ -842,35 +943,7 @@ export function OnboardingStage({
       v.removeEventListener("seeked", onTimeUpdate);
       if (frameId) v.cancelVideoFrameCallback?.(frameId);
     };
-  }, [currentBeat, b06VideoPhase, setTurnIndex]);
-
-  // B06 failed video: show the still PNG beside Infie, then move on after a reading dwell
-  // (per turn, so turns 1-3 each get their still). Gate on text complete so we never advance before text is readable.
-  useEffect(() => {
-    if (currentBeat !== "B06" || b06VideoPhase !== "failed") return;
-    if (turnIndex < 1 || turnIndex > 3) return;
-    const line = B06_DEVICE_LINES[turnIndex] ?? "";
-    const t = window.setTimeout(() => {
-      if (textCompleteRef.current) {
-        setTurnIndex((ti) => (ti === turnIndex ? Math.min(ti + 1, 4) : ti));
-      } else {
-        setB06PendingAdvance(true);
-      }
-    }, Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)));
-    return () => window.clearTimeout(t);
-  }, [currentBeat, turnIndex, b06VideoPhase, setTurnIndex]);
-
-  // When pending advance is waiting for B06 device text to complete, advance immediately upon completion
-  useEffect(() => {
-    if (currentBeat === "B06" && b06PendingAdvance && textComplete) {
-      setB06PendingAdvance(false);
-      setTurnIndex((t) => (t >= 1 && t < 4 ? t + 1 : t));
-    }
-  }, [currentBeat, b06PendingAdvance, textComplete, setTurnIndex]);
-
-  useEffect(() => {
-    setB06PendingAdvance(false);
-  }, [turnIndex]);
+  }, [currentBeat, b06VideoPhase]);
 
   // B01 arrival sequence timer -> B02 (preserves Infinite Intelligence and i², fading cleanly before real Infie fades in at B02)
   useEffect(() => {
@@ -914,36 +987,18 @@ export function OnboardingStage({
   // introduced again by that turn's line. Reduced motion keeps the same order
   // and reading dwell, but with a short reveal delay and fade only.
   useEffect(() => {
-    if (currentBeat === "B00" || currentBeat === "COMPLETE") {
-      setPendingTimedTransition(null);
-      return;
-    }
-    setPendingTimedTransition(null);
+    if (currentBeat === "B00" || currentBeat === "COMPLETE") return;
     retireGroup("continue_button");
     const timers: number[] = [];
     const at = (ms: number, fn: () => void, compress = true) =>
       timers.push(window.setTimeout(fn, compress && reducedMotion ? Math.min(ms, 150) : ms));
-    const afterDwellAndText = (ms: number, fn: () => void, compress = true) => {
-      const scheduledId = currentMessageId;
-      at(
-        ms,
-        () => {
-          if (textCompleteRef.current) {
-            fn();
-          } else {
-            setPendingTimedTransition({ messageId: scheduledId, run: fn });
-          }
-        },
-        compress
-      );
-    };
-
     if (currentBeat === "B03") {
       if (turnIndex === 0) {
-        at(450, () => revealGroup(["level_indicator", "continue_button"]));
+        at(450, () => revealGroup("level_indicator"));
+        // Let the existing 450ms introduction, 1500ms spotlight and 750ms glide finish.
+        at(2700, () => setFinishedCue(turnKey));
       } else {
-        // "What a noob." appears as its own message and holds before its Continue appears.
-        at(B03_NOOB_TIMER_MS, () => revealGroup("continue_button"), false);
+        setFinishedCue(turnKey);
       }
     } else if (currentBeat === "B04") {
       if (turnIndex === 0) at(500, () => revealGroup("project_interest_reply"));
@@ -962,22 +1017,6 @@ export function OnboardingStage({
         at(450, () => revealGroup("continue_button"));
       } else {
         revealGroup("controls_illustrations");
-        // No gate: in normal motion the video's `ended` advances; reduced motion shows the
-        // still PNG and moves on after a reading dwell.
-        if (reducedMotion) {
-          const line = B06_DEVICE_LINES[turnIndex] ?? "";
-          at(
-            Math.max(B06_STILL_MIN_DWELL_MS, segueDwellMs(line)),
-            () => {
-              if (textCompleteRef.current) {
-                setTurnIndex((t) => (t === turnIndex ? Math.min(t + 1, 4) : t));
-              } else {
-                setB06PendingAdvance(true);
-              }
-            },
-            false
-          );
-        }
       }
     } else if (currentBeat === "B07") {
       at(400, () => revealGroup("continue_button"));
@@ -1034,7 +1073,6 @@ export function OnboardingStage({
           "tutorials_entry",
           "header_notifications_settings",
         ]);
-        afterDwellAndText(600, () => advanceBeat("B12"));
       }
     } else if (currentBeat === "B12") {
       revealGroup([
@@ -1046,29 +1084,30 @@ export function OnboardingStage({
         "home_conversation_entry",
         "home_projects_and_actions",
       ]);
+      const finishCue = () => setFinishedCue(turnKey);
       if (turnIndex === 0) {
         // Bridge line → conversation slides left and lands → dwell → i² Home (Turn 1).
-        afterDwellAndText(
+        at(
           reducedMotion ? 1000 : B12_BRIDGE_READ_MS + B12_SLIDE_MS + B12_LANDED_DWELL_MS,
-          () => setTurnIndex(1),
+          finishCue,
           false
         );
       } else if (turnIndex === 1) {
-        at(450, () => revealGroup("continue_button"));
+        at(450, finishCue);
       } else if (turnIndex === 2) {
         revealGroup("home_resume_projects");
         // Continue only after Active Projects finish their entrance
         // (not compressed in reduced motion: the fade still runs, order must hold).
-        at(B12_PROJECTS_FADE_MS + 120, () => revealGroup("continue_button"), false);
+        at(B12_PROJECTS_FADE_MS + 120, finishCue, false);
       } else if (turnIndex === 3) {
         revealGroup(["home_resume_projects", "home_new_import_buttons"]);
-        at(450, () => revealGroup("continue_button"), false);
+        at(450, finishCue, false);
       } else if (turnIndex === 4) {
         revealGroup(["home_resume_projects", "home_new_import_buttons"]);
-        at(400, () => revealGroup("continue_button"));
+        at(400, finishCue);
       } else {
         revealGroup(["home_resume_projects", "home_new_import_buttons", "home_action_buttons"]);
-        at(400, () => revealGroup("continue_button"));
+        at(400, finishCue);
       }
     } else if (currentBeat === "B13") {
       if (turnIndex === 0) {
@@ -1143,7 +1182,7 @@ export function OnboardingStage({
     projectOnlyPortion,
     currentBeat,
     turnIndex,
-    currentMessageId,
+    turnKey,
     maxEnabledBeat,
     connectedModels.length,
     reducedMotion,
@@ -1264,10 +1303,22 @@ export function OnboardingStage({
   }, [isEarlyCenterStage, messageStack]);
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
-  // Widgets & Whatnot (B18) speaks from a floating callout instead, so the screens beneath stay live.
-  const isFloatingCallout = currentBeat === "B18";
+  // The arrange demo and a tour with no hosted project stay a floating callout. The Library line
+  // floats only while the gallery covers the project chat. Continue then closes that gallery so the
+  // closing invitation is the next line in the project Infie chat.
+  const galleryCoversChat = widgetsGalleryLive && turnIndex === B18_LIBRARY_TURN;
+  const isFloatingCallout =
+    currentBeat === "B18" && (turnIndex === B18_MOVE_TURN || !widgetsTourInProject || galleryCoversChat);
 
   useEffect(() => {
+    // A callout line stays out of the project chat. Hide a Continue left by the previous turn.
+    if (isFloatingCallout) {
+      setDockedChat((prev) =>
+        prev.showContinue || prev.onContinue
+          ? { ...prev, showContinue: false, onContinue: undefined }
+          : prev
+      );
+    }
     if (
       isEarlyCenterStage ||
       isFloatingCallout ||
@@ -1278,8 +1329,8 @@ export function OnboardingStage({
       return;
     }
     const nextShowContinue = showContinueNow;
-    const nextOnContinue = triggerDockedContinue;
-    const nextOnTextComplete = handleDockedTextComplete;
+    const nextOnContinue = triggerContinue;
+    const nextOnTextComplete = handleMessageTextComplete;
     setDockedChat((prev) => {
       const msgId = currentMessageId;
       const baseHistory: ReadonlyArray<DockedTutorialChatEntry> =
@@ -1336,8 +1387,8 @@ export function OnboardingStage({
     isEarlyCenterStage,
     isFloatingCallout,
     showContinueNow,
-    triggerDockedContinue,
-    handleDockedTextComplete,
+    triggerContinue,
+    handleMessageTextComplete,
     setDockedChat,
   ]);
 
@@ -1359,6 +1410,7 @@ export function OnboardingStage({
     try {
       localStorage.setItem("i2.onboarding.interest", text);
     } catch {}
+    setConsecutiveAutos(0);
     setProjectInterestReply(text);
     setInterestDraft("");
     setChatDocked(true);
@@ -1466,7 +1518,7 @@ export function OnboardingStage({
     const besideMedia: "single" | "array" | null =
       currentBeat === "B06" && turnIndex === 4 && !b06Recentering
         ? "array"
-        : activeControlsMedia && (reducedMotion || b06VideoPhase === "failed")
+        : activeControlsMedia && (stillCaption || b06VideoPhase === "ended")
         ? "single"
         : null;
     const besideWidth =
@@ -1474,8 +1526,10 @@ export function OnboardingStage({
     const infieGroupShift = besideMedia ? -(besideWidth + B06_BESIDE_GAP_PX) / 2 : 0;
     const besideLeft = `calc(100% + ${B06_BESIDE_GAP_PX}px)`;
     const showHotkeyCard = currentBeat === "B07" && turnIndex === 2;
+    const showInfoMargin = currentBeat === "B09" && turnIndex === 0;
+    const showTodoMargin = currentBeat === "B09" && turnIndex === 1;
     const showStylistMargin = currentBeat === "B09" && turnIndex === 2 && isRevealed("stylist_preview");
-    const showRightMargin = showHotkeyCard || showStylistMargin;
+    const showRightMargin = showHotkeyCard || showInfoMargin || showTodoMargin || showStylistMargin;
     const chatShift = narrowStage && showRightMargin;
     const shiftPad = chatShift ? "min(280px, 36vw)" : undefined;
     const padLeft = 24;
@@ -1609,12 +1663,7 @@ export function OnboardingStage({
                         onEnded={(e) => {
                           if (e.currentTarget !== b06VideoRef.current) return;
                           if (b06VideoPhase !== "playing") return;
-                          // The chain is over: all three devices (Turn 4). Gate on text completion so text is readable.
-                          if (textCompleteRef.current) {
-                            setTurnIndex(4);
-                          } else {
-                            setB06PendingAdvance(true);
-                          }
+                          setB06VideoPhase("ended");
                         }}
                         onError={(e) => {
                           if (e.currentTarget !== b06VideoRef.current) return;
@@ -1740,7 +1789,7 @@ export function OnboardingStage({
                         <RevealingInfieText
                           text={msg.text}
                           live
-                          onComplete={handleTextComplete}
+                          onComplete={() => handleMessageTextComplete(msg.id)}
                         />
                       ) : (
                         msg.text
@@ -2090,6 +2139,8 @@ export function OnboardingStage({
                   </p>
                 </div>
               )}
+              {showInfoMargin && <ProjectFilePreview file="info" reducedMotion={reducedMotion} />}
+              {showTodoMargin && <ProjectFilePreview file="todo" reducedMotion={reducedMotion} />}
               {showStylistMargin && <StylistPreview reducedMotion={reducedMotion} />}
             </div>
           </div>
@@ -2219,6 +2270,7 @@ export function OnboardingStage({
                 type="button"
                 variant="primary"
                 onClick={() => {
+                  setConsecutiveAutos(0);
                   setMicPermissionChoice("allow");
                   setTurnIndex(1);
                 }}
@@ -2230,6 +2282,7 @@ export function OnboardingStage({
                 type="button"
                 variant="secondary"
                 onClick={() => {
+                  setConsecutiveAutos(0);
                   setMicPermissionChoice("not_now");
                   setTurnIndex(1);
                 }}
@@ -2246,7 +2299,7 @@ export function OnboardingStage({
               transition={{ duration: 0.25 }}
               className="flex justify-center"
             >
-              <FloatingContinueButton onClick={onContinue!} />
+              <FloatingContinueButton onClick={triggerContinue} />
             </motion.div>
           ) : null}
         </div>

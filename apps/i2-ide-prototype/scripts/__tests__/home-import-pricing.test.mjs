@@ -46,6 +46,8 @@ test('active projects stay fixed for the tutorial and two projects', () => {
   assert.equal(layout.headerClickAction(1), null)
   assert.equal(layout.headerClickAction(2), 'expand')
   assert.equal(layout.headerClickAction(3), 'fullscreen')
+  assert.equal(layout.headerClickAction(4), 'fullscreen')
+  assert.ok(layout.WIDGET_HEADER_CLICK_MS >= 500)
   assert.equal(layout.ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS, 'lg:h-[604px]')
   assert.equal(layout.HOME_BOTTOM_PADDING_CLASS, 'pb-[48px]')
 })

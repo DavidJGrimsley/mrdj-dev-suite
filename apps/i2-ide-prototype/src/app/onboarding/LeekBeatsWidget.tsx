@@ -7,7 +7,11 @@ import { chatScale } from "../widgets/chatScale";
 import {
   HEADER_CLICK_GAP_MS,
   applyHeaderClick,
+  classifyHeaderGestureClick,
   expireHeaderGesture,
+  headerAnchorBox,
+  pointInHeaderAnchor,
+  type HeaderAnchorBox,
   type HeaderGesture,
   type HeaderMode,
 } from "../widgets/dockBehavior";
@@ -174,6 +178,7 @@ export function LeekBeatsWidget({
   const [presentation, setPresentationState] = useState<HeaderMode>("normal");
   const presentationRef = useRef<HeaderMode>("normal");
   const gestureRef = useRef<HeaderGesture>({ count: 0, mode: "normal", pendingToggle: false });
+  const headerAnchorRef = useRef<HeaderAnchorBox | null>(null);
   const clickTimerRef = useRef<number | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const songPickerButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -421,6 +426,7 @@ export function LeekBeatsWidget({
       clickTimerRef.current = null;
     }
     gestureRef.current = { count: 0, mode: next, pendingToggle: false };
+    headerAnchorRef.current = null;
     commitPresentation(next);
   }, [commitPresentation]);
 
@@ -436,12 +442,27 @@ export function LeekBeatsWidget({
       const target = event.target;
       if (!(target instanceof Element)) return;
       const header = target.closest("[data-widget-header]");
-      if (!header) return;
-      if (target.closest("button, a, input, textarea, select, [role='button'], [data-no-widget-gesture]")) return;
-      const owned = header.closest("[data-name='LeekBeatsWidget'], [data-widget-overlay='" + HOME_OVERLAY_ID + "']");
-      if (!owned) return;
+      const owned = Boolean(
+        header?.closest("[data-name='LeekBeatsWidget'], [data-widget-overlay='" + HOME_OVERLAY_ID + "']"),
+      );
+      const kind = classifyHeaderGestureClick({
+        onInteractive: Boolean(target.closest("button, a, input, textarea, select, [role='button'], [data-no-widget-gesture]")),
+        onOwnedHeader: owned,
+        gestureOpen: gestureRef.current.count > 0,
+        inAnchor: pointInHeaderAnchor(headerAnchorRef.current, event.clientX, event.clientY),
+        onForeignHeader: Boolean(header) && !owned,
+        onOwnOverlay: Boolean(target.closest("[data-widget-overlay='" + HOME_OVERLAY_ID + "']")),
+      });
+      if (!kind) return;
+      if (kind === "continue") {
+        event.preventDefault();
+        event.stopPropagation();
+      } else if (header) {
+        headerAnchorRef.current = headerAnchorBox(header.getBoundingClientRect());
+      }
       const next = applyHeaderClick(gestureRef.current, false);
       gestureRef.current = { count: next.count, mode: next.mode, pendingToggle: next.pendingToggle };
+      if (next.count === 0) headerAnchorRef.current = null;
       if (next.mode !== presentationRef.current) commitPresentation(next.mode);
       if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
@@ -450,10 +471,12 @@ export function LeekBeatsWidget({
         clickTimerRef.current = null;
         if (gestureRef.current.mode !== presentationRef.current) {
           gestureRef.current = { count: 0, mode: presentationRef.current, pendingToggle: false };
+          headerAnchorRef.current = null;
           return;
         }
         const expired = expireHeaderGesture(gestureRef.current);
         gestureRef.current = expired;
+        headerAnchorRef.current = null;
         if (expired.mode !== presentationRef.current) commitPresentation(expired.mode);
       }, HEADER_CLICK_GAP_MS);
     };

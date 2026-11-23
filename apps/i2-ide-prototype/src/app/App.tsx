@@ -32,9 +32,13 @@ import {
   B14_AGENT_REPLY_DEFAULT,
   B15_TASKS_TURN,
   B17_EXPLANATIONS,
+  B18_MOVE_TURN,
+  B18_SLIDERS_TURN,
   B18_OPEN_WIDGETS_TURN,
   B18_LIBRARY_TURN,
 } from "./onboarding/revealLedger";
+import { chatDraftKey, readChatDraft, writeChatDraft } from "./onboarding/chatDraftMemory";
+import { firstActiveUsableProject } from "./onboarding/widgetsTourProject";
 import { LearnModal, LearnProvider, useLearn, type LearnTutorialId } from "./learn/LearnModal";
 import { TutorialOfferCard, ExitTutorialButton } from "./learn/TutorialOfferCard";
 import {
@@ -93,7 +97,7 @@ import {
 } from "./widgets/WidgetDock";
 import { FileViewerProvider, WorkspaceExplorer, useFileViewer, useOpenProjectFile, workspaceSpecFor } from "./widgets/workspaceFiles";
 import { InfiePreferencesProvider, RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "./widgets/infiePreferencesContext";
-import { InfiePreferencesWidget } from "./widgets/InfiePreferencesWidget";
+import { InfiePreferencesWidget, PreferenceSlidersPreview } from "./widgets/InfiePreferencesWidget";
 import { PrototypeLimitProvider, usePrototypeLimit, useRegisterPrototypeLimitNav, TUTORIAL_CHAT_LIMIT, importedProjectLimit, notHotdogLimit } from "./widgets/prototypeLimit";
 import { HOME_PRICING_REPLY, PERSONAL_TIERS, BUSINESS_TIERS, type PricingTier } from "./home/pricing";
 import { ACTIVE_PROJECTS_FIXED_HEIGHT_CLASS, HOME_BOTTOM_PADDING_CLASS, WIDGET_HEADER_CLICK_MS, activeProjectsFit, headerClickAction } from "./home/homeLayout";
@@ -2241,7 +2245,7 @@ function Widget({ label, children, onModal, onFullscreen, accentHeader = false, 
       if (countRef.current === 2) onModal();
       else if (countRef.current >= 3) onFullscreen();
       countRef.current = 0;
-    }, 260);
+    }, WIDGET_HEADER_CLICK_MS);
   };
 
   return (
@@ -2565,8 +2569,13 @@ function InfieAvatar({ size = 20 }: { size?: number }) {
 }
 
 function InfieChatPanel({ onSend }: { onSend: (t: string) => void }) {
+  const draftKey = chatDraftKey("legacy-infie");
   const [messages, setMessages] = useState<Message[]>(INIT_INFIE_MESSAGES);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState(() => readChatDraft(draftKey));
+  const setDraft = (value: string) => {
+    writeChatDraft(draftKey, value);
+    setDraftState(value);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -5598,6 +5607,7 @@ function ProjectHomeScreen({
   musicLibraryRef,
   moveMusicToBottomRef,
   animatePanelsIn = false,
+  widgetsTourChat = false,
 }: {
   project: ProtoProject;
   onOpenSession: (s: ProtoSession, opts?: { justStarted?: boolean }) => void;
@@ -5630,6 +5640,8 @@ function ProjectHomeScreen({
   moveMusicToBottomRef?: React.MutableRefObject<(() => void) | null>;
   /** Tutorial: the side and bottom panels slide in toward the chat when they first appear. */
   animatePanelsIn?: boolean;
+  /** Widgets & Whatnot after the arrange demo: scripted lines in this project's real chat. */
+  widgetsTourChat?: boolean;
 }) {
   const {
     isTutorialActive,
@@ -5673,7 +5685,8 @@ function ProjectHomeScreen({
     dockedChat.currentLine,
     dockedChat.currentMessageId
   );
-  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue && projectDockedTextComplete);
+  const showScriptedChat = isTutorialActive || widgetsTourChat;
+  const showDockedContinue = Boolean(showScriptedChat && dockedChat.showContinue && dockedChat.onContinue && projectDockedTextComplete);
   // Keep the newest tutorial line in view (scroll only the message list, never ancestors).
   const projectChatListRef = useRef<HTMLDivElement>(null);
   const isExperimemoHome = project.id === EXPERIMEMO_PROJECT_ID;
@@ -5688,11 +5701,21 @@ function ProjectHomeScreen({
     experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question";
   useEffect(() => {
     const el = projectChatListRef.current;
-    if ((isTutorialActive || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [isTutorialActive, dockedChat.history, isExperimemoHome, experimemoFlow.homeMessages.length]);
+    if ((showScriptedChat || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [showScriptedChat, dockedChat.history, isExperimemoHome, experimemoFlow.homeMessages.length]);
 
   const limit = usePrototypeLimit();
-  const [projectDraft, setProjectDraft] = useState("");
+  const projectDraftKey = chatDraftKey("project", project.id);
+  const projectIdRef = useRef(project.id);
+  const [projectDraft, setProjectDraftState] = useState(() => readChatDraft(projectDraftKey));
+  const setProjectDraft = (value: string) => {
+    writeChatDraft(chatDraftKey("project", projectIdRef.current), value);
+    setProjectDraftState(value);
+  };
+  useEffect(() => {
+    projectIdRef.current = project.id;
+    setProjectDraftState(readChatDraft(chatDraftKey("project", project.id)));
+  }, [project.id]);
   const [screenTab, setScreenTab] = useState<"Workspace" | "Emulators">("Workspace");
   const awaitingAgentReply = isTutorialActive && currentBeat === "B14" && turnIndex === 1 && !agentQuestionReplied;
   const explorerSpec = workspaceSpecFor(project.id, { sessionBranch: tutorial.session ? EXPERIMEMO_SESSION.branch : null });
@@ -6110,7 +6133,8 @@ function ProjectHomeScreen({
               </div>
             </div>
             <div ref={projectChatListRef} className="i2-chat-scale i2-conversation-scroll flex-1 overflow-y-auto p-[16px] flex flex-col gap-[16px]">
-              {isExperimemoHome ? (
+              {widgetsTourChat && turnIndex === B18_SLIDERS_TURN && <PreferenceSlidersPreview />}
+              {isExperimemoHome && !widgetsTourChat ? (
                 experimemoFlow.homeMessages.map((m, idx) => (
                   <FlowMessageBubble
                     key={m.id}
@@ -6120,7 +6144,7 @@ function ProjectHomeScreen({
                     onComplete={handleExperimemoHomeTextComplete}
                   />
                 ))
-              ) : isTutorialActive ? (
+              ) : showScriptedChat ? (
                 <>
                   {dockedChat.history.map((m, idx) => {
                     const isLatest = dockedChat.currentMessageId
@@ -6262,6 +6286,7 @@ function ProjectHomeScreen({
               >
                 {project.id === "experimemo" ? (
                   <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
                     {experimemoFlow.stage === "starter" && (
                       <InfieFlowPill
                         testId="whats-next-button"
@@ -6347,6 +6372,7 @@ function ProjectHomeScreen({
                   </>
                 ) : isUnguidedPetProject ? (
                   <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
                     {petSession.state.status === "PLAN REVIEW" && (
                       <InfieFlowPill
                         testId="home-approve-plan-button"
@@ -6416,7 +6442,10 @@ function ProjectHomeScreen({
                     )}
                   </>
                 ) : (
-                  <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">No active sessions</span>
+                  <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
+                    <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">No active sessions</span>
+                  </>
                 )}
               </div>
             </div>
@@ -6907,7 +6936,12 @@ function SessionScreen({
     { id: "s1", role: "assistant", content: "Worktree `add-comments` branched from `main` at `6e17795`. Agents are ready for plan review and implementation." },
     { id: "s2", role: "assistant", content: "Preview server connected. Doctor passed baseline checks." },
   ]);
-  const [input, setInput] = useState("");
+  const sessionDraftKey = chatDraftKey("session", session.id);
+  const [input, setInputState] = useState(() => readChatDraft(sessionDraftKey));
+  const setInput = (value: string) => {
+    writeChatDraft(sessionDraftKey, value);
+    setInputState(value);
+  };
   const [loading, setLoading] = useState(false);
   const [tests, setTests] = useState<CheckItem[]>(
     isExperimemo
@@ -8385,7 +8419,12 @@ function I2HomeScreen({
   const [tab, setTab] = useState<"Workspace" | "Emulators">("Workspace");
   const [emuConnected, setEmuConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: "greet", role: "assistant", content: INFIE_HOME_GREETING }]);
-  const [input, setInput] = useState("");
+  const homeDraftKey = chatDraftKey("home");
+  const [input, setInputState] = useState(() => readChatDraft(homeDraftKey));
+  const setInput = (value: string) => {
+    writeChatDraft(homeDraftKey, value);
+    setInputState(value);
+  };
   const [projectsMode, setProjectsMode] = useState<null | "expanded" | "fullscreen">(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const headerClickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -10361,6 +10400,15 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   );
   // Project & Session Flow runs on isolated demo data, then returns the user to where they were.
   const tourReturnRef = useRef<{ route: "home" | "project" | "session"; projectId: string | null; sessionId: string | null } | null>(null);
+  // Widgets & Whatnot snapshots the screen it leaves on the first Continue, then returns there.
+  const widgetsTourReturnRef = useRef<{
+    route: "home" | "project" | "session";
+    projectId: string | null;
+    sessionId: string | null;
+    galleryOpen: boolean;
+    hostedProjectId: string | null;
+  } | null>(null);
+  const [widgetsTourReturn, setWidgetsTourReturn] = useState(widgetsTourReturnRef.current);
   const generateOrImportActive =
     tutorial.isJennyOpen ||
     pickerOpen ||
@@ -10454,8 +10502,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   };
 
   // Ends the running tutorial in place (completion or Exit tutorial). Meet Infie finishes on
-  // i² Home; Project & Session Flow returns to the user's own project or session; a Widgets
-  // gallery the tour opened closes again.
+  // i² Home; Project & Session Flow returns to the user's own project or session; Widgets
+  // returns to the screen, project, session, and gallery captured on its first Continue.
   const endTutorial = (reason: "completed" | "dismissed") => {
     const track = activeTutorial;
     finishTutorial(reason);
@@ -10465,9 +10513,20 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       setRoute(back?.route ?? "home");
       setActiveProjectId(back?.projectId ?? null);
       setActiveSessionId(back?.sessionId ?? null);
-    } else if (track === "widgets" && tutorialOpenedGalleryRef.current) {
-      tutorialOpenedGalleryRef.current = false;
-      setWidgetsGalleryOpen(false);
+    } else if (track === "widgets") {
+      const back = widgetsTourReturnRef.current;
+      widgetsTourReturnRef.current = null;
+      setWidgetsTourReturn(null);
+      if (back) {
+        setRoute(back.route);
+        setActiveProjectId(back.projectId);
+        setActiveSessionId(back.sessionId);
+        setWidgetsGalleryOpen(back.galleryOpen);
+        tutorialOpenedGalleryRef.current = false;
+      } else if (tutorialOpenedGalleryRef.current) {
+        tutorialOpenedGalleryRef.current = false;
+        setWidgetsGalleryOpen(false);
+      }
     }
   };
 
@@ -10617,7 +10676,41 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   // turn highlights Library in the gallery. A gallery the tour opened closes when it ends.
   const isWidgetsOpenTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
   const isWidgetsLibraryTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
+  const widgetsTourInProject = Boolean(
+    isWidgetsTourActive &&
+    currentBeat === "B18" &&
+    turnIndex > B18_MOVE_TURN &&
+    widgetsTourReturn?.hostedProjectId &&
+    route === "project" &&
+    activeProjectId === widgetsTourReturn.hostedProjectId,
+  );
   const tutorialOpenedGalleryRef = useRef(false);
+  const enterWidgetsProject = () => {
+    if (widgetsTourReturnRef.current || !isWidgetsTourActive) return;
+    const project = firstActiveUsableProject(allProjects, {
+      demoProjectId: TUTORIAL_DEMO_PROJECT.id,
+      isImported: isImportedProject,
+    });
+    const snapshot = {
+      route,
+      projectId: activeProjectId,
+      sessionId: activeSessionId,
+      galleryOpen: widgetsGalleryOpen,
+      hostedProjectId: project?.id ?? null,
+    };
+    widgetsTourReturnRef.current = snapshot;
+    setWidgetsTourReturn(snapshot);
+    if (!project) return;
+    // Show the project. The saved gallery comes back for the Library line and at the end.
+    setWidgetsGalleryOpen(false);
+    setActiveSessionId(null);
+    setActiveProjectId(project.id);
+    setRoute("project");
+  };
+  useEffect(() => {
+    if (!isWidgetsLibraryTurn || !widgetsTourReturn?.galleryOpen) return;
+    setWidgetsGalleryOpen(true);
+  }, [isWidgetsLibraryTurn, widgetsTourReturn]);
   const handleHeaderWidgetsClick = () => {
     setWidgetsGalleryOpen(true);
     if (isWidgetsOpenTurn) {
@@ -11060,7 +11153,11 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         danceNonce={danceNonce}
         onOpenDemoSession={() => openSessionById("add-comments")}
         onFinish={() => endTutorial("completed")}
-        widgetsGalleryOpen={widgetsGalleryOpen}
+        widgetsGalleryOpen={widgetsGalleryOpen || Boolean(widgetsTourReturn?.galleryOpen)}
+        widgetsGalleryLive={widgetsGalleryOpen}
+        widgetsTourInProject={widgetsTourInProject}
+        onEnterWidgetsProject={enterWidgetsProject}
+        onDismissWidgetsGallery={() => setWidgetsGalleryOpen(false)}
       />
 
       {/* Persistent lower-left Home music player widget (absent from DOM until B05) */}
@@ -11171,8 +11268,9 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               showHeaderControls={showProjectNavigation}
               showLevelIndicator={showLevelIndicator}
               showTutorialsEntry={showTutorialsEntry}
-              showRoadmapSessions={showProjectRoadmapSessions}
-              showWidgetsPanel={showProjectWidgetsPanel}
+              showRoadmapSessions={showProjectRoadmapSessions || widgetsTourInProject}
+              showWidgetsPanel={showProjectWidgetsPanel || widgetsTourInProject}
+              widgetsTourChat={widgetsTourInProject}
               showStartAppSlot={isTutorialComplete}
               switchableProjects={
                 activeProjectId === EXPERIMEMO_PROJECT_ID && experimemoProject

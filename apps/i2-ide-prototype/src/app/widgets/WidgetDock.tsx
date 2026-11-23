@@ -30,10 +30,13 @@ import {
   applyHeaderClick,
   bottomPanelHeight,
   clampPairResize,
+  classifyHeaderGestureClick,
   clearDockClickSwallowed,
   computeZoneResizeWeights,
   dockClickWasSwallowed,
   expireHeaderGesture,
+  headerAnchorBox,
+  pointInHeaderAnchor,
   fromColumns,
   isFlowMarked,
   markDockClickSwallowed,
@@ -41,6 +44,7 @@ import {
   tidyZone,
   toColumns,
   type DockSideName,
+  type HeaderAnchorBox,
   type HeaderGesture,
   type HeaderMode,
 } from "./dockBehavior";
@@ -1248,6 +1252,7 @@ function WidgetFrame({ dock, widget, slot }: { dock: WidgetDockHandle; widget: D
   const frameRef = useRef<HTMLDivElement>(null);
   const clickTimer = useRef<number | null>(null);
   const gesture = useRef<HeaderGesture>({ count: 0, mode: "normal", pendingToggle: false });
+  const headerAnchor = useRef<HeaderAnchorBox | null>(null);
   const key = `${dock.screen}:${widget.id}`;
   const mode: WidgetMode = ctx.active?.key === key ? ctx.active.mode : "normal";
   const dragging = ctx.drag?.kind === "widget" && ctx.drag.screen === dock.screen && ctx.drag.id === widget.id;
@@ -1270,11 +1275,33 @@ function WidgetFrame({ dock, widget, slot }: { dock: WidgetDockHandle; widget: D
     gesture.current.mode = next;
     if (next !== modeRef.current) setMode(next);
   };
-  const onHeaderClick = (target: Element) => {
+  const onHeaderClick = (event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
     if (dockClickWasSwallowed()) return;
-    if (!headerOwnedBy(target, widget.id)) return;
+    const header = target.closest("[data-widget-header]");
+    const owned = headerOwnedBy(target, widget.id);
+    const overlay = target.closest("[data-widget-overlay]");
+    const kind = classifyHeaderGestureClick({
+      onInteractive: Boolean(target.closest(INTERACTIVE)),
+      onOwnedHeader: owned,
+      gestureOpen: gesture.current.count > 0,
+      inAnchor: pointInHeaderAnchor(headerAnchor.current, event.clientX, event.clientY),
+      onForeignHeader: Boolean(header) && !owned,
+      onOwnOverlay: overlay?.getAttribute("data-widget-overlay") === widget.id,
+    });
+    if (!kind) return;
+    // The expanding overlay covers the header. Swallow the continuation so the
+    // backdrop's "click outside" handler does not restore the widget first.
+    if (kind === "continue") {
+      event.preventDefault();
+      event.stopPropagation();
+    } else if (header) {
+      headerAnchor.current = headerAnchorBox(header.getBoundingClientRect());
+    }
     const next = applyHeaderClick(gesture.current, Boolean(widgetRef.current.onExpand));
     gesture.current = { count: next.count, mode: next.mode, pendingToggle: next.pendingToggle };
+    if (next.count === 0) headerAnchor.current = null;
     if (next.customCall) widgetRef.current.onExpand?.();
     if (!widgetRef.current.onExpand) commitGestureMode(next.mode);
     if (clickTimer.current) window.clearTimeout(clickTimer.current);
@@ -1286,10 +1313,12 @@ function WidgetFrame({ dock, widget, slot }: { dock: WidgetDockHandle; widget: D
       // header-click timer pull that choice back when it expires.
       if (gesture.current.mode !== modeRef.current) {
         gesture.current = { count: 0, mode: modeRef.current, pendingToggle: false };
+        headerAnchor.current = null;
         return;
       }
       const expired = expireHeaderGesture(gesture.current);
       gesture.current = expired;
+      headerAnchor.current = null;
       if (!widgetRef.current.onExpand) commitGestureMode(expired.mode);
     }, HEADER_CLICK_GAP_MS);
   };
@@ -1311,9 +1340,7 @@ function WidgetFrame({ dock, widget, slot }: { dock: WidgetDockHandle; widget: D
   ctxRef.current = ctx;
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
-      const target = e.target;
-      if (!(target instanceof Element)) return;
-      onHeaderClick(target);
+      onHeaderClick(e);
     };
     const onDown = (e: PointerEvent) => {
       if (modeRef.current !== "normal") return;

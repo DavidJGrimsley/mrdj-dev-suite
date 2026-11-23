@@ -127,9 +127,9 @@ export function getInfieFormAssetForBeat(beat: OnboardingBeat): string {
 }
 
 export const B17_EXPLANATIONS: readonly string[] = [
-  "Here's the Session Completion Form. I've filled in most of it; check the corrections, add feedback, and hit Submit. Free-plan users need to submit one; paid users are welcome to contribute too. You can turn on auto-submit on merge in Settings, and that still counts.",
-  "These forms boost your level while you work. The corrected actions are sent back to improve iSquared—not your codebase—so we can avoid the same mistakes. The number of open Sessions without submitted forms depends on your level and plan.",
-  "We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Completion forms, donors and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities that made it possible.",
+  "Here's the Session Completion Form. I've filled in most of it. Check the corrections, add feedback, and hit Submit. Free plans need one; paid users can contribute too. Auto-submit on merge in Settings still counts.",
+  "These forms boost your level while you work. Corrections go back to iSquared, not your codebase. How many open Sessions you can leave unsubmitted depends on your level and plan.",
+  "We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Forms, donors, and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities.",
 ] as const;
 
 /**
@@ -137,9 +137,9 @@ export const B17_EXPLANATIONS: readonly string[] = [
  * checking the demo Human task. Turn logic derives from this list's length.
  */
 export const B15_LINES: readonly string[] = [
-  "Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.",
-  "Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.",
-  "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.",
+  "Each Session has Session Agents working on it. Pick the model: ready-made agents, your own, or imported ones. i² is where they work together.",
+  "Me, the Session Agents, and any other agents you bring in work through the iSquared MCP and tools. We block dangerous mistakes, steer around pitfalls, and put best practices to work.",
+  "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it yourself.",
   "Tasks come in two groups: Session Agent tasks and Human tasks. You're the human. This one's ready for you to verify. Click on all open tasks to mark them complete.",
 ] as const;
 /** Index of the B15 turn that reveals the task groups and waits for the Human task check. */
@@ -150,7 +150,7 @@ export const B15_TASKS_TURN = B15_LINES.length - 1;
  * Continue; Continue on `B19_TURN2_LINE` finishes the tutorial in the session view.
  */
 export const B19_LINES: readonly string[] = [
-  "The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away. You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.",
+  "The website lets even your non-technical teammates join in too, without the desktop app or the codebase. The mobile app brings notifications, updates, and chat, and you can open your environments on mobile, the website, or in VR.",
 ] as const;
 /** Index of the B19 turn that closes Project & Session Flow. */
 export const B19_FINAL_TURN = B19_LINES.length;
@@ -164,13 +164,14 @@ export const B17_SESSION_CLOSED_LINE =
 
 /**
  * Widgets & Whatnot (B18): 0 arrange demo, 1 panels/collapse, 2 Preference Sliders,
- * 3 open Widgets (skipped when the gallery is already open), 4 Library callout.
+ * 3 open Widgets (skipped when the gallery was already open), 4 Library, 5 explore on your own.
  */
 export const B18_MOVE_TURN = 0;
 export const B18_PANELS_TURN = 1;
 export const B18_SLIDERS_TURN = 2;
 export const B18_OPEN_WIDGETS_TURN = 3;
 export const B18_LIBRARY_TURN = 4;
+export const B18_EXPLORE_TURN = 5;
 
 export const B18_LINES: readonly string[] = [
   "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want, and iSquared supports fullscreen multiple-screen layout saves. Let's try it with a widget.",
@@ -178,6 +179,7 @@ export const B18_LINES: readonly string[] = [
   "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.",
   "Click Widgets in the header to see everything else you can add to your workspace.",
   "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
+  "Explore the rest of the widgets on your own!",
 ] as const;
 
 /** B14 demo agent question (arrives in the Project Home Infie chat) and its pre-filled reply. */
@@ -270,8 +272,8 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
   continue_button: {
     id: "continue_button",
     group: "Continue",
-    firstBeat: "B03",
-    cue: "B03 “level zero”",
+    firstBeat: "B04",
+    cue: "B04 reply to the user’s project interest",
     locationAndGate: "Beside current message",
     lifetime: "temporary",
     componentTarget: "FloatingContinueButton",

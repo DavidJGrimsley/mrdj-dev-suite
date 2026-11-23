@@ -77,14 +77,14 @@ async function runMeetInfie(page, { name, provider }) {
 
   await line(page, `Nice to meet you, ${name}. I can see you're level zero.`)
   await page.locator('[data-name="Level"]').waitFor()
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
   await line(page, 'What a noob.')
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
 
   await line(page, 'Tell me a little about what you like to build and why.')
   await page.locator('#onboarding-project-interest').fill('Tiny games')
   await page.getByRole('button', { name: 'Send', exact: true }).click()
-  await line(page, "I don't do much coding myself.")
+  await line(page, "I don't do much coding myself. I'll bet you don't either, or we wouldn't be talking.")
   await cont(page)
 
   await line(page, "Btw… it's kinda quiet. Do you like music?")
@@ -98,6 +98,7 @@ async function runMeetInfie(page, { name, provider }) {
   await line(page, 'Of course you can use the keyboard and mouse.')
   await line(page, "Or pick up a gamepad if that's more your groove.")
   await line(page, 'Prefer a joystick and programmable keypad? You can do that too.')
+  await cont(page)
   await line(page, 'Since navigating the UI and executing common actions are mapped to a controller')
   await cont(page)
 
@@ -131,23 +132,23 @@ async function runMeetInfie(page, { name, provider }) {
   await cont(page)
 
   await line(page, 'Let me scoot over and make some room.')
-  await line(page, 'This is i² Home. The Workspace and Emulators controls switch between your work and your previews.')
+  await line(page, 'This is i² Home.')
   assert.ok(await page.getByText('Screen 1', { exact: true }).count(), 'Workspace/Emulators toggle revealed')
   assert.equal(await page.locator('[data-testid="active-projects-header"]').count(), 0, 'Active Projects not yet revealed')
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
   await line(page, 'You can resume projects that are already onboarded to iSquared.')
   await page.locator('[data-testid="active-projects-header"]').waitFor()
   assert.equal(await page.getByRole('button', { name: 'Import Project' }).count(), 0, 'Generate/Import not yet revealed')
   await cont(page)
   await line(page, 'You can also start new projects or onboard existing ones to iSquared.')
   await page.getByRole('button', { name: 'Import Project' }).waitFor()
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
   await line(page, 'I can also help you manage our Global To-Do list: it includes open project tasks and reminders')
   assert.equal(await page.locator('[data-name="HomeInfieActionRow"] [data-tutorial-disabled]').count(), 0, 'action buttons not yet revealed')
   await cont(page)
   await line(page, "I'll present Action Buttons specific to the next steps of your projects")
   await page.locator('[data-name="HomeInfieActionRow"] [data-tutorial-disabled]').first().waitFor()
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
 
   await line(page, "Learn has the other tutorials whenever you're ready.")
   await cont(page)
@@ -172,6 +173,55 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
   const seenLines = new Set()
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+
+    await t.test('B03 waits for visible text and reading time, including after a tab switch', async () => {
+      const page = await browser.newPage({ reducedMotion: 'no-preference' })
+      try {
+        await page.goto(`${base}?beat=B02`)
+        const name = 'A'.repeat(160)
+        await page.locator('#onboarding-name').fill(name)
+        await page.locator('#onboarding-email').fill('ada@e.mail')
+        await page.getByRole('button', { name: 'Submit', exact: true }).click()
+        const current = (id) => page.locator(`[data-slot="infie-message"][data-message-id="${id}"]`)
+        // At normal text speed this greeting takes longer to reveal than the level spotlight.
+        await current('B03-0').locator('[data-text-reveal="complete"]').waitFor()
+        await page.waitForTimeout(1000)
+        assert.equal(await current('B03-0').count(), 1, 'full personalized greeting retains its reading dwell')
+        await current('B03-1').locator('[data-text-reveal="complete"]').waitFor()
+        const setHidden = (hidden) => page.evaluate((value) => {
+          Object.defineProperty(document, 'hidden', { configurable: true, value })
+          document.dispatchEvent(new Event('visibilitychange'))
+        }, hidden)
+        await setHidden(true)
+        await page.waitForTimeout(1600)
+        assert.equal(await current('B03-1').count(), 1, 'hidden time cannot advance the punchline')
+        await setHidden(false)
+        await page.waitForTimeout(600)
+        assert.equal(await current('B03-1').count(), 1, 'returning gives the reader a fresh dwell')
+        await page.locator('#onboarding-project-interest').waitFor()
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
+      } finally {
+        await page.close()
+      }
+    })
+
+    await t.test('a failed controls video keeps the two-caption limit and holds the joystick for Continue', async () => {
+      const page = await browser.newPage({ reducedMotion: 'no-preference' })
+      try {
+        await page.route('**/infie-controls-chain-alpha.webm', (route) => route.abort())
+        await page.goto(`${base}?beat=B06`)
+        await page.getByRole('button', { name: 'Not now', exact: true }).click()
+        for (const device of ['keyboard-mouse', 'gamepad', 'joystick-numpad']) {
+          await page.locator(`[data-name="ControlsDeviceIllustration"][data-device="${device}"]`).waitFor()
+        }
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
+        await line(page, 'Prefer a joystick and programmable keypad?')
+        await cont(page)
+        await line(page, 'Since navigating the UI and executing common actions')
+      } finally {
+        await page.close()
+      }
+    })
 
     await t.test('Meet Infie first run ends on Home with level 1 and the plan choice; a replay keeps real state', async () => {
       const page = await context.newPage()
@@ -212,11 +262,13 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         assert.equal(await profileName(page), 'Ada', 'replay restores the real profile')
         assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('i2.onboarding.models'))), ['claude'])
 
-        // Exit mid-replay keeps everything too.
+        // Exit during an automatic reading dwell cancels the pending turn.
         await page.getByRole('button', { name: 'Learn', exact: true }).click()
         await page.locator('[data-testid="learn-tutorial-meet-infie"]').click()
-        await line(page, "Hi there. I'm Infie.")
+        await page.getByRole('button', { name: 'Sign in with GitHub' }).click()
+        await line(page, 'What a noob.')
         await page.locator('[data-testid="exit-tutorial"]').click()
+        await page.waitForTimeout(1500)
         await beat(page, 'COMPLETE')
         assert.match(await page.locator('[data-name="Level"]').innerText(), /1/)
         assert.equal(await page.locator('[data-name="LeekBeatsWidget"]').count(), 1)
@@ -413,16 +465,47 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         await page.locator('[data-name="WidgetArrangeDemo"]').waitFor()
         assert.equal(await page.locator('[data-name="LeekBeatsWidget"]').count(), 1)
         await cont(page)
+        await page.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor()
+        assert.equal(await page.locator('[data-testid="tutorial-offer"]').count(), 0, 'opening the host project does not start another tour')
         await line(page, 'You can drag panel edges to resize them')
+        await page.locator('[data-dock-center]').waitFor()
         await cont(page)
         await line(page, 'Preference Sliders apply to all models in all conversations.')
         await page.locator('[data-name="PreferenceSlidersPreview"]').waitFor()
         await cont(page)
-        // The gallery is already open, so "Click Widgets" is skipped.
+        // The user already had the gallery open, so "Click Widgets" is skipped.
         await line(page, 'One of my favorites is the Library')
+        await page.locator('[data-name="WidgetsGalleryModal"]').waitFor()
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 1, 'one Continue on the Library cue')
         await cont(page)
-        await page.locator('[data-name="FloatingInfieCallout"]').waitFor({ state: 'detached' })
-        assert.equal(await page.locator('[data-name="WidgetsGalleryModal"]').count(), 1, 'a gallery the user opened stays open')
+        await page.locator('[data-name="WidgetsGalleryModal"]').waitFor({ state: 'detached' })
+        await page.locator('[data-testid="project-home"] [data-slot="infie-message"]').filter({ hasText: 'Explore the rest of the widgets on your own!' }).waitFor()
+        assert.equal(await page.locator('[data-name="FloatingInfieCallout"]').count(), 0, 'the closing line is not a callout over the gallery')
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 1, 'one Continue on the project chat line')
+        await cont(page)
+        await page.locator('[data-testid="project-home"]').waitFor({ state: 'detached' })
+        assert.equal(await page.locator('[data-name="WidgetsGalleryModal"]').count(), 1, 'finish restores the gallery the user opened')
+        const exitContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+        const exitPage = await exitContext.newPage()
+        exitPage.on('pageerror', (e) => pageErrors.push(e.message))
+        try {
+          await exitPage.goto(`${base}?beat=COMPLETE&tours=1`, { waitUntil: 'domcontentloaded' })
+          await exitPage.locator('[data-name="HeaderWidgetsButton"]').click()
+          await exitPage.locator('[data-name="WidgetsGalleryModal"]').waitFor()
+          await exitPage.getByRole('button', { name: 'Start tour' }).click()
+          await line(exitPage, "Everything's a widget here.")
+          await cont(exitPage)
+          await exitPage.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor()
+          assert.equal(await exitPage.locator('[data-name="WidgetsGalleryModal"]').count(), 0, 'the tour closes the gallery to show the project')
+          await exitPage.locator('[data-testid="exit-tutorial"]').click()
+          await exitPage.locator('[data-testid="project-home"]').waitFor({ state: 'detached' })
+          assert.equal(await exitPage.locator('[data-name="WidgetsGalleryModal"]').count(), 1, 'exit restores the gallery the user had open')
+          assert.equal(await exitPage.locator('[data-testid="home-projects-column"]').count(), 1)
+        } finally {
+          await exitContext.close()
+        }
         await page.keyboard.press('Escape')
         await page.locator('[data-name="HeaderWidgetsButton"]').click()
         await page.waitForTimeout(400)
@@ -520,10 +603,15 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         await line(page, 'Behind the scenes, i² Core helps me coordinate')
         await cont(page)
         await line(page, "info.md holds the project's name")
+        await page.locator('[data-name="ProjectInfoPreview"]').waitFor()
         await cont(page)
         await line(page, 'todo.md is what we want to build')
+        await page.locator('[data-name="ProjectTodoPreview"]').waitFor()
+        await page.locator('[data-name="ProjectInfoPreview"]').waitFor({ state: 'detached' })
         await cont(page)
         await line(page, 'style.md is the colors, typography')
+        await page.locator('[data-name="StylistStaticPreview"]').waitFor()
+        await page.locator('[data-name="ProjectTodoPreview"]').waitFor({ state: 'detached' })
         await cont(page)
         await line(page, 'guidelines.md tells me, you, your teammates')
         await cont(page)

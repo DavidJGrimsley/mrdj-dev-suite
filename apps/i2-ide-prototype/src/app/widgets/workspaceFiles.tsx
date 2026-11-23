@@ -17,6 +17,7 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Expand, FileText, Folder, FolderOpen, Minimize2, X } from "lucide-react";
 import { assetUrl } from "../assetUrl";
+import { HEADER_CLICK_GAP_MS } from "./dockBehavior";
 import { notHotdogLimit, usePrototypeLimit } from "./prototypeLimit";
 
 export interface WorkspaceBundle {
@@ -143,11 +144,10 @@ interface ViewerState {
   fullscreen: boolean;
 }
 
-const TRIPLE_CLICK_MS = 320;
-
 /**
  * Read-only editor: the workspace Explorer on the left, opened files as tabs on the right.
- * Triple-click the title bar (or use its button) for fullscreen.
+ * Triple-click the title bar (or use its button) for fullscreen. The gap matches the dock
+ * header so a deliberate third click is not dropped.
  */
 export function FileViewerProvider({ children }: { children: ReactNode }) {
   const [viewer, setViewer] = useState<ViewerState | null>(null);
@@ -201,7 +201,7 @@ export function FileViewerProvider({ children }: { children: ReactNode }) {
     c.timer = window.setTimeout(() => {
       if (c.count >= 3) toggleFullscreen();
       c.count = 0;
-    }, TRIPLE_CLICK_MS);
+    }, HEADER_CLICK_GAP_MS);
   };
 
   return (
