@@ -8,13 +8,22 @@ export const IMPORT_WORKSPACE_NAME = "field-notes-i2Workspace";
 
 export const IMPORT_PURPOSE_QUESTION = "What is the purpose of this app?";
 
+export const IMPORT_EXAMPLE_PURPOSE_ANSWER =
+  "A private offline-first field notebook for capturing quick notes, photos, and markdown exports.";
+
 export const IMPORT_SIMULATION_LINE =
-  "Simulating the rest of the questions for this prototype. Go to Generate a new project for a fuller experience of filling out the project info.md.";
+  "In the full app, I send agents to scan your imported project, infer answers from the codebase, ask you to confirm what they found, and encourage you to elaborate. For this prototype I'm simulating the rest of the answers—try Generate a new project for the fuller experience of filling out info.md.";
 
 export const IMPORT_FLAG_INTRO = "I flagged these possible sessions:";
 
 export const IMPORT_START_LINE =
   "Starting them now. Nine sessions are active, each in a different state.";
+
+export const IMPORT_PROJECT_INTRO_LINE =
+  "Field Notes is onboarded with its tracked main branch, project documentation folder, and nine active sessions.";
+
+export const IMPORT_TUTORIAL_ENDING_LINE =
+  "That wraps up the Import project tutorial! Field Notes is show-only in this prototype—it illustrates multiple sessions running at once, each with multiple Session Agents coordinated by Infie.";
 
 export const IMPORT_SCAN_STEPS = [
   "Reading the folder…",

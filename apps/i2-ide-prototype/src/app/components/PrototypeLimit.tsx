@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { assetUrl } from "../assetUrl";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useIsPresent } from "motion/react";
+import { restoreFocus, trapTabKey } from "./focusTrap";
 import {
   AlertTriangle,
   Compass,
@@ -65,15 +66,34 @@ export function PrototypeLimit({
   showInfie = true,
   rewardNote,
 }: PrototypeLimitProps) {
+  // As a modal it is a layer of its own: it takes focus from whatever opened it (which may be
+  // another modal, such as Learn), keeps Tab inside, and hands focus back when it closes.
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<Element | null>(null);
+  const isPresent = useIsPresent();
+  useEffect(() => {
+    if (variant !== "modal") return;
+    previousFocusRef.current = document.activeElement;
+    primaryRef.current?.focus({ preventScroll: true });
+    return () => restoreFocus(previousFocusRef.current);
+  }, [variant]);
+  useEffect(() => {
+    if (isPresent) return;
+    restoreFocus(previousFocusRef.current);
+    previousFocusRef.current = null;
+  }, [isPresent]);
+
   // Handle ESC key to dismiss if modal
   useEffect(() => {
-    if (variant !== "modal" || !onClose) return;
+    if (variant !== "modal" || !isPresent) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onClose?.();
+      else trapTabKey(dialogRef.current, e);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [variant, onClose]);
+  }, [variant, onClose, isPresent]);
 
   const defaultPrimary: PrototypeLimitAction = primaryAction ?? {
     label: onClose ? "Back to i² Home" : "Understood",
@@ -310,6 +330,7 @@ export function PrototypeLimit({
           </button>
         )}
         <button
+          ref={primaryRef}
           type="button"
           onClick={defaultPrimary.onClick}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[10px] transition-all hover:opacity-90 active:scale-95"
@@ -344,6 +365,10 @@ export function PrototypeLimit({
       onClick={onClose}
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={featureName ? `${title}: ${featureName}` : title}
         initial={{ scale: 0.95, y: 10, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         exit={{ scale: 0.95, y: 10, opacity: 0 }}

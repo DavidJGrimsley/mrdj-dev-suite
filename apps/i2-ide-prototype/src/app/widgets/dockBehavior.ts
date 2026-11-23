@@ -96,6 +96,53 @@ export interface HeaderGesture {
   pendingToggle: boolean;
 }
 
+/** Screen box of the header that started the current gesture. */
+export interface HeaderAnchorBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** A natural third click can drift a few pixels off the title text. */
+export const HEADER_ANCHOR_SLOP_PX = 6;
+
+export function headerAnchorBox(rect: Pick<HeaderAnchorBox, "left" | "top" | "right" | "bottom">): HeaderAnchorBox {
+  return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+}
+
+export function pointInHeaderAnchor(
+  anchor: HeaderAnchorBox | null,
+  x: number,
+  y: number,
+  slop = HEADER_ANCHOR_SLOP_PX,
+): boolean {
+  if (!anchor) return false;
+  return x >= anchor.left - slop && x <= anchor.right + slop && y >= anchor.top - slop && y <= anchor.bottom + slop;
+}
+
+/**
+ * The second click expands immediately, so the overlay backdrop covers the header
+ * before a natural third click arrives. That click is no longer on a header; it
+ * lands on the backdrop (or on whatever the dialog moved over that spot) and would
+ * otherwise restore the widget. Count it when it is still inside the header that
+ * started the gesture. Buttons, links, and other controls never count.
+ */
+export function classifyHeaderGestureClick(input: {
+  onInteractive: boolean;
+  onOwnedHeader: boolean;
+  gestureOpen: boolean;
+  inAnchor: boolean;
+  onForeignHeader: boolean;
+  /** Backdrop or dialog that belongs to this widget, not another modal covering the same pixels. */
+  onOwnOverlay: boolean;
+}): "header" | "continue" | null {
+  if (input.onInteractive) return null;
+  if (input.onOwnedHeader) return "header";
+  if (input.gestureOpen && input.inAnchor && input.onOwnOverlay && !input.onForeignHeader) return "continue";
+  return null;
+}
+
 export function applyHeaderClick(g: HeaderGesture, custom: boolean): HeaderGesture & { customCall: boolean } {
   const count = g.count + 1;
   if (count >= 3) {

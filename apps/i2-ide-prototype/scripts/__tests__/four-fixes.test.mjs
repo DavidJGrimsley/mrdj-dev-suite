@@ -227,7 +227,7 @@ test('browser: four approved fixes across desktop 1440x900 and narrow 768x900 & 
     })
 
     // ── 2. Effort slider + B10 Turn 2 left margin vs narrow inline ────────────
-    await t.test('effort: shared widget stops/reset + B10 Turn 2 wide left margin & narrow inline', async () => {
+    await t.test('effort: shared widget stops/reset + Widgets & Whatnot sliders callout, narrow and mobile', async () => {
       const page = await context.newPage()
       page.on('pageerror', (e) => pageErrors.push(e.message))
       try {
@@ -276,65 +276,57 @@ test('browser: four approved fixes across desktop 1440x900 and narrow 768x900 & 
         assert.match(await widget.locator('#pref-effort [role="slider"]').getAttribute('aria-valuetext'), /^3:/)
         await page.keyboard.press('Escape')
 
-        // Now test B10 Turn 2 in reduced motion so Continue appears immediately
+        // Preference Sliders live in Widgets & Whatnot (B18 sliders turn), opening the actual
+        // full Preference Sliders widget modal above Infie's callout.
         await page.emulateMedia({ reducedMotion: 'reduce' })
-        await page.goto(`${baseUrl}?beat=B10`, { waitUntil: 'networkidle' })
+        await page.goto(`${baseUrl}?beat=B18`, { waitUntil: 'networkidle' })
+        const callout = page.locator('[data-name="FloatingInfieCallout"]')
+        await callout.waitFor({ state: 'visible', timeout: 6000 })
         await page.getByRole('button', { name: 'Continue', exact: true }).click()
-        await page.locator('[data-provider-id="claude"]').click()
-        await page.locator('[data-name="SimulatedModelSignInModal"] button:has-text("Connect Claude")').click()
+        await page.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor({ timeout: 6000 })
         await page.getByRole('button', { name: 'Continue', exact: true }).click()
+        await page.locator('[data-name="FloatingInfieCallout"][data-turn="2"]').waitFor()
 
-        // Turn 2 active
-        const preview = page.locator('[data-name="PreferenceSlidersPreview"]')
-        await preview.waitFor({ state: 'visible', timeout: 6000 })
-        assert.equal(await preview.count(), 1, 'preview renders once')
-        const messageText = await page.locator('[data-slot="infie-message"]').innerText()
-        assert.equal(/\bbelow\b/i.test(messageText), false, 'B10 Turn 2 copy must not say below')
+        const slidersModal = page.locator('[data-testid="widget-modal-infiePreferences"]')
+        const fullWidget = slidersModal.locator('[data-testid="infie-preferences-widget"]')
+        await fullWidget.waitFor({ state: 'visible', timeout: 6000 })
+        assert.equal(await fullWidget.count(), 1, 'full Preference Sliders widget renders once')
+        const messageText = await callout.innerText()
+        assert.match(messageText, /Preference Sliders apply to all models in all conversations/)
+        assert.match(messageText, /close this when you're done/i)
+        assert.equal(/\bbelow\b/i.test(messageText), false, 'sliders copy must not say below')
 
-        // Desktop 1440x900: in OnboardingLeftMargin >=300px, clear of header/music/chat, pointer interactive
-        const leftMargin = page.locator('[data-name="OnboardingLeftMargin"]')
-        assert.equal(await leftMargin.count(), 1)
-        const previewBox = await preview.boundingBox()
-        const marginBox = await leftMargin.boundingBox()
-        const headerBox = await page.locator('[data-name="Header"]').boundingBox()
-        const musicBox = await page.locator('[data-name="LeekBeatsWidget"]').boundingBox()
-        const scrollerBox = await page.locator('[data-name="OnboardingMessageScroller"]').boundingBox()
-        assert.ok(previewBox && marginBox && headerBox && musicBox && scrollerBox)
-        assert.ok(marginBox.width >= 300, `left margin width ${marginBox.width} >= 300`)
-        assert.ok(previewBox.x >= 0 && previewBox.x + previewBox.width <= scrollerBox.x + 1, 'preview left of chat')
-        assert.equal(boxesOverlap(previewBox, headerBox), false, 'no overlap with Header')
-        assert.equal(boxesOverlap(previewBox, musicBox), false, 'no overlap with Music')
-        assert.equal(boxesOverlap(previewBox, scrollerBox), false, 'no overlap with Chat')
+        // Desktop 1440x900: full widget anchored above callout, pointer interactive
+        const widgetBox = await fullWidget.boundingBox()
+        const calloutBox = await callout.boundingBox()
+        assert.ok(widgetBox && calloutBox)
+        assert.ok(widgetBox.y + widgetBox.height <= calloutBox.y + 8, 'full widget sits clear above Infie callout')
 
         // Real pointer click on Effort slider right edge -> moves to stop 5 (index 4)
-        const b10Effort = page.locator('[id="tutorial-pref-Effort"] [role="slider"]')
-        assert.equal(await b10Effort.getAttribute('aria-valuenow'), '2')
-        const trackBox = await page.locator('[id="tutorial-pref-Effort"]').boundingBox()
+        const b18Effort = fullWidget.locator('#pref-effort [role="slider"]')
+        await fullWidget.locator('#pref-effort').scrollIntoViewIfNeeded()
+        assert.equal(await b18Effort.getAttribute('aria-valuenow'), '2')
+        const trackBox = await fullWidget.locator('#pref-effort').boundingBox()
         assert.ok(trackBox)
         await page.mouse.click(trackBox.x + trackBox.width - 4, trackBox.y + trackBox.height / 2)
-        assert.equal(await b10Effort.getAttribute('aria-valuenow'), '4')
-        await maybeShot(page, '03-b10-wide-left-margin.png')
+        assert.equal(await b18Effort.getAttribute('aria-valuenow'), '4')
+        await maybeShot(page, '03-widgets-sliders-callout.png')
 
-        // Narrow 768x900: inline below messages, preserves shared Effort value
+        // Narrow 768x900: same full widget, shared Effort value kept, no overflow
         await page.setViewportSize({ width: 768, height: 900 })
         await page.waitForTimeout(150)
-        assert.equal(await page.locator('[data-name="OnboardingLeftMargin"]').count(), 0)
-        assert.equal(await preview.count(), 1)
-        assert.equal(await b10Effort.getAttribute('aria-valuenow'), '4')
-        const inline768Box = await preview.boundingBox()
-        const scroller768Box = await page.locator('[data-name="OnboardingMessageScroller"]').boundingBox()
-        assert.ok(inline768Box && scroller768Box && inline768Box.y >= scroller768Box.y + scroller768Box.height - 2)
+        assert.equal(await fullWidget.count(), 1)
+        assert.equal(await b18Effort.getAttribute('aria-valuenow'), '4')
         assert.ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 768, 'no overflow at 768px')
-        await maybeShot(page, '04-b10-narrow-768.png')
+        await maybeShot(page, '04-widgets-sliders-narrow-768.png')
 
-        // Mobile 390x844: inline below messages, no overflow
+        // Mobile 390x844: no overflow
         await page.setViewportSize({ width: 390, height: 844 })
         await page.waitForTimeout(150)
-        assert.equal(await page.locator('[data-name="OnboardingLeftMargin"]').count(), 0)
-        assert.equal(await preview.count(), 1)
-        assert.equal(await b10Effort.getAttribute('aria-valuenow'), '4')
+        assert.equal(await fullWidget.count(), 1)
+        assert.equal(await b18Effort.getAttribute('aria-valuenow'), '4')
         assert.ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 390, 'no overflow at 390px')
-        await maybeShot(page, '05-b10-mobile-390.png')
+        await maybeShot(page, '05-widgets-sliders-mobile-390.png')
       } finally {
         await page.close()
       }

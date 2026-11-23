@@ -27,16 +27,21 @@ import { OnboardingStage } from "./onboarding/OnboardingStage";
 import {
   BEAT_ORDER,
   OnboardingBeat,
+  ProjectSessionPortion,
   B14_AGENT_QUESTION,
   B14_AGENT_REPLY_DEFAULT,
   B15_TASKS_TURN,
   B17_EXPLANATIONS,
   B18_MOVE_TURN,
-  B18_PANELS_TURN,
+  B18_SLIDERS_TURN,
   B18_OPEN_WIDGETS_TURN,
   B18_LIBRARY_TURN,
-  B19_HOME_TURN,
 } from "./onboarding/revealLedger";
+import { chatDraftKey, readChatDraft, writeChatDraft } from "./onboarding/chatDraftMemory";
+import { firstActiveUsableProject } from "./onboarding/widgetsTourProject";
+import { LearnModal, LearnProvider, useLearn, type LearnTutorialId } from "./learn/LearnModal";
+import { markTutorialCompleted, readCompletedTutorials, writeCompletedTutorials } from "./learn/tutorialCompletion";
+import { TutorialOfferCard, ExitTutorialButton } from "./learn/TutorialOfferCard";
 import {
   FloatingContinueButton,
   FloatingField,
@@ -89,7 +94,8 @@ import {
 import { SimulatorPreview } from "./components/SimulatorPreview";
 import {
   WidgetDockProvider, WidgetZone, DockPanel, DockSplitter, useWidgetDock, useDockApi, buildDock, useDockSizes, useDockDragging,
-  useRegisterLibraryWidgets, useLibraryDrag, useRemovedWidgets, useWidgetFillsContainer, type DockWidget, type WidgetMode,
+  useDockSnapshot, useRegisterLibraryWidgets, useLibraryDrag, useRemovedWidgets, useWidgetFillsContainer,
+  type DockSnapshot, type DockWidget, type WidgetMode,
 } from "./widgets/WidgetDock";
 import { FileViewerProvider, WorkspaceExplorer, useFileViewer, useOpenProjectFile, workspaceSpecFor } from "./widgets/workspaceFiles";
 import { InfiePreferencesProvider, RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "./widgets/infiePreferencesContext";
@@ -103,7 +109,9 @@ import { WhatsNextProposals, WhatsNextScanning, useWhatsNextDiscovery, whatsNext
 import {
   IMPORT_FOLDER_LABEL,
   IMPORT_PROJECT_ID,
+  IMPORT_PROJECT_INTRO_LINE,
   IMPORT_PROJECT_NAME,
+  IMPORT_TUTORIAL_ENDING_LINE,
   IMPORTED_PROJECT,
   IMPORTED_SESSIONS,
   isImportedProject,
@@ -2185,8 +2193,8 @@ function EmulatorModal({
 
 // ─── Standard widget modal ──────────────────────────────────────────────────
 
-function WidgetModal({ id, label, fullscreen: initialFullscreen, onClose, ctx }: {
-  id: WidgetId; label: string; fullscreen: boolean; onClose: () => void; ctx: AppContext;
+function WidgetModal({ id, label, fullscreen: initialFullscreen, onClose, ctx, tutorialAnchored = false }: {
+  id: WidgetId; label: string; fullscreen: boolean; onClose: () => void; ctx: AppContext; tutorialAnchored?: boolean;
 }) {
   const [fullscreen, setFullscreen] = useState(initialFullscreen);
 
@@ -2198,13 +2206,23 @@ function WidgetModal({ id, label, fullscreen: initialFullscreen, onClose, ctx }:
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      data-testid={`widget-modal-${id}`}
+      data-tutorial-anchored={tutorialAnchored ? "true" : "false"}
+      className={`fixed inset-0 z-50 flex justify-center p-4 bg-black/70 backdrop-blur-sm ${
+        tutorialAnchored && !fullscreen ? "items-start pt-[5vh]" : "items-center"
+      }`}
       onClick={onClose}>
       <motion.div
         initial={{ scale: 0.95, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 8 }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         onClick={e => e.stopPropagation()}
-        className={`bg-[#1a1a1a] border border-white/8 rounded-[10px] shadow-2xl flex flex-col overflow-hidden ${fullscreen ? "fixed inset-3" : "w-[860px] h-[580px]"}`}
+        className={`bg-[#1a1a1a] border border-white/8 rounded-[10px] shadow-2xl flex flex-col overflow-hidden ${
+          fullscreen
+            ? "fixed inset-3"
+            : tutorialAnchored
+              ? "w-[min(860px,calc(100vw-2rem))] h-[min(560px,58vh)]"
+              : "w-[min(860px,calc(100vw-2rem))] h-[min(580px,calc(100vh-2rem))]"
+        }`}
       >
         <div className="flex items-center justify-between px-4 py-3 bg-[#1d1b20] border-b border-white/5 shrink-0">
           <span className="font-['Rounded_Mplus_1c',sans-serif] text-[13px] text-white">{label}</span>
@@ -2213,7 +2231,7 @@ function WidgetModal({ id, label, fullscreen: initialFullscreen, onClose, ctx }:
               ? <button onClick={() => setFullscreen(false)} className="text-[#555] hover:text-[#abefa3] transition-colors" title="Exit fullscreen"><Minimize2 size={14} /></button>
               : <button onClick={() => setFullscreen(true)} className="text-[#555] hover:text-[#abefa3] transition-colors" title="Fullscreen"><Maximize2 size={14} /></button>
             }
-            <button onClick={onClose} aria-label="Close emulator" className="text-[#555] hover:text-[#c5c5c5] transition-colors"><X size={14} /></button>
+            <button onClick={onClose} aria-label={`Close ${label}`} className="text-[#555] hover:text-[#c5c5c5] transition-colors cursor-pointer"><X size={14} /></button>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
@@ -2241,7 +2259,7 @@ function Widget({ label, children, onModal, onFullscreen, accentHeader = false, 
       if (countRef.current === 2) onModal();
       else if (countRef.current >= 3) onFullscreen();
       countRef.current = 0;
-    }, 260);
+    }, WIDGET_HEADER_CLICK_MS);
   };
 
   return (
@@ -2565,8 +2583,13 @@ function InfieAvatar({ size = 20 }: { size?: number }) {
 }
 
 function InfieChatPanel({ onSend }: { onSend: (t: string) => void }) {
+  const draftKey = chatDraftKey("legacy-infie");
   const [messages, setMessages] = useState<Message[]>(INIT_INFIE_MESSAGES);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState(() => readChatDraft(draftKey));
+  const setDraft = (value: string) => {
+    writeChatDraft(draftKey, value);
+    setDraftState(value);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -3129,7 +3152,8 @@ function Header({
     };
   }, []);
 
-  const handleTutorials = onTutorials ?? (() => onScopeNotice?.("Tutorials and lessons are coming soon!"));
+  const learn = useLearn();
+  const handleTutorials = onTutorials ?? learn?.open ?? (() => onScopeNotice?.("Tutorials and lessons are coming soon!"));
   const handleWidgets = onWidgets ?? (() => onScopeNotice?.("Widgets gallery coming soon!"));
   const handleNotifications = onNotifications ?? (() => onScopeNotice?.("No unread notifications."));
   const handleSettings = onSettings ?? (() => onScopeNotice?.("Settings configured to defaults."));
@@ -3535,6 +3559,7 @@ function Header({
             type="button"
             onClick={disabled ? undefined : handleTutorials}
             disabled={disabled}
+            data-learn-trigger
             className={`content-stretch flex flex-col items-center justify-center px-[12px] py-[4px] relative rounded-[7px] shrink-0 transition-all ${
               highlightTutorialsNav
                 ? "infie-glow border border-[#2dd4bf] bg-[rgba(45,212,191,0.14)]"
@@ -5146,13 +5171,21 @@ function LiveSimulatorBody({ kind, targetH = 420 }: { kind: "emuWeb" | "emuAndro
 /** Shown where a project has no build to simulate in the prototype. */
 function SimulatorUnavailable({ projectId }: { projectId: string | null }) {
   const limit = usePrototypeLimit();
-  const projectDisplayName = projectId === "nothotdog" ? "Not Hotdog" : projectId || "this project";
+  const imported = isImportedProject(projectId);
+  const projectDisplayName =
+    projectId === "nothotdog"
+      ? "Not Hotdog"
+      : imported
+        ? IMPORT_PROJECT_NAME
+        : projectId || "this project";
   return (
     <div data-testid="simulator-unavailable" className="flex flex-col items-center justify-center gap-2 p-4 text-center size-full">
       <AlertTriangle size={20} className="text-[#f59e0b]" />
       <p className="font-['Rounded_Mplus_1c',sans-serif] text-[12px] text-white">No build to simulate</p>
       <p className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#9a9aa2] max-w-[240px]">
-        Android preview not configured for {projectDisplayName}. Pet Show and Tell has a live simulated preview.
+        {imported
+          ? `${projectDisplayName} is a show-only imported project in this prototype, so no live preview build is configured.`
+          : `Android preview not configured for ${projectDisplayName}. Pet Show and Tell has a live simulated preview.`}
       </p>
       <button
         type="button"
@@ -5596,6 +5629,7 @@ function ProjectHomeScreen({
   musicLibraryRef,
   moveMusicToBottomRef,
   animatePanelsIn = false,
+  widgetsTourChat = false,
 }: {
   project: ProtoProject;
   onOpenSession: (s: ProtoSession, opts?: { justStarted?: boolean }) => void;
@@ -5628,6 +5662,8 @@ function ProjectHomeScreen({
   moveMusicToBottomRef?: React.MutableRefObject<(() => void) | null>;
   /** Tutorial: the side and bottom panels slide in toward the chat when they first appear. */
   animatePanelsIn?: boolean;
+  /** Widgets & Whatnot after the arrange demo: scripted lines in this project's real chat. */
+  widgetsTourChat?: boolean;
 }) {
   const {
     isTutorialActive,
@@ -5671,7 +5707,8 @@ function ProjectHomeScreen({
     dockedChat.currentLine,
     dockedChat.currentMessageId
   );
-  const showDockedContinue = Boolean(isTutorialActive && dockedChat.showContinue && dockedChat.onContinue && projectDockedTextComplete);
+  const showScriptedChat = isTutorialActive || widgetsTourChat;
+  const showDockedContinue = Boolean(showScriptedChat && dockedChat.showContinue && dockedChat.onContinue && projectDockedTextComplete);
   // Keep the newest tutorial line in view (scroll only the message list, never ancestors).
   const projectChatListRef = useRef<HTMLDivElement>(null);
   const isExperimemoHome = project.id === EXPERIMEMO_PROJECT_ID;
@@ -5686,11 +5723,21 @@ function ProjectHomeScreen({
     experimemoFlow.stage === "question" || experimemoFlow.stage === "schema-question";
   useEffect(() => {
     const el = projectChatListRef.current;
-    if ((isTutorialActive || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [isTutorialActive, dockedChat.history, isExperimemoHome, experimemoFlow.homeMessages.length]);
+    if ((showScriptedChat || isExperimemoHome) && el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [showScriptedChat, dockedChat.history, isExperimemoHome, experimemoFlow.homeMessages.length]);
 
   const limit = usePrototypeLimit();
-  const [projectDraft, setProjectDraft] = useState("");
+  const projectDraftKey = chatDraftKey("project", project.id);
+  const projectIdRef = useRef(project.id);
+  const [projectDraft, setProjectDraftState] = useState(() => readChatDraft(projectDraftKey));
+  const setProjectDraft = (value: string) => {
+    writeChatDraft(chatDraftKey("project", projectIdRef.current), value);
+    setProjectDraftState(value);
+  };
+  useEffect(() => {
+    projectIdRef.current = project.id;
+    setProjectDraftState(readChatDraft(chatDraftKey("project", project.id)));
+  }, [project.id]);
   const [screenTab, setScreenTab] = useState<"Workspace" | "Emulators">("Workspace");
   const awaitingAgentReply = isTutorialActive && currentBeat === "B14" && turnIndex === 1 && !agentQuestionReplied;
   const explorerSpec = workspaceSpecFor(project.id, { sessionBranch: tutorial.session ? EXPERIMEMO_SESSION.branch : null });
@@ -6108,7 +6155,7 @@ function ProjectHomeScreen({
               </div>
             </div>
             <div ref={projectChatListRef} className="i2-chat-scale i2-conversation-scroll flex-1 overflow-y-auto p-[16px] flex flex-col gap-[16px]">
-              {isExperimemoHome ? (
+              {isExperimemoHome && !widgetsTourChat ? (
                 experimemoFlow.homeMessages.map((m, idx) => (
                   <FlowMessageBubble
                     key={m.id}
@@ -6118,7 +6165,7 @@ function ProjectHomeScreen({
                     onComplete={handleExperimemoHomeTextComplete}
                   />
                 ))
-              ) : isTutorialActive ? (
+              ) : showScriptedChat ? (
                 <>
                   {dockedChat.history.map((m, idx) => {
                     const isLatest = dockedChat.currentMessageId
@@ -6205,6 +6252,36 @@ function ProjectHomeScreen({
                     </div>
                   </div>
                 ))
+              ) : importedHome ? (
+                [
+                  { id: "import-intro", text: IMPORT_PROJECT_INTRO_LINE, ending: false },
+                  { id: "import-ending", text: IMPORT_TUTORIAL_ENDING_LINE, ending: true },
+                ].map((item, i, arr) => (
+                  <div
+                    key={item.id}
+                    data-testid={item.ending ? "import-tutorial-ending" : "import-project-intro"}
+                    className="flex gap-[10px] items-start w-full"
+                  >
+                    <OP4InfieAvatar />
+                    <div
+                      className={`flex flex-col items-start gap-1.5 px-[14px] py-[10px] rounded-bl-[10px] rounded-br-[10px] rounded-tl-[3px] rounded-tr-[10px] flex-1 ${
+                        item.ending
+                          ? "bg-[rgba(45,212,191,0.08)] border border-[rgba(45,212,191,0.4)]"
+                          : "bg-[rgba(45,212,191,0.05)] border border-[rgba(45,212,191,0.13)]"
+                      }`}
+                    >
+                      {item.ending && (
+                        <span className="inline-flex items-center gap-1.5 font-['Space_Grotesk',sans-serif] text-[10px] font-bold uppercase tracking-wider text-[#abefa3]">
+                          <CheckCircle2 size={11} />
+                          Import tutorial complete
+                        </span>
+                      )}
+                      <p className="font-['Rounded_Mplus_1c',sans-serif] text-[#e5e7eb] text-[12px] leading-[19.5px]">
+                        {i === arr.length - 1 ? <RevealingInfieText text={item.text} /> : item.text}
+                      </p>
+                    </div>
+                  </div>
+                ))
               ) : (
                 (isUnguidedPetProject
                   ? [
@@ -6260,6 +6337,7 @@ function ProjectHomeScreen({
               >
                 {project.id === "experimemo" ? (
                   <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
                     {experimemoFlow.stage === "starter" && (
                       <InfieFlowPill
                         testId="whats-next-button"
@@ -6345,6 +6423,7 @@ function ProjectHomeScreen({
                   </>
                 ) : isUnguidedPetProject ? (
                   <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
                     {petSession.state.status === "PLAN REVIEW" && (
                       <InfieFlowPill
                         testId="home-approve-plan-button"
@@ -6414,7 +6493,10 @@ function ProjectHomeScreen({
                     )}
                   </>
                 ) : (
-                  <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">No active sessions</span>
+                  <>
+                    {widgetsTourChat && showDockedContinue && <FloatingContinueButton onClick={dockedChat.onContinue!} />}
+                    <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] text-[#777]">No active sessions</span>
+                  </>
                 )}
               </div>
             </div>
@@ -6850,7 +6932,6 @@ function SessionScreen({
   const tutorial = useTutorial();
   const petSession = usePetSession();
   const {
-    onboardingRunId,
     isTutorialActive,
     currentBeat,
     turnIndex,
@@ -6906,7 +6987,12 @@ function SessionScreen({
     { id: "s1", role: "assistant", content: "Worktree `add-comments` branched from `main` at `6e17795`. Agents are ready for plan review and implementation." },
     { id: "s2", role: "assistant", content: "Preview server connected. Doctor passed baseline checks." },
   ]);
-  const [input, setInput] = useState("");
+  const sessionDraftKey = chatDraftKey("session", session.id);
+  const [input, setInputState] = useState(() => readChatDraft(sessionDraftKey));
+  const setInput = (value: string) => {
+    writeChatDraft(sessionDraftKey, value);
+    setInputState(value);
+  };
   const [loading, setLoading] = useState(false);
   const [tests, setTests] = useState<CheckItem[]>(
     isExperimemo
@@ -7404,37 +7490,13 @@ function SessionScreen({
   ].filter((widget) => showTaskGroups || (musicAsWidget && Boolean(widget) && (widget as DockWidget).id === "music")));
 
   // A panel with nothing in it gets out of the way; while a widget is being dragged, collapsed
-  // and empty panels open enough to be drop targets. During B18 Turn 0 the bottom panel stays open
-  // as the explicit drop target for the music player.
-  const isB18MoveTurn =
-    !isExperimemo && isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN;
-  const b18EntryNormalizedRef = useRef<number | null>(null);
-  const musicInBottom = dock.layout.bottom.includes("music");
+  // and empty panels open enough to be drop targets.
   if (moveMusicToBottomRef) {
     moveMusicToBottomRef.current = () => {
       dock.move("music", "bottom", 0, { stack: false, column: 0, row: 0 });
       if (sizes.get("bottom") === 0) sizes.set("bottom", sizes.defaults.bottom);
     };
   }
-  useEffect(() => {
-    if (!isB18MoveTurn) return;
-    if (b18EntryNormalizedRef.current !== onboardingRunId) {
-      b18EntryNormalizedRef.current = onboardingRunId;
-      const placed = (["left", "right", "bottom"] as const).some((zone) => dock.layout[zone]?.includes("music"));
-      if (!placed) {
-        dock.restore("music");
-        return;
-      }
-      if (musicInBottom) {
-        dock.move("music", "right", dock.layout.right.length);
-        return;
-      }
-    }
-    if (musicInBottom) {
-      setTurnIndex(B18_PANELS_TURN);
-    }
-  }, [isB18MoveTurn, musicInBottom, onboardingRunId, dock, setTurnIndex]);
-
   // The Experimemo session only exists after Start Session; never render a ghost.
   if (isExperimemo && !xs) return null;
 
@@ -7442,7 +7504,6 @@ function SessionScreen({
   const panelSize = (side: "left" | "right" | "bottom") => {
     const stored = sizes.get(side);
     const empty = zoneEmpty(side);
-    if (side === "bottom" && isB18MoveTurn && (stored === 0 || empty)) return 130;
     if (dockDragging && (stored === 0 || empty)) return side === "bottom" ? 130 : 180;
     return empty ? 0 : stored;
   };
@@ -7454,6 +7515,7 @@ function SessionScreen({
   return (
     <div
       data-testid="session-screen"
+      data-project-id={project.id}
       data-active-tab={isExperimemo ? activeAgentTab : undefined}
       data-session-status={isExperimemo ? xs?.status : activeStatus}
       className="size-full flex flex-col relative overflow-hidden"
@@ -8179,7 +8241,7 @@ function SessionScreen({
           <>
             <DockSplitter side="bottom" value={sizes.get("bottom")} onChange={(px) => sizes.set("bottom", px)} defaultSize={sizes.defaults.bottom} min={130} />
             <DockPanel side="bottom" size={panelSize("bottom")}>
-              <WidgetZone dock={dock} zone="bottom" layout="flow" showDropHint={isB18MoveTurn} onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
+              <WidgetZone dock={dock} zone="bottom" layout="flow" onReceive={reopen("bottom")} className="flex flex-col flex-1 min-h-0" />
             </DockPanel>
           </>
         )}
@@ -8239,10 +8301,10 @@ function I2HomeHeader({ tab, setTab, onScopeNotice }: { tab: "Workspace" | "Emul
   );
 }
 
-// Tutorial-owned demo project record (isolated from real user projects, removed at B18 release)
+// Tutorial-owned demo project record (isolated from real user projects, released on finish/exit)
 const TUTORIAL_DEMO_PROJECT: ProtoProject = {
   id: "tutorial-demo",
-  name: "Tutorial demo",
+  name: "Pet Show and Tell",
   desc: "Seeded project folder & session walkthrough",
   framework: "Expo",
   sessions: 1,
@@ -8409,7 +8471,12 @@ function I2HomeScreen({
   const [tab, setTab] = useState<"Workspace" | "Emulators">("Workspace");
   const [emuConnected, setEmuConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([{ id: "greet", role: "assistant", content: INFIE_HOME_GREETING }]);
-  const [input, setInput] = useState("");
+  const homeDraftKey = chatDraftKey("home");
+  const [input, setInputState] = useState(() => readChatDraft(homeDraftKey));
+  const setInput = (value: string) => {
+    writeChatDraft(homeDraftKey, value);
+    setInputState(value);
+  };
   const [projectsMode, setProjectsMode] = useState<null | "expanded" | "fullscreen">(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const headerClickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -8637,12 +8704,13 @@ function I2HomeScreen({
             <FloatingInfieMascot danceNonce={danceNonce} formAsset={currentFormAsset} />
 
             {/* Card — rounded-16, teal glass border */}
-            <div className="content-stretch flex flex-col items-start pt-[16px] relative shrink-0 w-full">
-              <div className="content-stretch flex flex-col items-start overflow-clip relative rounded-[16px] shrink-0 w-full"
+            <div data-home-chat-card className="content-stretch flex flex-col items-start pt-[16px] relative shrink-0 w-full">
+              <div data-home-chat-surface className="content-stretch flex flex-col items-start overflow-clip relative rounded-[16px] shrink-0 w-full"
                 style={{ border: "none", background: "transparent" }}>
 
                 {/* Messages area + InfieActionRow */}
                 <div
+                  data-home-chat-body
                   className="content-stretch flex flex-col justify-between overflow-clip p-[16px] relative shrink-0 w-full"
                   // During the tutorial the chat keeps a constant height so the vertically centered
                   // column never shifts and the input stays put; it is ~20% taller than the old
@@ -8888,7 +8956,6 @@ function I2HomeScreen({
                 onChange={onProjectTypeChange}
                 onGenerate={onSuperStack}
                 onSupportNewFramework={onSupportNewFramework}
-                glow={isTutorialActive && currentBeat === "B20" && turnIndex === 0}
               />
               <button onClick={onOpenProject}
                 className="bg-[rgba(255,255,255,0.04)] border-[0.667px] border-[rgba(255,255,255,0.08)] content-stretch flex gap-[8px] h-full items-center justify-center px-[20px] py-[14px] relative rounded-[12px] shrink-0 whitespace-nowrap hover:bg-white/[0.07] transition-colors"
@@ -10231,21 +10298,34 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     setB00GateHeld,
     isTutorialActive,
     isTutorialComplete,
+    activeTutorial,
+    projectSessionPortion,
+    isMeetInfieReplay,
+    firstRunComplete,
+    isWidgetsTourActive,
     level,
     levelUpFlourish,
     levelUpStage,
     isRevealed,
     advanceBeat,
     startOnboarding,
+    startTutorialTrack,
+    finishTutorial,
     completeOnboarding,
   } = useOnboarding();
+  const meetInfieActive = activeTutorial === "meet-infie";
+  const isFirstRunIntro = meetInfieActive && !isMeetInfieReplay;
 
   const tutorial = useTutorial();
   const petSession = usePetSession();
   const { setOnJennyCompletedCallback, createProject } = tutorial;
+  // Generate replayed over an existing Experimemo keeps it: Jenny's conversation replays, but
+  // completing it opens the generated project as it is instead of resetting its progress.
+  const projectCreatedRef = useRef(tutorial.projectCreated);
+  projectCreatedRef.current = tutorial.projectCreated;
   useEffect(() => {
     setOnJennyCompletedCallback(() => {
-      createProject();
+      if (!projectCreatedRef.current) createProject();
       setActiveProjectId(EXPERIMEMO_PROJECT_ID);
       setActiveSessionId(null);
       setRoute("project");
@@ -10264,6 +10344,14 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   // The first of {real playback outcome, Continue} resolves B05 exactly once.
   const b05ResolvedRef = useRef(false);
   useEffect(() => { b05ResolvedRef.current = false; }, [onboardingRunId]);
+  // The music player's real playing state. A Meet Infie replay keeps the user's playback, so
+  // B05 may begin with music already on: its line and its Continue follow the actual audio.
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const musicPlayingRef = useRef(false);
+  const handleMusicPlayingChange = useCallback((playing: boolean) => {
+    musicPlayingRef.current = playing;
+    setMusicPlaying(playing);
+  }, []);
 
   // ── App phase gate (auth → app, with post-tutorial Home choose-plan overlay) ─
   const [appPhase, setAppPhase] = useState<"auth" | "app">(() => {
@@ -10292,17 +10380,18 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const importedLimitRef = useRef<(what: string) => void>(() => {});
 
   // ── Prototype router (home → project → session) ──────────────────────────
+  // `?beat=` deep links into Project & Session Flow open its demo project (or demo session).
   const [route, setRoute] = useState<"home" | "project" | "session">(() => {
-    if (["B13", "B14"].includes(currentBeat)) return "project";
-    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "session";
+    if (["B09", "B13", "B14"].includes(currentBeat)) return "project";
+    if (["B15", "B16", "B17", "B19"].includes(currentBeat)) return "session";
     return "home";
   });
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
-    if (["B13", "B14", "B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return TUTORIAL_DEMO_PROJECT.id;
+    if (["B09", "B13", "B14", "B15", "B16", "B17", "B19"].includes(currentBeat)) return TUTORIAL_DEMO_PROJECT.id;
     return null;
   });
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
-    if (["B15", "B16", "B17", "B18", "B19"].includes(currentBeat)) return "add-comments";
+    if (["B15", "B16", "B17", "B19"].includes(currentBeat)) return "add-comments";
     return null;
   });
   const [scopeNotice, setScopeNotice] = useState<string | null>(null);
@@ -10346,29 +10435,226 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     }
   }, [activeProjectId, activeSessionId, tutorial.projectCreated, tutorial.sessionStarted]);
 
-  const goHome = () => {
-    setRoute("home");
-    if (currentBeat === "B19") {
-      // Leaving the tutorial's demo project: Home's breadcrumbs go back to the plain
-      // "Project" / "Session" labels (demo records are released at the end anyway).
-      setActiveProjectId(null);
-      setActiveSessionId(null);
-      advanceBeat("B20");
+  // ── Tutorials after Meet Infie: first-time offers, starts, and returning the user ──
+  // Project & Session Flow is offered on the first eligible project or session opening and
+  // Widgets & Whatnot on the first eligible header Widgets opening. Generate and Import (and
+  // the navigation they perform) never start or use up an offer; neither does any other
+  // tutorial. Starting or dismissing an offer uses it up; Learn replays everything.
+  type TourOffer = { kind: "project-session"; portion: ProjectSessionPortion } | { kind: "widgets" };
+  const [tourOffer, setTourOffer] = useState<TourOffer | null>(null);
+  // `?beat=` deep links land reviewers in an exact state, so they skip first-time offers
+  // unless `&tours=1` asks for them.
+  const offersRef = useRef(
+    (() => {
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const skip = Boolean(params?.get("beat")) && params?.get("tours") !== "1";
+      return { projectSession: skip, projectPortionPending: false, widgets: skip };
+    })()
+  );
+  const [completedTutorials, setCompletedTutorials] = useState<Set<LearnTutorialId>>(() =>
+    readCompletedTutorials(),
+  );
+  const sessionPortionCompletedRef = useRef(false);
+  const recordTutorialCompleted = useCallback((id: LearnTutorialId) => {
+    setCompletedTutorials((prev) => {
+      if (prev.has(id)) return prev;
+      const next = markTutorialCompleted(prev, id);
+      writeCompletedTutorials(next);
+      return next;
+    });
+  }, []);
+  // Generate a new project completes once the Experimemo walkthrough reaches cleanup (not on early exit).
+  useEffect(() => {
+    if (tutorial.flow.stage === "cleaned-up") {
+      recordTutorialCompleted("generate");
+    }
+  }, [tutorial.flow.stage, recordTutorialCompleted]);
+
+  const dockSnapshot = useDockSnapshot();
+  // Project & Session Flow runs on isolated demo data, then returns the user to where they were.
+  const tourReturnRef = useRef<{ route: "home" | "project" | "session"; projectId: string | null; sessionId: string | null } | null>(null);
+  // Widgets & Whatnot snapshots the user's dock layouts/sizes and open modal, plus the screen
+  // it leaves on the first Continue, so Finish and Exit restore everything cleanly.
+  const widgetsLayoutSnapshotRef = useRef<{
+    dock: DockSnapshot;
+    rootModal: ModalState | null;
+  } | null>(null);
+  const widgetsTourReturnRef = useRef<{
+    route: "home" | "project" | "session";
+    projectId: string | null;
+    sessionId: string | null;
+    galleryOpen: boolean;
+    hostedProjectId: string | null;
+  } | null>(null);
+  const [widgetsTourReturn, setWidgetsTourReturn] = useState(widgetsTourReturnRef.current);
+  const generateOrImportActive =
+    tutorial.isJennyOpen ||
+    pickerOpen ||
+    importFlowOpen ||
+    (tutorial.projectCreated && tutorial.flow.stage !== "cleaned-up");
+  const canOfferTour = appPhase === "app" && firstRunComplete && !activeTutorial && !generateOrImportActive;
+  const isGeneratedOrImported = (projectId: string) =>
+    projectId === EXPERIMEMO_PROJECT_ID || isImportedProject(projectId);
+
+  const offerProjectTour = (projectId: string) => {
+    if (!canOfferTour || isGeneratedOrImported(projectId)) return;
+    if (!offersRef.current.projectSession) {
+      offersRef.current.projectSession = true;
+      setTourOffer({ kind: "project-session", portion: "full" });
+    } else if (offersRef.current.projectPortionPending) {
+      // The session portion ran on a direct session opening; offer the project/files portion now.
+      offersRef.current.projectPortionPending = false;
+      setTourOffer({ kind: "project-session", portion: "project" });
     }
   };
-  const openProjectHome = (p: ProtoProject) => {
+  const offerSessionTour = (s: ProtoSession) => {
+    if (!canOfferTour || isGeneratedOrImported(s.projectId) || offersRef.current.projectSession) return;
+    offersRef.current.projectSession = true;
+    setTourOffer({ kind: "project-session", portion: "session" });
+  };
+  const offerWidgetsTour = () => {
+    if (!canOfferTour || offersRef.current.widgets) return;
+    offersRef.current.widgets = true;
+    setTourOffer({ kind: "widgets" });
+  };
+  // An offer the user never answered (Generate or Import opened, or Learn started something
+  // else) is withdrawn without using it up, so the next eligible opening offers it again.
+  // It is never shown or accepted while another tutorial, Generate or Import is running.
+  const tourOfferBlocked = Boolean(activeTutorial) || generateOrImportActive;
+  const withdrawTourOffer = () => {
+    const offer = tourOffer;
+    if (!offer) return;
+    if (offer.kind === "widgets") offersRef.current.widgets = false;
+    else if (offer.portion === "project") offersRef.current.projectPortionPending = true;
+    else offersRef.current.projectSession = false;
+    setTourOffer(null);
+  };
+  useEffect(() => {
+    if (generateOrImportActive && tourOffer) withdrawTourOffer();
+  }, [generateOrImportActive, tourOffer]);
+  const tourOfferTitle = (offer: TourOffer) =>
+    offer.kind === "widgets"
+      ? "Widgets & Whatnot"
+      : offer.portion === "project"
+        ? "Project & Session Flow: the project and its files"
+        : "Project & Session Flow";
+
+  const closeShellOverlays = () => {
+    setModal(null);
+    setRootModal(null);
+    setWidgetsGalleryOpen(false);
+    setPickerOpen(false);
+    setScopeNotice(null);
+    setPlaygroundOpen(false);
+    setLearnOpen(false);
+    withdrawTourOffer();
+  };
+
+  const startProjectSessionTour = (portion: ProjectSessionPortion) => {
+    tourReturnRef.current = { route, projectId: activeProjectId, sessionId: activeSessionId };
+    closeShellOverlays();
+    offersRef.current.projectSession = true;
+    offersRef.current.projectPortionPending = portion === "session";
+    setWsState("none");
+    setActiveProjectId(TUTORIAL_DEMO_PROJECT.id);
+    if (portion === "session") {
+      setActiveSessionId("add-comments");
+      setRoute("session");
+    } else {
+      setActiveSessionId(null);
+      setRoute("project");
+    }
+    startTutorialTrack("project-session", { portion });
+  };
+  const startWidgetsTour = () => {
+    offersRef.current.widgets = true;
+    tutorialOpenedGalleryRef.current = false;
+    widgetsLayoutSnapshotRef.current = {
+      dock: dockSnapshot.capture(),
+      rootModal,
+    };
+    startTutorialTrack("widgets");
+  };
+  const acceptTourOffer = () => {
+    const offer = tourOffer;
+    if (!offer || tourOfferBlocked) return;
+    setTourOffer(null);
+    if (offer.kind === "widgets") startWidgetsTour();
+    else startProjectSessionTour(offer.portion);
+  };
+
+  // Ends the running tutorial in place (completion or Exit tutorial). Meet Infie finishes on
+  // i² Home; Project & Session Flow returns to the user's own project or session; Widgets
+  // returns to the screen, project, session, dock layout, modal, and gallery captured before it ran.
+  const endTutorial = (reason: "completed" | "dismissed") => {
+    const track = activeTutorial;
+    const portion = projectSessionPortion;
+    finishTutorial(reason);
+    if (reason === "completed" && track) {
+      if (track === "meet-infie") {
+        recordTutorialCompleted("meet-infie");
+      } else if (track === "widgets") {
+        recordTutorialCompleted("widgets");
+      } else if (track === "project-session") {
+        if (portion === "full") {
+          recordTutorialCompleted("project-session");
+        } else if (portion === "session") {
+          sessionPortionCompletedRef.current = true;
+        } else if (portion === "project" && sessionPortionCompletedRef.current) {
+          recordTutorialCompleted("project-session");
+        }
+      }
+    }
+    if (track === "project-session") {
+      const back = tourReturnRef.current;
+      tourReturnRef.current = null;
+      setRoute(back?.route ?? "home");
+      setActiveProjectId(back?.projectId ?? null);
+      setActiveSessionId(back?.sessionId ?? null);
+    } else if (track === "widgets") {
+      const back = widgetsTourReturnRef.current;
+      widgetsTourReturnRef.current = null;
+      setWidgetsTourReturn(null);
+      const savedLayout = widgetsLayoutSnapshotRef.current;
+      widgetsLayoutSnapshotRef.current = null;
+      if (savedLayout) {
+        dockSnapshot.restore(savedLayout.dock);
+        setRootModal(savedLayout.rootModal);
+      } else {
+        setRootModal((curr) => (curr?.kind === "standard" && curr.id === "infiePreferences" ? null : curr));
+      }
+      if (back) {
+        setRoute(back.route);
+        setActiveProjectId(back.projectId);
+        setActiveSessionId(back.sessionId);
+        setWidgetsGalleryOpen(back.galleryOpen);
+        tutorialOpenedGalleryRef.current = false;
+      } else if (tutorialOpenedGalleryRef.current) {
+        tutorialOpenedGalleryRef.current = false;
+        setWidgetsGalleryOpen(false);
+      }
+    }
+  };
+
+  const goHome = () => {
+    setRoute("home");
+  };
+  const openProjectHome = (p: ProtoProject, opts?: { suppressTour?: boolean }) => {
     setActiveProjectId(p.id);
     setRoute("project");
-    if (currentBeat === "B12") {
-      advanceBeat("B13");
-    }
+    if (!opts?.suppressTour) offerProjectTour(p.id);
   };
   const openSession = (s: ProtoSession, opts?: { justStarted?: boolean }) => {
     if (isImportedSession(s.id) || isImportedProject(s.projectId)) {
       importedLimitRef.current(s.name);
       return;
     }
-    if (currentBeat === "B12" || currentBeat === "B13") {
+    // The project/files portion alone ends on the agent reply; its session portion already ran.
+    if (
+      currentBeat === "B12" ||
+      currentBeat === "B13" ||
+      (currentBeat === "B14" && activeTutorial === "project-session" && projectSessionPortion === "project")
+    ) {
       return;
     }
     // The Experimemo session cannot be opened by any path until Start Session created it.
@@ -10381,6 +10667,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     if (currentBeat === "B14") {
       advanceBeat("B15");
     }
+    if (!opts?.justStarted) offerSessionTour(s);
   };
   const openSessionById = (id: string) => { const s = allSessions.find(x => x.id === id); if (s) openSession(s); };
   // Home What's Next reads the live reducers; recommendations re-derive on every state change.
@@ -10425,7 +10712,9 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const finishImport = () => {
     setImportedLive(true);
     setImportFlowOpen(false);
-    openProjectHome({ ...IMPORTED_PROJECT });
+    recordTutorialCompleted("import");
+    // Navigation performed by Import never starts (or uses up) Project & Session Flow.
+    openProjectHome({ ...IMPORTED_PROJECT }, { suppressTour: true });
   };
 
   const handleScenario = (id: ScenarioId) => {
@@ -10490,29 +10779,87 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     if (pet) openProjectHome(pet);
   });
 
-  // B18 Turn 2 prompts the user to click Widgets in the header; B18 Turn 3 highlights Library
-  // in the opened gallery and closes it again when advancing to Turn 4.
-  const isB18OpenWidgetsTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
-  const isTutorialGalleryTurn = isTutorialActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
+  // Widgets & Whatnot: the sliders turn opens the real full Preference Sliders widget modal;
+  // closing it advances. Its "Click Widgets" turn waits for the header button, then the Library
+  // turn highlights Library in the gallery. A gallery the tour opened closes when it ends.
+  const isWidgetsSlidersTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_SLIDERS_TURN;
+  const widgetsSlidersOpen = Boolean(
+    isWidgetsSlidersTurn && rootModal?.kind === "standard" && rootModal.id === "infiePreferences",
+  );
+  const isWidgetsOpenTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_OPEN_WIDGETS_TURN;
+  const isWidgetsLibraryTurn = isWidgetsTourActive && currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN;
+  const widgetsTourInProject = Boolean(
+    isWidgetsTourActive &&
+    currentBeat === "B18" &&
+    turnIndex > B18_MOVE_TURN &&
+    widgetsTourReturn?.hostedProjectId &&
+    route === "project" &&
+    activeProjectId === widgetsTourReturn.hostedProjectId,
+  );
   const tutorialOpenedGalleryRef = useRef(false);
+  const enterWidgetsProject = () => {
+    if (widgetsTourReturnRef.current || !isWidgetsTourActive) return;
+    if (!widgetsLayoutSnapshotRef.current) {
+      widgetsLayoutSnapshotRef.current = {
+        dock: dockSnapshot.capture(),
+        rootModal,
+      };
+    }
+    const project = firstActiveUsableProject(allProjects, {
+      demoProjectId: TUTORIAL_DEMO_PROJECT.id,
+      isImported: isImportedProject,
+    });
+    const snapshot = {
+      route,
+      projectId: activeProjectId,
+      sessionId: activeSessionId,
+      galleryOpen: widgetsGalleryOpen,
+      hostedProjectId: project?.id ?? null,
+    };
+    widgetsTourReturnRef.current = snapshot;
+    setWidgetsTourReturn(snapshot);
+    if (!project) return;
+    // Show the project. The saved gallery comes back for the Library line and at the end.
+    setWidgetsGalleryOpen(false);
+    setActiveSessionId(null);
+    setActiveProjectId(project.id);
+    setRoute("project");
+  };
+  const openWidgetsSliders = () => {
+    if (!widgetsLayoutSnapshotRef.current) {
+      widgetsLayoutSnapshotRef.current = {
+        dock: dockSnapshot.capture(),
+        rootModal,
+      };
+    }
+    setRootModal({ kind: "standard", id: "infiePreferences", label: "Preference Sliders", fullscreen: false });
+  };
+  const closeRootModal = () => {
+    const closingTourSliders = widgetsSlidersOpen;
+    setRootModal(null);
+    if (closingTourSliders) {
+      const hadGalleryOpen = widgetsGalleryOpen || Boolean(widgetsTourReturnRef.current?.galleryOpen);
+      if (hadGalleryOpen) {
+        setWidgetsGalleryOpen(true);
+        setTurnIndex(B18_LIBRARY_TURN);
+      } else {
+        setTurnIndex(B18_OPEN_WIDGETS_TURN);
+      }
+    }
+  };
   useEffect(() => {
-    if (isTutorialGalleryTurn) {
-      tutorialOpenedGalleryRef.current = true;
-      setWidgetsGalleryOpen(true);
-      return;
-    }
-    if (tutorialOpenedGalleryRef.current) {
-      tutorialOpenedGalleryRef.current = false;
-      setWidgetsGalleryOpen(false);
-    }
-  }, [isTutorialGalleryTurn]);
-  const handleHeaderWidgetsClick = useCallback(() => {
+    if (!isWidgetsLibraryTurn || !widgetsTourReturn?.galleryOpen) return;
     setWidgetsGalleryOpen(true);
-    if (isB18OpenWidgetsTurn) {
+  }, [isWidgetsLibraryTurn, widgetsTourReturn]);
+  const handleHeaderWidgetsClick = () => {
+    setWidgetsGalleryOpen(true);
+    if (isWidgetsOpenTurn) {
       tutorialOpenedGalleryRef.current = true;
       setTurnIndex(B18_LIBRARY_TURN);
+      return;
     }
-  }, [isB18OpenWidgetsTurn, setTurnIndex]);
+    offerWidgetsTour();
+  };
 
   const openRootWidget = useCallback((id: WidgetId, label: string) => {
     const emuIds: WidgetId[] = ["emuWeb", "emuAndroid", "emuIos"];
@@ -10744,6 +11091,45 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     reducedMotion,
   ]);
 
+  // ── Learn: start any tutorial at its beginning ────────────────────────────
+  const [learnOpen, setLearnOpen] = useState(false);
+  const learnContextValue = useMemo(() => ({ open: () => setLearnOpen(true) }), []);
+  const startFromLearn = (id: LearnTutorialId) => {
+    // Widgets & Whatnot leaves the header live; any tutorial started from Learn replaces it.
+    if (isWidgetsTourActive) endTutorial("dismissed");
+    closeShellOverlays();
+    if (id === "project-session") {
+      startProjectSessionTour("full");
+      return;
+    }
+    if (id === "widgets") {
+      startWidgetsTour();
+      return;
+    }
+    setWsState("none");
+    setRoute("home");
+    if (id === "meet-infie") {
+      // Replay: profile, level, models, projects, sessions, layout and music are kept.
+      setImportFlowOpen(false);
+      setMusicOutcome("none");
+      startOnboarding({ replay: true });
+    } else if (id === "generate") {
+      tutorial.openJenny();
+    } else if (importedLive) {
+      // Field Notes is already imported: replay the import conversation without re-importing.
+      setImportFlowOpen(true);
+    } else {
+      setPickerOpen(true);
+    }
+  };
+  const openEducation = () =>
+    limit({
+      featureName: "Education",
+      subtitle: "Learn",
+      description:
+        "Computer science, game development and level-increase lessons belong here. They aren't part of this prototype.",
+    });
+
   // ── App phase gate: auth screen before the workspace router ───────────────
   if (appPhase === "auth") {
     return (
@@ -10779,8 +11165,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
 
   const isB00Blackout = currentBeat === "B00";
   // Ambient i² background: pure black at B00, a little more of the normal background
-  // with every beat, fully normal from B12 (Home) on and outside the tutorial.
-  const ambientProgress = isTutorialActive ? ambientProgressForBeat(currentBeat) : 1;
+  // with every Meet Infie beat, fully normal from B12 (Home) on and outside Meet Infie.
+  const ambientProgress = meetInfieActive ? ambientProgressForBeat(currentBeat) : 1;
   const levelLabel = `Lvl. ${level}`;
   const showLevelIndicator = isRevealed("level_indicator");
   const showHeaderBreadcrumbs = isRevealed("header_breadcrumbs");
@@ -10793,7 +11179,6 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
   const showNewImportButtons = isRevealed("home_new_import_buttons") || isTutorialComplete;
   const showHomeActionButtons = isRevealed("home_action_buttons") || isTutorialComplete;
   const showProjectsAndActions = isRevealed("home_projects_and_actions");
-  const showTutorialDemoProject = isRevealed("tutorial_demo_project");
   const showMusicPlayOnly = isRevealed("music_play_only");
   const showMusicFullPlayer = isRevealed("music_full_player");
   const showWidgetMoveResize = isRevealed("widget_move_resize");
@@ -10817,29 +11202,29 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
     showConversationEntry ||
     showProjectsAndActions;
 
-  // Experience guidelines:
+  // Experience guidelines (Meet Infie stages these; every other tutorial starts with them docked):
   // - Level (B03) spotlights, holds, and glides to its anchor automatically during its introduction.
-  // - Music player (B05) assembles and glides to its lower-left anchor automatically after its hold.
-  // - i2 / Project / Session nav group (B08 Turn 2) docks when the user clicks Continue.
+  // - Music player (B05) assembles and glides to its lower-left anchor automatically after its hold
+  //   (a replay leaves the player where the user put it).
+  // - i2 / Project / Session nav group (B08) docks when the user clicks Continue.
   // - B11 header groups glide when the user clicks Continue.
   const levelPillDocked =
-    isTutorialComplete || currentBeat !== "B03" || turnIndex >= 1 ? true : undefined;
-  const breadcrumbsDocked =
-    isTutorialComplete || currentBeat !== "B08" || turnIndex >= 2;
+    !meetInfieActive || currentBeat !== "B03" || turnIndex >= 1 ? true : undefined;
+  const breadcrumbsDocked = !meetInfieActive || currentBeat !== "B08";
   const tutorialsWidgetsGamesDocked =
-    isTutorialComplete || currentBeat !== "B11" || turnIndex >= 1;
+    !meetInfieActive || currentBeat !== "B11" || turnIndex >= 1;
   const notificationsSettingsDocked =
-    isTutorialComplete ||
+    !meetInfieActive ||
     BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B11") ||
     (currentBeat === "B11" && turnIndex >= 2);
   const musicWidgetDocked =
-    isTutorialComplete || BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B05")
+    !isFirstRunIntro || BEAT_ORDER.indexOf(currentBeat) > BEAT_ORDER.indexOf("B05")
       ? true
       : undefined;
   const isHeaderDisabled = !isTutorialComplete;
-  const highlightHomeNav = isTutorialActive && currentBeat === "B19" && turnIndex === B19_HOME_TURN;
-  const highlightTutorialsNav = isTutorialActive && currentBeat === "B20" && turnIndex === 0;
-  const highlightWidgetsNav = isB18OpenWidgetsTurn;
+  const highlightTutorialsNav = meetInfieActive && currentBeat === "B20";
+  const highlightWidgetsNav = isWidgetsOpenTurn;
+  const canExitTutorial = Boolean(activeTutorial) && !isFirstRunIntro;
 
   // ── Workspace state machine router ───────────────────────────────────────
   return (
@@ -10851,6 +11236,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         projects: allProjects.map((project) => ({ id: project.id, name: project.name })),
       }}
     >
+    <LearnProvider value={learnContextValue}>
     <div
       className="size-full overflow-hidden relative"
       style={{ backgroundColor: "#000000", isolation: "isolate" }}
@@ -10894,14 +11280,26 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
       >
         <AnimatedGlows />
       </div>
-      {/* Floating Infie Onboarding Stage (B01 -> B18) */}
+      {/* Floating Infie tutorial stage: Meet Infie, Project & Session Flow, Widgets & Whatnot */}
       <OnboardingStage
         key={onboardingRunId}
         musicOutcome={musicOutcome}
-        onSelectContinueMusicQuiet={() => { b05ResolvedRef.current = true; setMusicOutcome("quiet"); }}
+        musicPlaying={musicPlaying}
+        onContinueMusicGate={() => {
+          b05ResolvedRef.current = true;
+          setMusicOutcome(musicPlayingRef.current ? "played" : "quiet");
+        }}
         pressNonce={playPressNonce}
         danceNonce={danceNonce}
         onOpenDemoSession={() => openSessionById("add-comments")}
+        onFinish={() => endTutorial("completed")}
+        widgetsGalleryOpen={widgetsGalleryOpen || Boolean(widgetsTourReturn?.galleryOpen)}
+        widgetsGalleryLive={widgetsGalleryOpen}
+        widgetsSlidersOpen={widgetsSlidersOpen}
+        widgetsTourInProject={widgetsTourInProject}
+        onEnterWidgetsProject={enterWidgetsProject}
+        onOpenWidgetsSliders={openWidgetsSliders}
+        onDismissWidgetsGallery={() => setWidgetsGalleryOpen(false)}
       />
 
       {/* Persistent lower-left Home music player widget (absent from DOM until B05) */}
@@ -10909,8 +11307,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         playButtonRevealed={showMusicPlayOnly}
         fullPlayerRevealed={showMusicFullPlayer}
         moveResizeRevealed={showWidgetMoveResize && (isTutorialActive || route === "home")}
-        calloutGlow={isTutorialActive && currentBeat === "B18" && turnIndex === B18_MOVE_TURN}
-        animateIntro={!isTutorialComplete}
+        animateIntro={isFirstRunIntro}
         docked={musicWidgetDocked}
         placement={
           wsState === "none" && (route === "project" || route === "session") ? "panel" : "floating"
@@ -10929,6 +11326,7 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         }
         onPressStart={() => setPlayPressNonce((n) => n + 1)}
         onMusicPlay={triggerInfieDance}
+        onPlayingChange={handleMusicPlayingChange}
         onPlayAttempt={(result) => {
           if (currentBeat === "B05" && turnIndex === 0 && !b05ResolvedRef.current && result !== "paused") {
             b05ResolvedRef.current = true;
@@ -10964,13 +11362,12 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               showNotificationsSettings={showHeaderNotificationsSettings}
               showLevelIndicator={showLevelIndicator}
               showTutorialsEntry={showTutorialsEntry}
-              animateHeaderIntro={!isTutorialComplete}
+              animateHeaderIntro={meetInfieActive}
               showConversationEntry={showConversationEntry}
               showProjectsAndActions={showProjectsAndActions}
               showResumeProjects={showResumeProjects}
               showNewImportButtons={showNewImportButtons}
               showHomeActionButtons={showHomeActionButtons}
-              showTutorialDemoProject={showTutorialDemoProject}
               showAmbientBackdrop={false}
               levelUpFlourish={levelUpFlourish}
               levelUpStage={levelUpStage}
@@ -11013,8 +11410,9 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
               showHeaderControls={showProjectNavigation}
               showLevelIndicator={showLevelIndicator}
               showTutorialsEntry={showTutorialsEntry}
-              showRoadmapSessions={showProjectRoadmapSessions}
-              showWidgetsPanel={showProjectWidgetsPanel}
+              showRoadmapSessions={showProjectRoadmapSessions || widgetsTourInProject}
+              showWidgetsPanel={showProjectWidgetsPanel || widgetsTourInProject}
+              widgetsTourChat={widgetsTourInProject}
               showStartAppSlot={isTutorialComplete}
               switchableProjects={
                 activeProjectId === EXPERIMEMO_PROJECT_ID && experimemoProject
@@ -11074,7 +11472,6 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
                   : allSessions
               }
               onSelectSession={openSession}
-              highlightHomeNav={highlightHomeNav}
               highlightWidgetsNav={highlightWidgetsNav}
               disabled={isHeaderDisabled}
               musicSlotRef={setMusicSlotEl}
@@ -11151,8 +11548,8 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
         {widgetsGalleryOpen && (
           <WidgetsGalleryModal
             key="widgets-gallery"
-            highlightWidgetId={isTutorialGalleryTurn ? "library" : undefined}
-            tutorialMode={isTutorialActive}
+            highlightWidgetId={isWidgetsLibraryTurn ? "library" : undefined}
+            tutorialMode={isTutorialActive || isWidgetsTourActive}
             dockScreen={
               route === "session" && activeSessionId ? `session:${activeSessionId}`
                 : route === "project" && activeProjectId ? `project:${activeProjectId}`
@@ -11190,14 +11587,49 @@ function PersistentAppShell({ initialOpening = false }: { initialOpening?: boole
           />
         )}
         {rootModal?.kind === "standard" && (
-          <WidgetModal key="root-std" id={rootModal.id} label={rootModal.label} fullscreen={rootModal.fullscreen} onClose={() => setRootModal(null)} ctx={rootCtx} />
+          <WidgetModal
+            key="root-std"
+            id={rootModal.id}
+            label={rootModal.label}
+            fullscreen={rootModal.fullscreen}
+            tutorialAnchored={widgetsSlidersOpen && rootModal.id === "infiePreferences"}
+            onClose={closeRootModal}
+            ctx={rootCtx}
+          />
         )}
       </AnimatePresence>
 
       {/* Experimemo Interactive Tutorial Overlay */}
       <TutorialOverlay />
 
+      {/* Learn: every tutorial, replayable; Education is a prototype limit */}
+      <AnimatePresence>
+        {learnOpen && (
+          <LearnModal
+            key="learn"
+            onClose={() => setLearnOpen(false)}
+            onStartTutorial={startFromLearn}
+            onOpenEducation={openEducation}
+            completedTutorials={completedTutorials}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* First-time tutorial offers, and leaving a replay or later tutorial */}
+      <AnimatePresence>
+        {tourOffer && !tourOfferBlocked && (
+          <TutorialOfferCard
+            key={tourOffer.kind === "widgets" ? "offer-widgets" : `offer-${tourOffer.portion}`}
+            title={tourOfferTitle(tourOffer)}
+            onStart={acceptTourOffer}
+            onDismiss={() => setTourOffer(null)}
+          />
+        )}
+      </AnimatePresence>
+      {canExitTutorial && <ExitTutorialButton onExit={() => endTutorial("dismissed")} />}
+
     </div>
+    </LearnProvider>
     </SimulatorSurfaceContext.Provider>
   );
 }

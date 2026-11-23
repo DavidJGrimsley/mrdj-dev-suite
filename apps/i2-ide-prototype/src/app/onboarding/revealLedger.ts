@@ -55,6 +55,28 @@ export const BEAT_ORDER: readonly OnboardingBeat[] = [
   "COMPLETE",
 ] as const;
 
+// ─── Tutorial tracks ─────────────────────────────────────────────────────────
+// The beats above are shared by three scripted tutorials. Each track runs its own
+// subset in order; Generate and Import keep their existing flows.
+export type TutorialTrackId = "meet-infie" | "project-session" | "widgets";
+
+/** Project & Session Flow can run whole, or start at either portion. */
+export type ProjectSessionPortion = "full" | "project" | "session";
+
+export const TRACK_BEATS: Record<TutorialTrackId, readonly OnboardingBeat[]> = {
+  "meet-infie": ["B00", "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B08", "B10", "B11", "B12", "B20", "B21"],
+  "project-session": ["B08", "B09", "B13", "B14", "B15", "B16", "B17", "B19"],
+  widgets: ["B18"],
+};
+
+/** Track a `?beat=` deep link belongs to (B08 is Meet Infie's navigation turn). */
+export function trackForBeat(beat: OnboardingBeat): TutorialTrackId | null {
+  if (beat === "COMPLETE") return null;
+  if (beat === "B18") return "widgets";
+  if (beat !== "B08" && TRACK_BEATS["project-session"].includes(beat)) return "project-session";
+  return "meet-infie";
+}
+
 export type InfieFormId = "mist" | "glyph" | "surge" | "compile";
 
 export const INFIE_FORM_ASSETS: Record<InfieFormId, string> = {
@@ -64,8 +86,10 @@ export const INFIE_FORM_ASSETS: Record<InfieFormId, string> = {
   compile: assetUrl("/assets/infie-form-compile.png"),
 };
 
-// Silent 21-beat form cycle per tutorial-script.md:
-// Repeating cycle Mist -> Glyph -> Surge -> Compile with no two adjacent beats sharing a form.
+// Silent form cycle per tutorial-script.md:
+// Repeating cycle Mist -> Glyph -> Surge -> Compile with no two adjacent beats sharing a form
+// within a tutorial track (Meet Infie skips B09 and B13–B19; Project & Session Flow runs
+// B08, B09, B13–B17, B19; Widgets & Whatnot is B18 alone).
 // B05 uses Glyph (Mist skipped because B06 Controls is Mist); B06 pauses cycle in Mist;
 // B07 resumes with Surge; B08 stays Compile across all its turns.
 export const BEAT_FORM_MAP: Record<OnboardingBeat, InfieFormId> = {
@@ -82,14 +106,14 @@ export const BEAT_FORM_MAP: Record<OnboardingBeat, InfieFormId> = {
   B10: "glyph",
   B11: "surge",
   B12: "compile",
-  B13: "mist",
+  B13: "surge",
   B14: "glyph",
   B15: "surge",
   B16: "compile",
   B17: "mist",
   B18: "glyph",
   B19: "surge",
-  B20: "compile",
+  B20: "glyph",
   B21: "mist",
   COMPLETE: "mist",
 };
@@ -103,12 +127,9 @@ export function getInfieFormAssetForBeat(beat: OnboardingBeat): string {
 }
 
 export const B17_EXPLANATIONS: readonly string[] = [
-  "This is the Session Completion Form. I do most of the work. You check the corrections, give feedback, and hit Submit. They're quick and easy, and I've already filled in most of it.",
-  "If you're on the free plan, session completion forms are required and users on the paid plans are still welcome to contribute. You can also turn on auto-submit on merge in Settings for future sessions. An auto-submitted form still counts as your completion form. These boost your level and are the primary way to passively increase it while you work. We greatly appreciate it.",
-  "Either way, the corrected actions are what get sent back to improve iSquared, not your codebase. That means the next time you or another dev attempt this same thing, we will avoid that mistake.",
-  "iSquared is also exploring quantum computing: quantum machine learning runs in tandem with the regular analysis of those requests, so we can see where quantum computing really fits into the IDE. It's research for now. Nothing you build depends on it.",
-  "Session Completion Forms, donors, and paid users are what keep this experience running.",
-  "It's great to contribute to the Infinite Intelligence that drives this experience, made possible by the vast open source and free education materials available today. For which my creator is eternally grateful to the community.",
+  "Here's the Session Completion Form. I've filled in most of it. Check the corrections, add feedback, and hit Submit. Free plans need one; paid users can contribute too. Auto-submit on merge in Settings still counts.",
+  "These forms boost your level while you work. Corrections go back to iSquared, not your codebase. How many open Sessions you can leave unsubmitted depends on your level and plan.",
+  "We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Forms, donors, and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities.",
 ] as const;
 
 /**
@@ -116,23 +137,23 @@ export const B17_EXPLANATIONS: readonly string[] = [
  * checking the demo Human task. Turn logic derives from this list's length.
  */
 export const B15_LINES: readonly string[] = [
-  "Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.",
-  "Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.",
-  "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.",
+  "Each Session has Session Agents working on it. Pick the model: ready-made agents, your own, or imported ones. i² is where they work together.",
+  "Me, the Session Agents, and any other agents you bring in work through the iSquared MCP and tools. We block dangerous mistakes, steer around pitfalls, and put best practices to work.",
+  "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it yourself.",
   "Tasks come in two groups: Session Agent tasks and Human tasks. You're the human. This one's ready for you to verify. Click on all open tasks to mark them complete.",
 ] as const;
 /** Index of the B15 turn that reveals the task groups and waits for the Human task check. */
 export const B15_TASKS_TURN = B15_LINES.length - 1;
 
 /**
- * B19 Away from the desk. Every turn but the last is gated by Continue; the last
- * (`B19_TURN2_LINE`) is gated by returning Home.
+ * B19 Away from the desk (Project & Session Flow's last beat). Every turn is gated by
+ * Continue; Continue on `B19_TURN2_LINE` finishes the tutorial in the session view.
  */
 export const B19_LINES: readonly string[] = [
-  "The website lets even your non-technical teammates join in too without downloading the desktop app or codebase. The i² mobile app keeps you connected with notifications, project updates, and chat while you're away. You can also get into your i² project environments through the mobile apps, the website, and apps in your VR headset for a truly immersive experience.",
+  "The website lets even your non-technical teammates join in too, without the desktop app or the codebase. The mobile app brings notifications, updates, and chat, and you can open your environments on mobile, the website, or in VR.",
 ] as const;
-/** Index of the B19 turn that asks the user to head Home. */
-export const B19_HOME_TURN = B19_LINES.length;
+/** Index of the B19 turn that closes Project & Session Flow. */
+export const B19_FINAL_TURN = B19_LINES.length;
 
 /** B12 Turn 0 bridge line: shown as the conversation slides left to its Home chat position. */
 export const B12_BRIDGE_LINE = "Let me scoot over and make some room.";
@@ -140,33 +161,34 @@ export const B12_BRIDGE_LINE = "Let me scoot over and make some room.";
 /** B17 after Submit: what submitting did to the demo Session (gated by Continue). */
 export const B17_SESSION_CLOSED_LINE =
   "Submitted. Next I close the session: its branches are merged and cleaned up, both locally and on the remote, barring your approval.";
-/** B17 → B18 segue (no gate). */
-export const B17_TO_UI_SEGUE = "So that's the flow of a session, now onto the rest of the UI.";
-/** B18 → B19 segue (no gate). */
-export const B18_TO_SURFACES_SEGUE = "This IDE is just one surface of iSquared.";
 
-/** B18 5-turn sequence (0: Move music -> bottom, 1: Panels/collapse, 2: Open Widgets, 3: Library callout, 4: Segue). */
+/**
+ * Widgets & Whatnot (B18): 0 arrange demo, 1 panels/collapse, 2 Preference Sliders,
+ * 3 open Widgets (skipped when the gallery was already open), 4 Library, 5 explore on your own.
+ */
 export const B18_MOVE_TURN = 0;
 export const B18_PANELS_TURN = 1;
-export const B18_OPEN_WIDGETS_TURN = 2;
-export const B18_LIBRARY_TURN = 3;
-export const B18_SEGUE_TURN = 4;
+export const B18_SLIDERS_TURN = 2;
+export const B18_OPEN_WIDGETS_TURN = 3;
+export const B18_LIBRARY_TURN = 4;
+export const B18_EXPLORE_TURN = 5;
 
 export const B18_LINES: readonly string[] = [
-  "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player to the bottom panel underneath this chat.",
+  "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want, and iSquared supports fullscreen multiple-screen layout saves. Let's try it with a widget.",
   "You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.",
+  "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking. Close this when you're done.",
   "Click Widgets in the header to see everything else you can add to your workspace.",
   "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
-  B18_TO_SURFACES_SEGUE,
+  "Explore the rest of the widgets on your own!",
 ] as const;
 
 /** B14 demo agent question (arrives in the Project Home Infie chat) and its pre-filled reply. */
 export const B14_AGENT_QUESTION = "Should new comments show newest first or oldest first?";
 export const B14_AGENT_REPLY_DEFAULT = "Newest first.";
 
-/** B19 Turn 1 segue line (user-directed copy). */
+/** B19 closing line of Project & Session Flow (user-directed copy). */
 export const B19_TURN2_LINE =
-  "If your project didn't start in i², I'll onboard it for you. Don't worry about what that means as I'll prompt you with a tutorial any time you do something new here. For now, let's head Home. Click i2 in the top left corner.";
+  "If your project didn't start in i², I'll onboard it for you. I'll offer a tutorial when you do something new here.";
 
 export type RevealGroupId =
   | "infie_and_message"
@@ -192,7 +214,6 @@ export type RevealGroupId =
   | "home_new_import_buttons"
   | "home_action_buttons"
   | "home_projects_and_actions"
-  | "tutorial_demo_project"
   | "project_navigation"
   | "project_roadmap_sessions"
   | "demo_session_and_question"
@@ -251,8 +272,8 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
   continue_button: {
     id: "continue_button",
     group: "Continue",
-    firstBeat: "B03",
-    cue: "B03 “Hit Continue”",
+    firstBeat: "B04",
+    cue: "B04 reply to the user’s project interest",
     locationAndGate: "Beside current message",
     lifetime: "temporary",
     componentTarget: "FloatingContinueButton",
@@ -306,8 +327,8 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "workspace_tree",
     group: "Animated vertical native i2Workspace tree",
     firstBeat: "B08",
-    cue: "B08 Turn 1 “Here you will work in an i2 Workspace.”",
-    locationAndGate: "Vertical native tree; fades when Continue docks nav in Turn 2",
+    cue: "Project & Session Flow B08 Turn 0 “Here you'll work in an i² Workspace.”",
+    locationAndGate: "Vertical native tree; fades on Continue",
     lifetime: "temporary",
     componentTarget: "OnboardingStage (WorkspaceTree)",
   },
@@ -315,7 +336,7 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "project_folder_only",
     group: "Isolated green project/ folder and B09 vertical file list",
     firstBeat: "B08",
-    cue: "B08 Turn 3 “The key to working with i² is the project folder.”",
+    cue: "Project & Session Flow B08 Turn 1 “The key to working with i² is the project folder.”",
     locationAndGate: "Green project/ folder alone -> 4 files in B09",
     lifetime: "temporary",
     componentTarget: "OnboardingStage (GreenProjectFolder)",
@@ -351,16 +372,16 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "header_breadcrumbs",
     group: "Header i2 / Project / Session breadcrumbs",
     firstBeat: "B08",
-    cue: "B08 Turn 2 “It's also how the UI navigation is structured.”",
-    locationAndGate: "Spotlight center -> top-left Header anchor; Continue",
+    cue: "Meet Infie B08 “Here's how navigation works”",
+    locationAndGate: "Spotlight near Infie -> top-left Header anchor; docks on Continue",
     lifetime: "persistent",
     componentTarget: "Header[data-name='HeaderBreadcrumbs']",
   },
   header_tutorials_widgets_games: {
     id: "header_tutorials_widgets_games",
-    group: "Header Tutorials, Widgets, Games group",
+    group: "Header Learn, Widgets, Games group",
     firstBeat: "B11",
-    cue: "B11 Turn 1 “Whenever you want to visit more tutorials…”",
+    cue: "B11 Turn 0 “Click Learn for tutorials and lessons…”",
     locationAndGate: "Spotlight -> docks on Continue",
     lifetime: "persistent",
     componentTarget: "Header[data-name='HeaderTutorialsWidgetsGames']",
@@ -369,7 +390,7 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "header_notifications_settings",
     group: "Header Notification / Settings group",
     firstBeat: "B11",
-    cue: "B11 Turn 2 “A combined list of alerts…”",
+    cue: "B11 Turn 1 “Your alerts, notifications and settings live here.”",
     locationAndGate: "Spotlight -> docks on Continue",
     lifetime: "persistent",
     componentTarget: "Header[data-name='HeaderNotificationsSettings']",
@@ -378,7 +399,7 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "home_header_controls",
     group: "Home header/identity/navigation",
     firstBeat: "B11",
-    cue: "B11 header groups",
+    cue: "B12 Turn 0 “Let me scoot over…” — Workspace/Emulators appear",
     locationAndGate: "Existing Home positions",
     lifetime: "persistent",
     componentTarget: "Header (breadcrumbs, Widgets/Games, Workspace/Emulators, Bell/Settings)",
@@ -397,7 +418,7 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     group: "Resume projects section",
     firstBeat: "B12",
     cue: "B12 Turn 2 “You can resume projects…”",
-    locationAndGate: "Existing Home Active Projects grid (non-clickable until Turn 7)",
+    locationAndGate: "Existing Home Active Projects grid (non-clickable during Meet Infie)",
     lifetime: "persistent",
     componentTarget: "I2HomeScreen (Active Projects grid)",
   },
@@ -414,7 +435,7 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "home_action_buttons",
     group: "Action buttons associated with dummy data",
     firstBeat: "B12",
-    cue: "B12 Turn 6 “I'll present Action Buttons…”",
+    cue: "B12 Turn 5 “I'll present Action Buttons…”",
     locationAndGate: "Inside Home Infie chat",
     lifetime: "persistent",
     componentTarget: "I2HomeScreen (InfieActionRow)",
@@ -428,20 +449,11 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     lifetime: "persistent",
     componentTarget: "I2HomeScreen (Active Projects grid + Generate + Open New)",
   },
-  tutorial_demo_project: {
-    id: "tutorial_demo_project",
-    group: "Tutorial demo project choices glow",
-    firstBeat: "B12",
-    cue: "B12 Turn 7 “I've filled in some dummy data…”",
-    locationAndGate: "Inside existing picker; open it",
-    lifetime: "tutorial-data",
-    componentTarget: "I2HomeScreen ProjectCard (Pet Show and Tell / Not Hotdog)",
-  },
   project_navigation: {
     id: "project_navigation",
     group: "Project title/switcher/Home navigation",
     firstBeat: "B13",
-    cue: "B13 first line",
+    cue: "Project & Session Flow B13 first line",
     locationAndGate: "Existing project positions",
     lifetime: "normal-ui",
     componentTarget: "ProjectHomeScreen Header",
@@ -504,8 +516,8 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "widget_move_resize",
     group: "Widget move/resize controls",
     firstBeat: "B18",
-    cue: "B18 “Move it, resize it”",
-    locationAndGate: "On/near music widget",
+    cue: "Widgets & Whatnot “Move it, resize it”",
+    locationAndGate: "On/near music widget; arranging is demonstrated on a sample layout",
     lifetime: "normal-ui",
     componentTarget: "LeekBeatsWidget drag/resize/keyboard move controls",
   },
@@ -513,19 +525,19 @@ export const REVEAL_LEDGER: Record<RevealGroupId, RevealLedgerEntry> = {
     id: "library_entry_and_example",
     group: "Library entry and example",
     firstBeat: "B18",
-    cue: "B18 “the Library”",
+    cue: "Widgets & Whatnot “the Library”",
     locationAndGate: "Existing widget entry/location",
     lifetime: "persistent",
     componentTarget: "Header Widgets gallery with highlighted Library entry",
   },
   tutorials_entry: {
     id: "tutorials_entry",
-    group: "Tutorials entry",
+    group: "Learn entry",
     firstBeat: "B11",
-    cue: "B11 / B20 “Check out the other tutorials”",
-    locationAndGate: "Actual final Home position",
+    cue: "B11 “Click Learn…” / B20 “Learn has the other tutorials…”",
+    locationAndGate: "Actual final Home position; opens the Learn modal",
     lifetime: "persistent",
-    componentTarget: "Header Tutorials button",
+    componentTarget: "Header Learn button",
   },
 };
 
@@ -535,11 +547,38 @@ export const PERSISTENT_RELEASE_GROUPS: readonly RevealGroupId[] = (
   .filter((entry) => entry.lifetime === "persistent" || entry.lifetime === "normal-ui")
   .map((entry) => entry.id);
 
+/**
+ * Reveals that Project & Session Flow stages itself even though they persist afterwards
+ * (Project Home panels slide in at B13, task groups appear at B15).
+ */
+export const PROJECT_SESSION_STAGED_GROUPS: readonly RevealGroupId[] = [
+  "project_roadmap_sessions",
+  "session_task_groups",
+];
+
+/** Groups a later tutorial starts from: the finished Meet Infie shell, minus its own staged reveals. */
+export function getStartingGroupsForTrack(track: TutorialTrackId): Set<RevealGroupId> {
+  const set = new Set(PERSISTENT_RELEASE_GROUPS);
+  if (track === "project-session") {
+    for (const id of PROJECT_SESSION_STAGED_GROUPS) set.delete(id);
+  }
+  return set;
+}
+
 export function getInitialRevealedGroupsForBeat(beat: OnboardingBeat): Set<RevealGroupId> {
   if (beat === "COMPLETE") {
     return new Set(PERSISTENT_RELEASE_GROUPS);
   }
+  const track = trackForBeat(beat);
   const targetIndex = BEAT_ORDER.indexOf(beat);
+  if (track && track !== "meet-infie") {
+    // A deep link lands mid-tutorial: staged reveals from earlier beats are already shown.
+    const set = getStartingGroupsForTrack(track);
+    for (const id of PROJECT_SESSION_STAGED_GROUPS) {
+      if (BEAT_ORDER.indexOf(REVEAL_LEDGER[id].firstBeat) <= targetIndex) set.add(id);
+    }
+    return set;
+  }
   if (targetIndex <= 0) {
     return new Set();
   }
@@ -551,14 +590,6 @@ export function getInitialRevealedGroupsForBeat(beat: OnboardingBeat): Set<Revea
         set.add(entry.id);
       }
     }
-  }
-  if (targetIndex >= BEAT_ORDER.indexOf("B18")) {
-    set.add("music_play_only");
-    set.add("music_full_player");
-    set.add("widget_move_resize");
-  }
-  if (beat === "B19") {
-    set.add("continue_button");
   }
   return set;
 }

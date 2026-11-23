@@ -391,7 +391,7 @@ test('ExactWebPreviewFrame probes loopback URLs before mounting iframe and suppo
   assert.match(frameSource, /data-testid="preview-retry-button"/)
 })
 
-test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy, B08 5-turn reveal, B15 both-tasks gate, B17 half-dwell, B18 5-turn dock/gallery flow, and B20 conditional Generate glow', async () => {
+test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy across the five tutorials, Project & Session Flow B08 4-turn reveal, B15 both-tasks gate, Widgets & Whatnot 5-turn callout, and no Generate glow', async () => {
   const onboardingDir = path.join(appRoot, 'src', 'app', 'onboarding')
   const primitivesSrc = fs.readFileSync(path.join(onboardingDir, 'FloatingPrimitives.tsx'), 'utf8')
   const stageSrc = fs.readFileSync(path.join(onboardingDir, 'OnboardingStage.tsx'), 'utf8')
@@ -441,20 +441,20 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy, B08 5-t
   const dataUrl = `data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`
   const mod = await import(dataUrl)
 
-  assert.match(contextSrc, /currentBeat === "B08"[\s\S]*turns 2-4/, 'OnboardingContext B08 must handle turns 0..4')
+  assert.match(contextSrc, /currentBeat === "B08"[\s\S]*turns 1-3/, 'OnboardingContext B08 must handle Project & Session Flow turns 0..3')
   assert.equal(mod.B18_MOVE_TURN, 0)
   assert.equal(mod.B18_PANELS_TURN, 1)
-  assert.equal(mod.B18_OPEN_WIDGETS_TURN, 2)
-  assert.equal(mod.B18_LIBRARY_TURN, 3)
-  assert.equal(mod.B18_SEGUE_TURN, 4)
-  assert.equal(mod.B18_LINES.length, 5, 'B18 must have 5 turns')
+  assert.equal(mod.B18_SLIDERS_TURN, 2)
+  assert.equal(mod.B18_OPEN_WIDGETS_TURN, 3)
+  assert.equal(mod.B18_LIBRARY_TURN, 4)
+  assert.equal(mod.B18_EXPLORE_TURN, 5)
+  assert.equal(mod.B18_LINES.length, 6, 'Widgets & Whatnot must have 6 turns')
 
-  // B17 segue dwell is halved via factor 0.5 while B18 segue keeps factor 1
-  const fullB17Dwell = mod.segueDwellMs(mod.B17_TO_UI_SEGUE)
-  const halfB17Dwell = mod.segueDwellMs(mod.B17_TO_UI_SEGUE, 0.5)
-  assert.equal(halfB17Dwell, Math.round(fullB17Dwell * 0.5))
-  assert.match(stageSrc, /segueDwellMs\(B17_TO_UI_SEGUE,\s*0\.5\)/)
-  assert.match(stageSrc, /segueDwellMs\(B18_TO_SURFACES_SEGUE\)/)
+  // The old combined-tour segues are gone, along with their dwell timers.
+  assert.equal(mod.B17_TO_UI_SEGUE, undefined)
+  assert.equal(mod.B18_TO_SURFACES_SEGUE, undefined)
+  assert.equal(mod.B18_SEGUE_TURN, undefined)
+  assert.doesNotMatch(stageSrc, /B17_TO_UI_SEGUE|B18_TO_SURFACES_SEGUE/)
 
   // Pre-dock bottom offset responsive custom property
   assert.equal(mod.PREDOCK_BOTTOM_OFFSET, 'var(--i2-predock-bottom, 14vh)')
@@ -465,36 +465,86 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy, B08 5-t
 
   // 4. Synchronized copy checks across runtime and tutorial-script.md
   const requiredCopy = [
-    "I actually don't do much coding myself. I bet you don't either, or we wouldn't be talking. But if you do, that's cool too. i² helps you focus on the big picture, and it's built for getting your hands dirty. I won't hide your files and make things hard to edit by hand, or even interact with, like some other agentic IDEs. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.",
+    // Meet Infie
+    "What a noob.",
+    "Tell me a little about what you like to build and why.",
+    "I don't do much coding myself. I'll bet you don't either, or we wouldn't be talking. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that.",
+    "Oh yea, that's my jam. Your music player can live here for now. You can also connect a music streaming service later in settings.",
     "Your music player will be right here when you want it and comes preloaded with some smooth Lo-fi but you can connect a music streaming service later.",
-    "I'm an expert at version control like Git, Perforce, Diversion, and more. But you don't need any of those to use i²! I'm also packed with skills that make me a great agent team lead. Most importantly, I help you manage tasks and projects, even after weeks away or across multiple projects. Think of me as your double, your partner-in-crime, your right hand.",
-    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.",
-    "Here you'll work in an i² Workspace. It keeps your project, Sessions, and supporting files organized, transparent, and light on disk. Whether you use version control or not, I've got you covered.",
-    "That's also how navigation works. Project changes to the name of your current project. A Session is a space dedicated to a feature, bug fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me. First...",
-    "The key to working with i² is the project folder. It's a magical place! It holds the bigger picture: what we're building, our plans, design choices, and guidelines. These files help every Session Agent understand the whole application, not just their current task.",
-    "It's my job to keep these canonical files updated, in sync, and free of contradictions. They keep the Session Agents on track and everyone working toward the same vision. The project folder is separate from your Sessions, so nothing gets lost in the shuffle.",
-    "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. And with optional i² Sync, your team can contribute through the website, even without Git or the IDE. Your project stays yours, and you're in control of what gets shared!",
-    "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical one you're meant to edit. There are extra agent handoff files there too, but I'll take care of those, silly human.",
+    "I'm all ears if you want to speak conversationally. The built-in music will automatically turn down while either of us is talking, but you can configure push-to-talk later in settings.",
+    "Prefer a joystick and programmable keypad? You can do that too.",
+    "I'm your orchestrator, coordinator, question-answerer, and maybe friend. I take the boring stuff out of building and show you what you need when you need it.",
+    "I help manage your tasks and projects, even after weeks away. I know version control like Git, Perforce and Diversion, but you don't need it to use i². Think of me as your partner-in-crime, your right hand.",
+    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you. I'll get to what Session Agents are later.",
+    "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. Those buttons are handy dropdowns. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.",
     "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.",
-    "I can work with multiple projects at once. If a feature in Project A needs a new feature in Project B, and you want both in play, I'll create a worktree for each, a master plan, a plan for each project, and a special session that shows up in both. The agent team and I can use that session to find errors before you test.",
-    "This is used by me to keep the Session Agents in check to make sure your vision is always in mind.",
-    "When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.",
-    "A combined list of alerts (Global Todo Widget) for your review and other notifications live here as well as settings.",
-    "Here you can talk with me about whatever you want, or use our conversation in a project. You can do a lot from here and then get deeper as needed. I can also help you manage our Global Todo list which includes your projects that have open todo items or random todo things you want to track like 'Update SSL certificates on MyWebsite.com'",
+    "Click Learn for tutorials and lessons, and Widgets to customize your workspace. Games unlock at level five, take your level into account and pause when I need you to review something. They're a fun way to wait for Session Agents. You can submit a tutorial, widget or game to the Infinite Intelligence too!",
+    "Your alerts, notifications and settings live here. I'll also help you manage the Global To-Do list.",
+    "This is i² Home.",
+    "Here you can talk with me about whatever you want, or use our conversation in a project. I can also help you manage our Global To-Do list: it includes open project tasks and reminders like ‘Update SSL certificates on MyWebsite.com.’",
+    "I'll present Action Buttons specific to the next steps of your projects to save you time typing.",
+    "Learn has the other tutorials whenever you're ready. You can also give me feedback, and I'll send it to the right place and give you a ticket to follow up. Now go build cool shit.",
+    "Speaking of… there's your first level. I hope you enjoyed this tutorial, and if you didn't, I don't really care. I got paid either way. Toodles for now.",
+    // Project & Session Flow
+    "Here you'll work in an i² Workspace. It keeps your project, Sessions, and files organized and light on disk. Version control or not, I've got you covered.",
+    "The key to working with i² is the project folder. It holds what we're building, our plans, design choices, and guidelines, so every Session Agent sees the whole application, not just their task.",
+    "It's my job to keep these canonical files updated, in sync, and free of contradictions. They're separate from your Sessions, so nothing gets lost.",
+    "Behind the scenes, i² Core helps me coordinate our tasks, Sessions, and Session Agents. Optional i² Sync lets your team use the website without Git or the IDE. You control what gets shared.",
+    "info.md holds the project's name, purpose, and important details. An agent can ask, or you can start from a template. Teammates can chat with me about it on the website, and I use it to keep your vision in mind.",
+    "todo.md is what we want to build, change, or fix. Tell me an idea, or add it yourself. GitHub issues come in too, and when anyone edits Info I add todos so the app follows the design. You can audit me.",
+    "style.md is the colors, typography, and look. The Stylist previews it, and your designer can use it on the website too.",
+    "guidelines.md tells me, you, your teammates, and the Session Agents how to work. It's the most technical file you edit. I'll handle the extra handoff files, silly human.",
+    "This is Project Home. Click the project name to switch, or head back to i² Home. Right-click a project to open it in a new window. Work keeps going while you switch. Don't overload your brain. That's what I'm here for.",
+    "I can work with multiple projects at once. If Project A needs something new in Project B, I'll make a worktree for each, a master plan, a plan per project, and a shared session so we can catch errors before you test.",
+    "Your roadmap and Sessions live here. I help with planning, version control, branches, worktrees, the next step, and research so the plan stays current.",
     "When a Session Agent has a question, I'll bring it to you here. You can reply without opening the Session. Try it.",
     "Or click the Session name and talk to the Session Agent directly. Let's do that now.",
-    "Each Session has Session Agents working on it. The model is up to you. Use our ready-made agents, bring your own, or import them. i² gives them a place to work together.",
-    "Me, the Session Agents, and any other agents you bring in all work through the iSquared MCP and tools. They're there to prevent dangerous mistakes in your codebase, steer around common pitfalls, and put best practices into practice.",
-    "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it for yourself.",
+    "Each Session has Session Agents working on it. Pick the model: ready-made agents, your own, or imported ones. i² is where they work together.",
+    "Me, the Session Agents, and any other agents you bring in work through the iSquared MCP and tools. We block dangerous mistakes, steer around pitfalls, and put best practices to work.",
+    "Simulators are built in, too. Session Agents use them to check their own work, and you can use them to see it yourself.",
     "Tasks come in two groups: Session Agent tasks and Human tasks. You're the human. This one's ready for you to verify. Click on all open tasks to mark them complete.",
-    "It's great to contribute to the Infinite Intelligence that drives this experience, made possible by the vast open source and free education materials available today.",
+    "Here's the Session Completion Form. I've filled in most of it. Check the corrections, add feedback, and hit Submit. Free plans need one; paid users can contribute too. Auto-submit on merge in Settings still counts.",
+    "These forms boost your level while you work. Corrections go back to iSquared, not your codebase. How many open Sessions you can leave unsubmitted depends on your level and plan.",
+    "We're also exploring quantum machine learning alongside the regular analysis. It's research; nothing you build depends on it. Forms, donors, and paid users help keep i² running, and my creator is grateful to the open-source and free-education communities.",
     "Submitted. Next I close the session: its branches are merged and cleaned up, both locally and on the remote, barring your approval.",
-    "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want and iSquared supports fullscreen multiple screen layout saves. Try moving the music player to the bottom panel underneath this chat.",
+    "The website lets even your non-technical teammates join in too, without the desktop app or the codebase. The mobile app brings notifications, updates, and chat, and you can open your environments on mobile, the website, or in VR.",
+    "If your project didn't start in i², I'll onboard it for you. I'll offer a tutorial when you do something new here.",
+    // Widgets & Whatnot
+    "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want, and iSquared supports fullscreen multiple-screen layout saves. Let's try it with a widget.",
     "You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.",
+    "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking. Close this when you're done.",
     "Click Widgets in the header to see everything else you can add to your workspace.",
     "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
-    "If your project didn't start in i², I'll onboard it for you. Don't worry about what that means as I'll prompt you with a tutorial any time you do something new here. For now, let's head Home. Click i2 in the top left corner.",
-    "The number of open sessions without submitted Completion Reports will be limited based on your level and plan. I hope this gives you everything you could need but please submit feedback directly to me at any time and I'll make sure it goes to the proper channel and give you a ticket to follow-up.",
+    "Explore the rest of the widgets on your own!",
+  ]
+
+  // Exact wording the proposal deletes or replaces (moved lines are listed above in their new tutorial).
+  const removedCopy = [
+    "This onboarding tutorial may take around 15 minutes",
+    "I've filled in some dummy data for this tutorial. Let's open one.",
+    "So that's the flow of a session, now onto the rest of the UI.",
+    "This IDE is just one surface of iSquared.",
+    "I'm going to help you build amazing projects. I hope you're ready.",
+    "I actually don't do much coding myself. I bet you don't either",
+    "I'm your orchestrator, coordinator, middle-man",
+    "I'm an expert at version control like Git, Perforce, Diversion, and more.",
+    "That's also how navigation works. Project changes to the name of your current project.",
+    "Whenever you want more tutorials and lessons, click Learn in the header.",
+    "A combined list of alerts (Global Todo Widget)",
+    "You can do a lot from here and then get deeper as needed.",
+    "We're now in i² Home.",
+    "When anyone edits project Info, I add project Todo items so the app reflects the changes in the grand design. You can view this and keep me in check.",
+    "That's about it to get started. This prototype has one more tutorial",
+    "Games unlock at level five, so hop to it.",
+    "I hope this gives you everything you could need but please submit feedback directly to me",
+    "Don't worry about what that means as I'll prompt you with a tutorial any time you do something new here. For now, let's head Home.",
+    "Try moving the music player to the bottom panel underneath this chat.",
+    "This is the Session Completion Form. I do most of the work.",
+    "If you're on the free plan, session completion forms are required",
+    "Either way, the corrected actions are what get sent back to improve iSquared",
+    "iSquared is also exploring quantum computing: quantum machine learning runs in tandem",
+    "Session Completion Forms, donors, and paid users are what keep this experience running.",
+    "For which my creator is eternally grateful to the community.",
   ]
 
   for (const snippet of requiredCopy) {
@@ -508,32 +558,44 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy, B08 5-t
     )
   }
 
+  for (const snippet of removedCopy) {
+    assert.equal(stageSrc.includes(snippet) || ledgerSrc.includes(snippet), false, `Removed copy must be gone from runtime: "${snippet.slice(0, 60)}..."`)
+    assert.equal(transcriptSrc.includes(snippet), false, `Removed copy must be gone from tutorial-script.md: "${snippet.slice(0, 60)}..."`)
+  }
+
   assert.equal(stageSrc.includes('other Session Agents'), false, 'B09-3 must not say "other Session Agents"')
-  assert.match(stageSrc, /\(Global Todo Widget\)/)
-  assert.match(stageSrc, /Global Todo list/)
+  // Global To-Do stays in Meet Infie: the notifications line (B11) and the Home chat line (B12).
+  assert.match(stageSrc, /I'll also help you manage the Global To-Do list\./)
+  assert.match(stageSrc, /I can also help you manage our Global To-Do list: it includes open project tasks/)
 
   // 5. B15 both-tasks gate in App.tsx SessionScreen
   assert.match(appSrc, /if \(becomingDone && \(!isTutorialActive \|\| nextTests\.every\(x => x\.done\)\)\)/)
 
-  // 6. B18 layout-driven gate, keyboard move hook, Widgets button gate, and rolling feed without duplicate Continue
+  // 6. Widgets & Whatnot: music stays put (no move gate), Widgets button gate, floating callout only
   assert.equal((appSrc.match(/const musicAsWidget = true/g) || []).length, 2)
   assert.match(
     stageSrc,
     /currentBeat === "B18"[\s\S]*?revealGroup\(\["music_play_only", "music_full_player", "widget_move_resize"\]\)/,
-    'OnboardingStage B18 cue must reveal music_play_only and music_full_player alongside widget_move_resize'
+    'OnboardingStage B18 cue must keep music_play_only and music_full_player alongside widget_move_resize'
   )
-  assert.match(
-    contextSrc,
-    /currentBeat === "B18"[\s\S]*?revealGroup\(\["music_play_only", "music_full_player", "widget_move_resize"\]\)/,
-    'OnboardingContext B18 sync must reveal music_play_only and music_full_player alongside widget_move_resize'
-  )
-  assert.match(appSrc, /const musicInBottom = dock\.layout\.bottom\.includes\("music"\)/)
-  assert.match(appSrc, /setTurnIndex\(B18_PANELS_TURN\)/)
+  assert.match(contextSrc, /const MUSIC_GROUPS: readonly RevealGroupId\[\] = \["music_play_only", "music_full_player", "widget_move_resize"\]/)
+  assert.match(contextSrc, /currentBeat === "B18"[\s\S]*?revealGroup\(MUSIC_GROUPS\)/)
+  assert.doesNotMatch(appSrc, /musicInBottom|isB18MoveTurn/, 'Widgets & Whatnot never asks the user to move the music player')
+  assert.match(stageSrc, /setTurnIndex\(B18_PANELS_TURN\)/)
   assert.match(appSrc, /setTurnIndex\(B18_LIBRARY_TURN\)/)
   assert.match(leekSrc, /onMoveToBottomPanel\?:\s*\(\)\s*=>\s*void/)
-  assert.match(stageSrc, /const isFloatingCallout = currentBeat === "B18" && turnIndex === B18_LIBRARY_TURN/)
-  assert.match(stageSrc, /const nextShowContinue = isFloatingCallout \? false : showContinueNow/)
+  assert.match(stageSrc, /widgetsGalleryLive && turnIndex === B18_LIBRARY_TURN/)
+  assert.match(stageSrc, /onDismissWidgetsGallery\?\.\(\)/)
+  assert.doesNotMatch(stageSrc, /turnIndex === B18_LIBRARY_TURN \|\| turnIndex === B18_EXPLORE_TURN/)
+  assert.match(stageSrc, /const isFloatingCallout =\s*currentBeat === "B18" &&\s*\(turnIndex === B18_MOVE_TURN \|\| !widgetsTourInProject \|\| slidersCoversChat \|\| galleryCoversChat\);/)
+  assert.match(stageSrc, /ProjectFilePreview file="info"/)
+  assert.match(stageSrc, /ProjectFilePreview file="todo"/)
+  assert.match(stageSrc, /autoAdvancedFor\.current === currentMessageId/)
+  assert.match(stageSrc, /settledAdvancedFor\.current === turnKey/)
+  assert.match(stageSrc, /isEarlyCenterStage \|\|\s*isFloatingCallout \|\|/, 'the callout never writes into the docked chat')
+  assert.match(stageSrc, /<WidgetArrangeDemo reducedMotion=\{reducedMotion\} \/>/)
 
-  // 7. Conditional GenerateProjectButton glow only on B20 Turn 0 during tutorial
-  assert.match(appSrc, /glow=\{isTutorialActive && currentBeat === "B20" && turnIndex === 0\}/)
+  // 7. The Generate button no longer glows: Meet Infie's close points to Learn instead.
+  assert.doesNotMatch(appSrc, /glow=\{isTutorialActive && currentBeat === "B20"/)
+  assert.match(appSrc, /const highlightTutorialsNav = meetInfieActive && currentBeat === "B20";/)
 })

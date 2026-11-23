@@ -70,9 +70,10 @@ The Project Home and Session side panels are dockable widgets (src/app/widgets/W
 
 - B06 controls: the three per-device MP4s (`infie-transform-*.mp4`) are replaced by one continuous
   transparent recording, `public/assets/infie-controls-chain-alpha.webm` (VP9 + alpha, 1080x1080,
-  30 fps, 16 s, no audio). It is a plain `<video>`; the old canvas luma key (`LumaKeyedVideo.tsx`)
+  100/3 fps, 14.4 s, no audio). It is a plain `<video>`; the old canvas luma key (`LumaKeyedVideo.tsx`)
   is no longer used by B06 and is left in place. Cues follow the video's media time: keyboard at 0 s,
-  gamepad at 6 s, joystick at 11 s, all three devices when it ends. Reduced motion and any video
+  gamepad at 5.4 s, joystick at 9.9 s. The joystick caption offers Continue after the video ends.
+  Reduced motion and any video
   failure (error, no start, stall, no VP9 support) still use the device PNG stills.
 - `pnpm-workspace.yaml`: `supportedArchitectures` also lists `current` so installs work on the
   developer's own OS (the export only listed linux).

@@ -1,9 +1,20 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Play, Pause, SkipBack, SkipForward, GripHorizontal, Move, Music2, Check, Volume2 } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, GripHorizontal, Move, Music2, Check, Volume2, Maximize2, Minimize2, Expand, ListMusic, X } from "lucide-react";
 import { LEEKBEATS_TRACKS, PLAYLIST_NAME } from "./leekBeatsPlaylist";
 import { chatScale } from "../widgets/chatScale";
+import {
+  HEADER_CLICK_GAP_MS,
+  applyHeaderClick,
+  classifyHeaderGestureClick,
+  expireHeaderGesture,
+  headerAnchorBox,
+  pointInHeaderAnchor,
+  type HeaderAnchorBox,
+  type HeaderGesture,
+  type HeaderMode,
+} from "../widgets/dockBehavior";
 
 // ─── Persistent lower-left Home music widget (LeekBeats) ────────────────────
 // - One <audio> element for the life of the shell: time, volume, track and
@@ -26,7 +37,8 @@ export interface LeekBeatsWidgetProps {
   /** External docking control (stays in spotlight until advancing past B05). */
   docked?: boolean;
   /**
-   * "floating": the unboxed lower-left Home player (spotlight → dock).
+   * "floating": Play stays an unframed spotlight. Once the full player starts
+   * moving to its Home position it is a bounded Music widget and stays framed.
    * "panel": Project/Session — a bordered widget rendered into `panelSlot`
    * (bottom of the right column) so it never covers content.
    */
@@ -53,6 +65,8 @@ export interface LeekBeatsWidgetProps {
   /** Fires synchronously in the click handler, same tick as audio.play(). */
   onPressStart?: () => void;
   onPlayAttempt?: (result: PlaybackAttemptResult) => void;
+  /** Mirrors the audio element's real playing state (from its events). */
+  onPlayingChange?: (playing: boolean) => void;
   onPositionMoved?: (pos: { left: number; bottom: number }) => void;
 }
 
@@ -64,6 +78,28 @@ const PANEL_PLAY = 36;
 const PANEL_GAP = 8;
 const FRAMED_FLOATING_WIDTH = 240;
 const DEFAULT_POSITION = { left: 24, bottom: 24 };
+const HOME_OVERLAY_ID = "leekbeats-home";
+const ACTION_CHIP =
+  "rounded bg-[#1d1b20]/85 text-[#666] transition-colors p-0.5 hover:text-[#abefa3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60";
+
+/**
+ * The Play spotlight stays unframed. A normal bounded Music widget begins at the
+ * Home move and keeps its own expand, fullscreen, and song-picker actions whenever
+ * that framed player is floating (Home, or popped out of a column).
+ */
+export function musicHomeFrame(options: {
+  fullPlayerRevealed: boolean;
+  docked: boolean;
+  placement: "floating" | "panel";
+  floating: boolean;
+}): { framed: boolean; actions: boolean } {
+  const travelingHome = options.fullPlayerRevealed && options.docked;
+  const framed = options.placement === "panel" || travelingHome;
+  return {
+    framed,
+    actions: framed && options.floating && travelingHome,
+  };
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -119,19 +155,34 @@ export function LeekBeatsWidget({
   onMusicPlay,
   onPressStart,
   onPlayAttempt,
+  onPlayingChange,
   onPositionMoved,
 }: LeekBeatsWidgetProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const resumeAfterSwitchRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  useEffect(() => {
+    onPlayingChange?.(isPlaying);
+  }, [isPlaying, onPlayingChange]);
   const [trackIndex, setTrackIndex] = useState(0);
   const [artistFilter, setArtistFilter] = useState<string | null>(null);
   const [pulse, setPulse] = useState(0);
   const [position, setPosition] = useState(DEFAULT_POSITION);
   const [internalDocked, setInternalDocked] = useState<boolean>(() => !animateIntro || fullPlayerRevealed);
-  const docked = controlledDocked !== undefined ? controlledDocked : internalDocked;
+  const docked =
+    controlledDocked !== undefined
+      ? controlledDocked
+      : (prefersReducedMotion() && fullPlayerRevealed) || internalDocked;
   const [spotlightPos, setSpotlightPos] = useState<{ left: number; bottom: number } | null>(null);
   const [keyboardMoveActive, setKeyboardMoveActive] = useState(false);
+  const [presentation, setPresentationState] = useState<HeaderMode>("normal");
+  const presentationRef = useRef<HeaderMode>("normal");
+  const gestureRef = useRef<HeaderGesture>({ count: 0, mode: "normal", pendingToggle: false });
+  const headerAnchorRef = useRef<HeaderAnchorBox | null>(null);
+  const clickTimerRef = useRef<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const songPickerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pickerWasOpenRef = useRef(false);
   // Once the user drags (or keyboard-moves) the player it floats at their position everywhere.
   const [userMoved, setUserMoved] = useState(false);
   const userMovedRef = useRef(false);
@@ -156,7 +207,6 @@ export function LeekBeatsWidget({
       ? "panel"
       : "hidden"
     : "floating";
-  const framed = placement === "panel";
 
   // Reset docked state when hidden at the start of an onboarding run;
   // once fullPlayerRevealed becomes true in B05 Turn 1, hold briefly in its spotlight
@@ -167,10 +217,18 @@ export function LeekBeatsWidget({
       setUserMoved(false);
       setKeyboardMoveActive(false);
       setPosition(DEFAULT_POSITION);
+      presentationRef.current = "normal";
+      gestureRef.current = { count: 0, mode: "normal", pendingToggle: false };
+      setPresentationState("normal");
       return;
     }
-    if (!animateIntro || prefersReducedMotion()) {
+    if (!animateIntro) {
       setInternalDocked(true);
+      return;
+    }
+    if (prefersReducedMotion()) {
+      // The Play spotlight stays put. Once the full player exists, skip the glide.
+      if (fullPlayerRevealed) setInternalDocked(true);
       return;
     }
     if (controlledDocked === undefined && fullPlayerRevealed && !internalDocked) {
@@ -348,6 +406,89 @@ export function LeekBeatsWidget({
   };
 
   const isDockedNow = docked || userMoved;
+  const homeFrame = musicHomeFrame({
+    fullPlayerRevealed,
+    docked: isDockedNow,
+    placement,
+    floating: mode === "floating",
+  });
+  const framed = homeFrame.framed;
+  const selfContained = homeFrame.actions;
+
+  const commitPresentation = useCallback((next: HeaderMode) => {
+    presentationRef.current = next;
+    setPresentationState((current) => (current === next ? current : next));
+  }, []);
+
+  const openPresentation = useCallback((next: HeaderMode) => {
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    gestureRef.current = { count: 0, mode: next, pendingToggle: false };
+    headerAnchorRef.current = null;
+    commitPresentation(next);
+  }, [commitPresentation]);
+
+  useEffect(() => {
+    if (selfContained) return;
+    openPresentation("normal");
+  }, [selfContained, openPresentation]);
+
+  // Same header gesture as every dock widget: double-click expands, triple-click fullscreens.
+  useEffect(() => {
+    if (!selfContained) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const header = target.closest("[data-widget-header]");
+      const owned = Boolean(
+        header?.closest("[data-name='LeekBeatsWidget'], [data-widget-overlay='" + HOME_OVERLAY_ID + "']"),
+      );
+      const kind = classifyHeaderGestureClick({
+        onInteractive: Boolean(target.closest("button, a, input, textarea, select, [role='button'], [data-no-widget-gesture]")),
+        onOwnedHeader: owned,
+        gestureOpen: gestureRef.current.count > 0,
+        inAnchor: pointInHeaderAnchor(headerAnchorRef.current, event.clientX, event.clientY),
+        onForeignHeader: Boolean(header) && !owned,
+        onOwnOverlay: Boolean(target.closest("[data-widget-overlay='" + HOME_OVERLAY_ID + "']")),
+      });
+      if (!kind) return;
+      if (kind === "continue") {
+        event.preventDefault();
+        event.stopPropagation();
+      } else if (header) {
+        headerAnchorRef.current = headerAnchorBox(header.getBoundingClientRect());
+      }
+      const next = applyHeaderClick(gestureRef.current, false);
+      gestureRef.current = { count: next.count, mode: next.mode, pendingToggle: next.pendingToggle };
+      if (next.count === 0) headerAnchorRef.current = null;
+      if (next.mode !== presentationRef.current) commitPresentation(next.mode);
+      if (clickTimerRef.current) window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      if (next.count === 0) return;
+      clickTimerRef.current = window.setTimeout(() => {
+        clickTimerRef.current = null;
+        if (gestureRef.current.mode !== presentationRef.current) {
+          gestureRef.current = { count: 0, mode: presentationRef.current, pendingToggle: false };
+          headerAnchorRef.current = null;
+          return;
+        }
+        const expired = expireHeaderGesture(gestureRef.current);
+        gestureRef.current = expired;
+        headerAnchorRef.current = null;
+        if (expired.mode !== presentationRef.current) commitPresentation(expired.mode);
+      }, HEADER_CLICK_GAP_MS);
+    };
+    window.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("click", onClick, true);
+      if (clickTimerRef.current) {
+        window.clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+    };
+  }, [selfContained, commitPresentation]);
 
   useLayoutEffect(() => {
     if (!anyRevealed) {
@@ -371,6 +512,8 @@ export function LeekBeatsWidget({
   const targetScale = isDockedNow ? 1 : fullPlayerRevealed ? 1.1 : 1.35;
 
   const compact = framed;
+  const uiMotion = prefersReducedMotion() ? 0 : 0.35;
+  const showLocalLibrary = selfContained && presentation !== "normal" && !librarySlot;
   const slotPx = compact ? PANEL_SLOT : SLOT;
   const playPx = compact ? PANEL_PLAY : 40;
   const gapPx = compact ? PANEL_GAP : GAP;
@@ -417,7 +560,7 @@ export function LeekBeatsWidget({
             type="button"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: uiMotion }}
             onClick={() => switchTrack(-1)}
             aria-label="Previous track"
             className="flex items-center justify-center size-full rounded-full hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
@@ -445,7 +588,7 @@ export function LeekBeatsWidget({
           type="button"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
+          transition={{ duration: uiMotion }}
           onClick={handleTogglePlay}
           aria-label={isPlaying ? `Pause ${PLAYLIST_NAME}` : `Play ${PLAYLIST_NAME}`}
           className="relative flex items-center justify-center size-full rounded-full active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/70"
@@ -466,7 +609,7 @@ export function LeekBeatsWidget({
             type="button"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: uiMotion }}
             onClick={() => switchTrack(1)}
             aria-label="Next track"
             className="flex items-center justify-center size-full rounded-full hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
@@ -482,7 +625,7 @@ export function LeekBeatsWidget({
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
+          transition={{ duration: uiMotion }}
           className={`flex flex-col justify-center pl-1 ${compact ? "flex-1 min-w-0" : ""}`}
           style={compact ? undefined : { minWidth: 120 }}
         >
@@ -505,11 +648,24 @@ export function LeekBeatsWidget({
     </>
   );
 
-  // Bordered widget frame used in Project/Session (panel slot or popped-out float).
-  const renderFrame = (gripRef?: React.Ref<HTMLButtonElement>) => (
+  const onFrameHeaderKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mode === "panel") {
+      handleMoveKeyDown(event);
+      return;
+    }
+    if (!selfContained || event.target !== event.currentTarget) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openPresentation("expanded");
+    }
+  };
+
+  // Bordered widget frame. Panel chrome stays header-only because the dock supplies
+  // expand and fullscreen. The Home float carries those actions itself.
+  const renderFrame = (gripRef?: React.Ref<HTMLButtonElement>, placeholder = false) => (
     <div
       data-name="LeekBeatsFrame"
-      className={`w-full flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip transition-shadow ${calloutGlow ? "infie-glow" : ""}`}
+      className={`relative w-full flex flex-col flex-1 min-h-0 rounded-[6px] overflow-clip transition-shadow ${calloutGlow ? "infie-glow" : ""}`}
       style={{
         border: calloutGlow ? "1px solid #2dd4bf" : "1px solid rgba(255, 255, 255, 0.05)",
         boxShadow: calloutGlow ? undefined : "0px 4px 6px -1px rgba(0, 0, 0, 0.1)",
@@ -517,24 +673,76 @@ export function LeekBeatsWidget({
     >
       <div
         data-widget-header
-        tabIndex={mode === "panel" ? 0 : undefined}
-        onKeyDown={mode === "panel" ? handleMoveKeyDown : undefined}
+        tabIndex={mode === "panel" || selfContained ? 0 : undefined}
+        aria-label={selfContained ? "Music" : undefined}
+        onKeyDown={mode === "panel" || selfContained ? onFrameHeaderKeyDown : undefined}
         className="flex items-center gap-2 px-3 py-[7px] bg-[#1d1b20] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
         style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}
       >
         <Music2 size={12} className="text-[#555] shrink-0" aria-hidden="true" />
-        <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">
+        <span className="min-w-0 truncate font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#777]">
           Music
         </span>
-        {moveResizeRevealed && mode !== "panel" && (
-          <div data-name="LeekBeatsMoveResizeControls" className="ml-auto flex items-center gap-1.5">
-            {renderMoveControls(gripRef)}
-          </div>
+        {((moveResizeRevealed && mode !== "panel") || (selfContained && !placeholder)) && (
+        <div className="ml-auto flex items-center gap-1">
+          {moveResizeRevealed && mode !== "panel" && (
+            <div data-name="LeekBeatsMoveResizeControls" className="flex items-center gap-1.5">
+              {renderMoveControls(gripRef)}
+            </div>
+          )}
+          {selfContained && !placeholder && (
+            <div data-music-actions="true" data-no-widget-gesture className="flex items-center gap-1">
+              <button
+                ref={songPickerButtonRef}
+                type="button"
+                title="Song picker"
+                aria-label="Song picker"
+                aria-haspopup="dialog"
+                aria-expanded={presentation !== "normal"}
+                onClick={() => openPresentation("expanded")}
+                className={ACTION_CHIP}
+              >
+                <ListMusic size={10} />
+              </button>
+              <button
+                type="button"
+                title="Expand"
+                aria-label="Expand Music"
+                aria-haspopup="dialog"
+                aria-expanded={presentation !== "normal"}
+                onClick={() => openPresentation("expanded")}
+                className={ACTION_CHIP}
+              >
+                <Maximize2 size={10} />
+              </button>
+              <button
+                type="button"
+                title="Fullscreen"
+                aria-label="Fullscreen"
+                aria-haspopup="dialog"
+                aria-expanded={presentation === "fullscreen"}
+                onClick={() => openPresentation("fullscreen")}
+                className={ACTION_CHIP}
+              >
+                <Expand size={10} />
+              </button>
+            </div>
+          )}
+        </div>
         )}
       </div>
-      <div className="flex items-center px-3 py-2.5 bg-[#252323] flex-1 min-h-0" style={{ gap: gapPx }}>
-        {transport}
-      </div>
+      {placeholder ? (
+        <div
+          data-dock-body
+          className="grid place-items-center flex-1 min-h-[48px] px-3 py-4 bg-[#252323] font-['Rounded_Mplus_1c',sans-serif] text-[10px] uppercase tracking-wide text-[#555]"
+        >
+          Music · {presentation}
+        </div>
+      ) : (
+        <div className="flex items-center px-3 py-2.5 bg-[#252323] flex-1 min-h-0" style={{ gap: gapPx }}>
+          {transport}
+        </div>
+      )}
     </div>
   );
 
@@ -553,16 +761,21 @@ export function LeekBeatsWidget({
     { name: "Tidal", tint: "#9ad7ff" },
     { name: "Local files", tint: "#c5c5c5" },
   ];
+  const shownLibraryMode: "library" | "providers" = showLocalLibrary
+    ? presentation === "fullscreen"
+      ? "providers"
+      : "library"
+    : libraryMode;
   const sideRow = (active: boolean) =>
     `w-full text-left px-3 py-[6px] rounded-[6px] font-['Rounded_Mplus_1c',sans-serif] text-[12px] truncate transition-colors ${
       active ? "bg-[#abefa3]/12 text-[#abefa3]" : "text-[#c5c5c5] hover:bg-white/5"
     }`;
   const library = (
-    <div data-name="LeekBeatsLibrary" data-library-mode={libraryMode} className="flex flex-col flex-1 w-full min-h-0 bg-[#1a1a1a] select-none">
-      <div data-widget-header className="flex items-center gap-2 px-4 py-[9px] bg-[#1d1b20] shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+    <div data-name="LeekBeatsLibrary" data-library-mode={shownLibraryMode} className="flex flex-col flex-1 w-full min-h-0 bg-[#1a1a1a] select-none">
+      <div data-widget-header className="flex items-center gap-2 px-4 py-[9px] pr-16 bg-[#1d1b20] shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
         <Music2 size={13} className="text-[#abefa3] shrink-0" aria-hidden="true" />
         <span className="font-['Rounded_Mplus_1c',sans-serif] text-[11px] tracking-[0.275px] uppercase text-[#aaa]">
-          Music{libraryMode === "providers" ? " · Library & providers" : " · Library"}
+          Music{shownLibraryMode === "providers" ? " · Library & providers" : " · Library"}
         </span>
       </div>
       <div className="flex flex-1 min-h-0">
@@ -600,12 +813,12 @@ export function LeekBeatsWidget({
             );
           })}
           <p className="px-4 py-3 font-['Rounded_Mplus_1c',sans-serif] text-[10.5px] text-[#666]">
-            {libraryMode === "providers"
+            {shownLibraryMode === "providers"
               ? "Connect a provider to bring in your own library."
               : "Triple-click the header for fullscreen to connect a music provider."}
           </p>
         </div>
-        {libraryMode === "providers" && (
+        {shownLibraryMode === "providers" && (
           <div data-name="LeekBeatsProviders" className="w-[300px] shrink-0 flex flex-col gap-2 p-3 overflow-y-auto" style={{ borderLeft: "1px solid rgba(255,255,255,0.05)" }}>
             <p className="px-1 font-['Rounded_Mplus_1c',sans-serif] text-[9.5px] uppercase tracking-wider text-[#666]">Music providers</p>
             <div className="flex items-center gap-2 px-3 py-2 rounded-[8px] bg-[#abefa3]/8" style={{ border: "1px solid rgba(171,239,163,0.3)" }}>
@@ -637,10 +850,77 @@ export function LeekBeatsWidget({
     </div>
   );
 
+  useEffect(() => {
+    if (!showLocalLibrary) {
+      if (pickerWasOpenRef.current) {
+        pickerWasOpenRef.current = false;
+        songPickerButtonRef.current?.focus();
+      }
+      return;
+    }
+    pickerWasOpenRef.current = true;
+    dialogRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-widget-move-grip]")) return;
+      event.preventDefault();
+      openPresentation("normal");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showLocalLibrary, openPresentation]);
+
+  const renderLibraryDialog = () => (
+    <div
+      data-widget-overlay={HOME_OVERLAY_ID}
+      data-widget-mode={presentation}
+      className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={() => openPresentation("normal")}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={presentation === "fullscreen" ? "Music fullscreen" : "Song picker"}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+        className={`relative bg-[#1a1a1a] border border-white/8 rounded-[10px] shadow-2xl flex flex-col overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60 ${presentation === "fullscreen" ? "fixed inset-3" : "w-[860px] h-[580px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)]"}`}
+      >
+        <div data-no-widget-gesture className="absolute z-[2] top-[9px] right-[10px] flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => openPresentation(presentation === "fullscreen" ? "expanded" : "fullscreen")}
+            title={presentation === "fullscreen" ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={presentation === "fullscreen" ? "Exit fullscreen" : "Fullscreen"}
+            className="p-1 rounded text-[#777] hover:text-[#abefa3] hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
+          >
+            {presentation === "fullscreen" ? <Minimize2 size={13} /> : <Expand size={13} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => openPresentation("normal")}
+            title="Back to normal"
+            aria-label="Restore Music"
+            className="p-1 rounded text-[#666] hover:text-[#abefa3] hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#abefa3]/60"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div
+          className="flex flex-col min-w-0 min-h-0 flex-[1_1_0%] [&>*]:flex-[1_1_0%] [&>*]:min-h-0 [&>*]:!rounded-none [&>*]:!border-0"
+          style={{ zoom: prefersReducedMotion() ? 1 : presentation === "fullscreen" ? 1.7 : 1.4 }}
+        >
+          {library}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {librarySlot && anyRevealed && createPortal(library, librarySlot)}
-      {/* The single persistent audio instance — always mounted, even before reveal. */}
+      {/* First child, always. Conditional portals after this must not remount it,
+          or track, playback position and volume would reset. */}
       <audio
         ref={audioRef}
         src={track.src}
@@ -657,6 +937,8 @@ export function LeekBeatsWidget({
           setTrackIndex((i) => (i + 1) % LEEKBEATS_TRACKS.length);
         }}
       />
+      {!showLocalLibrary && librarySlot && anyRevealed && createPortal(library, librarySlot)}
+      {showLocalLibrary && createPortal(renderLibraryDialog(), document.body)}
 
       {/* Project/Session: bordered widget in the right-column slot (in the layout, never overlapping). */}
       {mode === "panel" &&
@@ -670,7 +952,7 @@ export function LeekBeatsWidget({
             data-docked="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: uiMotion }}
             className="w-full flex flex-col flex-1 min-h-0 select-none"
           >
             {renderFrame()}
@@ -678,7 +960,7 @@ export function LeekBeatsWidget({
           panelSlot
         )}
 
-      {/* Floating: unboxed spotlight → lower-left dock on Home; bordered when moved in Project/Session. */}
+      {/* Floating: unframed Play spotlight, then a bounded Music widget from the Home move on. */}
       {mode === "floating" && (isDockedNow || spotlightPos !== null) && (
         <motion.div
           ref={floatingRef}
@@ -686,6 +968,8 @@ export function LeekBeatsWidget({
           data-placement="floating"
           data-framed={framed ? "true" : "false"}
           data-docked={isDockedNow ? "true" : "false"}
+          data-widget-mode={selfContained ? presentation : undefined}
+          data-home-frame={selfContained ? "framed" : undefined}
           initial={{
             // Popping out of the panel must not flash: start fully visible.
             opacity: userMoved ? 1 : 0,
@@ -700,12 +984,12 @@ export function LeekBeatsWidget({
             scale: targetScale,
           }}
           transition={{
-            opacity: { duration: 0.35 },
+            opacity: { duration: uiMotion },
             left: { duration: prefersReducedMotion() || userMoved ? 0 : 0.75, ease: [0.22, 1, 0.36, 1] },
             bottom: { duration: prefersReducedMotion() || userMoved ? 0 : 0.75, ease: [0.22, 1, 0.36, 1] },
             scale: { duration: prefersReducedMotion() ? 0 : 0.75, ease: [0.22, 1, 0.36, 1] },
           }}
-          className="fixed z-50 flex items-center select-none"
+          className={`fixed z-50 select-none ${framed ? "flex flex-col" : "flex items-center"}`}
           style={{
             gap: framed ? 0 : GAP,
             width: framed ? FRAMED_FLOATING_WIDTH : undefined,
@@ -715,7 +999,7 @@ export function LeekBeatsWidget({
           }}
         >
           {framed ? (
-            renderFrame(floatingGripRef)
+            renderFrame(floatingGripRef, showLocalLibrary)
           ) : (
             <>
               {/* Move / resize (B18+) — floats above so it never shifts Play */}
