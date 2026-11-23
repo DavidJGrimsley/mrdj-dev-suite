@@ -141,6 +141,7 @@ async function importFieldNotes(page) {
   await page.locator('[data-testid="import-message-purpose"]').waitFor({ timeout: 8000 })
   await page.locator('[data-testid="import-reply"]').fill('A private notebook for field notes')
   await page.locator('[data-testid="import-send"]').click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 15000 })
   await page.locator('[data-testid="project-home"][data-project-id="field-notes"]').waitFor({ timeout: 12000 })
 }
 

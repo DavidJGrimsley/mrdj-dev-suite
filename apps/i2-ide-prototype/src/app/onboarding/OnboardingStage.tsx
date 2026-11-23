@@ -47,7 +47,7 @@ import { StylistPreview } from "./StylistPreview";
 import { ProjectFilePreview } from "./ProjectFilePreview";
 import { WidgetArrangeDemo } from "./WidgetArrangeDemo";
 import { RevealingInfieText, usePrefersReducedMotion, useTextRevealGate } from "../widgets/infiePreferencesContext";
-import { PreferenceSlidersPreview } from "../widgets/InfiePreferencesWidget";
+import { capturePredockChatBox } from "./HomeConversationSlide";
 import { TUTORIAL_CHAT_LIMIT, usePrototypeLimit } from "../widgets/prototypeLimit";
 import { chatScale } from "../widgets/chatScale";
 import {
@@ -331,10 +331,14 @@ export interface OnboardingStageProps {
   widgetsGalleryOpen?: boolean;
   /** The gallery modal is actually open. The Library line then floats above it. */
   widgetsGalleryLive?: boolean;
+  /** The full Preference Sliders widget modal is open during B18's sliders turn. */
+  widgetsSlidersOpen?: boolean;
   /** After the arrange demo, later B18 lines are in a real project chat instead of the callout. */
   widgetsTourInProject?: boolean;
   /** First Continue of Widgets & Whatnot: open the first active usable project, or stay put. */
   onEnterWidgetsProject?: () => void;
+  /** Opens the full Preference Sliders widget modal from the Widgets menu for B18's sliders turn. */
+  onOpenWidgetsSliders?: () => void;
   /** Library Continue closes the live gallery. The saved open/closed choice stays for the end. */
   onDismissWidgetsGallery?: () => void;
   /** Increments synchronously when the music Play button is pressed. */
@@ -351,8 +355,10 @@ export function OnboardingStage({
   onFinish,
   widgetsGalleryOpen = false,
   widgetsGalleryLive = false,
+  widgetsSlidersOpen = false,
   widgetsTourInProject = false,
   onEnterWidgetsProject,
+  onOpenWidgetsSliders,
   onDismissWidgetsGallery,
   pressNonce = 0,
   danceNonce = 0,
@@ -511,7 +517,7 @@ export function OnboardingStage({
         onContinue = () => setTurnIndex(2);
       } else {
         currentLine =
-          "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.";
+          "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you. I'll get to what Session Agents are later.";
         onContinue = () => advanceBeat("B08");
       }
       break;
@@ -519,7 +525,7 @@ export function OnboardingStage({
       if (activeTutorial !== "project-session") {
         // Meet Infie: the i² / Project / Session group docks in the header on Continue.
         currentLine =
-          "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.";
+          "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. Those buttons are handy dropdowns. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.";
         onContinue = () => advanceBeat("B10");
       } else if (turnIndex === 0) {
         currentLine =
@@ -702,10 +708,13 @@ export function OnboardingStage({
           setTurnIndex(B18_PANELS_TURN);
         };
       } else if (turnIndex === B18_PANELS_TURN) {
-        onContinue = () => setTurnIndex(B18_SLIDERS_TURN);
+        onContinue = () => {
+          onOpenWidgetsSliders?.();
+          setTurnIndex(B18_SLIDERS_TURN);
+        };
       } else if (turnIndex === B18_SLIDERS_TURN) {
-        // The user already had the gallery open: skip "Click Widgets".
-        onContinue = () => setTurnIndex(widgetsGalleryOpen ? B18_LIBRARY_TURN : B18_OPEN_WIDGETS_TURN);
+        // Gated by closing the full Preference Sliders widget modal ("Close this when you're done.").
+        onContinue = undefined;
       } else if (turnIndex === B18_OPEN_WIDGETS_TURN) {
         onContinue = undefined;
       } else if (turnIndex === B18_LIBRARY_TURN) {
@@ -783,6 +792,7 @@ export function OnboardingStage({
   const autoAdvance = meetInfieAutoAdvance({
     activeTutorial,
     beat: currentBeat,
+    turnIndex,
     readingTurn,
     consecutiveAutos,
     line: currentLine,
@@ -831,6 +841,24 @@ export function OnboardingStage({
     if (!(settled && textComplete && !document.hidden)) return;
     if (settledAdvancedFor.current === turnKey) return;
     settledAdvancedFor.current = turnKey;
+    if (dockingHeader) {
+      // Measure the real pre-dock chat bounds before unmounting B11 so B12 smoothly
+      // resizes from these dimensions into the Home chat column instead of popping.
+      const scroller = document.querySelector('[data-name="OnboardingMessageScroller"]');
+      const stageRow = document.querySelector('[data-name="InfieStageRow"]');
+      const bottomZone = document.querySelector('[data-name="PredockBottomZone"]');
+      const inputEl = document.getElementById("onboarding-docked-chat-input")?.parentElement;
+      const topRect = stageRow?.getBoundingClientRect() ?? scroller?.getBoundingClientRect();
+      const widthRect = inputEl?.getBoundingClientRect() ?? scroller?.getBoundingClientRect();
+      const bottomRect = inputEl?.getBoundingClientRect() ?? bottomZone?.getBoundingClientRect();
+      if (topRect && widthRect && bottomRect) {
+        capturePredockChatBox({
+          width: widthRect.width,
+          height: Math.max(260, bottomRect.bottom - topRect.top),
+          top: topRect.top,
+        });
+      }
+    }
     advanceBeat(dockingHeader ? "B12" : "B07");
   }, [settled, textComplete, dockingHeader, advanceBeat, turnKey]);
 
@@ -1156,8 +1184,8 @@ export function OnboardingStage({
       }
     } else if (currentBeat === "B18") {
       revealGroup(["music_play_only", "music_full_player", "widget_move_resize"]);
-      if (turnIndex === B18_OPEN_WIDGETS_TURN) {
-        // Gated by clicking Widgets in the header (the shell advances to the Library turn).
+      if (turnIndex === B18_SLIDERS_TURN || turnIndex === B18_OPEN_WIDGETS_TURN) {
+        // Sliders turn waits for closing the Preference Sliders widget; open turn waits for header Widgets.
         retireGroup(["library_entry_and_example", "continue_button"]);
       } else if (turnIndex === B18_LIBRARY_TURN) {
         revealGroup("library_entry_and_example");
@@ -1303,12 +1331,13 @@ export function OnboardingStage({
   }, [isEarlyCenterStage, messageStack]);
 
   // From B12 onward, ordinary messages live in the docked Infie chat across Home, Project, and Session.
-  // The arrange demo and a tour with no hosted project stay a floating callout. The Library line
-  // floats only while the gallery covers the project chat. Continue then closes that gallery so the
-  // closing invitation is the next line in the project Infie chat.
+  // The arrange demo and a tour with no hosted project stay a floating callout. The Preference Sliders
+  // and Library lines float while their respective modals cover the project chat.
+  const slidersCoversChat = widgetsSlidersOpen && turnIndex === B18_SLIDERS_TURN;
   const galleryCoversChat = widgetsGalleryLive && turnIndex === B18_LIBRARY_TURN;
   const isFloatingCallout =
-    currentBeat === "B18" && (turnIndex === B18_MOVE_TURN || !widgetsTourInProject || galleryCoversChat);
+    currentBeat === "B18" &&
+    (turnIndex === B18_MOVE_TURN || !widgetsTourInProject || slidersCoversChat || galleryCoversChat);
 
   useEffect(() => {
     // A callout line stays out of the project chat. Hide a Continue left by the previous turn.
@@ -2381,7 +2410,6 @@ export function OnboardingStage({
         }}
       >
         {turnIndex === B18_MOVE_TURN && <WidgetArrangeDemo reducedMotion={reducedMotion} />}
-        {turnIndex === B18_SLIDERS_TURN && <PreferenceSlidersPreview />}
         <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0" style={{ background: "transparent", border: "none" }}>
           <InfieHeroArtwork
             reducedMotion={reducedMotion}

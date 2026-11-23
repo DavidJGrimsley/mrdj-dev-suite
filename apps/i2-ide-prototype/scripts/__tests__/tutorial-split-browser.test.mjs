@@ -98,19 +98,25 @@ async function runMeetInfie(page, { name, provider }) {
   await line(page, 'Of course you can use the keyboard and mouse.')
   await line(page, "Or pick up a gamepad if that's more your groove.")
   await line(page, 'Prefer a joystick and programmable keypad? You can do that too.')
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
   await line(page, 'Since navigating the UI and executing common actions are mapped to a controller')
   await cont(page)
 
   await line(page, "I'm your orchestrator, coordinator, question-answerer, and maybe friend.")
-  await cont(page)
+  assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
   await line(page, 'I help manage your tasks and projects, even after weeks away.')
   await cont(page)
-  await line(page, 'You can ask me for help with any part of the IDE just by holding the hotkeys')
+  await line(
+    page,
+    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you. I'll get to what Session Agents are later."
+  )
   await page.locator('[data-name="OnboardingHotkeyCard"]').waitFor()
   await cont(page)
 
-  await line(page, "Here's how navigation works: i² takes you Home")
+  await line(
+    page,
+    "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. Those buttons are handy dropdowns. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me."
+  )
   await page.locator('[data-name="HeaderBreadcrumbs"]').waitFor()
   assert.equal(await page.locator('[data-name="WorkspaceVerticalTree"]').count(), 0, 'workspace tree moved to Project & Session Flow')
   await cont(page)
@@ -185,7 +191,7 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         const current = (id) => page.locator(`[data-slot="infie-message"][data-message-id="${id}"]`)
         // At normal text speed this greeting takes longer to reveal than the level spotlight.
         await current('B03-0').locator('[data-text-reveal="complete"]').waitFor()
-        await page.waitForTimeout(1000)
+        await page.waitForTimeout(550)
         assert.equal(await current('B03-0').count(), 1, 'full personalized greeting retains its reading dwell')
         await current('B03-1').locator('[data-text-reveal="complete"]').waitFor()
         const setHidden = (hidden) => page.evaluate((value) => {
@@ -193,10 +199,10 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
           document.dispatchEvent(new Event('visibilitychange'))
         }, hidden)
         await setHidden(true)
-        await page.waitForTimeout(1600)
+        await page.waitForTimeout(900)
         assert.equal(await current('B03-1').count(), 1, 'hidden time cannot advance the punchline')
         await setHidden(false)
-        await page.waitForTimeout(600)
+        await page.waitForTimeout(250)
         assert.equal(await current('B03-1').count(), 1, 'returning gives the reader a fresh dwell')
         await page.locator('#onboarding-project-interest').waitFor()
         assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
@@ -205,7 +211,7 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
       }
     })
 
-    await t.test('a failed controls video keeps the two-caption limit and holds the joystick for Continue', async () => {
+    await t.test('a failed controls video steps through all three stills and advances from joystick without Continue', async () => {
       const page = await browser.newPage({ reducedMotion: 'no-preference' })
       try {
         await page.route('**/infie-controls-chain-alpha.webm', (route) => route.abort())
@@ -214,10 +220,10 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         for (const device of ['keyboard-mouse', 'gamepad', 'joystick-numpad']) {
           await page.locator(`[data-name="ControlsDeviceIllustration"][data-device="${device}"]`).waitFor()
         }
-        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
         await line(page, 'Prefer a joystick and programmable keypad?')
-        await cont(page)
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
         await line(page, 'Since navigating the UI and executing common actions')
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor()
       } finally {
         await page.close()
       }
@@ -471,8 +477,13 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         await page.locator('[data-dock-center]').waitFor()
         await cont(page)
         await line(page, 'Preference Sliders apply to all models in all conversations.')
-        await page.locator('[data-name="PreferenceSlidersPreview"]').waitFor()
-        await cont(page)
+        await line(page, "Close this when you're done.")
+        const slidersModal = page.locator('[data-testid="widget-modal-infiePreferences"]')
+        await slidersModal.locator('[data-testid="infie-preferences-widget"]').waitFor()
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0, 'closing the widget advances instead of Continue')
+        // Closing the real Preference Sliders widget modal advances to the Library cue (gallery was already open).
+        await slidersModal.getByRole('button', { name: 'Close Preference Sliders' }).click()
+        await slidersModal.waitFor({ state: 'detached' })
         // The user already had the gallery open, so "Click Widgets" is skipped.
         await line(page, 'One of my favorites is the Library')
         await page.locator('[data-name="WidgetsGalleryModal"]').waitFor()
@@ -499,10 +510,17 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
           await cont(exitPage)
           await exitPage.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor()
           assert.equal(await exitPage.locator('[data-name="WidgetsGalleryModal"]').count(), 0, 'the tour closes the gallery to show the project')
+          // Collapse panels during the tour, then exit and confirm dock panel sizes are restored.
+          await exitPage.locator('[data-testid="project-infie-header"]').dblclick()
           await exitPage.locator('[data-testid="exit-tutorial"]').click()
           await exitPage.locator('[data-testid="project-home"]').waitFor({ state: 'detached' })
           assert.equal(await exitPage.locator('[data-name="WidgetsGalleryModal"]').count(), 1, 'exit restores the gallery the user had open')
           assert.equal(await exitPage.locator('[data-testid="home-projects-column"]').count(), 1)
+          // Re-opening Pet confirms the collapsed panels from the aborted tour were restored.
+          await exitPage.keyboard.press('Escape')
+          await exitPage.locator('button[data-project-id="pet"]').click()
+          await exitPage.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor()
+          assert.equal(await exitPage.locator('[data-dock-splitter="left"]').getAttribute('data-collapsed'), 'false', 'user dock panel state restored after exit')
         } finally {
           await exitContext.close()
         }
@@ -515,8 +533,11 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         // Import (and the navigation it performs) never offers Project & Session Flow.
         await page.getByRole('button', { name: 'Import Project' }).click()
         await page.locator('[data-testid="import-choice"]').click()
-        await page.locator('[data-testid="import-reply"]').fill('Field notes')
+        await page.locator('[data-testid="import-message-purpose"]').waitFor()
+        assert.ok((await page.locator('[data-testid="import-reply"]').inputValue()).trim().length > 10, 'Import prefills an example answer')
         await page.locator('[data-testid="import-send"]').click()
+        await page.locator('[data-testid="import-message-start"]').waitFor({ timeout: 10000 })
+        await cont(page)
         await page.locator('[data-testid="project-home"][data-project-id="field-notes"]').waitFor({ timeout: 12000 })
         await page.waitForTimeout(500)
         assert.equal(await page.locator('[data-testid="tutorial-offer"]').count(), 0, 'no offer from Import navigation')
@@ -618,6 +639,8 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
 
         await line(page, 'This is Project Home.')
         await page.locator('[data-testid="project-home"][data-project-id="tutorial-demo"]').waitFor()
+        assert.equal(await page.getByText('Tutorial demo').count(), 0, 'demo label reflects Pet Show and Tell')
+        assert.match(await page.locator('[data-name="HeaderBreadcrumbs"]').innerText(), /Pet Show and Tell/)
         await cont(page)
         await line(page, 'I can work with multiple projects at once.')
         await cont(page)
@@ -659,8 +682,165 @@ test('browser: five-tutorial split — Meet Infie, replay, Learn, offers, suppre
         await page.locator('[data-testid="project-home"][data-project-id="pet"]').waitFor()
         assert.equal(await page.getByText('Tutorial demo').count(), 0, 'demo project released')
         assert.match(await page.locator('[data-name="Level"]').innerText(), /1/)
+        // Completing Project & Session Flow flips its Learn action to Replay.
+        await page.getByRole('button', { name: 'Learn', exact: true }).click()
+        const learnAfterPs = page.locator('[data-testid="learn-modal"]')
+        await learnAfterPs.waitFor()
+        assert.equal(await learnAfterPs.locator('[data-testid="learn-tutorial-project-session"]').getAttribute('data-tutorial-action'), 'replay')
+        await learnAfterPs.getByRole('button', { name: 'Close Learn' }).click()
       } finally {
         await page.close()
+      }
+    })
+
+    await t.test('B12 animates chat resizing before sliding across screen sizes and respects reduced motion', async () => {
+      for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 1024, height: 800 },
+        { width: 390, height: 844 },
+      ]) {
+        const ctx = await browser.newContext({ viewport, reducedMotion: 'no-preference' })
+        const page = await ctx.newPage()
+        page.on('pageerror', (e) => pageErrors.push(e.message))
+        try {
+          await page.addInitScript(() => {
+            window.__b12Phases = []
+            const record = () => {
+              const el = document.querySelector('[data-name="HomeConversationEntry"]')
+              const phase = el?.getAttribute('data-slide-phase')
+              if (phase && window.__b12Phases[window.__b12Phases.length - 1] !== phase) {
+                window.__b12Phases.push(phase)
+              }
+            }
+            new MutationObserver(record).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-slide-phase'] })
+          })
+          await page.goto(`${base}?beat=B12`, { waitUntil: 'domcontentloaded' })
+          await page.waitForFunction(
+            () => document.querySelector('[data-name="HomeConversationEntry"]')?.getAttribute('data-slide-phase') === 'rest',
+            null,
+            { timeout: 8000 },
+          )
+          const phases = await page.evaluate(() => window.__b12Phases)
+          const resizeIdx = phases.indexOf('resize')
+          const slideIdx = phases.indexOf('slide')
+          const restIdx = phases.indexOf('rest')
+          assert.ok(resizeIdx >= 0 && slideIdx > resizeIdx && restIdx > slideIdx, `${viewport.width}x${viewport.height} phases: ${JSON.stringify(phases)}`)
+          assert.ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= viewport.width + 1, `no horizontal overflow at ${viewport.width}px`)
+        } finally {
+          await ctx.close()
+        }
+      }
+
+      // Reduced motion jumps straight to rest with no slide/resize choreography.
+      const rmCtx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+      const rmPage = await rmCtx.newPage()
+      rmPage.on('pageerror', (e) => pageErrors.push(e.message))
+      try {
+        await rmPage.goto(`${base}?beat=B12`, { waitUntil: 'domcontentloaded' })
+        const entry = rmPage.locator('[data-name="HomeConversationEntry"]')
+        await entry.waitFor()
+        assert.equal(await entry.getAttribute('data-slide-phase'), 'rest')
+      } finally {
+        await rmCtx.close()
+      }
+    })
+
+    await t.test('Learn actions: Meet Infie always Replay, others Replay only after completion, persisted across reload, exit stays Start', async () => {
+      const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' })
+      const page = await ctx.newPage()
+      page.on('pageerror', (e) => pageErrors.push(e.message))
+      const readLearnActions = async () => {
+        await page.getByRole('button', { name: 'Learn', exact: true }).click()
+        const modal = page.locator('[data-testid="learn-modal"]')
+        await modal.waitFor()
+        const map = {}
+        for (const id of ['meet-infie', 'project-session', 'widgets', 'generate', 'import']) {
+          const btn = modal.locator(`[data-testid="learn-tutorial-${id}"]`)
+          map[id] = await btn.getAttribute('data-tutorial-action')
+        }
+        return { modal, map }
+      }
+      try {
+        await page.goto(`${base}?beat=COMPLETE`, { waitUntil: 'domcontentloaded' })
+        let { modal, map } = await readLearnActions()
+        assert.deepEqual(map, {
+          'meet-infie': 'replay',
+          'project-session': 'start',
+          widgets: 'start',
+          generate: 'start',
+          import: 'start',
+        })
+
+        // Exit Widgets early -> MUST stay Start (not Replay).
+        await modal.locator('[data-testid="learn-tutorial-widgets"]').click()
+        await line(page, "Everything's a widget here.")
+        await page.locator('[data-testid="exit-tutorial"]').click()
+        await beat(page, 'COMPLETE')
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map.widgets, 'start', 'early exit does not mark Widgets completed')
+
+        // Complete Widgets -> flips to Replay.
+        await modal.locator('[data-testid="learn-tutorial-widgets"]').click()
+        await line(page, "Everything's a widget here.")
+        await cont(page)
+        await line(page, 'You can drag panel edges to resize them')
+        await cont(page)
+        await page.locator('[data-testid="widget-modal-infiePreferences"]').getByRole('button', { name: 'Close Preference Sliders' }).click()
+        await line(page, 'Click Widgets in the header')
+        await page.locator('[data-name="HeaderWidgetsButton"]').click()
+        await line(page, 'One of my favorites is the Library')
+        await cont(page)
+        await line(page, 'Explore the rest of the widgets on your own!')
+        await cont(page)
+        await beat(page, 'COMPLETE')
+
+        // Cancel Import early -> stays Start; complete Import -> flips to Replay.
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map.widgets, 'replay', 'completed Widgets says Replay')
+        assert.equal(map.import, 'start')
+        await modal.locator('[data-testid="learn-tutorial-import"]').click()
+        await page.locator('[data-testid="import-choice"]').click()
+        await page.locator('[data-testid="import-message-purpose"]').waitFor()
+        await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map.import, 'start', 'cancelling Import does not mark it completed')
+
+        await modal.locator('[data-testid="learn-tutorial-import"]').click()
+        await page.locator('[data-testid="import-choice"]').click()
+        await page.locator('[data-testid="import-message-purpose"]').waitFor()
+        await page.locator('[data-testid="import-send"]').click()
+        await page.locator('[data-testid="import-message-start"]').waitFor({ timeout: 10000 })
+        await cont(page)
+        await page.locator('[data-testid="project-home"][data-project-id="field-notes"]').waitFor({ timeout: 10000 })
+        assert.equal(/Pet Show and Tell/i.test(await page.locator('[data-testid="project-home"]').innerText()), false)
+
+        // Reload page -> Replay persistence survives reload!
+        await page.reload({ waitUntil: 'domcontentloaded' })
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map['meet-infie'], 'replay')
+        assert.equal(map.widgets, 'replay', 'Widgets Replay persists across reload')
+        assert.equal(map.import, 'replay', 'Import Replay persists across reload')
+        assert.equal(map['project-session'], 'start')
+        assert.equal(map.generate, 'start')
+
+        // Early Jenny exit keeps Generate on Start.
+        await modal.locator('[data-testid="learn-tutorial-generate"]').click()
+        await page.locator('[data-testid="tutorial-jenny-screen"]').waitFor({ timeout: 8000 })
+        await page.keyboard.press('Escape')
+        await page.locator('[data-testid="tutorial-jenny-screen"]').waitFor({ state: 'detached' })
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map.generate, 'start', 'early exit from Jenny keeps Generate on Start')
+
+        // Replaying Widgets and exiting early still preserves prior Replay completion.
+        await modal.locator('[data-testid="learn-tutorial-widgets"]').click()
+        await line(page, "Everything's a widget here.")
+        await page.locator('[data-testid="exit-tutorial"]').click()
+        await beat(page, 'COMPLETE')
+        ;({ modal, map } = await readLearnActions())
+        assert.equal(map.widgets, 'replay', 'exiting a replay preserves prior completion')
+        await modal.getByRole('button', { name: 'Close Learn' }).click()
+      } finally {
+        await ctx.close()
       }
     })
 

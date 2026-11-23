@@ -475,8 +475,8 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy across t
     "Prefer a joystick and programmable keypad? You can do that too.",
     "I'm your orchestrator, coordinator, question-answerer, and maybe friend. I take the boring stuff out of building and show you what you need when you need it.",
     "I help manage your tasks and projects, even after weeks away. I know version control like Git, Perforce and Diversion, but you don't need it to use i². Think of me as your partner-in-crime, your right hand.",
-    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.",
-    "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.",
+    "You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you. I'll get to what Session Agents are later.",
+    "Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. Those buttons are handy dropdowns. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.",
     "I am run by an open-weight LLM plus a decision model, like Jev, on iSquared's server which is included in your plan. I also have a set of deterministic actions to control the UI and state of projects when appropriate, so that I stay consistent. If you want to give me an upgrade with a local or frontier model, you can do so later in settings, so long as the model meets the minimum requirements I need.",
     "Click Learn for tutorials and lessons, and Widgets to customize your workspace. Games unlock at level five, take your level into account and pause when I need you to review something. They're a fun way to wait for Session Agents. You can submit a tutorial, widget or game to the Infinite Intelligence too!",
     "Your alerts, notifications and settings live here. I'll also help you manage the Global To-Do list.",
@@ -512,7 +512,7 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy across t
     // Widgets & Whatnot
     "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want, and iSquared supports fullscreen multiple-screen layout saves. Let's try it with a widget.",
     "You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.",
-    "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.",
+    "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking. Close this when you're done.",
     "Click Widgets in the header to see everything else you can add to your workspace.",
     "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
     "Explore the rest of the widgets on your own!",
@@ -587,7 +587,7 @@ test('onboarding Stage 1: FloatingPrimitives exports, synchronized copy across t
   assert.match(stageSrc, /widgetsGalleryLive && turnIndex === B18_LIBRARY_TURN/)
   assert.match(stageSrc, /onDismissWidgetsGallery\?\.\(\)/)
   assert.doesNotMatch(stageSrc, /turnIndex === B18_LIBRARY_TURN \|\| turnIndex === B18_EXPLORE_TURN/)
-  assert.match(stageSrc, /const isFloatingCallout =\s*currentBeat === "B18" && \(turnIndex === B18_MOVE_TURN \|\| !widgetsTourInProject \|\| galleryCoversChat\);/)
+  assert.match(stageSrc, /const isFloatingCallout =\s*currentBeat === "B18" &&\s*\(turnIndex === B18_MOVE_TURN \|\| !widgetsTourInProject \|\| slidersCoversChat \|\| galleryCoversChat\);/)
   assert.match(stageSrc, /ProjectFilePreview file="info"/)
   assert.match(stageSrc, /ProjectFilePreview file="todo"/)
   assert.match(stageSrc, /autoAdvancedFor\.current === currentMessageId/)

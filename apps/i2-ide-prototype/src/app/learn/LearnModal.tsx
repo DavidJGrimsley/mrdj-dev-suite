@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { motion, useIsPresent } from "motion/react";
-import { BookOpen, GraduationCap, Maximize2, Minimize2, Play, X } from "lucide-react";
+import { BookOpen, GraduationCap, Maximize2, Minimize2, Play, RotateCcw, X } from "lucide-react";
 import { restoreFocus, trapTabKey } from "../components/focusTrap";
+import { tutorialActionLabel } from "./tutorialCompletion";
 
 /** Modal layers that can sit above Learn. */
 const STACKED_LAYER = '[data-testid="prototype-limit-modal"]';
@@ -53,14 +54,18 @@ export function useLearn(): LearnContextValue | null {
   return useContext(LearnContext);
 }
 
+const EMPTY_COMPLETED: ReadonlySet<LearnTutorialId> = new Set();
+
 export function LearnModal({
   onClose,
   onStartTutorial,
   onOpenEducation,
+  completedTutorials = EMPTY_COMPLETED,
 }: {
   onClose: () => void;
   onStartTutorial: (id: LearnTutorialId) => void;
   onOpenEducation: () => void;
+  completedTutorials?: ReadonlySet<LearnTutorialId>;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
   const firstTutorialRef = useRef<HTMLButtonElement | null>(null);
@@ -192,12 +197,16 @@ export function LearnModal({
           {/* Tutorials */}
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             <ul className="flex flex-col gap-2.5">
-              {LEARN_TUTORIALS.map((tutorial, idx) => (
+              {LEARN_TUTORIALS.map((tutorial, idx) => {
+                const actionLabel = tutorialActionLabel(tutorial.id, completedTutorials);
+                const isReplay = actionLabel === "Replay";
+                return (
                 <li key={tutorial.id}>
                   <button
                     ref={idx === 0 ? firstTutorialRef : undefined}
                     type="button"
                     data-testid={`learn-tutorial-${tutorial.id}`}
+                    data-tutorial-action={actionLabel.toLowerCase()}
                     onClick={() => onStartTutorial(tutorial.id)}
                     className="group w-full flex items-center gap-3 p-3.5 rounded-[8px] bg-[#252323] border border-white/5 hover:border-[#abefa3]/25 hover:bg-[#2a2828] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2dd4bf]/60 transition-all text-left"
                   >
@@ -210,12 +219,13 @@ export function LearnModal({
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-[7px] border border-[#2dd4bf]/35 text-[#2dd4bf] font-['Space_Grotesk',sans-serif] text-[11.5px] font-semibold group-hover:bg-[#2dd4bf]/10 transition-colors">
-                      <Play size={11} />
-                      Start
+                      {isReplay ? <RotateCcw size={11} /> : <Play size={11} />}
+                      {actionLabel}
                     </span>
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         </div>

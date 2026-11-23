@@ -321,27 +321,13 @@ test('browser: B06 controls animation plays 14.4s VP9-alpha chain with cues at 0
           await page.screenshot({ path: path.join(screenshotDir, 'b06-live-turn3-joystick.png') })
         }
 
-        // The ended event releases Continue on the joystick caption. It does not open the summary.
-        await seek(page, 14.1, { play: true, rate: 1 })
-        await page.waitForFunction(
-          () => {
-            const v = document.querySelector('[data-name="ControlsTransformationVideo"]')
-            return Boolean(v && v.ended)
-          },
-          null,
-          { timeout: 6000 }
-        )
+        // Before video ends, Turn 4 must not have started and no Continue button appears on Turn 3.
         assert.equal(await page.locator('[data-name="ControlsAllThreeIllustrations"]').count(), 0)
-        await page.waitForFunction(
-          () =>
-            [...document.querySelectorAll('[data-slot="infie-message"]')].some((el) =>
-              el.textContent.includes('Prefer a joystick and programmable keypad? You can do that too.')
-            ),
-          null,
-          { timeout: 6000 }
-        )
-        await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 8000 })
-        await page.locator('[data-name="ControlsAllThreeIllustrations"]').waitFor({ state: 'visible', timeout: 6000 })
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
+
+        // The ended event advances Turn 3 automatically into Turn 4 (no Continue on joystick caption).
+        await seek(page, 14.1, { play: true, rate: 1 })
+        await page.locator('[data-name="ControlsAllThreeIllustrations"]').waitFor({ state: 'visible', timeout: 8000 })
         await page.waitForFunction(
           () =>
             [...document.querySelectorAll('[data-slot="infie-message"]')].some((el) =>
@@ -350,6 +336,7 @@ test('browser: B06 controls animation plays 14.4s VP9-alpha chain with cues at 0
           null,
           { timeout: 6000 }
         )
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor({ timeout: 6000 })
         if (screenshotDir) {
           await page.screenshot({ path: path.join(screenshotDir, 'b06-live-turn4-all-three.png') })
         }
@@ -374,8 +361,9 @@ test('browser: B06 controls animation plays 14.4s VP9-alpha chain with cues at 0
         await page.locator('[data-name="ControlsDeviceIllustration"][data-device="gamepad"]').waitFor({ timeout: 10000 })
         await page.locator('[data-name="ControlsDeviceIllustration"][data-device="joystick-numpad"]').waitFor({ timeout: 10000 })
         assert.equal(await page.locator('[data-name="ControlsAllThreeIllustrations"]').count(), 0)
-        await page.getByRole('button', { name: 'Continue', exact: true }).click({ timeout: 10000 })
-        await page.locator('[data-name="ControlsAllThreeIllustrations"]').waitFor({ timeout: 8000 })
+        assert.equal(await page.getByRole('button', { name: 'Continue', exact: true }).count(), 0)
+        await page.locator('[data-name="ControlsAllThreeIllustrations"]').waitFor({ timeout: 10000 })
+        await page.getByRole('button', { name: 'Continue', exact: true }).waitFor({ timeout: 6000 })
       } finally {
         await context.close()
       }

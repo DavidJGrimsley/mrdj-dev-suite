@@ -9,6 +9,16 @@
   display: none;
 }
 
+/* While B12 animates the centered chat resizing into the Home column, let the card body
+   flex to the animating wrapper height so the input tracks smoothly with no pop or clip. */
+[data-animating-box="true"] [data-home-chat-card],
+[data-animating-box="true"] [data-home-chat-surface],
+[data-animating-box="true"] [data-home-chat-body] {
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+}
+
 /* ── Infie callout glow ──────────────────────────────────────────────────────
    One class for every "look here" highlight. The ring pulses in both reach and brightness;
    elements that also use Tailwind's animate-pulse keep their opacity pulse alongside it. */

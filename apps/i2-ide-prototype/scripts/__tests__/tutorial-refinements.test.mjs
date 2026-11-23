@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const onboardingDir = path.resolve(testDir, '../../src/app/onboarding')
+const learnDir = path.resolve(testDir, '../../src/app/learn')
 
 const esbuild = await import('esbuild')
 const built = await esbuild.build({
@@ -14,6 +15,7 @@ const built = await esbuild.build({
       export * from './onboardingTiming.ts';
       export * from './widgetsTourProject.ts';
       export * from './chatDraftMemory.ts';
+      export * from '../learn/tutorialCompletion.ts';
     `,
     resolveDir: onboardingDir,
     loader: 'ts',
@@ -25,6 +27,7 @@ const built = await esbuild.build({
   define: { 'import.meta.env.BASE_URL': '"/"' },
 })
 const mod = await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`)
+void learnDir
 
 const ACTION_BUTTONS = "I'll present Action Buttons specific to the next steps of your projects to save you time typing."
 const JOKE = "I don't do much coding myself. I'll bet you don't either, or we wouldn't be talking. i² helps you focus on the big picture, but I won't hide your files or make them hard to edit by hand. Your ideas and abilities are what make you special and awesome. I'm here to amplify that."
@@ -55,34 +58,41 @@ test('96 characters is short enough to auto-advance, and the cutoff is inclusive
   assert.equal(qualifies('Short line.', { readingTurn: false }), false)
 })
 
-test('reading dwell starts from the revealed text and has a floor', () => {
-  assert.equal(mod.readingDwellMs('What a noob.'), 1200)
-  assert.equal(mod.readingDwellMs('one two three four five six'), 1320)
+test('reading dwell is halved from the previous floor and per-word rate while keeping still floor', () => {
+  assert.equal(mod.readingDwellMs('What a noob.'), 600)
+  assert.equal(mod.readingDwellMs('one two three four five six'), 660)
+  assert.equal(mod.readingDwellMs(ACTION_BUTTONS), 1870)
   assert.equal(mod.readingDwellMs('hi', 2600), 2600)
 })
 
-test('Meet Infie never auto-advances three informational lines in a row', () => {
+test('Meet Infie auto-advances B06 joystick and B07 orchestrator while preserving the two-auto cap elsewhere', () => {
+  const ORCHESTRATOR = "I'm your orchestrator, coordinator, question-answerer, and maybe friend. I take the boring stuff out of building and show you what you need when you need it."
+  const B07_TURN1 = "I help manage your tasks and projects, even after weeks away. I know version control like Git, Perforce and Diversion, but you don't need it to use i². Think of me as your partner-in-crime, your right hand."
   const lines = [
-    ['B12', 'Let me scoot over and make some room.'],
-    ['B12', 'This is i² Home.'],
-    ['B12', 'You can resume projects that are already onboarded to iSquared.'],
-    ['B12', 'You can also start new projects or onboard existing ones to iSquared.'],
-    ['B12', "Here you can talk with me about whatever you want, or use our conversation in a project. I can also help you manage our Global To-Do list: it includes open project tasks and reminders like ‘Update SSL certificates on MyWebsite.com.’"],
-    ['B12', ACTION_BUTTONS],
-    ['B20', 'Learn has the other tutorials whenever you\'re ready. You can also give me feedback, and I\'ll send it to the right place and give you a ticket to follow up. Now go build cool shit.'],
-    ['B06', KEYBOARD],
-    ['B06', GAMEPAD],
-    ['B06', JOYSTICK],
+    ['B12', 0, 'Let me scoot over and make some room.'],
+    ['B12', 1, 'This is i² Home.'],
+    ['B12', 2, 'You can resume projects that are already onboarded to iSquared.'],
+    ['B12', 3, 'You can also start new projects or onboard existing ones to iSquared.'],
+    ['B12', 4, "Here you can talk with me about whatever you want, or use our conversation in a project. I can also help you manage our Global To-Do list: it includes open project tasks and reminders like ‘Update SSL certificates on MyWebsite.com.’"],
+    ['B12', 5, ACTION_BUTTONS],
+    ['B20', 0, 'Learn has the other tutorials whenever you\'re ready. You can also give me feedback, and I\'ll send it to the right place and give you a ticket to follow up. Now go build cool shit.'],
+    ['B06', 1, KEYBOARD],
+    ['B06', 2, GAMEPAD],
+    ['B06', 3, JOYSTICK],
+    ['B07', 0, ORCHESTRATOR],
+    ['B07', 1, B07_TURN1],
   ]
   let consecutive = 0
   const autos = []
-  for (const [beat, line] of lines) {
+  for (const [beat, turnIndex, line] of lines) {
     if (beat === 'B06' && line === KEYBOARD) consecutive = 0
+    if (beat === 'B07' && turnIndex === 0) consecutive = 0
     if (beat === 'B12' && line.startsWith('You can also start')) consecutive = 0
     if (beat === 'B12' && line === ACTION_BUTTONS) consecutive = 0
     const auto = mod.meetInfieAutoAdvance({
       activeTutorial: 'meet-infie',
       beat,
+      turnIndex,
       readingTurn: true,
       consecutiveAutos: consecutive,
       line,
@@ -93,8 +103,30 @@ test('Meet Infie never auto-advances three informational lines in a row', () => 
   assert.deepEqual(autos, [
     true, true, false,
     true, false, true, false,
-    true, true, false,
+    true, true, true,
+    true, false,
   ])
+})
+
+test('Learn completion helpers: Meet Infie always Replay, others Replay only after completion with storage persistence', () => {
+  const store = new Map()
+  const fakeStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, v),
+  }
+  const initial = mod.readCompletedTutorials(fakeStorage)
+  assert.equal(mod.tutorialActionLabel('meet-infie', initial), 'Replay')
+  assert.equal(mod.tutorialActionLabel('project-session', initial), 'Start')
+  assert.equal(mod.tutorialActionLabel('widgets', initial), 'Start')
+  assert.equal(mod.tutorialActionLabel('generate', initial), 'Start')
+  assert.equal(mod.tutorialActionLabel('import', initial), 'Start')
+
+  const afterWidgets = mod.markTutorialCompleted(initial, 'widgets')
+  mod.writeCompletedTutorials(afterWidgets, fakeStorage)
+  const reloaded = mod.readCompletedTutorials(fakeStorage)
+  assert.equal(mod.tutorialActionLabel('meet-infie', reloaded), 'Replay')
+  assert.equal(mod.tutorialActionLabel('widgets', reloaded), 'Replay')
+  assert.equal(mod.tutorialActionLabel('import', reloaded), 'Start')
 })
 
 test('the widgets host is the first active usable project', () => {

@@ -8,6 +8,7 @@ import {
   B17_EXPLANATIONS,
   B18_LIBRARY_TURN,
   B18_OPEN_WIDGETS_TURN,
+  B18_SLIDERS_TURN,
   B19_FINAL_TURN,
   B14_AGENT_REPLY_DEFAULT,
   TutorialTrackId,
@@ -292,7 +293,7 @@ export function OnboardingProvider({
       } else {
         retireGroup("library_entry_and_example");
       }
-      if (turnIndex === B18_OPEN_WIDGETS_TURN) retireGroup("continue_button");
+      if (turnIndex === B18_SLIDERS_TURN || turnIndex === B18_OPEN_WIDGETS_TURN) retireGroup("continue_button");
     } else if (currentBeat === "B19") {
       retireGroup("session_completion_form");
       if (turnIndex > B19_FINAL_TURN) retireGroup("continue_button");

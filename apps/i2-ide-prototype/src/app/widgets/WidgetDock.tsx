@@ -148,6 +148,20 @@ interface DockContextValue {
   libraryDrops: number;
   noteLibraryDrop: () => void;
   registry: React.MutableRefObject<Map<string, ScreenRegistryEntry>>;
+  captureSnapshot: () => DockSnapshot;
+  restoreSnapshot: (snapshot: DockSnapshot) => void;
+}
+
+export interface DockSnapshot {
+  layouts: Record<string, StoredLayout | undefined>;
+  sizes: Record<string, Partial<Record<DockSide, number>>>;
+  widgetWeights: Record<string, Record<string, number>>;
+  stackHeights: Record<string, Record<string, number>>;
+  active: { key: string; mode: Exclude<WidgetMode, "normal"> } | null;
+}
+
+function cloneRecord<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 const DockContext = createContext<DockContextValue | null>(null);
@@ -332,6 +346,26 @@ export function WidgetDockProvider({ children }: { children: ReactNode }) {
     window.addEventListener("keydown", onKey, true);
   }, []);
 
+  const stateRef = useRef({ layouts, sizes, widgetWeights, stackHeights, active });
+  stateRef.current = { layouts, sizes, widgetWeights, stackHeights, active };
+  const captureSnapshot = useCallback((): DockSnapshot => {
+    const s = stateRef.current;
+    return {
+      layouts: cloneRecord(s.layouts),
+      sizes: cloneRecord(s.sizes),
+      widgetWeights: cloneRecord(s.widgetWeights),
+      stackHeights: cloneRecord(s.stackHeights),
+      active: s.active ? { ...s.active } : null,
+    };
+  }, []);
+  const restoreSnapshot = useCallback((snapshot: DockSnapshot) => {
+    setLayouts(cloneRecord(snapshot.layouts));
+    setSizes(cloneRecord(snapshot.sizes));
+    setWidgetWeights(cloneRecord(snapshot.widgetWeights));
+    setStackHeights(cloneRecord(snapshot.stackHeights));
+    setActive(snapshot.active ? { ...snapshot.active } : null);
+  }, []);
+
   const value = useMemo(
     () => ({
       layouts,
@@ -354,6 +388,8 @@ export function WidgetDockProvider({ children }: { children: ReactNode }) {
       libraryDrops,
       noteLibraryDrop,
       registry,
+      captureSnapshot,
+      restoreSnapshot,
     }),
     [
       layouts,
@@ -372,6 +408,8 @@ export function WidgetDockProvider({ children }: { children: ReactNode }) {
       active,
       libraryDrops,
       noteLibraryDrop,
+      captureSnapshot,
+      restoreSnapshot,
     ],
   );
   return (
@@ -398,6 +436,12 @@ function useDockContext(): DockContextValue {
   const ctx = useContext(DockContext);
   if (!ctx) throw new Error("WidgetDockProvider is missing");
   return ctx;
+}
+
+/** Lets the shell snapshot and restore the user's widget layouts, sizes, and active modals. */
+export function useDockSnapshot() {
+  const { captureSnapshot, restoreSnapshot } = useDockContext();
+  return { capture: captureSnapshot, restore: restoreSnapshot };
 }
 
 /** Lets the shell supply how gallery ("library") widgets render once docked in a zone. */

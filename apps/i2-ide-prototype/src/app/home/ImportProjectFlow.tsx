@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Circle, Folder, Send } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Circle, Folder, Send, Sparkles } from "lucide-react";
 import { InfieHeroArtwork } from "../onboarding/OnboardingStage";
+import { FloatingContinueButton } from "../onboarding/FloatingPrimitives";
+import { RevealingInfieText, usePrefersReducedMotion } from "../widgets/infiePreferencesContext";
 import {
+  IMPORT_EXAMPLE_PURPOSE_ANSWER,
   IMPORT_FLAG_MESSAGE,
   IMPORT_FOLDER_LABEL,
   IMPORT_PROJECT_NAME,
@@ -19,6 +22,12 @@ interface ChatLine {
   content: string;
 }
 
+const POST_PURPOSE_LINES: ReadonlyArray<{ id: string; content: string }> = [
+  { id: "simulation", content: IMPORT_SIMULATION_LINE },
+  { id: "flag", content: IMPORT_FLAG_MESSAGE },
+  { id: "start", content: IMPORT_START_LINE },
+];
+
 export function ImportProjectFlow({
   onCancel,
   onComplete,
@@ -26,44 +35,86 @@ export function ImportProjectFlow({
   onCancel: () => void;
   onComplete: () => void;
 }) {
+  const reducedMotion = usePrefersReducedMotion();
   const [phase, setPhase] = useState<"scan" | "chat">("scan");
   const [step, setStep] = useState(0);
   const [messages, setMessages] = useState<ChatLine[]>([]);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(IMPORT_EXAMPLE_PURPOSE_ANSWER);
   const [locked, setLocked] = useState(false);
+  // Index of the next post-purpose assistant line to append (0..POST_PURPOSE_LINES.length)
+  const [postIndex, setPostIndex] = useState<number | null>(null);
+  const [latestRevealedId, setLatestRevealedId] = useState<string | null>(null);
+  const [readyToContinue, setReadyToContinue] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const finished = useRef(false);
-  const timers = useRef<number[]>([]);
-
-  useEffect(() => {
-    return () => {
-      timers.current.forEach((id) => window.clearTimeout(id));
-    };
-  }, []);
 
   useEffect(() => {
     if (phase !== "scan") return;
     if (step >= IMPORT_SCAN_STEPS.length) {
       const id = window.setTimeout(() => {
         setPhase("chat");
+        setDraft(IMPORT_EXAMPLE_PURPOSE_ANSWER);
         setMessages([{ id: "purpose", role: "assistant", content: IMPORT_PURPOSE_QUESTION }]);
-      }, 360);
-      timers.current.push(id);
+      }, reducedMotion ? 120 : 360);
       return () => window.clearTimeout(id);
     }
-    const id = window.setTimeout(() => setStep((current) => current + 1), 380);
-    timers.current.push(id);
+    const id = window.setTimeout(
+      () => setStep((current) => current + 1),
+      reducedMotion ? 100 : 380,
+    );
     return () => window.clearTimeout(id);
-  }, [phase, step]);
+  }, [phase, step, reducedMotion]);
+
+  // Append post-purpose lines one at a time, waiting for each line's full reveal plus a short
+  // readable pause (pausing if the tab is hidden), then show Continue instead of auto-jumping.
+  useEffect(() => {
+    if (postIndex === null) return;
+    const latest = messages[messages.length - 1];
+    if (!latest) return;
+    const waitingForReveal = latest.role === "assistant" && latestRevealedId !== latest.id;
+    if (waitingForReveal) return;
+
+    const pauseMs =
+      postIndex === 0
+        ? (reducedMotion ? 100 : 320)
+        : postIndex < POST_PURPOSE_LINES.length
+          ? (reducedMotion ? 160 : 520)
+          : (reducedMotion ? 80 : 280);
+
+    let timer: number;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (document.hidden) return;
+      timer = window.setTimeout(() => {
+        if (document.hidden) return;
+        if (postIndex < POST_PURPOSE_LINES.length) {
+          const next = POST_PURPOSE_LINES[postIndex];
+          setMessages((lines) =>
+            lines.some((line) => line.id === next.id)
+              ? lines
+              : [...lines, { id: next.id, role: "assistant", content: next.content }],
+          );
+          setPostIndex(postIndex + 1);
+        } else {
+          setReadyToContinue(true);
+        }
+      }, pauseMs);
+    };
+    schedule();
+    document.addEventListener("visibilitychange", schedule);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", schedule);
+    };
+  }, [postIndex, messages, latestRevealedId, reducedMotion]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, phase, step]);
+  }, [messages, phase, step, readyToContinue]);
 
-  const later = (delay: number, run: () => void) => {
-    const id = window.setTimeout(run, delay);
-    timers.current.push(id);
-  };
+  const handleMessageRevealComplete = useCallback((id: string) => {
+    setLatestRevealedId(id);
+  }, []);
 
   const send = () => {
     const text = draft.trim();
@@ -71,20 +122,13 @@ export function ImportProjectFlow({
     setLocked(true);
     setDraft("");
     setMessages((lines) => [...lines, { id: "answer", role: "user", content: text }]);
-    later(420, () => {
-      setMessages((lines) => [...lines, { id: "simulation", role: "assistant", content: IMPORT_SIMULATION_LINE }]);
-      later(700, () => {
-        setMessages((lines) => [...lines, { id: "flag", role: "assistant", content: IMPORT_FLAG_MESSAGE }]);
-        later(700, () => {
-          setMessages((lines) => [...lines, { id: "start", role: "assistant", content: IMPORT_START_LINE }]);
-          later(800, () => {
-            if (finished.current) return;
-            finished.current = true;
-            onComplete();
-          });
-        });
-      });
-    });
+    setPostIndex(0);
+  };
+
+  const handleContinue = () => {
+    if (finished.current) return;
+    finished.current = true;
+    onComplete();
   };
 
   return (
@@ -95,7 +139,7 @@ export function ImportProjectFlow({
         <button
           type="button"
           onClick={onCancel}
-          className="ml-auto text-[12px] text-white/60 hover:text-white"
+          className="ml-auto text-[12px] text-white/60 hover:text-white cursor-pointer"
         >
           Cancel
         </button>
@@ -104,7 +148,7 @@ export function ImportProjectFlow({
       <div className="flex-1 min-h-0 flex flex-col items-center px-6 py-4 overflow-hidden">
         <div className="i2-chat-scale flex flex-col items-center w-full max-w-[540px] h-full min-h-0 gap-3">
           <div className="shrink-0">
-            <InfieHeroArtwork reducedMotion={false} size="sm" />
+            <InfieHeroArtwork reducedMotion={reducedMotion} size="sm" />
           </div>
           {phase === "scan" ? (
             <div data-testid="import-scan" className="flex flex-col gap-3 w-full">
@@ -120,9 +164,10 @@ export function ImportProjectFlow({
             </div>
           ) : (
             <>
-              <div className="flex-1 min-h-0 overflow-y-auto w-full flex flex-col gap-2">
-                {messages.map((line) => {
+              <div className="i2-conversation-scroll flex-1 min-h-0 overflow-y-auto w-full flex flex-col gap-2">
+                {messages.map((line, idx) => {
                   const mine = line.role === "user";
+                  const isLatestAssistant = !mine && idx === messages.length - 1;
                   return (
                     <div key={line.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                       <div
@@ -134,35 +179,59 @@ export function ImportProjectFlow({
                           color: mine ? "#abefa3" : "rgba(255, 255, 255, 0.95)",
                         }}
                       >
-                        {line.content}
+                        {isLatestAssistant ? (
+                          <RevealingInfieText
+                            text={line.content}
+                            live
+                            onComplete={() => handleMessageRevealComplete(line.id)}
+                          />
+                        ) : (
+                          line.content
+                        )}
                       </div>
                     </div>
                   );
                 })}
                 <div ref={bottomRef} />
               </div>
-              <div className="w-full shrink-0 flex gap-2 items-center">
-                <input
-                  data-testid="import-reply"
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") send();
-                  }}
-                  placeholder="Talk to Infie…"
-                  disabled={locked}
-                  className="flex-1 bg-transparent border border-[rgba(45,212,191,0.35)] rounded-[12px] px-3 py-2 text-[13px] text-white placeholder-white/30 outline-none font-['Rounded_Mplus_1c',sans-serif]"
-                />
-                <button
-                  type="button"
-                  data-testid="import-send"
-                  onClick={send}
-                  disabled={locked}
-                  aria-label="Send import reply"
-                  className="w-9 h-9 rounded-full bg-[#abefa3] text-[#1d1b20] flex items-center justify-center disabled:opacity-40"
-                >
-                  <Send size={14} />
-                </button>
+              <div className="w-full shrink-0 flex flex-col gap-2">
+                {readyToContinue && (
+                  <div className="flex justify-center pb-1">
+                    <FloatingContinueButton
+                      onClick={handleContinue}
+                      label="Continue"
+                    />
+                  </div>
+                )}
+                {!locked && (
+                  <div className="flex items-center gap-1.5 px-1 text-[11px] font-['Rounded_Mplus_1c',sans-serif] text-[#2dd4bf]/80">
+                    <Sparkles size={12} className="shrink-0" />
+                    <span>Example answer prefilled — edit or press Send</span>
+                  </div>
+                )}
+                <div className="w-full flex gap-2 items-center">
+                  <input
+                    data-testid="import-reply"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") send();
+                    }}
+                    placeholder="Talk to Infie…"
+                    disabled={locked}
+                    className="flex-1 bg-transparent border border-[rgba(45,212,191,0.35)] rounded-[12px] px-3 py-2 text-[13px] text-white placeholder-white/30 outline-none font-['Rounded_Mplus_1c',sans-serif]"
+                  />
+                  <button
+                    type="button"
+                    data-testid="import-send"
+                    onClick={send}
+                    disabled={locked || !draft.trim()}
+                    aria-label="Send import reply"
+                    className="w-9 h-9 rounded-full bg-[#abefa3] text-[#1d1b20] flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                  >
+                    <Send size={14} />
+                  </button>
+                </div>
               </div>
             </>
           )}

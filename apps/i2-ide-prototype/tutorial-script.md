@@ -14,10 +14,10 @@ This file drives the Figma Make prototype. The spoken lines below are the copy. 
 
 ### Learn and automatic starts
 
-- **Learn** in the header opens a modal with a left selector for **Tutorials** and **Education**. Tutorials lists all five entries above; clicking one takes the user to its start. Education opens the existing Prototype Limit component, with a message that computer science, game development and level-increase lessons belong there. The modal has the same fullscreen and close actions as widget modals.
+- **Learn** in the header opens a modal with a left selector for **Tutorials** and **Education**. Tutorials lists all five entries above; clicking one takes the user to its start. **Meet Infie** always shows **Replay**; every other tutorial shows **Start** until completed (early exit keeps **Start**) and **Replay** once completed, persisted across reloads. Education opens the existing Prototype Limit component, with a message that computer science, game development and level-increase lessons belong there. The modal has the same fullscreen and close actions as widget modals.
 - Project & Session Flow is offered on the first eligible project or session opening, and Widgets & Whatnot on the first eligible header Widgets opening, with a small offer card (Start tour / Not now). Starting or dismissing an offer uses it up; every tutorial can be replayed from Learn.
 - Project & Session Flow never starts during Generate or Import, including navigation performed as those tutorials create or open their projects (Generate counts as running while Jenny is open or its Experimemo walkthrough has not reached cleanup). Opening Widgets during another tutorial never interrupts that tutorial or uses up the Widgets & Whatnot offer.
-- If a session is opened directly, the offer starts with the session portion (B15 onward); the project/files portion (B08–B14) is offered when the user next visits Project Home and ends once the agent question is answered. Project & Session Flow uses isolated demo data (the Tutorial demo project and its Add Comments session) for the scripted question, task and completion form, then returns to the user's selected Home, project or session.
+- If a session is opened directly, the offer starts with the session portion (B15 onward); the project/files portion (B08–B14) is offered when the user next visits Project Home and ends once the agent question is answered. Project & Session Flow uses isolated demo data (labeled Pet Show and Tell with its Add Comments session) for the scripted question, task and completion form, then returns to the user's selected Home, project or session.
 - Replay preserves the user's profile, level, selected models, projects, session progress, widget layout and music. A Meet Infie replay snapshots the profile, interest reply, level and model choices and restores them when it ends; its music player stays where the user put it and keeps playing. Generate replayed over an existing Experimemo replays Jenny's conversation and then opens the existing Experimemo instead of resetting it. Import replayed after Field Notes is imported replays the import conversation and opens the existing project without re-importing. The first level and the first-run plan choice are awarded only on the first Meet Infie completion.
 - Only the first-run Meet Infie has no exit. A replay or any later tutorial shows a small **Exit tutorial** control; leaving keeps real state and releases the demo records in place.
 
@@ -30,7 +30,7 @@ This file drives the Figma Make prototype. The spoken lines below are the copy. 
 - Introduced elements (level, music widget, the i² / Project / Session navigation group (B08), and the header groups) first appear spotlighted and slightly larger near Infie's message as she introduces them, hold briefly, then dock at their real position, using the cue and timing given in their own beat or the already-built animation (reduced motion: fade straight to the docked position). The level spotlights, holds and glides to its anchor automatically during its introduction (B03). The music player assembles and then glides to its lower-left anchor after its hold (B05). The i² / Project / Session navigation group is revealed with its message and docks when the user continues, as B08 states. The B11 header groups glide when the user continues, as that beat states. The B12 Home reveals appear in their existing Home positions as Infie cues them and finish animating before the next required interaction. Individual beats do not repeat this rule; keep the already-built intro motions.
 - Floating means unboxed. Messages and fields have thin borders and transparent interiors. Buttons have a background and border. No new enclosing tutorial card, form card, tutorial panel, message list, or outer border/background around a group; once docked at Home, Infie's own existing chat is the app's normal chat, not a tutorial panel. Keep text steady. Use negative space instead of adding a backplate. Until Infie's conversation docks at Home (B12), her single current message floats unboxed. From B12 on, ordinary messages go in the existing Infie chat—Home, Project and Session alike. A floating message is allowed only when specifically calling out something far from the chat. When a specific callout points at an element, glow that target teal/cyan; the glow is used the same whether the message is in chat or floating; normal first introductions do not glow. The completion form maintains unboxed floating styling without an outer form card.
 - Before Infie's conversation docks (B12), show one current Infie message; it is also her caption; do not duplicate it in a subtitle bar. Keep longer passages in separate turns. Narration is optional; the text always works by itself. After docking, messages continue in the existing Infie chat.
-- In Meet Infie, informational lines of up to 96 characters advance after the full text is visible for at least 1.2 seconds or 220 ms per word, whichever is longer. The personalized B03 greeting always qualifies. Count across beat boundaries, including the Home bridge. After two consecutive automatic advances, the next message waits for the user. A hidden tab pauses advancement and returning gives the reader a fresh dwell. Required actions and docking cues keep their gates. For a reading gate, Infie shows a small temporary Continue button. It belongs to the current message and disappears when used. Do not add a standing toolbar or progress tracker. Interaction gates require the named action. The first-run Meet Infie has no Skip; replays and later tutorials have only the small Exit tutorial control described above.
+- In Meet Infie, informational lines of up to 96 characters advance after the full text is visible for at least 0.6 seconds or 110 ms per word, whichever is longer. The personalized B03 greeting, the B06 joystick caption, and the B07 orchestrator/coordinator/friend line also auto-advance after their readable dwell (and video completion for B06). Count across beat boundaries, including the Home bridge. After two consecutive automatic advances, the next message waits for the user (except the B06 joystick caption flowing directly into the controller summary). A hidden tab pauses advancement and returning gives the reader a fresh dwell. Required actions and docking cues keep their gates. For a reading gate, Infie shows a small temporary Continue button. It belongs to the current message and disappears when used. Do not add a standing toolbar or progress tracker. Interaction gates require the named action. The first-run Meet Infie has no Skip; replays and later tutorials have only the small Exit tutorial control described above.
 - Use natural keyboard focus and button activation. Do not intercept typing, Enter in an email field, or Space on a focused control with a global advance handler. Unrevealed controls cannot receive focus or appear to assistive technology. No first-frame UI flash.
 - Respect reduced motion with gentle fades and the same content/order. Voice is shown with a simulated microphone prompt only; both choices advance and no microphone is ever accessed. If audio is unavailable or playback is blocked, continue normally with a paused player and readable dialogue.
 - Project/session/form data is local tutorial demo data. Simulate authentication, model provider sign-ins, agent work, PR status and form submission. Simulated sign-in modals are clearly fake (no real OAuth, no network, no real credentials collected, no password fields that submit anywhere). Do not initiate OAuth, send email, publish feedback or touch real projects.
@@ -149,7 +149,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 | 0 s (video start) | Keyboard and mouse |
 | 5.4 s | Gamepad |
 | 9.9 s | Joystick and programmable keypad |
-| 14.4 s (video ends) | Final caption can offer Continue to the closing message |
+| 14.4 s (video ends) | Final caption advances automatically to the closing message once readable and the video ends |
 
 **Infie (at 0 s):** “You can control this IDE in a number of ways. Of course you can use the keyboard and mouse.”
 
@@ -157,9 +157,9 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 **Infie (at 9.9 s):** “Prefer a joystick and programmable keypad? You can do that too.”
 
-**Gate:** The keyboard and gamepad captions advance automatically. The joystick caption offers Continue after its reading dwell and the end of the video. Slower text can finish after a media cue without pausing or restarting playback. The same two-advance limit applies to the stills.
+**Gate:** All three device captions advance automatically: keyboard and gamepad follow the media cues after reading dwell, and the joystick caption advances automatically after its reading dwell and the end of the video (no Continue button). Slower text can finish after a media cue without pausing or restarting playback. In reduced-motion or fallback stills mode, each still holds for its reading dwell and advances cleanly into the closing controller message (which keeps Continue).
 
-**Infie (after Continue on the final caption):** “Since navigating the UI and executing common actions are mapped to a controller, you can set up any kind of custom scenario you want in settings later. Some games may require a specific input device.”
+**Infie (after the joystick caption completes):** “Since navigating the UI and executing common actions are mapped to a controller, you can set up any kind of custom scenario you want in settings later. Some games may require a specific input device.”
 
 **Stage:** The video fades out as it ends and the live Infie returns. With the closing message, all three transparent floating illustrations (`infie-controls-keyboard-mouse.png`, `infie-controls-gamepad.png`, `infie-controls-joystick-numpad.png`) appear together beside Infie (no card, panel, border, or backplate), then retire when Continue is pressed.
 
@@ -181,17 +181,17 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 **Reveal:** The existing hotkey guide, showing Alt-click, Shift-click and Ctrl-click.
 
-**Infie:** “You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you.”
+**Infie:** “You can ask me for help with any part of the IDE just by holding the hotkeys and clicking it. Even individual words or phrases in Session Agent chats! I'll explain things in a way that makes sense to you. I'll get to what Session Agents are later.”
 
 **Stage note:** The spoken line stays as written. A short card centered in the empty area to the right of the chat lists the combinations: Alt+click asks a question (voice or text, then a follow-up); Shift+click reports a problem (confirm or ask, then a todo or an in-branch fix); Ctrl+click opens links, go-to-symbol, and import, or a quick summary. The card footer reads “Alt = question · Shift = problem.” This is a margin card only. Do not add a new help backend.
 
-**Gate:** Continue per turn.
+**Gate:** The first turn (orchestrator/coordinator/friend) advances automatically after its full reveal and readable dwell (no Continue). Turns 2 and 3 keep Continue.
 
 ### B08 — Navigation
 
 **Reveal:** The `i² / Project / Session` navigation group appears together near Infie (existing spotlight motion) and docks in the header on Continue.
 
-**Infie:** “Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.”
+**Infie:** “Here's how navigation works: i² takes you Home, Project shows your current project, and a Session is a space for a feature, fix, or experiment. Those buttons are handy dropdowns. If you use Git, I'll manage separate worktrees. If not, no problem! You can start Sessions just by talking to me.”
 
 **Gate:** Continue docks the navigation group. The detailed workspace tree and `project/` folder lesson are in Project & Session Flow.
 
@@ -227,7 +227,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 ### B12 — i² Home
 
-**Reveal:** Infie's conversation slides into its normal Home chat position. The Workspace/Emulators controls appear in the header. From here on, ordinary messages appear in the docked Infie chat; floating messages are reserved for specific callouts far from the chat. Do not silently expose unrelated controls or invent a new dashboard.
+**Reveal:** Infie's conversation animates resizing smoothly from its pre-dock dimensions to the Home chat dimensions while centered, then slides into its normal Home chat position (reduced motion fades straight to its Home position). The Workspace/Emulators controls appear in the header. From here on, ordinary messages appear in the docked Infie chat; floating messages are reserved for specific callouts far from the chat. Do not silently expose unrelated controls or invent a new dashboard.
 
 **Infie:** “Let me scoot over and make some room.”
 
@@ -269,7 +269,7 @@ Continue then leads to the “that's my jam” line and the music keeps playing.
 
 ## Project & Session Flow
 
-Runs on the Tutorial demo project and its Add Comments session, then returns the user to where they were. The full tour runs B08 → B09 → B13 → B14 → B15 → B16 → B17 → B19; the session portion alone starts at B15. The workspace and project-folder lesson (B08, B09) plays over a scrim on the live shell, in the same unboxed center-stage style as Meet Infie; from B13 on, messages are in the docked Infie chat.
+Runs on the isolated Pet Show and Tell demo project and its Add Comments session, then returns the user to where they were. The full tour runs B08 → B09 → B13 → B14 → B15 → B16 → B17 → B19; the session portion alone starts at B15. The workspace and project-folder lesson (B08, B09) plays over a scrim on the live shell, in the same unboxed center-stage style as Meet Infie; from B13 on, messages are in the docked Infie chat.
 
 ### B08 — i2 Workspace and project folder
 
@@ -443,11 +443,11 @@ The arrange demo is a floating Infie callout over the live screen. The first Con
 
 **Gate:** Continue. In the hosted project this line is in the real Infie chat.
 
-**Reveal:** A small preview with only slider names and tracks: Guidance, Sassiness, Verbosity, Technical Level, Speed, Effort. These are shared by every model and conversation. In the hosted project the preview sits in the chat column.
+**Reveal:** Open the actual full Preference Sliders widget modal from the Widgets menu (Guidance, Sassiness, Verbosity & Compression, Technical Level, Text Reveal Speed, Effort — with full descriptions, stops, and tooltips), anchored above Infie's floating callout.
 
-**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.”
+**Infie:** “Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking. Close this when you're done.”
 
-**Gate:** Speed changes apply immediately, including to the current line. Continue. Keep this preview compact. Reduced motion still shows text immediately.
+**Gate:** Speed changes apply immediately, including to the current line. Closing the Preference Sliders widget advances to the next turn. Reduced motion still shows text immediately. User widget layouts, dock sizes, and open modal state are restored when the tour finishes or exits.
 
 **Infie:** “Click Widgets in the header to see everything else you can add to your workspace.”
 

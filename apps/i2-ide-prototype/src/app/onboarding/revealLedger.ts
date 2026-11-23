@@ -176,7 +176,7 @@ export const B18_EXPLORE_TURN = 5;
 export const B18_LINES: readonly string[] = [
   "Everything's a widget here. Move it, resize it, close it, bring it back. More screens or a VR headset? Spread out. You can have as many windows as you want, and iSquared supports fullscreen multiple-screen layout saves. Let's try it with a widget.",
   "You can drag panel edges to resize them or collapse a panel completely. Double-click my chat header or tab bar anytime to collapse all panels and focus on our conversation, then double-click again to bring them back.",
-  "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking.",
+  "Preference Sliders apply to all models in all conversations. Find them in Widgets any time. How fast would you like the text? Try the Speed slider—even while I'm talking. Close this when you're done.",
   "Click Widgets in the header to see everything else you can add to your workspace.",
   "One of my favorites is the Library: screens, flows, components, and packages that fit your project.",
   "Explore the rest of the widgets on your own!",

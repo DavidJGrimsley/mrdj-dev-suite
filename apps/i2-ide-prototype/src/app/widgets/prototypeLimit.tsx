@@ -94,10 +94,10 @@ export function notHotdogLimit(what: string): PrototypeLimitRequest {
 export function importedProjectLimit(projectName: string, what: string): PrototypeLimitRequest {
   return {
     featureName: what,
-    subtitle: `${projectName} · imported placeholder`,
+    subtitle: `${projectName} · show-only imported project`,
     description:
-      `${projectName} was imported to show a project with many sessions. Its files, sessions, and simulators aren't wired into this prototype. Check out Pet Show and Tell for more interactivity: real project files, a working Explorer and a live web preview.`,
-    environmentNote: "Simulated prototype · this project's sources are not included",
-    suggestPet: true,
+      `${projectName} is show-only in this prototype—it illustrates multiple sessions running at once, each with multiple Session Agents coordinated by Infie. Its files, sessions, and simulators aren't wired interactively here.`,
+    environmentNote: "Simulated prototype · show-only imported project",
+    suggestPet: false,
   };
 }

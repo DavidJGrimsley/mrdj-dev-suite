@@ -9,17 +9,34 @@ import { BEAT_ORDER, OnboardingBeat } from "./revealLedger";
  */
 export const MEET_INFIE_SHORT_LINE_CHARS = 96;
 
-/** Meet Infie reading turns auto-advance at most twice in a row. B03 ignores the length limit. */
+export const B06_JOYSTICK_LINE =
+  "Prefer a joystick and programmable keypad? You can do that too.";
+export const B07_ORCHESTRATOR_LINE =
+  "I'm your orchestrator, coordinator, question-answerer, and maybe friend. I take the boring stuff out of building and show you what you need when you need it.";
+
+/**
+ * Meet Infie reading turns auto-advance at most twice in a row.
+ * B03, B06 joystick, and B07 orchestrator qualify explicitly so their pacing flows
+ * cleanly without unnecessary Continue stops while preserving legibility and other gates.
+ */
 export function meetInfieAutoAdvance(input: {
   activeTutorial: string | null;
   beat: string;
+  turnIndex?: number;
   readingTurn: boolean;
   consecutiveAutos: number;
   line: string;
 }): boolean {
+  if (input.activeTutorial !== "meet-infie" || !input.readingTurn) return false;
+  const isB06Joystick =
+    input.beat === "B06" &&
+    (input.turnIndex === 3 || input.line === B06_JOYSTICK_LINE);
+  if (isB06Joystick) return true;
+  const isB07Orchestrator =
+    input.beat === "B07" &&
+    (input.turnIndex === 0 || input.line === B07_ORCHESTRATOR_LINE);
+  if (isB07Orchestrator) return input.consecutiveAutos < 2;
   return (
-    input.activeTutorial === "meet-infie" &&
-    input.readingTurn &&
     input.consecutiveAutos < 2 &&
     (input.beat === "B03" || input.line.length <= MEET_INFIE_SHORT_LINE_CHARS)
   );
@@ -36,14 +53,18 @@ export const B06_RECENTER_MS = 550;
 /** B06: gap between Infie and whatever floats beside her. */
 export const B06_BESIDE_GAP_PX = 24;
 
-/** B12: bridge line is readable before the conversation slides left. */
+/** B12: brief hold at pre-dock dimensions before animating resize into Home chat size. */
+export const B12_RESIZE_HOLD_MS = 180;
+/** B12: smooth chat resize duration (centered) before sliding left into Home. */
+export const B12_RESIZE_MS = 520;
+/** B12: bridge line is readable (and chat resize finishes) before the conversation slides left. */
 export const B12_BRIDGE_READ_MS = 1000;
 /** B12: conversation slide duration (slow, smooth glide). */
 export const B12_SLIDE_MS = 1350;
 /** B12: gentle ease-in-out so the glide starts and settles softly. */
 export const B12_SLIDE_EASE = [0.45, 0, 0.25, 1] as const;
 /** B12: pause after the chat lands before anything else happens (Active Projects). */
-export const B12_LANDED_DWELL_MS = 1500;
+export const B12_LANDED_DWELL_MS = 750;
 /** B12: Active Projects entrance duration. */
 export const B12_PROJECTS_FADE_MS = 700;
 
@@ -54,9 +75,9 @@ export const B18_GALLERY_OPEN_DELAY_MS = 400;
 export const PREDOCK_BOTTOM_OFFSET = "var(--i2-predock-bottom, 14vh)";
 
 /** Visible reading time after the last character has appeared, independent of text speed. */
-export function readingDwellMs(text: string, minimum = 1200): number {
+export function readingDwellMs(text: string, minimum = 600): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(minimum, words * 220);
+  return Math.max(minimum, words * 110);
 }
 
 /**
