@@ -24,11 +24,11 @@ directory unless another directory is named.
   recognized a connected Quest 3S. Android Studio, the Android SDK, and JDK 17
   are present; the Meta Horizon Android Studio plugin was not detected. The
   CLI is usable through `npx -y metavr`, even when `metavr` is not on PATH.
-- Codex has the official Expo plugin and skills. Its Expo MCP server is
-  registered but requires user OAuth login (`codex mcp login expo`). Meta CLI
-  initialization installed the official Quest skills and registered its MCP
-  server for Codex. Restart Codex, then verify the Meta docs-search MCP tool;
-  this current session verified CLI docs search, not the reloaded MCP session.
+- Codex has the official Expo plugin and skills. The initial setup recorded an
+  Expo OAuth login requirement. Meta CLI initialization installed the official
+  Quest skills and registered its MCP server for Codex; the initial setup
+  verified CLI docs search and left MCP verification until after a restart.
+  See the current session recheck below for the updated status.
   Claude Code already has Expo installed; avoid duplicate installs. The existing
   ReactVision MCP endpoint matches its [official setup documentation](https://viro-community.readme.io/docs/viroreact-mcp-server)
   and returned a read-only overview. Check connection permissions before sharing
@@ -36,6 +36,27 @@ directory unless another directory is named.
 - `gh` is authenticated for this repository. Playwright screenshot tools are
   available to this agent; an actual prototype screenshot was not captured in
   this tooling pass.
+
+### Current session recheck (2026-11-23)
+
+- Codex successfully called Meta documentation search, Expo documentation
+  search, the ReactVision overview, and Playwright's tab-list and screenshot
+  tools (a blank browser page, not a prototype comparison). After an initial
+  check found no device, a subsequent check on 2026-11-23 identified a Quest
+  3S in `device` state through both Meta's MCP and `npx -y metavr device list`.
+  The MCP device-info call also succeeded. Device connectivity does not prove
+  app installation or headset interaction.
+- Codex reports the Expo MCP server enabled with OAuth configured. Documentation
+  tools work, but authenticated project operations were not verified: this
+  checkout does not specify an EAS project ID or owner. The earlier note that
+  OAuth login is required reflects the initial setup attempt; if an
+  account-dependent operation requests authentication, run `codex mcp login
+  expo` and complete the browser sign-in.
+- Local Expo automation remains unverified and `expo-mcp` has not been added to
+  the app for this check. Expo's [MCP setup guide](https://docs.expo.dev/mcp/)
+  describes the additional local development-server setup; do not assume it
+  supports Android or Quest interactions without testing. The existing
+  Playwright and Meta tools provide separate desktop and headset paths.
 
 ## Build paths
 
