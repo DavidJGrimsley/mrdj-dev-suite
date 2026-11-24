@@ -1,0 +1,1047 @@
+diff --git a/android/sharedCode/src/main/cpp/QuestInputSampler.h b/android/sharedCode/src/main/cpp/QuestInputSampler.h
+new file mode 100644
+index 0000000..9ecc206
+--- /dev/null
++++ b/android/sharedCode/src/main/cpp/QuestInputSampler.h
+@@ -0,0 +1,677 @@
++// App-owned addition to ReactVision/virocore v3.0.3 (MIT) for the Neo Rock 'Em
++// Sock 'Em Robots Quest controller diagnostics. Included once, by
++// VROSceneRendererOpenXR.cpp: the JNI entry points and the state below must
++// exist in exactly one translation unit (the same rule as QuestPanelLayer.h).
++//
++// The render thread publishes VROInputControllerOpenXR's raw per-frame input
++// (QuestRawInput) into a bounded ring, updates render-thread diagnostic hand
++// markers from the same current-frame sample before VRORenderer::prepareFrame,
++// and submits an optional sky diagnostics XrCompositionLayerQuad under the
++// projection layer. It adds no OpenXR session, action, binding or space.
++#pragma once
++#include <jni.h>
++#include <openxr/openxr.h>
++#include <GLES3/gl3.h>
++#include <android/log.h>
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <cmath>
++#include <cstdint>
++#include <cstring>
++#include <memory>
++#include <mutex>
++#include <string>
++#include <time.h>
++#include <vector>
++#include "VROInputControllerOpenXR.h"
++#include "VROInputPresenter.h"
++#include "VRONode.h"
++#include "VROSphere.h"
++#include "VROBox.h"
++#include "VROMaterial.h"
++
++namespace quest_input {
++// Bumped when the JNI contract or the sample layout changes; QuestInputModule checks it.
++constexpr int kVersion = 1;
++constexpr int kCapacity = 64;  // about 0.5 s at 120 Hz
++
++// Per sample: three int64 values, then ints, then floats. Hands are left, right.
++constexpr int kLongsPerSample = 3;   // seq, XrTime predicted display time, CLOCK_MONOTONIC capture
++constexpr int kIntsPerHand = 5;      // locate result, location flags, velocity flags, active bits, button bits
++constexpr int kIntsPerSample = 5 + 2 * kIntsPerHand;  // sync result, session state, actions ready, generation, ref epoch
++constexpr int kFloatsPerHand = 17;   // position 3, orientation xyzw 4, linear 3, angular 3, trigger, squeeze, stick x, y
++constexpr int kFloatsPerSample = 2 * kFloatsPerHand;
++constexpr int kHeaderLongs = 14;
++
++enum ActiveBit { kPose = 1, kTrigger = 2, kSqueeze = 4, kThumbstick = 8, kPrimary = 16, kSecondary = 32, kMenu = 64 };
++enum ButtonBit { kPrimaryDown = 1, kSecondaryDown = 2, kMenuDown = 4 };
++
++struct Slot {
++    int64_t longs[kLongsPerSample];
++    int32_t ints[kIntsPerSample];
++    float   floats[kFloatsPerSample];
++};
++
++struct State {
++    std::mutex mutex;
++    std::array<Slot, kCapacity> ring;
++    int64_t  nextSeq = 1;    // never reset, so a reader cursor cannot alias across sessions
++    int64_t  oldestSeq = 0;  // 0 while the ring is empty
++    int64_t  latestSeq = 0;
++    uint32_t generation = 0; // one per renderer session; 0 before the first
++    bool     live = false;
++    bool     actionsReady = false;
++    bool     haveOrigin = false;
++    int64_t  originDisplayTime = 0;
++    int64_t  originMonotonic = 0;
++    int64_t  published = 0;
++    int64_t  framesWithoutInput = 0;
++    int64_t  rejected = 0;   // publishes from a session that is no longer current
++    std::string profiles[2];
++};
++static State state;
++static std::atomic<bool> markersEnabled{false};
++
++inline int64_t monotonicNow() {
++    timespec ts;
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++    return static_cast<int64_t>(ts.tv_sec) * 1000000000LL + ts.tv_nsec;
++}
++
++// Caller holds state.mutex.
++inline void clearRingLocked() {
++    state.oldestSeq = 0;
++    state.latestSeq = 0;
++    state.haveOrigin = false;
++    state.originDisplayTime = 0;
++    state.originMonotonic = 0;
++    state.published = 0;
++    state.framesWithoutInput = 0;
++    state.profiles[0].clear();
++    state.profiles[1].clear();
++}
++
++// Render-thread diagnostic markers (blue left, orange right, 15 cm aim ray, yellow inferred tag).
++struct HandMarkerNodes {
++    std::shared_ptr<VRONode> root;
++    std::shared_ptr<VRONode> inferred;
++};
++
++struct MarkerState {
++    std::weak_ptr<VRONode> presenterRoot;
++    HandMarkerNodes hands[2];
++};
++static MarkerState markerState;
++
++inline std::shared_ptr<VROMaterial> makeMarkerMaterial(VROVector4f color) {
++    auto mat = std::make_shared<VROMaterial>();
++    mat->setLightingModel(VROLightingModel::Constant);
++    mat->getDiffuse().setColor(color);
++    mat->setReceivesShadows(false);
++    return mat;
++}
++
++inline HandMarkerNodes createHandMarkerNodes(VROVector4f sphereColor) {
++    constexpr float kMarkerRadius = 0.012f;
++    constexpr float kRayLength    = 0.15f;
++    HandMarkerNodes out;
++
++    out.root = std::make_shared<VRONode>();
++    out.root->setName("QuestRawHandMarker");
++    out.root->setSelectable(false);
++    out.root->setIgnoreEventHandling(true);
++    out.root->setHidden(true);
++
++    auto sphereGeom = VROSphere::createSphere(kMarkerRadius, 12, 12, true);
++    sphereGeom->setMaterials({ makeMarkerMaterial(sphereColor) });
++    auto sphereNode = std::make_shared<VRONode>();
++    sphereNode->setGeometry(sphereGeom);
++    sphereNode->setSelectable(false);
++    sphereNode->setIgnoreEventHandling(true);
++    out.root->addChildNode(sphereNode);
++
++    auto rayGeom = VROBox::createBox(0.003f, 0.003f, kRayLength);
++    rayGeom->setMaterials({ makeMarkerMaterial({ 0.886f, 0.910f, 0.941f, 1.0f }) });
++    auto rayNode = std::make_shared<VRONode>();
++    rayNode->setPosition({ 0.0f, 0.0f, -kRayLength * 0.5f });
++    rayNode->setGeometry(rayGeom);
++    rayNode->setSelectable(false);
++    rayNode->setIgnoreEventHandling(true);
++    out.root->addChildNode(rayNode);
++
++    auto inferredGeom = VROBox::createBox(0.01f, 0.01f, 0.01f);
++    inferredGeom->setMaterials({ makeMarkerMaterial({ 0.980f, 0.800f, 0.082f, 1.0f }) });
++    out.inferred = std::make_shared<VRONode>();
++    out.inferred->setPosition({ 0.0f, kMarkerRadius * 2.2f, 0.0f });
++    out.inferred->setGeometry(inferredGeom);
++    out.inferred->setSelectable(false);
++    out.inferred->setIgnoreEventHandling(true);
++    out.inferred->setHidden(true);
++    out.root->addChildNode(out.inferred);
++
++    return out;
++}
++
++// Render thread only. Detaches marker nodes on scene change or disable.
++inline void resetMarkers() {
++    for (int i = 0; i < 2; ++i) {
++        if (markerState.hands[i].root) {
++            markerState.hands[i].root->setHidden(true);
++            markerState.hands[i].root->removeFromParentNode();
++            markerState.hands[i].root.reset();
++        }
++        markerState.hands[i].inferred.reset();
++    }
++    markerState.presenterRoot.reset();
++}
++
++// Safe on teardown thread (after render thread joins): drops node refs without passert_thread.
++inline void clearMarkerRefs() {
++    for (int i = 0; i < 2; ++i) {
++        markerState.hands[i].root.reset();
++        markerState.hands[i].inferred.reset();
++    }
++    markerState.presenterRoot.reset();
++}
++
++// Render thread only, called before VRORenderer::prepareFrame so transforms and sort keys
++// reflect this exact frame's predictedDisplayTime with zero bridge or queue lag.
++inline void updateMarkers(const std::shared_ptr<VRONode> &presenterRoot,
++                          const QuestRawInput &raw,
++                          int sessionState) {
++    if (!markersEnabled.load(std::memory_order_relaxed) || !presenterRoot) {
++        if (markerState.hands[0].root || markerState.hands[1].root) resetMarkers();
++        return;
++    }
++    if (markerState.presenterRoot.lock() != presenterRoot) {
++        resetMarkers();
++        markerState.presenterRoot = presenterRoot;
++        markerState.hands[0] = createHandMarkerNodes({ 0.220f, 0.741f, 0.973f, 1.0f });
++        markerState.hands[1] = createHandMarkerNodes({ 0.976f, 0.451f, 0.086f, 1.0f });
++        presenterRoot->addChildNode(markerState.hands[0].root);
++        presenterRoot->addChildNode(markerState.hands[1].root);
++    }
++    const bool focused = (sessionState == XR_SESSION_STATE_FOCUSED && raw.syncResult == XR_SUCCESS);
++    const QuestRawHand *src[2] = { &raw.left, &raw.right };
++    for (int i = 0; i < 2; ++i) {
++        const QuestRawHand &hand = *src[i];
++        HandMarkerNodes &dst = markerState.hands[i];
++        const bool locateOk = XR_SUCCEEDED(hand.locateResult);
++        const bool posValid = locateOk && (hand.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
++        const bool oriValid = locateOk && (hand.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0;
++        const bool posTracked = posValid && (hand.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0;
++        const bool oriTracked = oriValid && (hand.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT) != 0;
++        const auto &p = hand.pose.position;
++        const auto &q = hand.pose.orientation;
++        const float qn = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
++        const bool validPose = focused && hand.poseActive && posValid && oriValid &&
++            std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
++            std::isfinite(q.x) && std::isfinite(q.y) && std::isfinite(q.z) && std::isfinite(q.w) &&
++            qn > 0.0f && std::fabs(qn - 1.0f) <= 0.05f;
++        if (validPose) {
++            dst.root->setPosition({ p.x, p.y, p.z });
++            dst.root->setRotation(VROQuaternion(q.x / qn, q.y / qn, q.z / qn, q.w / qn));
++            dst.root->setHidden(false);
++            dst.inferred->setHidden(posTracked && oriTracked);
++        } else {
++            dst.root->setHidden(true);
++            dst.inferred->setHidden(true);
++        }
++    }
++}
++
++// Constructor of a renderer whose session and action set now exist. Returns its generation.
++inline uint32_t beginSession(bool actionsReady) {
++    std::lock_guard<std::mutex> lock(state.mutex);
++    clearRingLocked();
++    state.generation += 1;
++    if (state.generation == 0) state.generation = 1;
++    state.live = true;
++    state.actionsReady = actionsReady;
++    return state.generation;
++}
++
++// destroySession of that renderer. Idempotent, and a no-op once a newer session began.
++inline void endSession(uint32_t generation) {
++    std::lock_guard<std::mutex> lock(state.mutex);
++    if (generation == 0 || generation != state.generation || !state.live) return;
++    state.live = false;
++    state.actionsReady = false;
++    clearRingLocked();
++}
++
++inline void noteFrameWithoutInput(uint32_t generation) {
++    std::lock_guard<std::mutex> lock(state.mutex);
++    if (state.live && generation == state.generation) ++state.framesWithoutInput;
++}
++
++inline void packHand(const QuestRawHand &hand, int32_t *ints, float *floats) {
++    ints[0] = static_cast<int32_t>(hand.locateResult);
++    ints[1] = static_cast<int32_t>(hand.locationFlags & 0xffffffffu);
++    ints[2] = static_cast<int32_t>(hand.velocityFlags & 0xffffffffu);
++    ints[3] = (hand.poseActive ? kPose : 0) | (hand.triggerActive ? kTrigger : 0) |
++              (hand.squeezeActive ? kSqueeze : 0) | (hand.thumbstickActive ? kThumbstick : 0) |
++              (hand.primaryActive ? kPrimary : 0) | (hand.secondaryActive ? kSecondary : 0) |
++              (hand.menuActive ? kMenu : 0);
++    ints[4] = (hand.primary ? kPrimaryDown : 0) | (hand.secondary ? kSecondaryDown : 0) |
++              (hand.menu ? kMenuDown : 0);
++    const XrPosef &p = hand.pose;
++    const float values[kFloatsPerHand] = {
++        p.position.x, p.position.y, p.position.z,
++        p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w,
++        hand.linearVelocity.x, hand.linearVelocity.y, hand.linearVelocity.z,
++        hand.angularVelocity.x, hand.angularVelocity.y, hand.angularVelocity.z,
++        hand.trigger, hand.squeeze, hand.thumbstick.x, hand.thumbstick.y,
++    };
++    std::memcpy(floats, values, sizeof(values));
++}
++
++// Render thread, once per frame that ran sync/onProcess.
++inline void publish(uint32_t generation, const QuestRawInput &raw, XrTime displayTime,
++                    int sessionState, int refEpoch) {
++    Slot slot;
++    slot.longs[1] = static_cast<int64_t>(displayTime);
++    slot.longs[2] = monotonicNow();
++    slot.ints[0] = static_cast<int32_t>(raw.syncResult);
++    slot.ints[1] = sessionState;
++    slot.ints[2] = raw.actionsReady ? 1 : 0;
++    slot.ints[3] = static_cast<int32_t>(generation);
++    slot.ints[4] = refEpoch;
++    packHand(raw.left, slot.ints + 5, slot.floats);
++    packHand(raw.right, slot.ints + 5 + kIntsPerHand, slot.floats + kFloatsPerHand);
++
++    std::lock_guard<std::mutex> lock(state.mutex);
++    if (!state.live || generation != state.generation) {
++        ++state.rejected;
++        return;
++    }
++    const int64_t seq = state.nextSeq++;
++    slot.longs[0] = seq;
++    state.ring[static_cast<size_t>(seq % kCapacity)] = slot;
++    if (state.oldestSeq == 0) state.oldestSeq = seq;
++    state.latestSeq = seq;
++    if (state.latestSeq - state.oldestSeq + 1 > kCapacity) state.oldestSeq = state.latestSeq - kCapacity + 1;
++    if (!state.haveOrigin) {
++        state.haveOrigin = true;
++        state.originDisplayTime = slot.longs[1];
++        state.originMonotonic = slot.longs[2];
++    }
++    ++state.published;
++}
++
++// Render thread. The OpenXR calls run before the lock. Returns true once a hand has a profile.
++inline bool refreshProfiles(uint32_t generation, XrInstance instance, XrSession session) {
++    static const char *kHands[2] = {"/user/hand/left", "/user/hand/right"};
++    std::string names[2];
++    for (int i = 0; i < 2; ++i) {
++        XrPath handPath = XR_NULL_PATH;
++        if (XR_FAILED(xrStringToPath(instance, kHands[i], &handPath))) continue;
++        XrInteractionProfileState profile = {XR_TYPE_INTERACTION_PROFILE_STATE};
++        if (XR_FAILED(xrGetCurrentInteractionProfile(session, handPath, &profile)) ||
++            profile.interactionProfile == XR_NULL_PATH) continue;
++        char buffer[XR_MAX_PATH_LENGTH];
++        uint32_t length = 0;
++        if (XR_SUCCEEDED(xrPathToString(instance, profile.interactionProfile,
++                                        XR_MAX_PATH_LENGTH, &length, buffer)) && length > 0) {
++            names[i].assign(buffer, length - 1);
++        }
++    }
++    std::lock_guard<std::mutex> lock(state.mutex);
++    if (!state.live || generation != state.generation) return true;
++    state.profiles[0] = names[0];
++    state.profiles[1] = names[1];
++    return !names[0].empty() || !names[1].empty();
++}
++
++struct DirtyRect {
++    int x = 0, y = 0, w = 0, h = 0;
++    bool empty() const { return w <= 0 || h <= 0; }
++    void include(int rx, int ry, int rw, int rh) {
++        if (rw <= 0 || rh <= 0) return;
++        if (empty()) { x = rx; y = ry; w = rw; h = rh; return; }
++        const int x1 = std::min(x, rx);
++        const int y1 = std::min(y, ry);
++        const int x2 = std::max(x + w, rx + rw);
++        const int y2 = std::max(y + h, ry + rh);
++        x = x1; y = y1; w = x2 - x1; h = y2 - y1;
++    }
++    void clamp(int maxW, int maxH) {
++        if (empty()) return;
++        const int x1 = std::max(0, x);
++        const int y1 = std::max(0, y);
++        const int x2 = std::min(maxW, x + w);
++        const int y2 = std::min(maxH, y + h);
++        x = x1; y = y1; w = x2 - x1; h = y2 - y1;
++    }
++};
++
++// Sky diagnostics panel quad layer (under the projection layer, same architecture as QuestPanelLayer.h).
++struct DiagState {
++    std::mutex mutex;
++    bool visible = false;
++    int status = 0;  // 0 hidden/pending, 1 submitted, -1 failed
++    uint64_t revision = 0;
++    int width = 0, height = 0;
++    float widthM = 1.8f, heightM = 1.0125f;
++    XrPosef pose = {{0.38268f, 0, 0, 0.92388f}, {0, 1.27f, -1.27f}};
++    DirtyRect pendingDirty;
++    std::vector<uint8_t> pixels;
++    std::vector<uint8_t> scratch;
++};
++static DiagState diagState;
++
++inline bool readDiagPose(JNIEnv *env, jfloatArray values, XrPosef *pose) {
++    if (values == nullptr || env->GetArrayLength(values) != 7) return false;
++    float p[7];
++    env->GetFloatArrayRegion(values, 0, 7, p);
++    for (float v : p) {
++        if (!std::isfinite(v)) return false;
++    }
++    const float norm = std::sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5] + p[6] * p[6]);
++    if (norm < 0.5f || norm > 1.5f) return false;
++    *pose = {{p[3] / norm, p[4] / norm, p[5] / norm, p[6] / norm}, {p[0], p[1], p[2]}};
++    return true;
++}
++
++class DiagLayer {
++    XrSwapchain _swapchain = XR_NULL_HANDLE;
++    std::vector<XrSwapchainImageOpenGLESKHR> _images;
++    std::vector<DirtyRect> _imageDirty;
++    uint64_t _revision = 0;
++    int _width = 0, _height = 0;
++    XrCompositionLayerQuad _layer = { XR_TYPE_COMPOSITION_LAYER_QUAD };
++
++    void destroySwapchain() {
++        if (_swapchain) xrDestroySwapchain(_swapchain);
++        _swapchain = XR_NULL_HANDLE;
++        _images.clear();
++        _imageDirty.clear();
++        _revision = 0;
++    }
++
++public:
++    ~DiagLayer() { destroySwapchain(); }
++
++    const XrCompositionLayerBaseHeader *prepare(XrSession session, XrSpace space) {
++        std::lock_guard<std::mutex> lock(diagState.mutex);
++        auto &s = diagState;
++        if (!s.visible || s.pixels.empty() || s.status < 0) return nullptr;
++        if (_swapchain && (_width != s.width || _height != s.height)) destroySwapchain();
++        if (!_swapchain) {
++            uint32_t count = 0;
++            if (XR_FAILED(xrEnumerateSwapchainFormats(session, 0, &count, nullptr))) return nullptr;
++            std::vector<int64_t> formats(count);
++            if (XR_FAILED(xrEnumerateSwapchainFormats(session, count, &count, formats.data()))) return nullptr;
++            const int64_t format = std::find(formats.begin(), formats.end(), GL_SRGB8_ALPHA8) != formats.end()
++                ? GL_SRGB8_ALPHA8 : GL_RGBA8;
++            if (std::find(formats.begin(), formats.end(), format) == formats.end()) {
++                s.status = -1; return nullptr;
++            }
++            XrSwapchainCreateInfo info = { XR_TYPE_SWAPCHAIN_CREATE_INFO };
++            info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
++            info.format = format; info.sampleCount = 1;
++            info.width = s.width; info.height = s.height;
++            info.faceCount = 1; info.arraySize = 1; info.mipCount = 1;
++            if (XR_FAILED(xrCreateSwapchain(session, &info, &_swapchain))) {
++                _swapchain = XR_NULL_HANDLE;
++                s.status = -1; return nullptr;
++            }
++            _width = s.width; _height = s.height;
++            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, 0, &count, nullptr))) {
++                destroySwapchain(); return nullptr;
++            }
++            _images.resize(count, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});
++            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, count, &count,
++                reinterpret_cast<XrSwapchainImageBaseHeader *>(_images.data())))) {
++                destroySwapchain(); return nullptr;
++            }
++            _imageDirty.assign(_images.size(), {0, 0, _width, _height});
++            s.pendingDirty = {};
++        } else if (_revision != s.revision) {
++            if (s.pendingDirty.empty()) {
++                for (auto &d : _imageDirty) d = {0, 0, _width, _height};
++            } else {
++                s.pendingDirty.clamp(_width, _height);
++                for (auto &d : _imageDirty) {
++                    d.include(s.pendingDirty.x, s.pendingDirty.y, s.pendingDirty.w, s.pendingDirty.h);
++                    d.clamp(_width, _height);
++                }
++                s.pendingDirty = {};
++            }
++        }
++        if (_revision != s.revision) {
++            uint32_t index = 0;
++            XrSwapchainImageAcquireInfo acquire = {XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
++            if (XR_FAILED(xrAcquireSwapchainImage(_swapchain, &acquire, &index))) return nullptr;
++            XrSwapchainImageWaitInfo wait = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
++            wait.timeout = XR_INFINITE_DURATION;
++            if (XR_FAILED(xrWaitSwapchainImage(_swapchain, &wait))) {
++                XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
++                xrReleaseSwapchainImage(_swapchain, &release);
++                return nullptr;
++            }
++            const DirtyRect dirty = index < _imageDirty.size()
++                ? _imageDirty[index]
++                : DirtyRect{0, 0, _width, _height};
++            GLenum uploadError = GL_NO_ERROR;
++            GLenum target = GL_TEXTURE_2D;
++            if (!dirty.empty()) {
++                GLint texture = 0, arrayTexture = 0, alignment = 0, unpackBuffer = 0;
++                GLint rowLength = 0, skipRows = 0, skipPixels = 0;
++                glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
++                glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &arrayTexture);
++                glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
++                glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
++                glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
++                glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skipRows);
++                glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skipPixels);
++                for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
++                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++                glPixelStorei(GL_UNPACK_ROW_LENGTH, _width);
++                glPixelStorei(GL_UNPACK_SKIP_ROWS, dirty.y);
++                glPixelStorei(GL_UNPACK_SKIP_PIXELS, dirty.x);
++                glBindTexture(GL_TEXTURE_2D, _images[index].image);
++                uploadError = glGetError();
++                if (uploadError == GL_INVALID_OPERATION) {
++                    target = GL_TEXTURE_2D_ARRAY;
++                    glBindTexture(target, _images[index].image);
++                    uploadError = glGetError();
++                }
++                if (uploadError == GL_NO_ERROR) {
++                    if (target == GL_TEXTURE_2D_ARRAY) {
++                        glTexSubImage3D(target, 0, dirty.x, dirty.y, 0, dirty.w, dirty.h, 1,
++                                        GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                    } else {
++                        glTexSubImage2D(target, 0, dirty.x, dirty.y, dirty.w, dirty.h,
++                                        GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                    }
++                    uploadError = glGetError();
++                }
++                glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
++                glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
++                glPixelStorei(GL_UNPACK_SKIP_ROWS, skipRows);
++                glPixelStorei(GL_UNPACK_SKIP_PIXELS, skipPixels);
++                glBindTexture(GL_TEXTURE_2D, texture);
++                glBindTexture(GL_TEXTURE_2D_ARRAY, arrayTexture);
++                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
++                glFlush();
++            }
++            XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
++            if (XR_FAILED(xrReleaseSwapchainImage(_swapchain, &release))) return nullptr;
++            if (uploadError != GL_NO_ERROR) {
++                __android_log_print(ANDROID_LOG_ERROR, "QuestInputDiagLayer",
++                    "Diag upload failed: GL=0x%x target=0x%x", uploadError, target);
++                s.status = -1;
++                return nullptr;
++            }
++            if (index < _imageDirty.size()) _imageDirty[index] = {};
++            _revision = s.revision;
++        }
++        _layer.space = space;
++        _layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
++        _layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
++        _layer.subImage.swapchain = _swapchain;
++        _layer.subImage.imageRect = {{0, 0}, {_width, _height}};
++        _layer.subImage.imageArrayIndex = 0;
++        _layer.pose = s.pose;
++        _layer.size = {s.widthM, s.heightM};
++        s.status = 1;
++        return reinterpret_cast<const XrCompositionLayerBaseHeader *>(&_layer);
++    }
++};
++}  // namespace quest_input
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeVersion(JNIEnv *, jobject) {
++    return quest_input::kVersion;
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeSetMarkersEnabled(JNIEnv *, jobject, jboolean enabled) {
++    quest_input::markersEnabled.store(enabled == JNI_TRUE, std::memory_order_relaxed);
++}
++
++// Copies every sample newer than afterSeq (at most kCapacity) and the header.
++// Returns the sample count, or -1 when an array is too small.
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeRead(
++        JNIEnv *env, jobject, jlong afterSeq, jlongArray header, jlongArray longs,
++        jintArray ints, jfloatArray floats) {
++    using namespace quest_input;
++    if (header == nullptr || longs == nullptr || ints == nullptr || floats == nullptr ||
++        env->GetArrayLength(header) < kHeaderLongs ||
++        env->GetArrayLength(longs) < kCapacity * kLongsPerSample ||
++        env->GetArrayLength(ints) < kCapacity * kIntsPerSample ||
++        env->GetArrayLength(floats) < kCapacity * kFloatsPerSample) return -1;
++
++    // Copied under the lock, handed to JNI after it is released.
++    static thread_local std::array<Slot, kCapacity> copy;
++    jlong head[kHeaderLongs] = {};
++    int count = 0;
++    {
++        std::lock_guard<std::mutex> lock(state.mutex);
++        head[0] = kVersion;
++        head[1] = state.generation;
++        head[2] = state.live ? 1 : 0;
++        head[3] = state.actionsReady ? 1 : 0;
++        head[4] = state.latestSeq;
++        head[5] = state.oldestSeq;
++        head[6] = state.published;
++        head[7] = state.framesWithoutInput;
++        head[8] = state.rejected;
++        head[10] = state.originDisplayTime;
++        head[11] = state.originMonotonic;
++        head[12] = state.haveOrigin ? 1 : 0;
++        head[13] = kCapacity;
++        if (state.latestSeq > 0) {
++            const int64_t first = afterSeq + 1 > state.oldestSeq ? afterSeq + 1 : state.oldestSeq;
++            for (int64_t seq = first; seq <= state.latestSeq && count < kCapacity; ++seq)
++                copy[count++] = state.ring[static_cast<size_t>(seq % kCapacity)];
++        }
++    }
++    head[9] = monotonicNow();
++    for (int i = 0; i < count; ++i) {
++        env->SetLongArrayRegion(longs, i * kLongsPerSample, kLongsPerSample,
++                                reinterpret_cast<const jlong *>(copy[i].longs));
++        env->SetIntArrayRegion(ints, i * kIntsPerSample, kIntsPerSample,
++                               reinterpret_cast<const jint *>(copy[i].ints));
++        env->SetFloatArrayRegion(floats, i * kFloatsPerSample, kFloatsPerSample, copy[i].floats);
++    }
++    env->SetLongArrayRegion(header, 0, kHeaderLongs, head);
++    return count;
++}
++
++// 0 = left, 1 = right. Empty until the runtime reports a bound profile.
++extern "C" JNIEXPORT jstring JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeProfile(JNIEnv *env, jobject, jint hand) {
++    std::string name;
++    if (hand == 0 || hand == 1) {
++        std::lock_guard<std::mutex> lock(quest_input::state.mutex);
++        name = quest_input::state.profiles[hand];
++    }
++    return env->NewStringUTF(name.c_str());
++}
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeDiagStatus(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_input::diagState.mutex);
++    return quest_input::diagState.status;
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeDiagHide(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_input::diagState.mutex);
++    quest_input::diagState.visible = false;
++    quest_input::diagState.status = 0;
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeDiagPose(JNIEnv *env, jobject, jfloatArray pose) {
++    XrPosef next;
++    if (!quest_input::readDiagPose(env, pose, &next)) return JNI_FALSE;
++    std::lock_guard<std::mutex> lock(quest_input::diagState.mutex);
++    quest_input::diagState.pose = next;
++    return JNI_TRUE;
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeDiagDraw(
++        JNIEnv *env, jobject, jbyteArray rgba, jint width, jint height, jfloat widthM,
++        jfloat heightM, jfloatArray pose) {
++    XrPosef next;
++    const size_t totalBytes = (width > 0 && height > 0)
++        ? static_cast<size_t>(width) * static_cast<size_t>(height) * 4u
++        : 0u;
++    if (rgba == nullptr || width < 1 || height < 1 || width > 4096 || height > 4096 ||
++        static_cast<size_t>(env->GetArrayLength(rgba)) != totalBytes ||
++        !std::isfinite(widthM) || widthM <= 0 || widthM > 2.0f ||
++        !std::isfinite(heightM) || heightM <= 0 || heightM > 2.0f ||
++        !quest_input::readDiagPose(env, pose, &next)) return JNI_FALSE;
++    std::lock_guard<std::mutex> lock(quest_input::diagState.mutex);
++    auto &s = quest_input::diagState;
++    s.width = width; s.height = height;
++    s.widthM = widthM; s.heightM = heightM;
++    s.pose = next;
++    s.pixels.resize(totalBytes);
++    s.scratch.resize(totalBytes);
++    env->GetByteArrayRegion(rgba, 0, static_cast<jsize>(totalBytes),
++                            reinterpret_cast<jbyte *>(s.scratch.data()));
++    const size_t rowBytes = static_cast<size_t>(width) * 4u;
++    for (int y = 0; y < height; ++y) {
++        std::memcpy(s.pixels.data() + static_cast<size_t>(height - y - 1) * rowBytes,
++                    s.scratch.data() + static_cast<size_t>(y) * rowBytes,
++                    rowBytes);
++    }
++    s.pendingDirty = {0, 0, width, height};
++    s.visible = true; ++s.revision;
++    return JNI_TRUE;
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questinput_QuestInputModule_nativeDiagDrawRegion(
++        JNIEnv *env, jobject, jbyteArray rgba, jint dx, jint dy, jint dw, jint dh) {
++    if (rgba == nullptr || dx < 0 || dy < 0 || dw <= 0 || dh <= 0) return JNI_FALSE;
++    const size_t regionBytes = static_cast<size_t>(dw) * static_cast<size_t>(dh) * 4u;
++    if (static_cast<size_t>(env->GetArrayLength(rgba)) != regionBytes) return JNI_FALSE;
++    std::lock_guard<std::mutex> lock(quest_input::diagState.mutex);
++    auto &s = quest_input::diagState;
++    if (!s.visible || s.width <= 0 || s.height <= 0 ||
++        dx + dw > s.width || dy + dh > s.height || s.pixels.empty()) return JNI_FALSE;
++    s.scratch.resize(regionBytes);
++    env->GetByteArrayRegion(rgba, 0, static_cast<jsize>(regionBytes),
++                            reinterpret_cast<jbyte *>(s.scratch.data()));
++    const size_t fullRowBytes = static_cast<size_t>(s.width) * 4u;
++    const size_t regRowBytes = static_cast<size_t>(dw) * 4u;
++    const size_t xOffsetBytes = static_cast<size_t>(dx) * 4u;
++    for (int row = 0; row < dh; ++row) {
++        const size_t glY = static_cast<size_t>(s.height - 1 - (dy + row));
++        std::memcpy(s.pixels.data() + glY * fullRowBytes + xOffsetBytes,
++                    s.scratch.data() + static_cast<size_t>(row) * regRowBytes,
++                    regRowBytes);
++    }
++    s.pendingDirty.include(dx, s.height - (dy + dh), dw, dh);
++    ++s.revision;
++    return JNI_TRUE;
++}
+diff --git a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
+index 61d8f0f..a2c60ea 100644
+--- a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
++++ b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.cpp
+@@ -280,14 +280,105 @@ XrAction VROInputControllerOpenXR::createAction(XrActionSet actionSet,
+ // Per-frame processing
+ // ──────────────────────────────────────────────────────────────────────────────
+ 
+-void VROInputControllerOpenXR::onProcess(XrSession session, XrSpace baseSpace,
+-                                          XrTime time, const VROCamera &camera) {
+-    // ── Sync active action set ────────────────────────────────────────────────
++// App input bridge (patch 0003). Re-reads the actions bound above without the
++// dead zone, click thresholds, stickyPose or hand fallback applied in
++// onProcess, and keeps the TRACKED bits, velocities and isActive flags those
++// paths drop. xrLocateSpace and xrGetActionState* do not change action or
++// session state, so Viro's own input events are unaffected.
++void VROInputControllerOpenXR::captureQuestRaw(XrSession session, XrSpace baseSpace,
++                                               XrTime time, XrResult syncResult) {
++    _questRaw = QuestRawInput();
++    _questRaw.syncResult   = syncResult;
++    _questRaw.actionsReady = _actionSet != XR_NULL_HANDLE &&
++                             _leftSpace != XR_NULL_HANDLE && _rightSpace != XR_NULL_HANDLE;
++    if (!_questRaw.actionsReady) return;
++
++    auto getInfo = [](XrAction action) {
++        XrActionStateGetInfo info = { XR_TYPE_ACTION_STATE_GET_INFO };
++        info.action = action;
++        return info;
++    };
++    auto readFloat = [&](XrAction action, bool &active, float &value) {
++        if (action == XR_NULL_HANDLE) return;
++        XrActionStateGetInfo info  = getInfo(action);
++        XrActionStateFloat   state = { XR_TYPE_ACTION_STATE_FLOAT };
++        if (XR_SUCCEEDED(xrGetActionStateFloat(session, &info, &state)) && state.isActive) {
++            active = true;
++            value  = state.currentState;
++        }
++    };
++    auto readBool = [&](XrAction action, bool &active, bool &value) {
++        if (action == XR_NULL_HANDLE) return;
++        XrActionStateGetInfo info  = getInfo(action);
++        XrActionStateBoolean state = { XR_TYPE_ACTION_STATE_BOOLEAN };
++        if (XR_SUCCEEDED(xrGetActionStateBoolean(session, &info, &state)) && state.isActive) {
++            active = true;
++            value  = state.currentState == XR_TRUE;
++        }
++    };
++    auto readStick = [&](XrAction action, QuestRawHand &hand) {
++        if (action == XR_NULL_HANDLE) return;
++        XrActionStateGetInfo  info  = getInfo(action);
++        XrActionStateVector2f state = { XR_TYPE_ACTION_STATE_VECTOR2F };
++        if (XR_SUCCEEDED(xrGetActionStateVector2f(session, &info, &state)) && state.isActive) {
++            hand.thumbstickActive = true;
++            hand.thumbstick       = state.currentState;
++        }
++    };
++    auto readPose = [&](XrAction action, XrSpace space, QuestRawHand &hand) {
++        XrActionStateGetInfo info  = getInfo(action);
++        XrActionStatePose    state = { XR_TYPE_ACTION_STATE_POSE };
++        hand.poseActive = XR_SUCCEEDED(xrGetActionStatePose(session, &info, &state)) &&
++                          state.isActive;
++        XrSpaceVelocity velocity = { XR_TYPE_SPACE_VELOCITY };
++        XrSpaceLocation location = { XR_TYPE_SPACE_LOCATION };
++        location.next     = &velocity;
++        hand.locateResult = xrLocateSpace(space, baseSpace, time, &location);
++        if (XR_SUCCEEDED(hand.locateResult)) {
++            hand.locationFlags   = location.locationFlags;
++            hand.pose            = location.pose;
++            hand.velocityFlags   = velocity.velocityFlags;
++            hand.linearVelocity  = velocity.linearVelocity;
++            hand.angularVelocity = velocity.angularVelocity;
++        }
++    };
++
++    QuestRawHand &left  = _questRaw.left;
++    QuestRawHand &right = _questRaw.right;
++    readPose(_leftAimPoseAction,  _leftSpace,  left);
++    readPose(_rightAimPoseAction, _rightSpace, right);
++    readFloat(_leftTriggerAction,  left.triggerActive,  left.trigger);
++    readFloat(_rightTriggerAction, right.triggerActive, right.trigger);
++    readFloat(_leftGripAction,     left.squeezeActive,  left.squeeze);
++    readFloat(_rightGripAction,    right.squeezeActive, right.squeeze);
++    readStick(_leftThumbstickAction,  left);
++    readStick(_rightThumbstickAction, right);
++    readBool(_aButtonAction, right.primaryActive,   right.primary);
++    readBool(_bButtonAction, right.secondaryActive, right.secondary);
++    readBool(_xButtonAction, left.primaryActive,    left.primary);
++    readBool(_yButtonAction, left.secondaryActive,  left.secondary);
++    readBool(_menuAction,    left.menuActive,       left.menu);
++}
++
++void VROInputControllerOpenXR::syncQuestInput(XrSession session, XrSpace baseSpace,
++                                              XrTime time) {
+     XrActiveActionSet activeSet = { _actionSet, XR_NULL_PATH };
+     XrActionsSyncInfo syncInfo  = { XR_TYPE_ACTIONS_SYNC_INFO };
+     syncInfo.activeActionSets      = &activeSet;
+     syncInfo.countActiveActionSets = 1;
+-    xrSyncActions(session, &syncInfo);
++    XrResult syncResult = xrSyncActions(session, &syncInfo);
++    captureQuestRaw(session, baseSpace, time, syncResult);
++    _questSyncedValid = true;
++    _questSyncedTime  = time;
++}
++
++void VROInputControllerOpenXR::onProcess(XrSession session, XrSpace baseSpace,
++                                          XrTime time, const VROCamera &camera) {
++    // ── Sync active action set (reusing syncQuestInput if already synced this frame)
++    if (!_questSyncedValid || _questSyncedTime != time) {
++        syncQuestInput(session, baseSpace, time);
++    }
++    _questSyncedValid = false;
+ 
+     // ── Capture poses for both hands (no dispatch yet) ───────────────────────
+     // Each hand can be supplied by either a held controller or by tracked
+diff --git a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.h b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.h
+index 2f7ff61..393f35b 100644
+--- a/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VROInputControllerOpenXR.h
+@@ -34,6 +34,37 @@
+ #include <openxr/openxr.h>
+ #include "VROInputControllerBase.h"
+ 
++// App-owned addition (Neo Rock 'Em Sock 'Em Robots Quest input bridge, patch
++// 0003). Raw per-frame state of the actions declared below, read right after
++// xrSyncActions: before the thumbstick dead zone, the trigger/grip click
++// thresholds, stickyPose and the hand-tracking fallback. QuestInputSampler.h
++// publishes it to the app; Viro's own events are unchanged.
++struct QuestRawHand {
++    XrResult             locateResult  = XR_ERROR_HANDLE_INVALID;
++    XrSpaceLocationFlags locationFlags = 0;  // VALID and TRACKED bits, unfiltered
++    XrSpaceVelocityFlags velocityFlags = 0;
++    XrPosef              pose            = { {0, 0, 0, 1}, {0, 0, 0} };  // aim pose
++    XrVector3f           linearVelocity  = { 0, 0, 0 };
++    XrVector3f           angularVelocity = { 0, 0, 0 };
++    bool       poseActive       = false;
++    bool       triggerActive    = false;
++    bool       squeezeActive    = false;
++    bool       thumbstickActive = false;
++    float      trigger    = 0.0f;
++    float      squeeze    = 0.0f;
++    XrVector2f thumbstick = { 0, 0 };
++    bool primaryActive   = false, primary   = false;  // A (right) / X (left)
++    bool secondaryActive = false, secondary = false;  // B (right) / Y (left)
++    bool menuActive      = false, menu      = false;  // left hand only
++};
++
++struct QuestRawInput {
++    XrResult     syncResult   = XR_ERROR_HANDLE_INVALID;
++    bool         actionsReady = false;  // action set and both aim spaces exist
++    QuestRawHand left;
++    QuestRawHand right;
++};
++
+ class VROInputControllerOpenXR : public VROInputControllerBase {
+ public:
+     explicit VROInputControllerOpenXR(std::shared_ptr<VRODriver> driver)
+@@ -101,6 +132,20 @@ public:
+         _backButtonCallback = std::move(callback);
+     }
+ 
++    /*
++     * Syncs the active action set and captures raw controller state once for the
++     * current frame's predictedDisplayTime (patch 0003). Safe to call before
++     * prepareFrame so diagnostic markers update on the same frame; onProcess
++     * reuses this frame's sync without calling xrSyncActions twice.
++     */
++    void syncQuestInput(XrSession session, XrSpace baseSpace, XrTime time);
++
++    /*
++     * Raw controller state captured by the last syncQuestInput/onProcess (patch 0003).
++     * Read on the render thread only.
++     */
++    const QuestRawInput &getQuestRawInput() const { return _questRaw; }
++
+ protected:
+     std::shared_ptr<VROInputPresenter> createPresenter(
+         std::shared_ptr<VRODriver> driver) override;
+@@ -165,6 +210,13 @@ private:
+     // ── Back button callback ──────────────────────────────────────────────────
+     std::function<void()> _backButtonCallback;
+ 
++    // ── App input bridge (patch 0003) ─────────────────────────────────────────
++    QuestRawInput _questRaw;
++    bool          _questSyncedValid = false;
++    XrTime        _questSyncedTime  = 0;
++    void captureQuestRaw(XrSession session, XrSpace baseSpace, XrTime time,
++                         XrResult syncResult);
++
+     // ── Edge-detection state (previous frame) ────────────────────────────────
+     bool _prevTriggerLeft  = false;
+     bool _prevTriggerRight = false;
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+index f68af1d..b3a1f20 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "VROSceneRendererOpenXR.h"
+ #include "QuestPanelLayer.h"
++#include "QuestInputSampler.h"
+ 
+ #include <android/log.h>
+ #include <sys/prctl.h>
+@@ -200,7 +201,11 @@ VROSceneRendererOpenXR::VROSceneRendererOpenXR(VRORendererConfiguration config,
+     _openxrDriver = std::make_shared<VRODriverOpenGLAndroidOpenXR>(gvrAudio);
+     _driver = _openxrDriver;  // base class std::shared_ptr<VRODriverOpenGLAndroid>
+     _inputController = std::make_shared<VROInputControllerOpenXR>(_openxrDriver);
+-    _inputController->createActionSet(_instance, _session, _eyeGazeSupported);
++    const bool questActionsReady =
++        _inputController->createActionSet(_instance, _session, _eyeGazeSupported);
++    // App input bridge (QuestInputSampler.h): samples from this session only.
++    _questInputGeneration = quest_input::beginSession(questActionsReady);
++    _questProfileRefreshIn = 0;
+     initHandTracking();  // no-op if XR_EXT_hand_tracking not available on this device
+ 
+     // Wire the B/Menu button back to Android's back-press so React Native's
+@@ -878,6 +883,8 @@ VROSceneRendererOpenXR::performARHitTestWithRay(VROVector3f ray) {
+ void VROSceneRendererOpenXR::destroySwapchains() {
+     // The panel swapchain belongs to this session too.
+     _questPanel.reset();
++    _questDiagPanel.reset();
++    quest_input::clearMarkerRefs();
+     for (auto &sc : _swapchains) {
+         if (sc.handle != XR_NULL_HANDLE) {
+             xrDestroySwapchain(sc.handle);
+@@ -888,6 +895,8 @@ void VROSceneRendererOpenXR::destroySwapchains() {
+ }
+ 
+ void VROSceneRendererOpenXR::destroySession() {
++    // App input bridge: this session's samples end here; a newer session is untouched.
++    quest_input::endSession(_questInputGeneration);
+     // AR session teardown — destroy the plane detector before the XrSession.
+     if (_arSession) {
+         _arSession->destroyPlaneDetector();
+@@ -1154,6 +1163,10 @@ void VROSceneRendererOpenXR::pollEvents() {
+                 }
+                 break;
+             }
++            case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED:
++                // App input bridge: re-read the bound controller profile next frame.
++                _questProfileRefreshIn = 0;
++                break;
+             case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING:
+                 ALOGE("Instance loss pending — shutting down");
+                 _running = false;
+@@ -1269,20 +1282,50 @@ void VROSceneRendererOpenXR::renderFrame() {
+         (viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) &&
+         (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+ 
+-    // App panel underlay (QuestPanelLayer.h). Prepare before rendering eyes so
+-    // the OpenXR display clears alpha to 0 while the panel is submitted, allowing
+-    // HDR tone-mapping (VROToneMappingRenderPass) to preserve the zero-alpha hole.
++    // App panel underlay (QuestPanelLayer.h) and sky diagnostics layer (QuestInputSampler.h).
++    // Prepare before rendering eyes so the OpenXR display clears alpha to 0 while either
++    // panel is submitted, allowing HDR tone-mapping to preserve the zero-alpha hole.
+     const XrCompositionLayerBaseHeader *questPanel = nullptr;
++    const XrCompositionLayerBaseHeader *questDiagPanel = nullptr;
+     if (viewsValid && frameState.shouldRender) {
+         if (!_questPanel) _questPanel.reset(new QuestPanelLayer());
+         questPanel = _questPanel->prepare(_session, _stageSpace);
++        if (!_questDiagPanel) _questDiagPanel.reset(new quest_input::DiagLayer());
++        questDiagPanel = _questDiagPanel->prepare(_session, _stageSpace);
+     }
+     if (_openxrDriver) {
+         auto display = _openxrDriver->getOpenXRDisplay();
+-        if (display) display->setClearAlpha((_passthroughEnabled || questPanel) ? 0.0f : 1.0f);
++        if (display) display->setClearAlpha((_passthroughEnabled || questPanel || questDiagPanel) ? 0.0f : 1.0f);
++    }
++
++    // App input bridge: a frame without an input pass is counted, never sampled.
++    if (!(viewsValid && frameState.shouldRender)) {
++        quest_input::noteFrameWithoutInput(_questInputGeneration);
+     }
+ 
+     if (viewsValid && frameState.shouldRender) {
++        // Sync actions and capture raw controller state BEFORE prepareFrame so render-thread
++        // diagnostic markers receive this frame's predictedDisplayTime transforms and sort keys.
++        if (_inputController && _renderer && _renderer->hasRenderContext()) {
++            _inputController->syncQuestInput(_session, _stageSpace,
++                                             frameState.predictedDisplayTime);
++            quest_input::publish(_questInputGeneration, _inputController->getQuestRawInput(),
++                                 frameState.predictedDisplayTime, (int)_sessionState,
++                                 quest_panel::refSpaceEpoch.load(std::memory_order_relaxed));
++            if (_questProfileRefreshIn-- <= 0) {
++                // Until a profile is bound, retry about once a second at 72 Hz.
++                _questProfileRefreshIn =
++                    quest_input::refreshProfiles(_questInputGeneration, _instance, _session)
++                        ? INT32_MAX : 72;
++            }
++            auto presenter = _inputController->getPresenter();
++            quest_input::updateMarkers(presenter ? presenter->getRootNode() : nullptr,
++                                       _inputController->getQuestRawInput(),
++                                       (int)_sessionState);
++        } else {
++            quest_input::noteFrameWithoutInput(_questInputGeneration);
++        }
++
+         // ── Prepare the Viro renderer (once per frame, before any eye render) ─
+         // Use the left eye pose/fov to drive scene-level preparation (culling,
+         // animation ticks, physics, etc.). Per-eye projection is applied in renderEye.
+@@ -1325,6 +1368,13 @@ void VROSceneRendererOpenXR::renderFrame() {
+             _inputController->onProcess(_session, _stageSpace,
+                                          frameState.predictedDisplayTime,
+                                          _renderer->getCamera());
++            auto presenter = _inputController->getPresenter();
++            if (auto presenterRoot = presenter ? presenter->getRootNode() : nullptr) {
++                auto parent = presenterRoot->getParentNode();
++                presenterRoot->computeTransforms(
++                    parent ? parent->getWorldTransform() : VROMatrix4f::identity(),
++                    parent ? parent->getWorldRotation() : VROMatrix4f::identity());
++            }
+         }
+ 
+         for (uint32_t eye = 0; eye < 2; ++eye) {
+@@ -1363,7 +1413,8 @@ void VROSceneRendererOpenXR::renderFrame() {
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayerComp));
+     }
+ 
+-    // App panel underlay (QuestPanelLayer.h), submitted under the projection layer.
++    // App panel underlay (QuestPanelLayer.h) and sky diagnostics layer (QuestInputSampler.h).
++    if (questDiagPanel) layers.push_back(questDiagPanel);
+     if (questPanel) layers.push_back(questPanel);
+ 
+     // Projection layer (3D scene)
+@@ -1379,11 +1430,11 @@ void VROSceneRendererOpenXR::renderFrame() {
+         if (_passthroughEnabled) {
+             projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT |
+                                    XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+-        } else if (questPanel) {
++        } else if (questPanel || questDiagPanel) {
+             // Fully virtual: the eye buffer clears opaque, which would hide the
+-            // underlay. Blend by source alpha only while the panel is submitted,
++            // underlay. Blend by source alpha only while a panel is submitted,
+             // and treat colour as premultiplied: where alpha is 1 the result is
+-            // the opaque frame, and only the zero-alpha panel hole changes.
++            // the opaque frame, and only the zero-alpha panel holes change.
+             projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+         }
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&projLayer));
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+index d7f5aa9..6efc0fc 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+@@ -51,6 +51,8 @@ class VROSceneController;
+ class VRONode;
+ class QuestPanelLayer;
+ 
++namespace quest_input { class DiagLayer; }
++
+ namespace gvr { class AudioApi; }
+ 
+ // Per-eye swapchain state
+@@ -173,6 +175,11 @@ private:
+     bool            _pendingRefSpaceChange = false;
+     XrTime          _pendingRefSpaceChangeTime = 0;
+ 
++    // App controller input bridge (QuestInputSampler.h).
++    uint32_t        _questInputGeneration = 0;
++    int32_t         _questProfileRefreshIn = 0;  // frames until the profile is re-read
++    std::unique_ptr<quest_input::DiagLayer> _questDiagPanel;
++
+     // Per-eye swapchains (index 0 = left, 1 = right)
+     VROOpenXRSwapchain _swapchains[2];
+ 

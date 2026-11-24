@@ -1,0 +1,67 @@
+{
+  "expo": {
+    "name": "i2 Companion",
+    "slug": "i2-companion",
+    "version": "1.0.0",
+    "scheme": "i2-companion",
+    "platforms": ["web", "android", "ios"],
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#05070d",
+          "image": "./assets/splash.png",
+          "dark": {
+            "image": "./assets/images/splash-icon-dark.png",
+            "backgroundColor": "#05070d"
+          },
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "style": "dark",
+          "enforceContrast": false
+        }
+      ],
+      "expo-system-ui",
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-audio"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true,
+      "tsconfigPaths": true
+    },
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mrdj.i2companion"
+    },
+    "android": {
+      "package": "com.mrdj.i2companion",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#05070d"
+      },
+      "backgroundColor": "#05070d"
+    },
+    "backgroundColor": "#05070d",
+    "androidStatusBar": {
+      "backgroundColor": "#05070d",
+      "barStyle": "light-content",
+      "translucent": false
+    }
+  }
+}

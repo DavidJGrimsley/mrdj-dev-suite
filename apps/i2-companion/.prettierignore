@@ -1,0 +1,8 @@
+node_modules/
+.expo/
+dist/
+android/
+ios/
+native/
+modules/*/native/build/
+uniwind-types.d.ts

@@ -1,0 +1,15 @@
+// Windows: CMake object paths beneath a long checkout path exceed the 260-character limit
+// that the NDK's bundled Ninja enforces. Stage every native build in a short directory
+// (QUEST_CXX_ROOT, default %TEMP%\nrq-cxx). Build directories stay in place: React Native
+// codegen requires them on the same drive as the sources.
+// Usage: gradlew.bat <tasks> -I ..\tools\quest\short-cmake.gradle
+def root = new File(System.getenv('QUEST_CXX_ROOT') ?: new File(System.getProperty('java.io.tmpdir'), 'nrq-cxx').path)
+
+gradle.beforeProject { project ->
+    ['com.android.application', 'com.android.library'].each { id ->
+        project.plugins.withId(id) {
+            project.android.externalNativeBuild.cmake.buildStagingDirectory =
+                new File(root, project.name.replaceAll('[^A-Za-z0-9]', '').take(24))
+        }
+    }
+}

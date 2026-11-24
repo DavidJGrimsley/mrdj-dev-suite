@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/ReactVision/virocore.git",
+  "tag": "v3.0.3",
+  "revision": "23710240d2cab5d4e866f3dba44ef568d8e563b4",
+  "ndk": "27.1.12297006",
+  "patches": [
+    "0001-openxr-pointer-depth-origin-reticle.patch",
+    "0002-openxr-quest-panel-layer.patch",
+    "0003-openxr-quest-input-sampler.patch",
+    "0004-openxr-quest-cockpit-slots.patch"
+  ],
+  "stockAarSha256": "cd654a19066b50c2b408c64c3ae2a6d1529ebd1c5dd3238a026bf4720727bdc7",
+  "stockRendererSha256": "2b3280493c4a788cc14319e263f1c2769bf3e54b22c9e4cc7673319967ccacd4"
+}

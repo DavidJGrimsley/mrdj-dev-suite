@@ -1,0 +1,504 @@
+From: David Grimsley <DavidJGrimsley@gmail.com>
+Subject: [PATCH] OpenXR: submit the app menu as a quad layer under the
+ projection layer
+
+The Quest menu is rasterized by the app (QuestPanelModule, Android Canvas)
+and drawn by the compositor as an XrCompositionLayerQuad, adapted from the
+Medical Viewer compositor panel. Viro draws a depth-writing, zero-alpha quad
+at the same pose, so the panel shows through that hole and rays, hit dots and
+models in front of it still occlude it. Hit targets stay Viro quads.
+
+- QuestPanelLayer.h (new, app-owned): JNI entry points for
+  expo.modules.questpanel.QuestPanelModule (nativeVersion 2, nativeStatus,
+  nativeHide, nativePose, nativeDraw with pixels and pose set together, and
+  nativeRefSpaceEpoch) and the render-thread swapchain upload. GL state Viro
+  owns is restored.
+- The layer is prepared before eye rendering and added before the projection
+  layer each rendered frame, and destroyed with the session swapchains.
+- Without passthrough the projection layer is opaque and would hide the
+  underlay. While the panel is submitted, the OpenXR display clears alpha to 0
+  and the projection layer is blended by source alpha as premultiplied colour:
+  HDR tone-mapping preserves the zero-alpha hole while keeping PBR and Hable
+  tone mapping active on 3D models. Passthrough flags are unchanged.
+- The per-eye clear restores the colour, depth and stencil write masks, so
+  Viro's cached masks match GL after the clear (from the Medical Viewer
+  compositor build).
+- XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING for LOCAL space increments
+  the reference-space epoch once its changeTime is reached so the app can
+  align cleanly with Horizon system recenter without snapping back.
+
+The OpenXR pointer patch (0001) is unchanged and applies first.
+diff --git a/android/sharedCode/src/main/cpp/QuestPanelLayer.h b/android/sharedCode/src/main/cpp/QuestPanelLayer.h
+new file mode 100644
+index 0000000..7538bf1
+--- /dev/null
++++ b/android/sharedCode/src/main/cpp/QuestPanelLayer.h
+@@ -0,0 +1,307 @@
++// App-owned addition to ReactVision/virocore v3.0.3 (MIT) for the Neo Rock 'Em
++// Sock 'Em Robots Quest menu. Adapted from the Medical Viewer compositor panel
++// (native/quest-compositor/MedicalQuestPanel.h in DavidJGrimsley's
++// medical-viewer, same author). Included once, by VROSceneRendererOpenXR.cpp.
++//
++// expo.modules.questpanel.QuestPanelModule rasterizes the compact button card
++// (underlay) and the floating transparent branded title (overlay) with Android
++// Canvas and hands the RGBA pixels, physical size and pose here. The render
++// thread uploads revisions into OpenXR swapchains and submits the card under
++// the projection layer (revealed through a depth-only zero-alpha quad hole)
++// and the transparent title over the scene.
++#pragma once
++#include <jni.h>
++#include <algorithm>
++#include <atomic>
++#include <cmath>
++#include <cstdint>
++#include <cstring>
++#include <mutex>
++#include <vector>
++#include <android/log.h>
++
++namespace quest_panel {
++// Bumped when the JNI contract changes; QuestPanelModule checks it.
++constexpr int kVersion = 3;
++
++static std::atomic<int> refSpaceEpoch{0};
++inline void bumpRefSpaceEpoch() { refSpaceEpoch.fetch_add(1, std::memory_order_relaxed); }
++
++struct QuadState {
++    std::mutex mutex;
++    bool visible = false;
++    int status = 0;  // 0 hidden or not yet submitted, 1 submitted, -1 failed
++    uint64_t revision = 0;
++    int width = 0, height = 0;
++    float widthM = 1.6f, heightM = 0.9f;
++    XrPosef pose = {{0, 0, 0, 1}, {0, 0, -1.5f}};
++    std::vector<uint8_t> pixels;
++    std::vector<uint8_t> scratch;
++};
++static QuadState state;
++static QuadState titleState;
++
++static bool readPose(JNIEnv *env, jfloatArray values, XrPosef *pose) {
++    if (values == nullptr || env->GetArrayLength(values) != 7) return false;
++    float p[7];
++    env->GetFloatArrayRegion(values, 0, 7, p);
++    for (float v : p) {
++        if (!std::isfinite(v)) return false;
++    }
++    const float norm = std::sqrt(p[3] * p[3] + p[4] * p[4] + p[5] * p[5] + p[6] * p[6]);
++    if (norm < 0.5f || norm > 1.5f) return false;
++    *pose = {{p[3] / norm, p[4] / norm, p[5] / norm, p[6] / norm}, {p[0], p[1], p[2]}};
++    return true;
++}
++
++static jboolean updateQuadPose(JNIEnv *env, QuadState &s, jfloatArray pose) {
++    XrPosef next;
++    if (!readPose(env, pose, &next)) return JNI_FALSE;
++    std::lock_guard<std::mutex> lock(s.mutex);
++    s.pose = next;
++    return JNI_TRUE;
++}
++
++static jboolean writeQuadDraw(JNIEnv *env, QuadState &s, jbyteArray rgba, jint width, jint height,
++                              jfloat widthM, jfloat heightM, jfloatArray pose) {
++    XrPosef next;
++    const size_t totalBytes = (width > 0 && height > 0)
++        ? static_cast<size_t>(width) * static_cast<size_t>(height) * 4u
++        : 0u;
++    if (rgba == nullptr || width < 1 || height < 1 || width > 4096 || height > 4096 ||
++        static_cast<size_t>(env->GetArrayLength(rgba)) != totalBytes ||
++        !std::isfinite(widthM) || widthM <= 0 || widthM > 2 ||
++        !std::isfinite(heightM) || heightM <= 0 || heightM > 2 ||
++        !readPose(env, pose, &next)) return JNI_FALSE;
++    std::lock_guard<std::mutex> lock(s.mutex);
++    s.width = width; s.height = height;
++    s.widthM = widthM; s.heightM = heightM;
++    s.pose = next;
++    s.pixels.resize(static_cast<size_t>(width) * height * 4);
++    s.scratch.resize(totalBytes);
++    env->GetByteArrayRegion(rgba, 0, static_cast<jsize>(totalBytes),
++                            reinterpret_cast<jbyte *>(s.scratch.data()));
++    // Canvas has a top-left origin; OpenGL textures have a bottom-left origin.
++    const size_t rowBytes = static_cast<size_t>(width) * 4u;
++    for (int y = 0; y < height; ++y) {
++        std::memcpy(s.pixels.data() + static_cast<size_t>(height - y - 1) * rowBytes,
++                    s.scratch.data() + static_cast<size_t>(y) * rowBytes,
++                    rowBytes);
++    }
++    s.visible = true; ++s.revision;
++    return JNI_TRUE;
++}
++
++class QuadLayer {
++    XrSwapchain _swapchain = XR_NULL_HANDLE;
++    std::vector<XrSwapchainImageOpenGLESKHR> _images;
++    uint64_t _revision = 0;
++    int _width = 0, _height = 0;
++    XrCompositionLayerQuad _layer = { XR_TYPE_COMPOSITION_LAYER_QUAD };
++
++    void destroySwapchain() {
++        if (_swapchain) xrDestroySwapchain(_swapchain);
++        _swapchain = XR_NULL_HANDLE;
++        _images.clear();
++        _revision = 0;
++    }
++
++public:
++    ~QuadLayer() { destroySwapchain(); }
++
++    // Returns the quad layer to submit this frame, or null when hidden.
++    const XrCompositionLayerBaseHeader *prepare(XrSession session, XrSpace space, QuadState &s,
++                                                const char *logTag) {
++        std::lock_guard<std::mutex> lock(s.mutex);
++        if (!s.visible || s.pixels.empty() || s.status < 0) return nullptr;
++        if (_swapchain && (_width != s.width || _height != s.height)) destroySwapchain();
++        if (!_swapchain) {
++            uint32_t count = 0;
++            if (XR_FAILED(xrEnumerateSwapchainFormats(session, 0, &count, nullptr))) return nullptr;
++            std::vector<int64_t> formats(count);
++            if (XR_FAILED(xrEnumerateSwapchainFormats(session, count, &count, formats.data()))) return nullptr;
++            // Canvas pixels are sRGB; an sRGB swapchain lets the compositor decode them.
++            const int64_t format = std::find(formats.begin(), formats.end(), GL_SRGB8_ALPHA8) != formats.end()
++                ? GL_SRGB8_ALPHA8 : GL_RGBA8;
++            if (std::find(formats.begin(), formats.end(), format) == formats.end()) {
++                s.status = -1; return nullptr;
++            }
++            XrSwapchainCreateInfo info = { XR_TYPE_SWAPCHAIN_CREATE_INFO };
++            info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
++            info.format = format; info.sampleCount = 1;
++            info.width = s.width; info.height = s.height;
++            info.faceCount = 1; info.arraySize = 1; info.mipCount = 1;
++            if (XR_FAILED(xrCreateSwapchain(session, &info, &_swapchain))) {
++                _swapchain = XR_NULL_HANDLE;
++                s.status = -1; return nullptr;
++            }
++            _width = s.width; _height = s.height;
++            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, 0, &count, nullptr))) {
++                destroySwapchain(); return nullptr;
++            }
++            _images.resize(count, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});
++            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, count, &count,
++                reinterpret_cast<XrSwapchainImageBaseHeader *>(_images.data())))) {
++                destroySwapchain(); return nullptr;
++            }
++        }
++        if (_revision != s.revision) {
++            uint32_t index = 0;
++            XrSwapchainImageAcquireInfo acquire = {XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
++            if (XR_FAILED(xrAcquireSwapchainImage(_swapchain, &acquire, &index))) return nullptr;
++            XrSwapchainImageWaitInfo wait = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
++            wait.timeout = XR_INFINITE_DURATION;
++            if (XR_FAILED(xrWaitSwapchainImage(_swapchain, &wait))) {
++                XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
++                xrReleaseSwapchainImage(_swapchain, &release);
++                return nullptr;
++            }
++            // Preserve Viro's GL state; it owns this context.
++            GLint texture = 0, arrayTexture = 0, alignment = 0, unpackBuffer = 0;
++            GLint rowLength = 0, skipRows = 0, skipPixels = 0;
++            glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
++            glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &arrayTexture);
++            glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
++            glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
++            glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
++            glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skipRows);
++            glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skipPixels);
++            // Attribute errors to this upload, rather than to an earlier scene draw.
++            for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
++            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
++            glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
++            glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
++            // Quest can return array textures even when swapchain arraySize is one.
++            glBindTexture(GL_TEXTURE_2D, _images[index].image);
++            GLenum uploadError = glGetError();
++            GLenum target = GL_TEXTURE_2D;
++            if (uploadError == GL_INVALID_OPERATION) {
++                target = GL_TEXTURE_2D_ARRAY;
++                glBindTexture(target, _images[index].image);
++                uploadError = glGetError();
++            }
++            if (uploadError == GL_NO_ERROR) {
++                if (target == GL_TEXTURE_2D_ARRAY) {
++                    glTexSubImage3D(target, 0, 0, 0, 0, _width, _height, 1,
++                                    GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                } else {
++                    glTexSubImage2D(target, 0, 0, 0, _width, _height,
++                                    GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                }
++                uploadError = glGetError();
++            }
++            glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
++            glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
++            glPixelStorei(GL_UNPACK_SKIP_ROWS, skipRows);
++            glPixelStorei(GL_UNPACK_SKIP_PIXELS, skipPixels);
++            glBindTexture(GL_TEXTURE_2D, texture);
++            glBindTexture(GL_TEXTURE_2D_ARRAY, arrayTexture);
++            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
++            glFlush();
++            XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
++            if (XR_FAILED(xrReleaseSwapchainImage(_swapchain, &release))) return nullptr;
++            if (uploadError != GL_NO_ERROR) {
++                __android_log_print(ANDROID_LOG_ERROR, logTag,
++                    "Panel upload failed: GL=0x%x target=0x%x", uploadError, target);
++                s.status = -1;
++                return nullptr;
++            }
++            // Once per new image, never per frame.
++            __android_log_print(ANDROID_LOG_INFO, logTag,
++                "Panel uploaded: revision=%llu %dx%d %.2fx%.2fm target=0x%x",
++                static_cast<unsigned long long>(s.revision), _width, _height,
++                s.widthM, s.heightM, target);
++            _revision = s.revision;
++        }
++        _layer.space = space;
++        // Canvas bitmaps are premultiplied, which is the compositor's default.
++        _layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
++        _layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
++        _layer.subImage.swapchain = _swapchain;
++        _layer.subImage.imageRect = {{0, 0}, {_width, _height}};
++        _layer.subImage.imageArrayIndex = 0;
++        _layer.pose = s.pose;
++        _layer.size = {s.widthM, s.heightM};
++        s.status = 1;
++        return reinterpret_cast<const XrCompositionLayerBaseHeader *>(&_layer);
++    }
++};
++}  // namespace quest_panel
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeVersion(JNIEnv *, jobject) {
++    return quest_panel::kVersion;
++}
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeRefSpaceEpoch(JNIEnv *, jobject) {
++    return quest_panel::refSpaceEpoch.load(std::memory_order_relaxed);
++}
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeStatus(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::state.mutex);
++    return quest_panel::state.status;
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeHide(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::state.mutex);
++    quest_panel::state.visible = false;
++    quest_panel::state.status = 0;
++}
++
++// Moves the shown pixels without a new upload.
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativePose(JNIEnv *env, jobject, jfloatArray pose) {
++    return quest_panel::updateQuadPose(env, quest_panel::state, pose);
++}
++
++// Pixels and pose change together, so new art never appears at an old pose.
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeDraw(
++        JNIEnv *env, jobject, jbyteArray rgba, jint width, jint height, jfloat widthM,
++        jfloat heightM, jfloatArray pose) {
++    return quest_panel::writeQuadDraw(env, quest_panel::state, rgba, width, height, widthM, heightM, pose);
++}
++
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitleStatus(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::titleState.mutex);
++    return quest_panel::titleState.status;
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitleHide(JNIEnv *, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::titleState.mutex);
++    quest_panel::titleState.visible = false;
++    quest_panel::titleState.status = 0;
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitlePose(JNIEnv *env, jobject, jfloatArray pose) {
++    return quest_panel::updateQuadPose(env, quest_panel::titleState, pose);
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitleDraw(
++        JNIEnv *env, jobject, jbyteArray rgba, jint width, jint height, jfloat widthM,
++        jfloat heightM, jfloatArray pose) {
++    return quest_panel::writeQuadDraw(env, quest_panel::titleState, rgba, width, height, widthM, heightM, pose);
++}
++
++class QuestPanelLayer {
++    quest_panel::QuadLayer _card;
++    quest_panel::QuadLayer _title;
++
++public:
++    const XrCompositionLayerBaseHeader *prepare(XrSession session, XrSpace space) {
++        return _card.prepare(session, space, quest_panel::state, "QuestPanelLayer");
++    }
++
++    const XrCompositionLayerBaseHeader *prepareTitle(XrSession session, XrSpace space) {
++        return _title.prepare(session, space, quest_panel::titleState, "QuestTitleLayer");
++    }
++};
+diff --git a/android/sharedCode/src/main/cpp/VRODisplayOpenGLOpenXR.h b/android/sharedCode/src/main/cpp/VRODisplayOpenGLOpenXR.h
+index e8ff8cf..08bc444 100644
+--- a/android/sharedCode/src/main/cpp/VRODisplayOpenGLOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VRODisplayOpenGLOpenXR.h
+@@ -98,11 +98,24 @@ public:
+                    _viewport.getWidth(), _viewport.getHeight());
+         glScissor(_viewport.getX(), _viewport.getY(),
+                   _viewport.getWidth(), _viewport.getHeight());
+-        // Force the colour write mask fully on (incl. alpha) — Viro's cached state
+-        // can leave the alpha channel masked off, which would skip the alpha clear.
++        // Clear all channels without desynchronizing Viro's cached write masks
++        // (from the Medical Viewer compositor build). Viro skips a glColorMask
++        // call when its cache already matches, so the masks are restored here.
++        GLboolean colorMask[4], depthMask;
++        GLint stencilFrontMask, stencilBackMask;
++        glGetBooleanv(GL_COLOR_WRITEMASK, colorMask);
++        glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
++        glGetIntegerv(GL_STENCIL_WRITEMASK, &stencilFrontMask);
++        glGetIntegerv(GL_STENCIL_BACK_WRITEMASK, &stencilBackMask);
+         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
++        glDepthMask(GL_TRUE);
++        glStencilMask(~0u);
+         glClearColor(0.0f, 0.0f, 0.0f, _clearAlpha);
+         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
++        glColorMask(colorMask[0], colorMask[1], colorMask[2], colorMask[3]);
++        glDepthMask(depthMask);
++        glStencilMaskSeparate(GL_FRONT, (GLuint) stencilFrontMask);
++        glStencilMaskSeparate(GL_BACK, (GLuint) stencilBackMask);
+     }
+ 
+ private:
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+index d1c6316..f68af1d 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+@@ -5,6 +5,7 @@
+ // MIT License — see LICENSE file.
+ 
+ #include "VROSceneRendererOpenXR.h"
++#include "QuestPanelLayer.h"
+ 
+ #include <android/log.h>
+ #include <sys/prctl.h>
+@@ -875,6 +876,8 @@ VROSceneRendererOpenXR::performARHitTestWithRay(VROVector3f ray) {
+ // ──────────────────────────────────────────────────────────────────────────────
+ 
+ void VROSceneRendererOpenXR::destroySwapchains() {
++    // The panel swapchain belongs to this session too.
++    _questPanel.reset();
+     for (auto &sc : _swapchains) {
+         if (sc.handle != XR_NULL_HANDLE) {
+             xrDestroySwapchain(sc.handle);
+@@ -1140,9 +1143,17 @@ void VROSceneRendererOpenXR::pollEvents() {
+                 handleSessionStateChange(stateEvent);
+                 break;
+             }
+-            case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
+-                ALOGV("Reference space change pending — content may shift");
++            case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING: {
++                auto *refEvent =
++                    reinterpret_cast<XrEventDataReferenceSpaceChangePending *>(&event);
++                ALOGV("Reference space change pending (type=%d) — content may shift",
++                      (int)refEvent->referenceSpaceType);
++                if (refEvent->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
++                    _pendingRefSpaceChange = true;
++                    _pendingRefSpaceChangeTime = refEvent->changeTime;
++                }
+                 break;
++            }
+             case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING:
+                 ALOGE("Instance loss pending — shutting down");
+                 _running = false;
+@@ -1223,6 +1234,10 @@ void VROSceneRendererOpenXR::renderFrame() {
+     XrFrameState    frameState= { XR_TYPE_FRAME_STATE };
+     XR_CHECK(xrWaitFrame(_session, &waitInfo, &frameState));
+     _lastPredictedDisplayTime = frameState.predictedDisplayTime;
++    if (_pendingRefSpaceChange && frameState.predictedDisplayTime >= _pendingRefSpaceChangeTime) {
++        _pendingRefSpaceChange = false;
++        quest_panel::bumpRefSpaceEpoch();
++    }
+ 
+     // ── Begin frame ───────────────────────────────────────────────────────────
+     XrFrameBeginInfo beginInfo = { XR_TYPE_FRAME_BEGIN_INFO };
+@@ -1254,6 +1269,19 @@ void VROSceneRendererOpenXR::renderFrame() {
+         (viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) &&
+         (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+ 
++    // App panel underlay (QuestPanelLayer.h). Prepare before rendering eyes so
++    // the OpenXR display clears alpha to 0 while the panel is submitted, allowing
++    // HDR tone-mapping (VROToneMappingRenderPass) to preserve the zero-alpha hole.
++    const XrCompositionLayerBaseHeader *questPanel = nullptr;
++    if (viewsValid && frameState.shouldRender) {
++        if (!_questPanel) _questPanel.reset(new QuestPanelLayer());
++        questPanel = _questPanel->prepare(_session, _stageSpace);
++    }
++    if (_openxrDriver) {
++        auto display = _openxrDriver->getOpenXRDisplay();
++        if (display) display->setClearAlpha((_passthroughEnabled || questPanel) ? 0.0f : 1.0f);
++    }
++
+     if (viewsValid && frameState.shouldRender) {
+         // ── Prepare the Viro renderer (once per frame, before any eye render) ─
+         // Use the left eye pose/fov to drive scene-level preparation (culling,
+@@ -1335,6 +1363,9 @@ void VROSceneRendererOpenXR::renderFrame() {
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayerComp));
+     }
+ 
++    // App panel underlay (QuestPanelLayer.h), submitted under the projection layer.
++    if (questPanel) layers.push_back(questPanel);
++
+     // Projection layer (3D scene)
+     XrCompositionLayerProjection projLayer = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
+     if (viewsValid && frameState.shouldRender) {
+@@ -1348,10 +1379,23 @@ void VROSceneRendererOpenXR::renderFrame() {
+         if (_passthroughEnabled) {
+             projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT |
+                                    XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
++        } else if (questPanel) {
++            // Fully virtual: the eye buffer clears opaque, which would hide the
++            // underlay. Blend by source alpha only while the panel is submitted,
++            // and treat colour as premultiplied: where alpha is 1 the result is
++            // the opaque frame, and only the zero-alpha panel hole changes.
++            projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+         }
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&projLayer));
+     }
+ 
++    // Floating transparent branded title overlay (QuestPanelLayer.h), over the scene.
++    const XrCompositionLayerBaseHeader *questTitlePanel = nullptr;
++    if (viewsValid && frameState.shouldRender && _questPanel) {
++        questTitlePanel = _questPanel->prepareTitle(_session, _stageSpace);
++    }
++    if (questTitlePanel) layers.push_back(questTitlePanel);
++
+     XrFrameEndInfo endInfo = { XR_TYPE_FRAME_END_INFO };
+     endInfo.displayTime          = frameState.predictedDisplayTime;
+     // Passthrough is supplied as a composition layer (underlay) beneath the
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+index e0a125b..d7f5aa9 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+@@ -49,6 +49,7 @@ class VRODisplayOpenGLOpenXR;
+ class VROARSessionOpenXR;
+ class VROSceneController;
+ class VRONode;
++class QuestPanelLayer;
+ 
+ namespace gvr { class AudioApi; }
+ 
+@@ -167,6 +168,11 @@ private:
+     XrBoundaryVisibilityMETA _boundaryVisibility = XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META;
+     uint32_t        _boundaryRequestCooldown = 0;  // frames until the next request
+ 
++    // App menu panel, an XrCompositionLayerQuad under the projection layer.
++    std::unique_ptr<QuestPanelLayer> _questPanel;
++    bool            _pendingRefSpaceChange = false;
++    XrTime          _pendingRefSpaceChangeTime = 0;
++
+     // Per-eye swapchains (index 0 = left, 1 = right)
+     VROOpenXRSwapchain _swapchains[2];
+ 

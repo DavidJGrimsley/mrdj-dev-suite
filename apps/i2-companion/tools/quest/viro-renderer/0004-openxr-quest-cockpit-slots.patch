@@ -1,0 +1,1570 @@
+diff --git a/ViroRenderer/VROToneMappingRenderPass.cpp b/ViroRenderer/VROToneMappingRenderPass.cpp
+index b8b2f6a..7679b73 100644
+--- a/ViroRenderer/VROToneMappingRenderPass.cpp
++++ b/ViroRenderer/VROToneMappingRenderPass.cpp
+@@ -199,7 +199,10 @@ void VROToneMappingRenderPass::render(std::shared_ptr<VROScene> scene,
+ 
+     pglpush("Tone Mapping");
+     driver->bindRenderTarget(target, VRORenderTargetUnbindOp::Invalidate);
+-    _postProcess->blit({ hdrInput, toneMappingMask }, driver);
++    _postProcess->begin(driver);
++    driver->setBlendingMode(VROBlendMode::None);
++    _postProcess->blitOpt({ hdrInput, toneMappingMask }, driver);
++    _postProcess->end(driver);
+     pglpop();
+ }
+ 
+diff --git a/android/sharedCode/src/main/cpp/QuestPanelLayer.h b/android/sharedCode/src/main/cpp/QuestPanelLayer.h
+index 7538bf1..56b78c8 100644
+--- a/android/sharedCode/src/main/cpp/QuestPanelLayer.h
++++ b/android/sharedCode/src/main/cpp/QuestPanelLayer.h
+@@ -1,45 +1,236 @@
+-// App-owned addition to ReactVision/virocore v3.0.3 (MIT) for the Neo Rock 'Em
+-// Sock 'Em Robots Quest menu. Adapted from the Medical Viewer compositor panel
+-// (native/quest-compositor/MedicalQuestPanel.h in DavidJGrimsley's
+-// medical-viewer, same author). Included once, by VROSceneRendererOpenXR.cpp.
++// App-owned OpenXR multi-window compositor bridge for ReactVision/virocore v3.0.3 (MIT).
++// Included once by VROSceneRendererOpenXR.cpp.
+ //
+-// expo.modules.questpanel.QuestPanelModule rasterizes the compact button card
+-// (underlay) and the floating transparent branded title (overlay) with Android
+-// Canvas and hands the RGBA pixels, physical size and pose here. The render
+-// thread uploads revisions into OpenXR swapchains and submits the card under
+-// the projection layer (revealed through a depth-only zero-alpha quad hole)
+-// and the transparent title over the scene.
++// Supports up to kMaxWindowSlots (16) dynamic floating OpenXR XrCompositionLayerQuad
++// underlays plus 1 dedicated overlay layer, all sharing Viro's single OpenXR session
++// and render-thread GL context.
+ #pragma once
+ #include <jni.h>
++#include <android/bitmap.h>
++#include <android/log.h>
+ #include <algorithm>
+ #include <atomic>
+ #include <cmath>
+ #include <cstdint>
++#include <cstdio>
+ #include <cstring>
++#include <memory>
+ #include <mutex>
++#include <string>
+ #include <vector>
+-#include <android/log.h>
++
++#include "VRONode.h"
+ 
+ namespace quest_panel {
+-// Bumped when the JNI contract changes; QuestPanelModule checks it.
+-constexpr int kVersion = 3;
++constexpr int kVersion = 5;
++constexpr int kMaxWindowSlots = 16;
++constexpr int kOverlaySlotIndex = kMaxWindowSlots;
++constexpr int kTotalSlots = kMaxWindowSlots + 1;  // 0..15 windows, 16=overlay
++constexpr uint64_t kSwapchainBytesBudget = 192ULL * 1024ULL * 1024ULL;
+ 
+ static std::atomic<int> refSpaceEpoch{0};
+ inline void bumpRefSpaceEpoch() { refSpaceEpoch.fetch_add(1, std::memory_order_relaxed); }
+ 
++struct SubmittedWindowDiag {
++    int slot = -1;
++    std::string nodeTag;
++    uint64_t swapchain = 0;
++    int contentW = 0;
++    int contentH = 0;
++    int bucketW = 0;
++    int bucketH = 0;
++    float widthM = 0.0f;
++    float heightM = 0.0f;
++    XrPosef pose = {{0, 0, 0, 1}, {0, 0, 0}};
++};
++
++struct RuntimeCaps {
++    std::mutex mutex;
++    std::string systemName = "OpenXR";
++    uint32_t maxLayerCount = 16;
++    uint32_t maxSwapchainWidth = 4096;
++    uint32_t maxSwapchainHeight = 4096;
++    uint32_t sessionGeneration = 0;
++    uint64_t frameNumber = 0;
++    uint64_t lastLoggedFrame = 0;
++    int lastSessionState = 0;
++    int lastEndFrameResult = 0;
++    int lastSwapchainResult = 0;
++    int submittedLayerCount = 0;
++    int activeWindowCount = 0;
++    int activeSwapchainCount = 0;
++    uint64_t activeSwapchainBytes = 0;
++    int lastReservedLayers = 2;
++    bool initialized = false;
++    bool diagLoggingEnabled = true;
++    std::vector<SubmittedWindowDiag> lastSubmittedLayers;
++};
++static RuntimeCaps caps;
++
++inline const char *sessionStateName(int state) {
++    switch (state) {
++        case 1: return "IDLE";
++        case 2: return "READY";
++        case 3: return "SYNCHRONIZED";
++        case 4: return "VISIBLE";
++        case 5: return "FOCUSED";
++        case 6: return "STOPPING";
++        case 7: return "LOSS_PENDING";
++        case 8: return "EXITING";
++        default: return "UNKNOWN";
++    }
++}
++
++inline std::string jsonEscape(const std::string &in) {
++    std::string out;
++    out.reserve(in.size() + 4);
++    for (char c : in) {
++        if (c == '"' || c == '\\') {
++            out.push_back('\\');
++            out.push_back(c);
++        } else if (static_cast<unsigned char>(c) >= 0x20) {
++            out.push_back(c);
++        }
++    }
++    return out;
++}
++
++inline void setSystemCapabilities(const char *systemName,
++                                  uint32_t maxLayerCount,
++                                  uint32_t maxSwapchainWidth,
++                                  uint32_t maxSwapchainHeight) {
++    std::lock_guard<std::mutex> lock(caps.mutex);
++    caps.systemName = (systemName && systemName[0]) ? systemName : "OpenXR";
++    caps.maxLayerCount = maxLayerCount > 0 ? maxLayerCount : 16;
++    caps.maxSwapchainWidth = maxSwapchainWidth > 0 ? maxSwapchainWidth : 4096;
++    caps.maxSwapchainHeight = maxSwapchainHeight > 0 ? maxSwapchainHeight : 4096;
++    caps.initialized = true;
++}
++
++inline void beginSessionCaps() {
++    std::lock_guard<std::mutex> lock(caps.mutex);
++    caps.sessionGeneration += 1;
++    caps.frameNumber = 0;
++    caps.lastLoggedFrame = 0;
++    caps.lastSessionState = 0;
++    caps.lastEndFrameResult = 0;
++    caps.lastSwapchainResult = 0;
++    caps.submittedLayerCount = 0;
++    caps.activeWindowCount = 0;
++    caps.activeSwapchainCount = 0;
++    caps.activeSwapchainBytes = 0;
++    caps.lastSubmittedLayers.clear();
++}
++
++inline void setDiagnosticsEnabled(bool enabled) {
++    std::lock_guard<std::mutex> lock(caps.mutex);
++    caps.diagLoggingEnabled = enabled;
++}
++
++inline void recordFrameTelemetry(int endFrameResult,
++                                 int sessionState,
++                                 int submittedLayers,
++                                 int activeWindows,
++                                 int activeSwapchains,
++                                 uint64_t swapchainBytes,
++                                 int reservedLayers,
++                                 const std::vector<SubmittedWindowDiag> *diags) {
++    bool shouldLog = false;
++    uint64_t frame = 0;
++    std::vector<SubmittedWindowDiag> logCopy;
++    {
++        std::lock_guard<std::mutex> lock(caps.mutex);
++        caps.frameNumber += 1;
++        frame = caps.frameNumber;
++        caps.lastSessionState = sessionState;
++        caps.lastEndFrameResult = endFrameResult;
++        caps.submittedLayerCount = submittedLayers;
++        caps.activeWindowCount = activeWindows;
++        caps.activeSwapchainCount = activeSwapchains;
++        caps.activeSwapchainBytes = swapchainBytes;
++        caps.lastReservedLayers = reservedLayers;
++        if (diags) {
++            caps.lastSubmittedLayers = *diags;
++        } else {
++            caps.lastSubmittedLayers.clear();
++        }
++        const bool isFocused = (sessionState == 5 /* XR_SESSION_STATE_FOCUSED */);
++        if (caps.diagLoggingEnabled && isFocused &&
++            (caps.lastLoggedFrame == 0 || (frame - caps.lastLoggedFrame) >= 90 ||
++             caps.lastSubmittedLayers.size() >= 2 && (frame - caps.lastLoggedFrame) >= 45)) {
++            caps.lastLoggedFrame = frame;
++            shouldLog = true;
++            logCopy = caps.lastSubmittedLayers;
++        }
++    }
++    if (shouldLog) {
++        std::string summary;
++        for (const auto &d : logCopy) {
++            char item[256];
++            std::snprintf(
++                item, sizeof(item),
++                " [slot=%d tag=%s sc=0x%llx px=%dx%d bucket=%dx%d m=%.2fx%.2f pos=(%.3f,%.3f,%.3f) ori=(%.3f,%.3f,%.3f,%.3f)]",
++                d.slot, d.nodeTag.c_str(), static_cast<unsigned long long>(d.swapchain),
++                d.contentW, d.contentH, d.bucketW, d.bucketH, d.widthM, d.heightM,
++                d.pose.position.x, d.pose.position.y, d.pose.position.z,
++                d.pose.orientation.x, d.pose.orientation.y, d.pose.orientation.z, d.pose.orientation.w);
++            summary += item;
++        }
++        __android_log_print(
++            ANDROID_LOG_INFO,
++            "QuestCompositorDiag",
++            "xrEndFrame res=%d state=%s frame=%llu layers=%d activeWin=%d swapchains=%d bytes=%llu%s",
++            endFrameResult, sessionStateName(sessionState),
++            static_cast<unsigned long long>(frame),
++            submittedLayers, activeWindows, activeSwapchains,
++            static_cast<unsigned long long>(swapchainBytes),
++            summary.c_str());
++    }
++}
++
++inline void recordSwapchainResult(int xrResult) {
++    std::lock_guard<std::mutex> lock(caps.mutex);
++    caps.lastSwapchainResult = xrResult;
++}
++
+ struct QuadState {
+     std::mutex mutex;
+     bool visible = false;
+-    int status = 0;  // 0 hidden or not yet submitted, 1 submitted, -1 failed
++    bool pendingDestroy = false;
++    int status = 0;  // 0 hidden/pending, 1 submitted, <0 failed
++    int lastError = 0;
+     uint64_t revision = 0;
+-    int width = 0, height = 0;
+-    float widthM = 1.6f, heightM = 0.9f;
++    int contentWidth = 0, contentHeight = 0;
++    int bucketWidth = 0, bucketHeight = 0;
++    float widthM = 0.9f, heightM = 0.6f;
+     XrPosef pose = {{0, 0, 0, 1}, {0, 0, -1.5f}};
++    std::string nodeTag;
+     std::vector<uint8_t> pixels;
+-    std::vector<uint8_t> scratch;
+ };
+-static QuadState state;
+-static QuadState titleState;
++static QuadState slots[kTotalSlots];
++
++inline QuadState *slotFor(jint slot) {
++    if (slot < 0 || slot >= kTotalSlots) return nullptr;
++    return &slots[slot];
++}
++
++inline void resetAllSlotsForSession() {
++    for (int i = 0; i < kTotalSlots; ++i) {
++        std::lock_guard<std::mutex> lock(slots[i].mutex);
++        slots[i].visible = false;
++        slots[i].pendingDestroy = false;
++        slots[i].status = 0;
++        slots[i].lastError = 0;
++        slots[i].revision = 0;
++        slots[i].contentWidth = 0;
++        slots[i].contentHeight = 0;
++        slots[i].bucketWidth = 0;
++        slots[i].bucketHeight = 0;
++        slots[i].nodeTag.clear();
++        slots[i].pixels.clear();
++        slots[i].pixels.shrink_to_fit();
++    }
++}
+ 
+ static bool readPose(JNIEnv *env, jfloatArray values, XrPosef *pose) {
+     if (values == nullptr || env->GetArrayLength(values) != 7) return false;
+@@ -54,179 +245,456 @@ static bool readPose(JNIEnv *env, jfloatArray values, XrPosef *pose) {
+     return true;
+ }
+ 
+-static jboolean updateQuadPose(JNIEnv *env, QuadState &s, jfloatArray pose) {
++static std::string readOptionalString(JNIEnv *env, jstring str) {
++    if (!str) return {};
++    const char *chars = env->GetStringUTFChars(str, nullptr);
++    if (!chars) return {};
++    std::string out(chars);
++    env->ReleaseStringUTFChars(str, chars);
++    return out;
++}
++
++static jboolean updateQuadPoseAndSize(JNIEnv *env, QuadState &s, jfloat widthM, jfloat heightM,
++                                      jfloatArray pose, jstring nodeTag) {
+     XrPosef next;
+     if (!readPose(env, pose, &next)) return JNI_FALSE;
++    const std::string tag = readOptionalString(env, nodeTag);
+     std::lock_guard<std::mutex> lock(s.mutex);
+     s.pose = next;
++    if (std::isfinite(widthM) && widthM >= 0.1f && widthM <= 4.0f) s.widthM = widthM;
++    if (std::isfinite(heightM) && heightM >= 0.1f && heightM <= 4.0f) s.heightM = heightM;
++    if (!tag.empty()) s.nodeTag = tag;
++    return JNI_TRUE;
++}
++
++static jboolean writeQuadBitmap(JNIEnv *env, QuadState &s, jobject bitmap,
++                                jint contentW, jint contentH, jint bucketW, jint bucketH,
++                                jfloat widthM, jfloat heightM, jfloatArray pose, jstring nodeTag) {
++    XrPosef next;
++    if (!bitmap || contentW < 1 || contentH < 1 || contentW > 4096 || contentH > 4096 ||
++        bucketW < contentW || bucketH < contentH || bucketW > 4096 || bucketH > 4096 ||
++        !std::isfinite(widthM) || widthM <= 0.05f || widthM > 4.0f ||
++        !std::isfinite(heightM) || heightM <= 0.05f || heightM > 4.0f ||
++        !readPose(env, pose, &next)) {
++        return JNI_FALSE;
++    }
++
++    AndroidBitmapInfo info = {};
++    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS) {
++        return JNI_FALSE;
++    }
++    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
++        static_cast<int>(info.width) < contentW ||
++        static_cast<int>(info.height) < contentH) {
++        return JNI_FALSE;
++    }
++
++    void *lockedPixels = nullptr;
++    if (AndroidBitmap_lockPixels(env, bitmap, &lockedPixels) != ANDROID_BITMAP_RESULT_SUCCESS ||
++        !lockedPixels) {
++        return JNI_FALSE;
++    }
++
++    const std::string tag = readOptionalString(env, nodeTag);
++    const size_t rowBytes = static_cast<size_t>(contentW) * 4u;
++    const size_t totalBytes = rowBytes * static_cast<size_t>(contentH);
++
++    {
++        std::lock_guard<std::mutex> lock(s.mutex);
++        s.contentWidth = contentW;
++        s.contentHeight = contentH;
++        s.bucketWidth = bucketW;
++        s.bucketHeight = bucketH;
++        s.widthM = widthM;
++        s.heightM = heightM;
++        s.pose = next;
++        s.nodeTag = tag;
++        s.pixels.resize(totalBytes);
++        const uint8_t *srcBase = static_cast<const uint8_t *>(lockedPixels);
++        for (int y = 0; y < contentH; ++y) {
++            const uint8_t *srcRow = srcBase + static_cast<size_t>(y) * info.stride;
++            uint8_t *dstRow = s.pixels.data() + static_cast<size_t>(contentH - y - 1) * rowBytes;
++            std::memcpy(dstRow, srcRow, rowBytes);
++        }
++        s.visible = true;
++        s.pendingDestroy = false;
++        s.status = 0;
++        s.lastError = 0;
++        ++s.revision;
++    }
++
++    AndroidBitmap_unlockPixels(env, bitmap);
+     return JNI_TRUE;
+ }
+ 
+-static jboolean writeQuadDraw(JNIEnv *env, QuadState &s, jbyteArray rgba, jint width, jint height,
+-                              jfloat widthM, jfloat heightM, jfloatArray pose) {
++static jboolean writeQuadDrawBytes(JNIEnv *env, QuadState &s, jbyteArray rgba, jint width, jint height,
++                                   jfloat widthM, jfloat heightM, jfloatArray pose) {
+     XrPosef next;
+     const size_t totalBytes = (width > 0 && height > 0)
+         ? static_cast<size_t>(width) * static_cast<size_t>(height) * 4u
+         : 0u;
+     if (rgba == nullptr || width < 1 || height < 1 || width > 4096 || height > 4096 ||
+         static_cast<size_t>(env->GetArrayLength(rgba)) != totalBytes ||
+-        !std::isfinite(widthM) || widthM <= 0 || widthM > 2 ||
+-        !std::isfinite(heightM) || heightM <= 0 || heightM > 2 ||
++        !std::isfinite(widthM) || widthM <= 0.05f || widthM > 4.0f ||
++        !std::isfinite(heightM) || heightM <= 0.05f || heightM > 4.0f ||
+         !readPose(env, pose, &next)) return JNI_FALSE;
++    std::vector<uint8_t> scratch(totalBytes);
++    env->GetByteArrayRegion(rgba, 0, static_cast<jsize>(totalBytes),
++                            reinterpret_cast<jbyte *>(scratch.data()));
+     std::lock_guard<std::mutex> lock(s.mutex);
+-    s.width = width; s.height = height;
+-    s.widthM = widthM; s.heightM = heightM;
++    s.contentWidth = width;
++    s.contentHeight = height;
++    s.bucketWidth = width;
++    s.bucketHeight = height;
++    s.widthM = widthM;
++    s.heightM = heightM;
+     s.pose = next;
+-    s.pixels.resize(static_cast<size_t>(width) * height * 4);
+-    s.scratch.resize(totalBytes);
+-    env->GetByteArrayRegion(rgba, 0, static_cast<jsize>(totalBytes),
+-                            reinterpret_cast<jbyte *>(s.scratch.data()));
+-    // Canvas has a top-left origin; OpenGL textures have a bottom-left origin.
++    s.pixels.resize(totalBytes);
+     const size_t rowBytes = static_cast<size_t>(width) * 4u;
+     for (int y = 0; y < height; ++y) {
+         std::memcpy(s.pixels.data() + static_cast<size_t>(height - y - 1) * rowBytes,
+-                    s.scratch.data() + static_cast<size_t>(y) * rowBytes,
++                    scratch.data() + static_cast<size_t>(y) * rowBytes,
+                     rowBytes);
+     }
+-    s.visible = true; ++s.revision;
++    s.visible = true;
++    s.pendingDestroy = false;
++    s.status = 0;
++    s.lastError = 0;
++    ++s.revision;
+     return JNI_TRUE;
+ }
+ 
++static std::shared_ptr<VRONode> findNodeByTagRecursive(const std::shared_ptr<VRONode> &node,
++                                                        const std::string &tag) {
++    if (!node || tag.empty()) return nullptr;
++    if (node->getTag() == tag) return node;
++    for (const auto &child : node->getChildNodes()) {
++        if (auto hit = findNodeByTagRecursive(child, tag)) return hit;
++    }
++    return nullptr;
++}
++
+ class QuadLayer {
+     XrSwapchain _swapchain = XR_NULL_HANDLE;
+     std::vector<XrSwapchainImageOpenGLESKHR> _images;
+-    uint64_t _revision = 0;
+-    int _width = 0, _height = 0;
++    std::vector<uint64_t> _imageRevisions;
++    std::weak_ptr<VRONode> _boundNode;
++    std::string _boundTag;
++    int _bucketW = 0, _bucketH = 0;
++    int _shrinkHysteresis = 0;
++    bool _submittedLastFrame = false;
+     XrCompositionLayerQuad _layer = { XR_TYPE_COMPOSITION_LAYER_QUAD };
+ 
+     void destroySwapchain() {
+-        if (_swapchain) xrDestroySwapchain(_swapchain);
++        if (_swapchain) {
++            xrDestroySwapchain(_swapchain);
++        }
+         _swapchain = XR_NULL_HANDLE;
+         _images.clear();
+-        _revision = 0;
++        _imageRevisions.clear();
++        _bucketW = 0;
++        _bucketH = 0;
++        _shrinkHysteresis = 0;
++        _submittedLastFrame = false;
+     }
+ 
+ public:
+     ~QuadLayer() { destroySwapchain(); }
+ 
+-    // Returns the quad layer to submit this frame, or null when hidden.
+-    const XrCompositionLayerBaseHeader *prepare(XrSession session, XrSpace space, QuadState &s,
+-                                                const char *logTag) {
++    bool hasSwapchain() const { return _swapchain != XR_NULL_HANDLE; }
++    uint64_t swapchainBytes() const {
++        if (!_swapchain || _bucketW <= 0 || _bucketH <= 0 || _images.empty()) return 0;
++        return static_cast<uint64_t>(_bucketW) * static_cast<uint64_t>(_bucketH) *
++               4ULL * static_cast<uint64_t>(_images.size());
++    }
++
++    // Must be called on the OpenXR render thread with EGL current.
++    void releaseNow() { destroySwapchain(); }
++
++    const XrCompositionLayerBaseHeader *prepare(
++            XrSession session,
++            XrSpace space,
++            QuadState &s,
++            const std::shared_ptr<VRONode> &sceneRoot,
++            uint64_t currentTotalBytes,
++            const char *logTag) {
+         std::lock_guard<std::mutex> lock(s.mutex);
+-        if (!s.visible || s.pixels.empty() || s.status < 0) return nullptr;
+-        if (_swapchain && (_width != s.width || _height != s.height)) destroySwapchain();
++        if (!s.visible || s.pixels.empty() || s.status < 0) {
++            // Destroy swapchain only after an xrEndFrame that did not reference it.
++            if (_swapchain && !_submittedLastFrame) {
++                destroySwapchain();
++                s.pendingDestroy = false;
++            } else if (_swapchain) {
++                s.pendingDestroy = true;
++            }
++            _submittedLastFrame = false;
++            return nullptr;
++        }
++
++        const bool mustGrow = _swapchain && (s.contentWidth > _bucketW || s.contentHeight > _bucketH ||
++                                             s.bucketWidth > _bucketW || s.bucketHeight > _bucketH);
++        bool shouldShrink = false;
++        if (_swapchain && !mustGrow && (s.bucketWidth < _bucketW || s.bucketHeight < _bucketH)) {
++            if (s.contentWidth * 4 <= _bucketW * 3 && s.contentHeight * 4 <= _bucketH * 3) {
++                if (++_shrinkHysteresis >= 18) {
++                    shouldShrink = true;
++                    _shrinkHysteresis = 0;
++                }
++            } else {
++                _shrinkHysteresis = 0;
++            }
++        } else {
++            _shrinkHysteresis = 0;
++        }
++
++        if (mustGrow || shouldShrink) {
++            destroySwapchain();
++        }
++
+         if (!_swapchain) {
++            const int targetW = std::max(s.contentWidth, s.bucketWidth);
++            const int targetH = std::max(s.contentHeight, s.bucketHeight);
++            const uint64_t estBytes = static_cast<uint64_t>(targetW) *
++                                      static_cast<uint64_t>(targetH) * 4ULL * 3ULL;
++            if (currentTotalBytes + estBytes > kSwapchainBytesBudget && currentTotalBytes > 0) {
++                __android_log_print(ANDROID_LOG_WARN, logTag,
++                    "Swapchain memory budget reached (%llu + %llu > %llu)",
++                    static_cast<unsigned long long>(currentTotalBytes),
++                    static_cast<unsigned long long>(estBytes),
++                    static_cast<unsigned long long>(kSwapchainBytesBudget));
++                s.status = -2;
++                s.lastError = XR_ERROR_LIMIT_REACHED;
++                recordSwapchainResult(XR_ERROR_LIMIT_REACHED);
++                _submittedLastFrame = false;
++                return nullptr;
++            }
++
+             uint32_t count = 0;
+-            if (XR_FAILED(xrEnumerateSwapchainFormats(session, 0, &count, nullptr))) return nullptr;
++            XrResult fmtRes = xrEnumerateSwapchainFormats(session, 0, &count, nullptr);
++            if (XR_FAILED(fmtRes) || count == 0) {
++                s.status = -1;
++                s.lastError = static_cast<int>(fmtRes);
++                recordSwapchainResult(s.lastError);
++                return nullptr;
++            }
+             std::vector<int64_t> formats(count);
+-            if (XR_FAILED(xrEnumerateSwapchainFormats(session, count, &count, formats.data()))) return nullptr;
+-            // Canvas pixels are sRGB; an sRGB swapchain lets the compositor decode them.
++            fmtRes = xrEnumerateSwapchainFormats(session, count, &count, formats.data());
++            if (XR_FAILED(fmtRes)) {
++                s.status = -1;
++                s.lastError = static_cast<int>(fmtRes);
++                recordSwapchainResult(s.lastError);
++                return nullptr;
++            }
+             const int64_t format = std::find(formats.begin(), formats.end(), GL_SRGB8_ALPHA8) != formats.end()
+                 ? GL_SRGB8_ALPHA8 : GL_RGBA8;
+             if (std::find(formats.begin(), formats.end(), format) == formats.end()) {
+-                s.status = -1; return nullptr;
++                s.status = -1;
++                s.lastError = XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
++                recordSwapchainResult(s.lastError);
++                return nullptr;
+             }
++
+             XrSwapchainCreateInfo info = { XR_TYPE_SWAPCHAIN_CREATE_INFO };
+-            info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
+-            info.format = format; info.sampleCount = 1;
+-            info.width = s.width; info.height = s.height;
+-            info.faceCount = 1; info.arraySize = 1; info.mipCount = 1;
+-            if (XR_FAILED(xrCreateSwapchain(session, &info, &_swapchain))) {
++            info.usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT |
++                              XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT |
++                              XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT;
++            info.format = format;
++            info.sampleCount = 1;
++            info.width = static_cast<uint32_t>(targetW);
++            info.height = static_cast<uint32_t>(targetH);
++            info.faceCount = 1;
++            info.arraySize = 1;
++            info.mipCount = 1;
++
++            XrResult createRes = xrCreateSwapchain(session, &info, &_swapchain);
++            if (XR_FAILED(createRes)) {
+                 _swapchain = XR_NULL_HANDLE;
+-                s.status = -1; return nullptr;
++                s.status = -1;
++                s.lastError = static_cast<int>(createRes);
++                recordSwapchainResult(s.lastError);
++                return nullptr;
+             }
+-            _width = s.width; _height = s.height;
+-            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, 0, &count, nullptr))) {
+-                destroySwapchain(); return nullptr;
++            _bucketW = targetW;
++            _bucketH = targetH;
++
++            XrResult enumRes = xrEnumerateSwapchainImages(_swapchain, 0, &count, nullptr);
++            if (XR_FAILED(enumRes) || count == 0) {
++                s.status = -1;
++                s.lastError = static_cast<int>(enumRes);
++                recordSwapchainResult(s.lastError);
++                destroySwapchain();
++                return nullptr;
+             }
+             _images.resize(count, {XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR});
+-            if (XR_FAILED(xrEnumerateSwapchainImages(_swapchain, count, &count,
+-                reinterpret_cast<XrSwapchainImageBaseHeader *>(_images.data())))) {
+-                destroySwapchain(); return nullptr;
++            enumRes = xrEnumerateSwapchainImages(
++                _swapchain, count, &count,
++                reinterpret_cast<XrSwapchainImageBaseHeader *>(_images.data()));
++            if (XR_FAILED(enumRes)) {
++                s.status = -1;
++                s.lastError = static_cast<int>(enumRes);
++                recordSwapchainResult(s.lastError);
++                destroySwapchain();
++                return nullptr;
+             }
++            _imageRevisions.assign(count, 0);
++            recordSwapchainResult(XR_SUCCESS);
+         }
+-        if (_revision != s.revision) {
++
++        // Only acquire a swapchain image when s.revision has never been uploaded yet,
++        // so static frames reuse the last released swapchain image without unnecessary acquires.
++        bool alreadyUploadedThisRev = false;
++        for (uint64_t r : _imageRevisions) {
++            if (r == s.revision) {
++                alreadyUploadedThisRev = true;
++                break;
++            }
++        }
++        if (!alreadyUploadedThisRev) {
+             uint32_t index = 0;
+-            XrSwapchainImageAcquireInfo acquire = {XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
+-            if (XR_FAILED(xrAcquireSwapchainImage(_swapchain, &acquire, &index))) return nullptr;
+-            XrSwapchainImageWaitInfo wait = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
+-            wait.timeout = XR_INFINITE_DURATION;
+-            if (XR_FAILED(xrWaitSwapchainImage(_swapchain, &wait))) {
++                XrSwapchainImageAcquireInfo acquire = {XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
++                XrResult acqRes = xrAcquireSwapchainImage(_swapchain, &acquire, &index);
++                if (XR_FAILED(acqRes)) {
++                    s.lastError = static_cast<int>(acqRes);
++                    return nullptr;
++                }
++                XrSwapchainImageWaitInfo wait = {XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO};
++                wait.timeout = XR_INFINITE_DURATION;
++                XrResult waitRes = xrWaitSwapchainImage(_swapchain, &wait);
++                if (XR_FAILED(waitRes)) {
++                    XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
++                    xrReleaseSwapchainImage(_swapchain, &release);
++                    s.lastError = static_cast<int>(waitRes);
++                    return nullptr;
++                }
++
++                // Preserve Viro's GL state; it owns this context.
++                GLint texture = 0, arrayTexture = 0, alignment = 0, unpackBuffer = 0;
++                GLint rowLength = 0, skipRows = 0, skipPixels = 0;
++                glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
++                glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &arrayTexture);
++                glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
++                glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
++                glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
++                glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skipRows);
++                glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skipPixels);
++                for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
++                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
++                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++                glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
++                glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
++                glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
++
++                glBindTexture(GL_TEXTURE_2D, _images[index].image);
++                GLenum uploadError = glGetError();
++                GLenum target = GL_TEXTURE_2D;
++                if (uploadError == GL_INVALID_OPERATION) {
++                    target = GL_TEXTURE_2D_ARRAY;
++                    glBindTexture(target, _images[index].image);
++                    uploadError = glGetError();
++                }
++                if (uploadError == GL_NO_ERROR) {
++                    if (target == GL_TEXTURE_2D_ARRAY) {
++                        glTexSubImage3D(target, 0, 0, 0, 0,
++                                        s.contentWidth, s.contentHeight, 1,
++                                        GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                    } else {
++                        glTexSubImage2D(target, 0, 0, 0,
++                                        s.contentWidth, s.contentHeight,
++                                        GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                    }
++                    uploadError = glGetError();
++                }
++                glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
++                glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
++                glPixelStorei(GL_UNPACK_SKIP_ROWS, skipRows);
++                glPixelStorei(GL_UNPACK_SKIP_PIXELS, skipPixels);
++                glBindTexture(GL_TEXTURE_2D, texture);
++                glBindTexture(GL_TEXTURE_2D_ARRAY, arrayTexture);
++                glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
++                glFlush();
++
+                 XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+-                xrReleaseSwapchainImage(_swapchain, &release);
+-                return nullptr;
+-            }
+-            // Preserve Viro's GL state; it owns this context.
+-            GLint texture = 0, arrayTexture = 0, alignment = 0, unpackBuffer = 0;
+-            GLint rowLength = 0, skipRows = 0, skipPixels = 0;
+-            glGetIntegerv(GL_TEXTURE_BINDING_2D, &texture);
+-            glGetIntegerv(GL_TEXTURE_BINDING_2D_ARRAY, &arrayTexture);
+-            glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
+-            glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &unpackBuffer);
+-            glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
+-            glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skipRows);
+-            glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skipPixels);
+-            // Attribute errors to this upload, rather than to an earlier scene draw.
+-            for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
+-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+-            glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+-            glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+-            glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+-            // Quest can return array textures even when swapchain arraySize is one.
+-            glBindTexture(GL_TEXTURE_2D, _images[index].image);
+-            GLenum uploadError = glGetError();
+-            GLenum target = GL_TEXTURE_2D;
+-            if (uploadError == GL_INVALID_OPERATION) {
+-                target = GL_TEXTURE_2D_ARRAY;
+-                glBindTexture(target, _images[index].image);
+-                uploadError = glGetError();
+-            }
+-            if (uploadError == GL_NO_ERROR) {
+-                if (target == GL_TEXTURE_2D_ARRAY) {
+-                    glTexSubImage3D(target, 0, 0, 0, 0, _width, _height, 1,
+-                                    GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
+-                } else {
+-                    glTexSubImage2D(target, 0, 0, 0, _width, _height,
+-                                    GL_RGBA, GL_UNSIGNED_BYTE, s.pixels.data());
++                XrResult relRes = xrReleaseSwapchainImage(_swapchain, &release);
++                if (XR_FAILED(relRes)) {
++                    s.lastError = static_cast<int>(relRes);
++                    return nullptr;
+                 }
+-                uploadError = glGetError();
++                if (uploadError != GL_NO_ERROR) {
++                    __android_log_print(ANDROID_LOG_ERROR, logTag,
++                        "Panel upload failed: GL=0x%x target=0x%x", uploadError, target);
++                    s.status = -1;
++                    s.lastError = -static_cast<int>(uploadError);
++                    return nullptr;
++                }
++                if (index < _imageRevisions.size()) {
++                    _imageRevisions[index] = s.revision;
++                }
++                __android_log_print(ANDROID_LOG_INFO, logTag,
++                    "Window uploaded: rev=%llu content=%dx%d bucket=%dx%d %.2fx%.2fm",
++                    static_cast<unsigned long long>(s.revision),
++                    s.contentWidth, s.contentHeight, _bucketW, _bucketH,
++                    s.widthM, s.heightM);
++        }
++
++        // Same-frame render-thread lockstep: if a Viro hole node tag is bound, sample
++        // its post-prepareFrame world transform so hole and OpenXR quad match on this frame.
++        XrPosef activePose = s.pose;
++        if (sceneRoot && !s.nodeTag.empty()) {
++            std::shared_ptr<VRONode> bound = _boundNode.lock();
++            if (!bound || _boundTag != s.nodeTag || bound->getTag() != s.nodeTag) {
++                bound = findNodeByTagRecursive(sceneRoot, s.nodeTag);
++                _boundNode = bound;
++                _boundTag = s.nodeTag;
+             }
+-            glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
+-            glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
+-            glPixelStorei(GL_UNPACK_SKIP_ROWS, skipRows);
+-            glPixelStorei(GL_UNPACK_SKIP_PIXELS, skipPixels);
+-            glBindTexture(GL_TEXTURE_2D, texture);
+-            glBindTexture(GL_TEXTURE_2D_ARRAY, arrayTexture);
+-            glBindBuffer(GL_PIXEL_UNPACK_BUFFER, unpackBuffer);
+-            glFlush();
+-            XrSwapchainImageReleaseInfo release = {XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+-            if (XR_FAILED(xrReleaseSwapchainImage(_swapchain, &release))) return nullptr;
+-            if (uploadError != GL_NO_ERROR) {
+-                __android_log_print(ANDROID_LOG_ERROR, logTag,
+-                    "Panel upload failed: GL=0x%x target=0x%x", uploadError, target);
+-                s.status = -1;
+-                return nullptr;
++            if (bound) {
++                const VROMatrix4f wt = bound->getWorldTransform();
++                const VROVector3f pos = wt.extractTranslation();
++                const VROQuaternion rot = wt.extractRotation(wt.extractScale());
++                const float qn = std::sqrt(rot.X * rot.X + rot.Y * rot.Y + rot.Z * rot.Z + rot.W * rot.W);
++                if (std::isfinite(pos.x) && std::isfinite(pos.y) && std::isfinite(pos.z) && qn > 0.5f) {
++                    activePose = {
++                        {rot.X / qn, rot.Y / qn, rot.Z / qn, rot.W / qn},
++                        {pos.x, pos.y, pos.z}
++                    };
++                }
+             }
+-            // Once per new image, never per frame.
+-            __android_log_print(ANDROID_LOG_INFO, logTag,
+-                "Panel uploaded: revision=%llu %dx%d %.2fx%.2fm target=0x%x",
+-                static_cast<unsigned long long>(s.revision), _width, _height,
+-                s.widthM, s.heightM, target);
+-            _revision = s.revision;
+         }
++
+         _layer.space = space;
+-        // Canvas bitmaps are premultiplied, which is the compositor's default.
+         _layer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+         _layer.eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+         _layer.subImage.swapchain = _swapchain;
+-        _layer.subImage.imageRect = {{0, 0}, {_width, _height}};
++        _layer.subImage.imageRect = {{0, 0}, {s.contentWidth, s.contentHeight}};
+         _layer.subImage.imageArrayIndex = 0;
+-        _layer.pose = s.pose;
++        _layer.pose = activePose;
+         _layer.size = {s.widthM, s.heightM};
+         s.status = 1;
++        _submittedLastFrame = true;
+         return reinterpret_cast<const XrCompositionLayerBaseHeader *>(&_layer);
+     }
++
++    uint64_t swapchainId() const {
++        return reinterpret_cast<uint64_t>(_swapchain);
++    }
++
++    int bucketWidth() const { return _bucketW; }
++    int bucketHeight() const { return _bucketH; }
++    const XrCompositionLayerQuad &quadLayer() const { return _layer; }
++
++    float viewDepth(const XrPosef &headPose) const {
++        // Compute Z in OpenXR view space (negative Z is in front of head).
++        const float dx = _layer.pose.position.x - headPose.position.x;
++        const float dy = _layer.pose.position.y - headPose.position.y;
++        const float dz = _layer.pose.position.z - headPose.position.z;
++        const auto &q = headPose.orientation;
++        // Forward axis of OpenXR pose is local (0, 0, -1) rotated by q:
++        // fx = -2*(x*z + w*y), fy = -2*(y*z - w*x), fz = -(1 - 2*(x*x + y*y))
++        const float fx = -2.0f * (q.x * q.z + q.w * q.y);
++        const float fy = -2.0f * (q.y * q.z - q.w * q.x);
++        const float fz = -(1.0f - 2.0f * (q.x * q.x + q.y * q.y));
++        // View-space Z = -(dot(delta, forward)), so more negative = farther in front.
++        return -(dx * fx + dy * fy + dz * fz);
++    }
+ };
+ }  // namespace quest_panel
+ 
+@@ -240,68 +708,309 @@ Java_expo_modules_questpanel_QuestPanelModule_nativeRefSpaceEpoch(JNIEnv *, jobj
+     return quest_panel::refSpaceEpoch.load(std::memory_order_relaxed);
+ }
+ 
++extern "C" JNIEXPORT jstring JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeCapabilitiesJson(JNIEnv *env, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::caps.mutex);
++    char buf[768];
++    std::snprintf(
++        buf,
++        sizeof(buf),
++        "{\"version\":%d,\"poolCapacity\":%d,\"maxLayerCount\":%u,"
++        "\"maxSwapchainWidth\":%u,\"maxSwapchainHeight\":%u,"
++        "\"reservedNonWindowLayers\":%d,\"activeWindowCount\":%d,"
++        "\"activeSwapchainCount\":%d,\"activeSwapchainBytes\":%llu,"
++        "\"memoryBudgetBytes\":%llu,\"lastEndFrameResult\":%d,"
++        "\"lastSwapchainResult\":%d,\"sessionGeneration\":%u,\"initialized\":%s,"
++        "\"systemName\":\"%s\"}",
++        quest_panel::kVersion,
++        quest_panel::kMaxWindowSlots,
++        quest_panel::caps.maxLayerCount,
++        quest_panel::caps.maxSwapchainWidth,
++        quest_panel::caps.maxSwapchainHeight,
++        quest_panel::caps.lastReservedLayers,
++        quest_panel::caps.activeWindowCount,
++        quest_panel::caps.activeSwapchainCount,
++        static_cast<unsigned long long>(quest_panel::caps.activeSwapchainBytes),
++        static_cast<unsigned long long>(quest_panel::kSwapchainBytesBudget),
++        quest_panel::caps.lastEndFrameResult,
++        quest_panel::caps.lastSwapchainResult,
++        quest_panel::caps.sessionGeneration,
++        quest_panel::caps.initialized ? "true" : "false",
++        quest_panel::caps.systemName.c_str()
++    );
++    return env->NewStringUTF(buf);
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeSetDiagnosticsEnabled(
++        JNIEnv *, jobject, jboolean enabled) {
++    quest_panel::setDiagnosticsEnabled(enabled == JNI_TRUE);
++}
++
++extern "C" JNIEXPORT jstring JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeDiagnosticsJson(JNIEnv *env, jobject) {
++    std::lock_guard<std::mutex> lock(quest_panel::caps.mutex);
++    std::string out = "{";
++    char head[512];
++    std::snprintf(
++        head,
++        sizeof(head),
++        "\"version\":%d,\"frameNumber\":%llu,\"sessionGeneration\":%u,"
++        "\"sessionState\":%d,\"sessionStateName\":\"%s\",\"focused\":%s,"
++        "\"endFrameResult\":%d,\"submittedLayerCount\":%d,"
++        "\"activeWindowCount\":%d,\"activeSwapchainCount\":%d,"
++        "\"activeSwapchainBytes\":%llu,\"layers\":[",
++        quest_panel::kVersion,
++        static_cast<unsigned long long>(quest_panel::caps.frameNumber),
++        quest_panel::caps.sessionGeneration,
++        quest_panel::caps.lastSessionState,
++        quest_panel::sessionStateName(quest_panel::caps.lastSessionState),
++        quest_panel::caps.lastSessionState == 5 ? "true" : "false",
++        quest_panel::caps.lastEndFrameResult,
++        quest_panel::caps.submittedLayerCount,
++        quest_panel::caps.activeWindowCount,
++        quest_panel::caps.activeSwapchainCount,
++        static_cast<unsigned long long>(quest_panel::caps.activeSwapchainBytes));
++    out += head;
++    for (size_t i = 0; i < quest_panel::caps.lastSubmittedLayers.size(); ++i) {
++        const auto &d = quest_panel::caps.lastSubmittedLayers[i];
++        if (i > 0) out += ",";
++        char item[512];
++        std::snprintf(
++            item,
++            sizeof(item),
++            "{\"slot\":%d,\"nodeTag\":\"%s\",\"swapchain\":\"0x%llx\","
++            "\"contentW\":%d,\"contentH\":%d,\"bucketW\":%d,\"bucketH\":%d,"
++            "\"widthM\":%.4f,\"heightM\":%.4f,"
++            "\"pose\":[%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f]}",
++            d.slot,
++            quest_panel::jsonEscape(d.nodeTag).c_str(),
++            static_cast<unsigned long long>(d.swapchain),
++            d.contentW, d.contentH, d.bucketW, d.bucketH,
++            d.widthM, d.heightM,
++            d.pose.position.x, d.pose.position.y, d.pose.position.z,
++            d.pose.orientation.x, d.pose.orientation.y, d.pose.orientation.z, d.pose.orientation.w);
++        out += item;
++    }
++    out += "]}";
++    return env->NewStringUTF(out.c_str());
++}
++
+ extern "C" JNIEXPORT jint JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativeStatus(JNIEnv *, jobject) {
+-    std::lock_guard<std::mutex> lock(quest_panel::state.mutex);
+-    return quest_panel::state.status;
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotStatus(JNIEnv *, jobject, jint slot) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return -1;
++    std::lock_guard<std::mutex> lock(s->mutex);
++    return s->status;
+ }
+ 
+ extern "C" JNIEXPORT void JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativeHide(JNIEnv *, jobject) {
+-    std::lock_guard<std::mutex> lock(quest_panel::state.mutex);
+-    quest_panel::state.visible = false;
+-    quest_panel::state.status = 0;
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotHide(JNIEnv *, jobject, jint slot) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return;
++    std::lock_guard<std::mutex> lock(s->mutex);
++    s->visible = false;
++    s->status = 0;
++    s->nodeTag.clear();
++    s->pixels.clear();
++    s->pixels.shrink_to_fit();
+ }
+ 
+-// Moves the shown pixels without a new upload.
+ extern "C" JNIEXPORT jboolean JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativePose(JNIEnv *env, jobject, jfloatArray pose) {
+-    return quest_panel::updateQuadPose(env, quest_panel::state, pose);
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotPoseAndSize(
++        JNIEnv *env, jobject, jint slot, jfloat widthM, jfloat heightM, jfloatArray pose, jstring nodeTag) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return JNI_FALSE;
++    return quest_panel::updateQuadPoseAndSize(env, *s, widthM, heightM, pose, nodeTag);
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotPose(JNIEnv *env, jobject, jint slot, jfloatArray pose) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return JNI_FALSE;
++    return quest_panel::updateQuadPoseAndSize(env, *s, -1.0f, -1.0f, pose, nullptr);
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotDrawBitmap(
++        JNIEnv *env, jobject, jint slot, jobject bitmap,
++        jint contentW, jint contentH, jint bucketW, jint bucketH,
++        jfloat widthM, jfloat heightM, jfloatArray pose, jstring nodeTag) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return JNI_FALSE;
++    return quest_panel::writeQuadBitmap(
++        env, *s, bitmap, contentW, contentH, bucketW, bucketH, widthM, heightM, pose, nodeTag);
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeSlotDraw(
++        JNIEnv *env, jobject, jint slot, jbyteArray rgba, jint width, jint height,
++        jfloat widthM, jfloat heightM, jfloatArray pose) {
++    auto *s = quest_panel::slotFor(slot);
++    if (!s) return JNI_FALSE;
++    return quest_panel::writeQuadDrawBytes(env, *s, rgba, width, height, widthM, heightM, pose);
++}
++
++// Legacy ABI wrappers preserved for compatibility and build-viro-renderer checks.
++extern "C" JNIEXPORT jint JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeStatus(JNIEnv *env, jobject obj) {
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotStatus(env, obj, 0);
++}
++
++extern "C" JNIEXPORT void JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativeHide(JNIEnv *env, jobject obj) {
++    Java_expo_modules_questpanel_QuestPanelModule_nativeSlotHide(env, obj, 0);
++}
++
++extern "C" JNIEXPORT jboolean JNICALL
++Java_expo_modules_questpanel_QuestPanelModule_nativePose(JNIEnv *env, jobject obj, jfloatArray pose) {
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotPose(env, obj, 0, pose);
+ }
+ 
+-// Pixels and pose change together, so new art never appears at an old pose.
+ extern "C" JNIEXPORT jboolean JNICALL
+ Java_expo_modules_questpanel_QuestPanelModule_nativeDraw(
+-        JNIEnv *env, jobject, jbyteArray rgba, jint width, jint height, jfloat widthM,
++        JNIEnv *env, jobject obj, jbyteArray rgba, jint width, jint height, jfloat widthM,
+         jfloat heightM, jfloatArray pose) {
+-    return quest_panel::writeQuadDraw(env, quest_panel::state, rgba, width, height, widthM, heightM, pose);
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotDraw(
++        env, obj, 0, rgba, width, height, widthM, heightM, pose);
+ }
+ 
+ extern "C" JNIEXPORT jint JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativeTitleStatus(JNIEnv *, jobject) {
+-    std::lock_guard<std::mutex> lock(quest_panel::titleState.mutex);
+-    return quest_panel::titleState.status;
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitleStatus(JNIEnv *env, jobject obj) {
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotStatus(
++        env, obj, quest_panel::kOverlaySlotIndex);
+ }
+ 
+ extern "C" JNIEXPORT void JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativeTitleHide(JNIEnv *, jobject) {
+-    std::lock_guard<std::mutex> lock(quest_panel::titleState.mutex);
+-    quest_panel::titleState.visible = false;
+-    quest_panel::titleState.status = 0;
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitleHide(JNIEnv *env, jobject obj) {
++    Java_expo_modules_questpanel_QuestPanelModule_nativeSlotHide(
++        env, obj, quest_panel::kOverlaySlotIndex);
+ }
+ 
+ extern "C" JNIEXPORT jboolean JNICALL
+-Java_expo_modules_questpanel_QuestPanelModule_nativeTitlePose(JNIEnv *env, jobject, jfloatArray pose) {
+-    return quest_panel::updateQuadPose(env, quest_panel::titleState, pose);
++Java_expo_modules_questpanel_QuestPanelModule_nativeTitlePose(JNIEnv *env, jobject obj, jfloatArray pose) {
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotPose(
++        env, obj, quest_panel::kOverlaySlotIndex, pose);
+ }
+ 
+ extern "C" JNIEXPORT jboolean JNICALL
+ Java_expo_modules_questpanel_QuestPanelModule_nativeTitleDraw(
+-        JNIEnv *env, jobject, jbyteArray rgba, jint width, jint height, jfloat widthM,
++        JNIEnv *env, jobject obj, jbyteArray rgba, jint width, jint height, jfloat widthM,
+         jfloat heightM, jfloatArray pose) {
+-    return quest_panel::writeQuadDraw(env, quest_panel::titleState, rgba, width, height, widthM, heightM, pose);
++    return Java_expo_modules_questpanel_QuestPanelModule_nativeSlotDraw(
++        env, obj, quest_panel::kOverlaySlotIndex, rgba, width, height, widthM, heightM, pose);
+ }
+ 
+ class QuestPanelLayer {
+-    quest_panel::QuadLayer _card;
+-    quest_panel::QuadLayer _title;
++    quest_panel::QuadLayer _windows[quest_panel::kMaxWindowSlots];
++    quest_panel::QuadLayer _overlay;
+ 
+ public:
++    ~QuestPanelLayer() { releaseAll(); }
++
++    void releaseAll() {
++        for (int i = 0; i < quest_panel::kMaxWindowSlots; ++i) {
++            _windows[i].releaseNow();
++        }
++        _overlay.releaseNow();
++    }
++
+     const XrCompositionLayerBaseHeader *prepare(XrSession session, XrSpace space) {
+-        return _card.prepare(session, space, quest_panel::state, "QuestPanelLayer");
++        return _windows[0].prepare(session, space, quest_panel::slots[0], nullptr, 0, "QuestPanel0");
++    }
++
++    int prepareUnderlays(
++            XrSession session,
++            XrSpace space,
++            const std::shared_ptr<VRONode> &sceneRoot,
++            const XrPosef &headPose,
++            int maxWindowBudget,
++            std::vector<const XrCompositionLayerBaseHeader *> &out,
++            int *outSwapchains,
++            uint64_t *outBytes,
++            std::vector<quest_panel::SubmittedWindowDiag> *outDiags = nullptr) {
++        uint64_t totalBytes = _overlay.swapchainBytes();
++        for (int i = 0; i < quest_panel::kMaxWindowSlots; ++i) {
++            totalBytes += _windows[i].swapchainBytes();
++        }
++
++        struct Item {
++            const XrCompositionLayerBaseHeader *layer;
++            float viewZ;
++            int slotIndex;
++        };
++        std::vector<Item> items;
++        items.reserve(quest_panel::kMaxWindowSlots);
++
++        const int clampedBudget = std::max(0, std::min(quest_panel::kMaxWindowSlots, maxWindowBudget));
++        for (int i = 0; i < quest_panel::kMaxWindowSlots; ++i) {
++            if (static_cast<int>(items.size()) >= clampedBudget) {
++                // Keep unused/over-budget swapchains released cleanly.
++                std::lock_guard<std::mutex> lock(quest_panel::slots[i].mutex);
++                if (!quest_panel::slots[i].visible) {
++                    _windows[i].releaseNow();
++                } else {
++                    quest_panel::slots[i].status = -3;
++                    quest_panel::slots[i].lastError = XR_ERROR_LAYER_LIMIT_EXCEEDED;
++                }
++                continue;
++            }
++            const uint64_t before = _windows[i].swapchainBytes();
++            const auto *layer = _windows[i].prepare(
++                session, space, quest_panel::slots[i], sceneRoot, totalBytes, "QuestPanelWin");
++            const uint64_t after = _windows[i].swapchainBytes();
++            totalBytes = totalBytes - before + after;
++            if (layer) {
++                items.push_back({layer, _windows[i].viewDepth(headPose), i});
++            }
++        }
++
++        // Far-to-near in OpenXR view space (more negative Z = farther in front), deterministic tie-break.
++        std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
++            if (std::fabs(a.viewZ - b.viewZ) > 0.005f) {
++                return a.viewZ < b.viewZ;
++            }
++            return a.slotIndex < b.slotIndex;
++        });
++
++        for (const auto &item : items) {
++            out.push_back(item.layer);
++            if (outDiags) {
++                quest_panel::SubmittedWindowDiag diag;
++                diag.slot = item.slotIndex;
++                {
++                    std::lock_guard<std::mutex> lock(quest_panel::slots[item.slotIndex].mutex);
++                    diag.nodeTag = quest_panel::slots[item.slotIndex].nodeTag;
++                    diag.contentW = quest_panel::slots[item.slotIndex].contentWidth;
++                    diag.contentH = quest_panel::slots[item.slotIndex].contentHeight;
++                }
++                diag.swapchain = _windows[item.slotIndex].swapchainId();
++                diag.bucketW = _windows[item.slotIndex].bucketWidth();
++                diag.bucketH = _windows[item.slotIndex].bucketHeight();
++                const auto &ql = _windows[item.slotIndex].quadLayer();
++                diag.widthM = ql.size.width;
++                diag.heightM = ql.size.height;
++                diag.pose = ql.pose;
++                outDiags->push_back(std::move(diag));
++            }
++        }
++
++        int swapchainCount = _overlay.hasSwapchain() ? 1 : 0;
++        for (int i = 0; i < quest_panel::kMaxWindowSlots; ++i) {
++            if (_windows[i].hasSwapchain()) ++swapchainCount;
++        }
++        if (outSwapchains) *outSwapchains = swapchainCount;
++        if (outBytes) *outBytes = totalBytes;
++        return static_cast<int>(items.size());
++    }
++
++    const XrCompositionLayerBaseHeader *prepareOverlay(XrSession session, XrSpace space) {
++        return _overlay.prepare(
++            session, space, quest_panel::slots[quest_panel::kOverlaySlotIndex],
++            nullptr, 0, "QuestOverlayLayer");
+     }
+ 
+     const XrCompositionLayerBaseHeader *prepareTitle(XrSession session, XrSpace space) {
+-        return _title.prepare(session, space, quest_panel::titleState, "QuestTitleLayer");
++        return prepareOverlay(session, space);
+     }
+ };
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+index b3a1f20..6339b25 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.cpp
+@@ -21,6 +21,8 @@
+ #include "VRONodeCamera.h"
+ #include "VROARScene.h"
+ #include "VROSceneController.h"
++#include "VROScene.h"
++#include "VROPortal.h"
+ #include "VROLog.h"
+ #include "VROAllocationTracker.h"
+ #include "VROTime.h"
+@@ -368,6 +370,27 @@ bool VROSceneRendererOpenXR::initOpenXR() {
+     XR_RETURN_FALSE(xrGetSystem(_instance, &sysInfo, &_systemId));
+     ALOGV("xrGetSystem OK  systemId=%llu", (unsigned long long)_systemId);
+ 
++    // ── Query runtime compositor & swapchain limits ──────────────────────────
++    {
++        XrSystemProperties systemProps = { XR_TYPE_SYSTEM_PROPERTIES };
++        if (XR_SUCCEEDED(xrGetSystemProperties(_instance, _systemId, &systemProps))) {
++            _maxLayerCount = systemProps.graphicsProperties.maxLayerCount > 0
++                ? systemProps.graphicsProperties.maxLayerCount
++                : 16;
++            quest_panel::setSystemCapabilities(
++                systemProps.systemName,
++                _maxLayerCount,
++                systemProps.graphicsProperties.maxSwapchainImageWidth,
++                systemProps.graphicsProperties.maxSwapchainImageHeight);
++            __android_log_print(ANDROID_LOG_INFO, LOG_TAG,
++                  "OpenXR system='%s' maxLayerCount=%u maxSwapchain=%ux%u",
++                  systemProps.systemName,
++                  _maxLayerCount,
++                  systemProps.graphicsProperties.maxSwapchainImageWidth,
++                  systemProps.graphicsProperties.maxSwapchainImageHeight);
++        }
++    }
++
+     // ── Probe eye-gaze support ────────────────────────────────────────────────
+     // The extension being present doesn't mean the device has eye-tracking
+     // hardware (only Quest Pro does). Query the system properties and gate the
+@@ -519,6 +542,8 @@ bool VROSceneRendererOpenXR::createSession() {
+ 
+     XR_RETURN_FALSE(xrCreateSession(_instance, &sessionInfo, &_session));
+     ALOGV("xrCreateSession OK");
++    quest_panel::beginSessionCaps();
++    quest_panel::resetAllSlotsForSession();
+ 
+     if (!createReferenceSpace()) return false;
+     if (!createSwapchains())    return false;
+@@ -1036,7 +1061,11 @@ void VROSceneRendererOpenXR::onTouchEvent(int /*action*/, float /*x*/, float /*y
+ void VROSceneRendererOpenXR::onKeyEvent(int /*keyCode*/, int /*action*/) {}
+ 
+ void VROSceneRendererOpenXR::recenterTracking() {
+-    if (_session == XR_NULL_HANDLE) return;
++    _recenterRequested.store(true, std::memory_order_relaxed);
++}
++
++void VROSceneRendererOpenXR::performRecenterOnRenderThread() {
++    if (_session == XR_NULL_HANDLE || _stageSpace == XR_NULL_HANDLE) return;
+ 
+     // Create a temporary VIEW space to locate the head pose.
+     XrReferenceSpaceCreateInfo viewSpaceInfo = { XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
+@@ -1049,7 +1078,6 @@ void VROSceneRendererOpenXR::recenterTracking() {
+     }
+ 
+     // Locate head (VIEW) relative to the current stage space.
+-    // Use _lastPredictedDisplayTime so the pose is from the most recent frame.
+     XrSpaceLocation headLoc = { XR_TYPE_SPACE_LOCATION };
+     xrLocateSpace(viewSpace, _stageSpace, _lastPredictedDisplayTime, &headLoc);
+     xrDestroySpace(viewSpace);
+@@ -1079,6 +1107,7 @@ void VROSceneRendererOpenXR::recenterTracking() {
+     if (XR_SUCCEEDED(xrCreateReferenceSpace(_session, &spaceInfo, &newSpace))) {
+         xrDestroySpace(_stageSpace);
+         _stageSpace = newSpace;
++        quest_panel::bumpRefSpaceEpoch();
+         ALOGV("recenterTracking: recentered (yaw=%.2f rad)", yaw);
+     } else {
+         ALOGE("recenterTracking: xrCreateReferenceSpace failed");
+@@ -1115,28 +1144,41 @@ void VROSceneRendererOpenXR::renderLoop() {
+     while (_running) {
+         pollEvents();
+ 
+-        if (_paused || _sessionState == XR_SESSION_STATE_IDLE ||
+-                       _sessionState == XR_SESSION_STATE_UNKNOWN) {
+-            usleep(100000);  // 100ms — don't burn CPU when idle/paused
++        if (_sessionState == XR_SESSION_STATE_IDLE ||
++            _sessionState == XR_SESSION_STATE_UNKNOWN) {
++            usleep(100000);  // 100ms — don't burn CPU before READY
+             continue;
+         }
+ 
+-        // OpenXR spec: the frame loop (xrWaitFrame/xrBeginFrame/xrEndFrame) must run
+-        // as soon as the session is running (_sessionRunning=true, set in READY handler
+-        // when xrBeginSession succeeds). The runtime only transitions from READY →
+-        // SYNCHRONIZED after it sees the first completed frame loop iteration.
++        // OpenXR spec: keep xrWaitFrame/xrBeginFrame/xrEndFrame paired whenever
++        // _sessionRunning is true (even while _paused) so STOPPING transitions never stall.
+         if (_sessionRunning) {
+             renderFrame();
+ 
+             // Drive Java FrameListeners / PlatformUtil render-thread callbacks
+-            // only when the app has visible content (VISIBLE or FOCUSED states).
+-            if (_sessionState == XR_SESSION_STATE_VISIBLE ||
+-                _sessionState == XR_SESSION_STATE_FOCUSED) {
++            // only when active and visible/focused.
++            if (!_paused &&
++                (_sessionState == XR_SESSION_STATE_VISIBLE ||
++                 _sessionState == XR_SESSION_STATE_FOCUSED)) {
+                 env->CallVoidMethod(_jview, onDrawFrameM);
+             }
++        } else if (_paused) {
++            usleep(50000);
+         }
+     }
+ 
++    // Destroy GL/swapchain resources on the render thread while EGL is still current.
++    _questPanel.reset();
++    _questDiagPanel.reset();
++    quest_input::clearMarkerRefs();
++    for (auto &sc : _swapchains) {
++        if (sc.handle != XR_NULL_HANDLE) {
++            xrDestroySwapchain(sc.handle);
++            sc.handle = XR_NULL_HANDLE;
++        }
++        sc.images.clear();
++    }
++
+     _jvm->DetachCurrentThread();
+     eglMakeCurrent(_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+     ALOGV("Render thread exited");
+@@ -1242,6 +1284,11 @@ void VROSceneRendererOpenXR::renderFrame() {
+     // submitted via VROPlatformDispatchAsyncRenderer from any thread.
+     VROPlatformDrainRendererQueue();
+ 
++    // Execute queued recenter atomically on the render thread before locating views or preparing scene.
++    if (_recenterRequested.exchange(false, std::memory_order_relaxed)) {
++        performRecenterOnRenderThread();
++    }
++
+     // ── Wait for the display ──────────────────────────────────────────────────
+     XrFrameWaitInfo waitInfo  = { XR_TYPE_FRAME_WAIT_INFO };
+     XrFrameState    frameState= { XR_TYPE_FRAME_STATE };
+@@ -1256,6 +1303,19 @@ void VROSceneRendererOpenXR::renderFrame() {
+     XrFrameBeginInfo beginInfo = { XR_TYPE_FRAME_BEGIN_INFO };
+     XR_CHECK(xrBeginFrame(_session, &beginInfo));
+ 
++    if (_paused) {
++        quest_input::noteFrameWithoutInput(_questInputGeneration);
++        XrFrameEndInfo endInfo = { XR_TYPE_FRAME_END_INFO };
++        endInfo.displayTime          = frameState.predictedDisplayTime;
++        endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
++        endInfo.layerCount           = 0;
++        endInfo.layers               = nullptr;
++        XrResult endResult = xrEndFrame(_session, &endInfo);
++        quest_panel::recordFrameTelemetry(
++            (int)endResult, (int)_sessionState, 0, 0, 0, 0, 0, nullptr);
++        return;
++    }
++
+     // Locate eye views
+     XrViewLocateInfo locateInfo = { XR_TYPE_VIEW_LOCATE_INFO };
+     locateInfo.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+@@ -1282,27 +1342,20 @@ void VROSceneRendererOpenXR::renderFrame() {
+         (viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) &&
+         (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+ 
+-    // App panel underlay (QuestPanelLayer.h) and sky diagnostics layer (QuestInputSampler.h).
+-    // Prepare before rendering eyes so the OpenXR display clears alpha to 0 while either
+-    // panel is submitted, allowing HDR tone-mapping to preserve the zero-alpha hole.
+-    const XrCompositionLayerBaseHeader *questPanel = nullptr;
+-    const XrCompositionLayerBaseHeader *questDiagPanel = nullptr;
+-    if (viewsValid && frameState.shouldRender) {
+-        if (!_questPanel) _questPanel.reset(new QuestPanelLayer());
+-        questPanel = _questPanel->prepare(_session, _stageSpace);
+-        if (!_questDiagPanel) _questDiagPanel.reset(new quest_input::DiagLayer());
+-        questDiagPanel = _questDiagPanel->prepare(_session, _stageSpace);
+-    }
+-    if (_openxrDriver) {
+-        auto display = _openxrDriver->getOpenXRDisplay();
+-        if (display) display->setClearAlpha((_passthroughEnabled || questPanel || questDiagPanel) ? 0.0f : 1.0f);
+-    }
+-
+     // App input bridge: a frame without an input pass is counted, never sampled.
+     if (!(viewsValid && frameState.shouldRender)) {
+         quest_input::noteFrameWithoutInput(_questInputGeneration);
+     }
+ 
++    std::vector<const XrCompositionLayerBaseHeader *> questUnderlays;
++    std::vector<quest_panel::SubmittedWindowDiag> questSubmittedDiags;
++    const XrCompositionLayerBaseHeader *questDiagPanel = nullptr;
++    const XrCompositionLayerBaseHeader *questOverlayPanel = nullptr;
++    int activeWindowCount = 0;
++    int activeSwapchainCount = 0;
++    uint64_t activeSwapchainBytes = 0;
++    int reservedNonWindow = 1;
++
+     if (viewsValid && frameState.shouldRender) {
+         // Sync actions and capture raw controller state BEFORE prepareFrame so render-thread
+         // diagnostic markers receive this frame's predictedDisplayTime transforms and sort keys.
+@@ -1327,34 +1380,23 @@ void VROSceneRendererOpenXR::renderFrame() {
+         }
+ 
+         // ── Prepare the Viro renderer (once per frame, before any eye render) ─
+-        // Use the left eye pose/fov to drive scene-level preparation (culling,
+-        // animation ticks, physics, etc.). Per-eye projection is applied in renderEye.
+         if (_renderer && _renderer->hasRenderContext()) {
+             VROViewport leftViewport(0, 0, _swapchains[0].width, _swapchains[0].height);
+ 
+-            // Convert OpenXR half-angle tangents (radians, signed) → degrees, positive
+             constexpr float kRad2Deg = 180.0f / M_PI;
+             const XrFovf &fov0 = views[0].fov;
+             VROFieldOfView viroFov(
+-                -fov0.angleLeft  * kRad2Deg,   // left  half-angle (positive)
+-                 fov0.angleRight * kRad2Deg,   // right half-angle
+-                -fov0.angleDown  * kRad2Deg,   // bottom half-angle
+-                 fov0.angleUp    * kRad2Deg    // top half-angle
++                -fov0.angleLeft  * kRad2Deg,
++                 fov0.angleRight * kRad2Deg,
++                -fov0.angleDown  * kRad2Deg,
++                 fov0.angleUp    * kRad2Deg
+             );
+-            // headRotation must be rotation-only. VROMatrix4f::multiply(VROVector3f) always
+-            // adds the matrix's translation column (m[12..14]), so passing the full pose
+-            // matrix shifts the computed camera forward/up vectors by the head's stage-space
+-            // position (~1.6 m on Y), tilting the frustum upward and culling objects placed
+-            // at (0, 0, -2). Strip translation so only orientation drives the frustum.
+-            // Per-eye view matrices (which include head position) are computed in renderEye().
+             VROMatrix4f headPoseMatrix  = xrPoseToMatrix(views[0].pose);
+             headPoseMatrix[12] = 0.0f;
+             headPoseMatrix[13] = 0.0f;
+             headPoseMatrix[14] = 0.0f;
+             VROMatrix4f leftProjMatrix  = xrFovToProjection(fov0);
+ 
+-            // The head position stripped above reaches the camera through the
+-            // point-of-view node. Use the mid-eye point.
+             VROVector3f midEye = (xrVec3ToVRO(views[0].pose.position) +
+                                   xrVec3ToVRO(views[1].pose.position)).scale(0.5f);
+             _pointOfView->getCamera()->setPosition(midEye);
+@@ -1363,7 +1405,7 @@ void VROSceneRendererOpenXR::renderFrame() {
+                                     headPoseMatrix, leftProjMatrix, _driver);
+         }
+ 
+-        // Process input after prepareFrame so the camera is valid for hit-testing.
++        // Process input after prepareFrame so the camera is valid for hit-testing and drags.
+         if (_inputController && _renderer && _renderer->hasRenderContext()) {
+             _inputController->onProcess(_session, _stageSpace,
+                                          frameState.predictedDisplayTime,
+@@ -1377,6 +1419,42 @@ void VROSceneRendererOpenXR::renderFrame() {
+             }
+         }
+ 
++        // Prepare OpenXR window underlays & overlay AFTER prepareFrame/onProcess so any bound
++        // VRONode hole transforms reflect this frame's drags/updates, and BEFORE renderEye(0)
++        // so display->setClearAlpha() takes effect for this frame's eye clear.
++        if (!_questPanel) _questPanel.reset(new QuestPanelLayer());
++        if (!_questDiagPanel) _questDiagPanel.reset(new quest_input::DiagLayer());
++
++        questDiagPanel = _questDiagPanel->prepare(_session, _stageSpace);
++        questOverlayPanel = _questPanel->prepareOverlay(_session, _stageSpace);
++
++        const bool passthroughActive = (_passthroughEnabled && _passthroughLayer != XR_NULL_HANDLE);
++        reservedNonWindow = 1 /* projection */
++            + (passthroughActive ? 1 : 0)
++            + (questDiagPanel ? 1 : 0)
++            + (questOverlayPanel ? 1 : 0);
++        const int windowBudget = std::max(0, static_cast<int>(_maxLayerCount) - reservedNonWindow);
++
++        std::shared_ptr<VRONode> sceneRoot = nullptr;
++        if (_sceneController && _sceneController->getScene()) {
++            sceneRoot = _sceneController->getScene()->getRootNode();
++        }
++        XrPosef headPose = views[0].pose;
++        headPose.position.x = 0.5f * (views[0].pose.position.x + views[1].pose.position.x);
++        headPose.position.y = 0.5f * (views[0].pose.position.y + views[1].pose.position.y);
++        headPose.position.z = 0.5f * (views[0].pose.position.z + views[1].pose.position.z);
++
++        activeWindowCount = _questPanel->prepareUnderlays(
++            _session, _stageSpace, sceneRoot, headPose, windowBudget,
++            questUnderlays, &activeSwapchainCount, &activeSwapchainBytes, &questSubmittedDiags);
++
++        if (_openxrDriver) {
++            auto display = _openxrDriver->getOpenXRDisplay();
++            if (display) {
++                display->setClearAlpha((_passthroughEnabled || !questUnderlays.empty() || questDiagPanel) ? 0.0f : 1.0f);
++            }
++        }
++
+         for (uint32_t eye = 0; eye < 2; ++eye) {
+             renderEye((int)eye, views[eye], _swapchains[eye]);
+ 
+@@ -1413,9 +1491,9 @@ void VROSceneRendererOpenXR::renderFrame() {
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&ptLayerComp));
+     }
+ 
+-    // App panel underlay (QuestPanelLayer.h) and sky diagnostics layer (QuestInputSampler.h).
++    // App panel underlays (QuestPanelLayer.h) and sky diagnostics layer (QuestInputSampler.h).
+     if (questDiagPanel) layers.push_back(questDiagPanel);
+-    if (questPanel) layers.push_back(questPanel);
++    for (const auto *underlay : questUnderlays) layers.push_back(underlay);
+ 
+     // Projection layer (3D scene)
+     XrCompositionLayerProjection projLayer = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
+@@ -1423,54 +1501,47 @@ void VROSceneRendererOpenXR::renderFrame() {
+         projLayer.space      = _stageSpace;
+         projLayer.viewCount  = 2;
+         projLayer.views      = projViews.data();
+-        // When passthrough is on, the scene is rendered with a transparent clear
+-        // (alpha 0). Tell the compositor to honor the layer's alpha channel so
+-        // passthrough shows through empty regions; otherwise the layer is treated
+-        // as opaque and hides the room.
+         if (_passthroughEnabled) {
+             projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT |
+                                    XR_COMPOSITION_LAYER_UNPREMULTIPLIED_ALPHA_BIT;
+-        } else if (questPanel || questDiagPanel) {
+-            // Fully virtual: the eye buffer clears opaque, which would hide the
+-            // underlay. Blend by source alpha only while a panel is submitted,
+-            // and treat colour as premultiplied: where alpha is 1 the result is
+-            // the opaque frame, and only the zero-alpha panel holes change.
++        } else if (!questUnderlays.empty() || questDiagPanel) {
+             projLayer.layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+         }
+         layers.push_back(reinterpret_cast<const XrCompositionLayerBaseHeader *>(&projLayer));
+     }
+ 
+-    // Floating transparent branded title overlay (QuestPanelLayer.h), over the scene.
+-    const XrCompositionLayerBaseHeader *questTitlePanel = nullptr;
+-    if (viewsValid && frameState.shouldRender && _questPanel) {
+-        questTitlePanel = _questPanel->prepareTitle(_session, _stageSpace);
++    // Floating overlay (PrototypeLimit / modal alert) over the scene.
++    if (viewsValid && frameState.shouldRender && questOverlayPanel &&
++        layers.size() < _maxLayerCount) {
++        layers.push_back(questOverlayPanel);
++    }
++
++    if (layers.size() > _maxLayerCount) {
++        layers.resize(_maxLayerCount);
+     }
+-    if (questTitlePanel) layers.push_back(questTitlePanel);
+ 
+     XrFrameEndInfo endInfo = { XR_TYPE_FRAME_END_INFO };
+     endInfo.displayTime          = frameState.predictedDisplayTime;
+-    // Passthrough is supplied as a composition layer (underlay) beneath the
+-    // projection layer, so the environment blend mode stays OPAQUE. The projection
+-    // layer's SOURCE_ALPHA bit + the display's transparent clear (alpha 0 in empty
+-    // regions) let the passthrough layer show through where there's no geometry.
+     endInfo.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+     endInfo.layerCount  = (uint32_t)layers.size();
+-    // OpenXR spec: layers must be NULL when layerCount==0
+     endInfo.layers      = layers.empty() ? nullptr : layers.data();
+ 
+     static uint32_t sFrameLog = 0;
+     if (sFrameLog++ < 10 || (sFrameLog % 90 == 0)) {
+-        ALOGV("xrEndFrame: state=%d shouldRender=%d viewsValid=%d layerCount=%u",
++        ALOGV("xrEndFrame: state=%d shouldRender=%d viewsValid=%d layerCount=%u win=%d",
+               (int)_sessionState, (int)frameState.shouldRender,
+-              (int)viewsValid, endInfo.layerCount);
++              (int)viewsValid, endInfo.layerCount, activeWindowCount);
+     }
+ 
+     XrResult endResult = xrEndFrame(_session, &endInfo);
++    quest_panel::recordFrameTelemetry(
++        (int)endResult, (int)_sessionState, (int)endInfo.layerCount,
++        activeWindowCount, activeSwapchainCount,
++        activeSwapchainBytes, reservedNonWindow, &questSubmittedDiags);
+     if (XR_FAILED(endResult)) {
+         ALOGE("xrEndFrame FAILED: result=%d state=%d shouldRender=%d layerCount=%u",
+               (int)endResult, (int)_sessionState,
+               (int)frameState.shouldRender, endInfo.layerCount);
+-        return;
+     }
+     updateBoundaryVisibility(ptLayerComp.layerHandle != XR_NULL_HANDLE);
+ }
+diff --git a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+index 6efc0fc..5eaeddb 100644
+--- a/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
++++ b/android/sharedCode/src/main/cpp/VROSceneRendererOpenXR.h
+@@ -170,10 +170,14 @@ private:
+     XrBoundaryVisibilityMETA _boundaryVisibility = XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META;
+     uint32_t        _boundaryRequestCooldown = 0;  // frames until the next request
+ 
+-    // App menu panel, an XrCompositionLayerQuad under the projection layer.
++    // App menu panel, dynamic multi-window XrCompositionLayerQuad pool under the projection layer.
+     std::unique_ptr<QuestPanelLayer> _questPanel;
+     bool            _pendingRefSpaceChange = false;
+     XrTime          _pendingRefSpaceChangeTime = 0;
++    uint32_t        _maxLayerCount = 16;
++    std::atomic<bool> _recenterRequested { false };
++
++    void performRecenterOnRenderThread();
+ 
+     // App controller input bridge (QuestInputSampler.h).
+     uint32_t        _questInputGeneration = 0;
